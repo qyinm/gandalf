@@ -332,6 +332,7 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 - [done] Implement reproducibility gap inputs via capture statuses and blind spots.
 - [done] Implement markdown report renderer for `snaptailor-report.md`.
 - [done] Wire `scan`, `snapshot`, `diff`, `audit`, `provenance`, and `report` through the CLI.
+- [done] Add explicit reproducibility gap section to markdown reports.
 
 ### Milestone 5: Docs And Dogfood
 
