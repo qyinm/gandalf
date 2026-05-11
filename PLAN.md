@@ -334,14 +334,14 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 
 ### Milestone 5: Docs And Dogfood
 
-- Add copy-paste workflows:
+- [done] Add copy-paste workflows in `README.md`:
   - inspect what will be scanned
   - create first baseline
   - see what changed since baseline
   - audit current setup
   - export a redacted report, not a restorable bundle
   - use JSON in CI or agent workflows
-- Dogfood on at least three real agent setups before adding write features.
+- [remaining] Dogfood on at least three real agent setups before adding write features.
 
 ## Test Diagram
 
