@@ -343,7 +343,7 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
   - audit current setup
   - export a redacted report, not a restorable bundle
   - use JSON in CI or agent workflows
-- [remaining] Dogfood on at least three real agent setups before adding write features.
+- [done] Dogfood on at least three real agent setups before adding write features. Results are summarized in `docs/dogfood.md`.
 
 ## Test Diagram
 
