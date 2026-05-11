@@ -306,10 +306,10 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 
 ### Milestone 1: Read-Only Scan
 
-- Implement trust preflight and `scan --explain`.
-- Implement path discovery for Claude Code and project-local agent files.
-- Emit evidence inventory with capture status.
-- Enforce no symlink following, size caps, parse timeouts, and no network/command execution.
+- [done] Implement trust preflight and `scan --explain`.
+- [done] Implement path discovery for Claude Code and project-local agent files.
+- [done] Emit evidence inventory with capture status.
+- [done] Enforce no symlink following, size caps, parse timeouts, and no network/command execution.
 
 ### Milestone 2: Metadata Snapshot Store
 
