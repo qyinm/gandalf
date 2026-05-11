@@ -153,6 +153,8 @@ Every scanner emits a policy-aware intermediate item:
 }
 ```
 
+Implementation status: shared TypeScript model lives in `src/types.ts`.
+
 ### Capture Status Values
 
 - `captured`: safe structured value captured.
