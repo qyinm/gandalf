@@ -324,6 +324,7 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 - [done] Implement `current` pseudo-snapshot in the analysis layer.
 - [done] Implement semantic diff plus raw source-change summary.
 - [done] Add `--json` to scan, snapshot show, diff, audit, provenance, and report in CLI integration.
+- [done] `scan --explain` prints the considered evidence paths.
 
 ### Milestone 4: Audit And Provenance
 
