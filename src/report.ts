@@ -53,6 +53,14 @@ function provenanceLine(entry: ProvenanceEntry): string {
   return `- ${entry.evidenceId} -> ${entry.nodeId} from ${entry.sourcePath} (${entry.scope}, precedence ${entry.precedence}, ${entry.captureStatus})`;
 }
 
+function captureStatusCounts(evidence: DiscoveredItem[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const item of evidence) {
+    counts.set(item.captureStatus, (counts.get(item.captureStatus) ?? 0) + 1);
+  }
+  return counts;
+}
+
 export function renderMarkdownReport(input: ReportInput): string {
   const snapshotName = input.snapshotName ?? input.current ?? "current";
   const lines: string[] = [
@@ -94,6 +102,16 @@ export function renderMarkdownReport(input: ReportInput): string {
   } else {
     for (const blindSpot of input.blindSpots) {
       lines.push(`- ${blindSpot}`);
+    }
+  }
+
+  lines.push("", "## Reproducibility gaps");
+  const counts = captureStatusCounts(input.evidence);
+  if (counts.size === 0) {
+    lines.push("- None");
+  } else {
+    for (const [status, count] of [...counts.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+      lines.push(`- ${status}: ${count}`);
     }
   }
 

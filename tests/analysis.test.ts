@@ -221,6 +221,8 @@ describe("analysis modules", () => {
     assert.match(markdown, /UNSUPPORTED_AGENT_STATE/);
     assert.match(markdown, /## Blind spots/);
     assert.match(markdown, /Remote MCP server behavior cannot be captured/);
+    assert.match(markdown, /## Reproducibility gaps/);
+    assert.match(markdown, /unsupported: 1/);
     assert.match(markdown, /## Provenance/);
     assert.match(markdown, /unsupported-codex/);
     assert.match(markdown, /snaptailor snapshot create --name baseline --metadata-only --project \./);
