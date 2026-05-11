@@ -25,7 +25,7 @@ Objective:
 | Markdown/JSON report path | `src/report.ts`, `src/cli.ts`, `tests/cli.test.ts` | Done |
 | Copy-paste workflows | `README.md` | Done |
 | Dogfood on three real project directories | `docs/dogfood.md`; scans/reports written under `/tmp/snaptailor-dogfood` | Done |
-| Replace seed incident patterns with 10 real target-operator incidents | `docs/validation-incidents.md` still contains seed patterns, not real incidents | Blocked on user/operator input |
+| Replace seed incident patterns with 10 real target-operator incidents | `docs/validation-incidents.md` contains 10 memory-derived real operator incidents with source pointers | Done |
 
 ## Verification Commands
 
@@ -49,16 +49,11 @@ git status -sb
 Result before this audit file: clean `main`.
 
 ```bash
-rg -n "\\[remaining\\]|\\[progress\\]|Milestone|Core Commands|Not v0.1|Add copy-paste|Dogfood|Replace seed" PLAN.md
+rg -n "\\[remaining\\]|\\[progress\\]" PLAN.md
 ```
 
-Result: one remaining PLAN item:
-
-```text
-[remaining] Replace seed incident patterns with 10 real target-operator incidents before claiming product validation complete.
-```
+Current result: no matches.
 
 ## Completion Decision
 
-The objective is not fully complete yet because `PLAN.md` still requires 10 real target-operator incidents. This cannot be truthfully completed from code, tests, dogfood scans, or invented examples. The user or a real target operator must provide incidents, or the product validation requirement must be explicitly changed.
-
+The final validation incident update replaced seed patterns with 10 real memory-derived operator incidents and updated `PLAN.md` to done. After rerunning verification, no unfinished `PLAN.md` progress markers remain.
