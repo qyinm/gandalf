@@ -1,0 +1,34 @@
+{
+  "name": "snaptailor",
+  "version": "0.1.0",
+  "description": "Read-only drift diagnosis and security audit for AI coding agent setups.",
+  "type": "module",
+  "bin": {
+    "snaptailor": "./dist/src/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "PLAN.md",
+    "PRODUCT.md",
+    "TODOS.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test \"dist/**/*.test.js\"",
+    "check": "npm run build && npm test"
+  },
+  "keywords": [
+    "ai-agent",
+    "mcp",
+    "cli",
+    "audit",
+    "diff"
+  ],
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3"
+  }
+}
