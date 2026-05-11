@@ -295,10 +295,11 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 
 ### Milestone 0: Validation And Repo Scaffold
 
-- Collect 10 real "agent behavior changed" incidents from the target operator.
-- Manually reconstruct what changed and classify whether snaptailor could detect it.
-- Choose TypeScript for fastest parser iteration and CLI distribution, with minimal dependencies and a lockfile.
-- Add CLI scaffold, tests, lint/typecheck, fixture harness, and temp-home integration test harness.
+- [progress] TypeScript CLI scaffold, lockfile, build, and Node test harness are implemented.
+- [progress] Validation incident template and seed backlog are documented in `docs/validation-incidents.md`.
+- [remaining] Replace seed incident patterns with 10 real target-operator incidents before claiming product validation complete.
+- [done] Choose TypeScript for fastest parser iteration and CLI distribution, with minimal dependencies and a lockfile.
+- [done] Add CLI scaffold, tests, lint/typecheck, fixture harness, and temp-home integration test harness.
 
 ### Milestone 1: Read-Only Scan
 
@@ -441,4 +442,3 @@ scan --project .
 | Eng Review | `/plan-eng-review` via `/autoplan` | Architecture and tests | 1 | issues_resolved_in_plan | Secret handling, symlinks, store trust, restore risk addressed |
 | DX Review | `/plan-devex-review` via `/autoplan` | Developer experience | 1 | issues_resolved_in_plan | First useful report and trust preflight added |
 | Dual Voices | `/autoplan` | CEO, Eng, DX outside voices | 3 | issues_resolved_in_plan | Strong consensus on read-only diagnostic MVP |
-
