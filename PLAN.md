@@ -297,9 +297,9 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 
 ### Milestone 0: Validation And Repo Scaffold
 
-- [progress] TypeScript CLI scaffold, lockfile, build, and Node test harness are implemented.
+- [done] TypeScript CLI scaffold, lockfile, build, and Node test harness are implemented.
 - [done] Shared user-facing error contract is implemented and tested.
-- [progress] Validation incident template and seed backlog are documented in `docs/validation-incidents.md`.
+- [done] Validation incident template and seed backlog are documented in `docs/validation-incidents.md`.
 - [remaining] Replace seed incident patterns with 10 real target-operator incidents before claiming product validation complete.
 - [done] Choose TypeScript for fastest parser iteration and CLI distribution, with minimal dependencies and a lockfile.
 - [done] Add CLI scaffold, tests, lint/typecheck, fixture harness, and temp-home integration test harness.
