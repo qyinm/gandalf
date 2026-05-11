@@ -153,6 +153,25 @@ function renderScanText(state: CurrentState): string {
   return `${lines.join("\n")}\n`;
 }
 
+function renderExplainText(state: CurrentState): string {
+  const paths = [...new Set(state.scan.evidence.map((item) => item.sourcePath))].sort();
+  const lines = [
+    renderScanText(state).trimEnd(),
+    "",
+    "Paths considered"
+  ];
+
+  if (paths.length === 0) {
+    lines.push("  none found");
+  } else {
+    for (const sourcePath of paths) {
+      lines.push(`  ${sourcePath}`);
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 function displayAgent(agent: string): string {
   if (agent === "claude-code") return "Claude Code";
   if (agent === "codex") return "Codex";
@@ -198,7 +217,7 @@ async function run(args: string[]): Promise<number> {
 
   if (args[0] === "scan") {
     const state = await currentState(args);
-    process.stdout.write(hasFlag(args, "--json") ? json(state) : renderScanText(state));
+    process.stdout.write(hasFlag(args, "--json") ? json(state) : hasFlag(args, "--explain") ? renderExplainText(state) : renderScanText(state));
     return 0;
   }
 
@@ -301,6 +320,10 @@ async function run(args: string[]): Promise<number> {
       blindSpots: scan.blindSpots,
       diffs: diff
     });
+    if (hasFlag(args, "--json")) {
+      process.stdout.write(json({ snapshot, markdown }));
+      return 0;
+    }
     const out = valueAfter(args, "--out");
     if (out) {
       await writeFile(path.resolve(out), markdown);

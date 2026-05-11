@@ -50,6 +50,11 @@ describe("snaptailor CLI scaffold", () => {
     assert.match(scan.stdout, /Read-only: yes/);
     assert.match(scan.stdout, /Claude Code/);
 
+    const explain = runCli(["scan", "--project", project, "--explain"], project, env);
+    assert.equal(explain.status, 0, explain.stderr);
+    assert.match(explain.stdout, /Paths considered/);
+    assert.match(explain.stdout, /\.mcp\.json/);
+
     const create = runCli(["snapshot", "create", "--name", "baseline", "--metadata-only", "--project", project], project, env);
     assert.equal(create.status, 0, create.stderr);
     assert.match(create.stdout, /Created metadata-only snapshot: baseline/);
@@ -84,5 +89,9 @@ describe("snaptailor CLI scaffold", () => {
     const report = runCli(["report", "current", "--project", project, "--out", reportPath], project, env);
     assert.equal(report.status, 0, report.stderr);
     assert.match(await readFile(reportPath, "utf8"), /# snaptailor report: current/);
+
+    const reportJson = runCli(["report", "current", "--project", project, "--json"], project, env);
+    assert.equal(reportJson.status, 0, reportJson.stderr);
+    assert.equal(JSON.parse(reportJson.stdout).snapshot.manifest.name, "current");
   });
 });
