@@ -1,5 +1,18 @@
 #!/usr/bin/env node
 
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
+
+import { auditEvidence } from "./audit.js";
+import { diffGraphs, type GraphDiff } from "./diff.js";
+import { formatSnapError } from "./errors.js";
+import { buildGraph } from "./graph.js";
+import { buildProvenance } from "./provenance.js";
+import { renderMarkdownReport } from "./report.js";
+import { scanProject, type ScanResult } from "./scan.js";
+import { defaultStoreDir, ensureStore, listSnapshots, readSnapshot, writeSnapshot } from "./store.js";
+import type { AuditFinding, Snapshot, SnapshotManifest } from "./types.js";
+
 const HELP = `snaptailor
 
 Read-only drift diagnosis and security audit for AI coding agent setups.
@@ -16,18 +29,307 @@ Core v0.1 commands:
   snaptailor report current --project . --out snaptailor-report.md
 `;
 
-function main(argv: string[]): number {
-  if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
+interface RuntimeOptions {
+  projectPath: string;
+  homeDir: string;
+  storeDir: string;
+}
+
+interface CurrentState {
+  scan: ScanResult;
+  snapshot: Snapshot;
+  storeFindings: AuditFinding[];
+}
+
+function valueAfter(args: string[], flag: string): string | undefined {
+  const index = args.indexOf(flag);
+  if (index === -1) {
+    return undefined;
+  }
+  return args[index + 1];
+}
+
+function hasFlag(args: string[], flag: string): boolean {
+  return args.includes(flag);
+}
+
+function runtimeOptions(args: string[]): RuntimeOptions {
+  const homeDir = process.env.HOME ?? process.cwd();
+  return {
+    projectPath: path.resolve(valueAfter(args, "--project") ?? process.cwd()),
+    homeDir,
+    storeDir: process.env.SNAPTAILOR_STORE ?? defaultStoreDir(homeDir)
+  };
+}
+
+function json(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function trustForReport(scan: ScanResult): { readOnly: boolean; network: "disabled"; commandsExecuted: number } {
+  return {
+    readOnly: scan.trust.readOnly,
+    network: scan.trust.network,
+    commandsExecuted: scan.trust.commandsExecuted.length
+  };
+}
+
+async function currentState(args: string[], name = "current"): Promise<CurrentState> {
+  const options = runtimeOptions(args);
+  const storeFindings = await ensureStore(options.storeDir);
+  const scan = await scanProject(options);
+  const graph = buildGraph(scan.evidence);
+  const auditFindings = [...storeFindings, ...auditEvidence(scan.evidence, graph)];
+  const provenance = buildProvenance(graph, scan.evidence);
+  const manifest: SnapshotManifest = {
+    schemaVersion: "0.1",
+    name,
+    createdAt: new Date().toISOString(),
+    projectPath: options.projectPath,
+    security: {
+      rawSecretsIncluded: false,
+      redactionPolicy: "metadata-only"
+    }
+  };
+
+  return {
+    scan,
+    storeFindings,
+    snapshot: {
+      manifest,
+      evidence: scan.evidence,
+      graph,
+      auditFindings,
+      provenance
+    }
+  };
+}
+
+async function snapshotByRef(ref: string, args: string[]): Promise<Snapshot> {
+  if (ref === "current") {
+    return (await currentState(args)).snapshot;
+  }
+  return await readSnapshot(runtimeOptions(args).storeDir, ref);
+}
+
+function renderScanText(state: CurrentState): string {
+  const lines = [
+    "snaptailor scan",
+    "",
+    `Read-only: ${state.scan.trust.readOnly ? "yes" : "no"}`,
+    `Network: ${state.scan.trust.network}`,
+    `Commands executed: ${state.scan.trust.commandsExecuted.length}`,
+    `Writes: ${state.scan.trust.storeWriteLocation}/index only`,
+    "",
+    "Detected agents"
+  ];
+
+  const agents = new Set(state.scan.evidence.map((item) => item.agent));
+  if (agents.size === 0) {
+    lines.push("  none");
+  } else {
+    for (const agent of [...agents].sort()) {
+      const items = state.scan.evidence.filter((item) => item.agent === agent);
+      const scopes = new Set(items.map((item) => item.scope));
+      lines.push(`  ${displayAgent(agent)}  ${[...scopes].sort().join(" + ")} state found`);
+    }
+  }
+
+  lines.push("", "High-signal findings");
+  if (state.snapshot.auditFindings.length === 0) {
+    lines.push("  none");
+  } else {
+    for (const finding of state.snapshot.auditFindings.slice(0, 8)) {
+      lines.push(`  ${finding.severity.toUpperCase()}  ${finding.problem}`);
+    }
+  }
+
+  lines.push("", "Blind spots");
+  for (const blindSpot of state.scan.blindSpots) {
+    lines.push(`  ${blindSpot}`);
+  }
+
+  lines.push("", "Next", "  snaptailor snapshot create --name baseline --metadata-only --project .");
+  return `${lines.join("\n")}\n`;
+}
+
+function displayAgent(agent: string): string {
+  if (agent === "claude-code") return "Claude Code";
+  if (agent === "codex") return "Codex";
+  if (agent === "cursor") return "Cursor";
+  if (agent === "project") return "Project";
+  return agent;
+}
+
+function renderDiffText(diff: GraphDiff): string {
+  const lines = ["snaptailor diff", "", "Semantic changes"];
+  if (diff.semanticChanges.length === 0) {
+    lines.push("  none");
+  } else {
+    for (const change of diff.semanticChanges) {
+      lines.push(`  ${change.severity.toUpperCase()}  ${change.code}: ${change.entityName}`);
+    }
+  }
+
+  lines.push("", "Raw source changes");
+  if (diff.rawSourceChanges.length === 0) {
+    lines.push("  none");
+  } else {
+    for (const change of diff.rawSourceChanges) {
+      lines.push(`  ${change.status}: ${change.sourcePath}`);
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+function renderFindingsText(findings: AuditFinding[]): string {
+  if (findings.length === 0) {
+    return "No findings.\n";
+  }
+  return `${findings.map((finding) => `${finding.severity.toUpperCase()} ${finding.code}: ${finding.problem}`).join("\n")}\n`;
+}
+
+async function run(args: string[]): Promise<number> {
+  if (args.length === 0 || hasFlag(args, "--help") || hasFlag(args, "-h")) {
     process.stdout.write(HELP);
     return 0;
   }
 
-  process.stderr.write(`SNAPTAILOR_UNKNOWN_COMMAND
-Problem: Unknown command.
-Cause: snaptailor does not recognize "${argv.join(" ")}".
-Fix: Run \`snaptailor --help\` to see supported v0.1 commands.
-`);
+  if (args[0] === "scan") {
+    const state = await currentState(args);
+    process.stdout.write(hasFlag(args, "--json") ? json(state) : renderScanText(state));
+    return 0;
+  }
+
+  if (args[0] === "snapshot" && args[1] === "create") {
+    const name = valueAfter(args, "--name");
+    if (!name) {
+      process.stderr.write(formatSnapError({
+        code: "SNAPTAILOR_MISSING_NAME",
+        problem: "Snapshot name is required.",
+        cause: "`snapshot create` was called without `--name`.",
+        fix: "Run `snaptailor snapshot create --name baseline --metadata-only --project .`."
+      }));
+      return 1;
+    }
+    if (!hasFlag(args, "--metadata-only")) {
+      process.stderr.write(formatSnapError({
+        code: "SNAPTAILOR_METADATA_ONLY_REQUIRED",
+        problem: "v0.1 snapshots are metadata-only.",
+        cause: "`snapshot create` was called without `--metadata-only`.",
+        fix: "Add `--metadata-only`; raw content snapshots are not supported in v0.1."
+      }));
+      return 1;
+    }
+
+    const options = runtimeOptions(args);
+    const state = await currentState(args, name);
+    await writeSnapshot(options.storeDir, state.snapshot);
+    process.stdout.write(`Created metadata-only snapshot: ${name}\n`);
+    return 0;
+  }
+
+  if (args[0] === "snapshot" && args[1] === "list") {
+    const names = await listSnapshots(runtimeOptions(args).storeDir);
+    process.stdout.write(names.length === 0 ? "No snapshots.\n" : `${names.join("\n")}\n`);
+    return 0;
+  }
+
+  if (args[0] === "snapshot" && args[1] === "show") {
+    const name = args[2];
+    if (!name) {
+      process.stderr.write(formatSnapError({
+        code: "SNAPTAILOR_MISSING_NAME",
+        problem: "Snapshot name is required.",
+        cause: "`snapshot show` was called without a name.",
+        fix: "Run `snaptailor snapshot list` and pass one of the listed names."
+      }));
+      return 1;
+    }
+    const snapshot = await readSnapshot(runtimeOptions(args).storeDir, name);
+    process.stdout.write(hasFlag(args, "--json") ? json(snapshot) : `${snapshot.manifest.name}\n`);
+    return 0;
+  }
+
+  if (args[0] === "diff") {
+    const baseline = args[1];
+    const target = args[2];
+    if (!baseline || !target) {
+      process.stderr.write(formatSnapError({
+        code: "SNAPTAILOR_DIFF_REFS_REQUIRED",
+        problem: "Two snapshot references are required.",
+        cause: "`diff` was called without baseline and target references.",
+        fix: "Run `snaptailor diff baseline current --project .`."
+      }));
+      return 1;
+    }
+    const before = await snapshotByRef(baseline, args);
+    const after = await snapshotByRef(target, args);
+    const diff = diffGraphs(before.graph, after.graph);
+    process.stdout.write(hasFlag(args, "--json") ? json(diff) : renderDiffText(diff));
+    return 0;
+  }
+
+  if (args[0] === "audit") {
+    const ref = args[1] ?? "current";
+    const snapshot = await snapshotByRef(ref, args);
+    process.stdout.write(hasFlag(args, "--json") ? json(snapshot.auditFindings) : renderFindingsText(snapshot.auditFindings));
+    return 0;
+  }
+
+  if (args[0] === "provenance") {
+    const ref = args[1] ?? "current";
+    const snapshot = await snapshotByRef(ref, args);
+    process.stdout.write(hasFlag(args, "--json") ? json(snapshot.provenance) : json(snapshot.provenance));
+    return 0;
+  }
+
+  if (args[0] === "report") {
+    const ref = args[1] ?? "current";
+    const options = runtimeOptions(args);
+    const snapshot = await snapshotByRef(ref, args);
+    const diff = ref === "current" ? undefined : diffGraphs(snapshot.graph, (await currentState(args)).snapshot.graph);
+    const scan = ref === "current" ? (await currentState(args)).scan : await scanProject(options);
+    const markdown = renderMarkdownReport({
+      snapshotName: snapshot.manifest.name,
+      trust: trustForReport(scan),
+      evidence: snapshot.evidence,
+      graph: snapshot.graph,
+      findings: snapshot.auditFindings,
+      provenance: snapshot.provenance,
+      blindSpots: scan.blindSpots,
+      diffs: diff
+    });
+    const out = valueAfter(args, "--out");
+    if (out) {
+      await writeFile(path.resolve(out), markdown);
+      process.stdout.write(`Wrote report: ${path.resolve(out)}\n`);
+    } else {
+      process.stdout.write(markdown);
+    }
+    return 0;
+  }
+
+  process.stderr.write(formatSnapError({
+    code: "SNAPTAILOR_UNKNOWN_COMMAND",
+    problem: "Unknown command.",
+    cause: `snaptailor does not recognize "${args.join(" ")}".`,
+    fix: "Run `snaptailor --help` to see supported v0.1 commands."
+  }));
   return 1;
 }
 
-process.exitCode = main(process.argv.slice(2));
+run(process.argv.slice(2))
+  .then((code) => {
+    process.exitCode = code;
+  })
+  .catch((error: unknown) => {
+    process.stderr.write(formatSnapError({
+      code: "SNAPTAILOR_UNHANDLED_ERROR",
+      problem: "Command failed.",
+      cause: error instanceof Error ? error.message : "Unknown error.",
+      fix: "Rerun with `--help` to confirm command syntax, then inspect the reported path if present."
+    }));
+    process.exitCode = 1;
+  });

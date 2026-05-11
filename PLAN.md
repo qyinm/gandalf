@@ -323,7 +323,7 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 - [done] Build agent-state graph with scope, precedence, confidence, and source references.
 - [done] Implement `current` pseudo-snapshot in the analysis layer.
 - [done] Implement semantic diff plus raw source-change summary.
-- [progress] Add `--json` to scan, snapshot show, diff, audit, provenance, and report in CLI integration.
+- [done] Add `--json` to scan, snapshot show, diff, audit, provenance, and report in CLI integration.
 
 ### Milestone 4: Audit And Provenance
 
@@ -331,6 +331,7 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 - [done] Implement provenance report showing where every effective value came from.
 - [done] Implement reproducibility gap inputs via capture statuses and blind spots.
 - [done] Implement markdown report renderer for `snaptailor-report.md`.
+- [done] Wire `scan`, `snapshot`, `diff`, `audit`, `provenance`, and `report` through the CLI.
 
 ### Milestone 5: Docs And Dogfood
 
