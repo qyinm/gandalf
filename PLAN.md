@@ -313,10 +313,10 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 
 ### Milestone 2: Metadata Snapshot Store
 
-- Create `~/.snaptailor` with `0700`.
-- Store metadata-only snapshots.
-- Add `snapshot create --metadata-only`, `list`, and `show --json`.
-- Add checksums for observed files and safe structured fields.
+- [done] Create `~/.snaptailor` with `0700`.
+- [done] Store metadata-only snapshots.
+- [done] Add snapshot store helpers for create, list, and show.
+- [done] Add checksums for observed files and safe structured fields.
 
 ### Milestone 3: Normalized Graph And Diff
 
