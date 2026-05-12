@@ -216,6 +216,9 @@ export interface RestoreItem {
   /** Previous state saved for potential rollback */
   rollbackState: Record<string, unknown> | null;
 
+  /** Content to restore from the snapshot (from targetState.value) */
+  targetContent?: unknown;
+
   /** Whether this item supports rollback */
   canRollback: boolean;
 
@@ -287,6 +290,12 @@ export type UndoHandler = (item: RestoreItem) => Promise<void>;
 
 /** Registry mapping item type strings to their undo handlers */
 export type UndoHandlerRegistry = Record<string, UndoHandler>;
+
+/** Executor function for applying a single restore item (mutates files) */
+export type ApplyHandler = (item: RestoreItem) => Promise<void>;
+
+/** Registry mapping item types to their apply handlers */
+export type ApplyHandlerRegistry = Record<string, ApplyHandler>;
 
 /** Summary of a rollback/undo execution */
 export interface RollbackSummary {

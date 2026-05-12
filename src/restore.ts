@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { scanProject } from "./scan.js";
 import { readSnapshot } from "./store.js";
 import {
@@ -7,6 +9,8 @@ import {
 import { diffGraphs } from "./diff.js";
 import type {
   AgentId,
+  ApplyHandler,
+  ApplyHandlerRegistry,
   ApplyOptions,
   ApplySummary,
   ApplyWithRollbackResult,
@@ -149,6 +153,7 @@ export function parseDryRunOutput(input: string): ParseDryRunResult {
       status: "pending",
       executionOrder: order,
       rollbackState: null,
+      targetContent: planItem.targetState?.value,
       canRollback,
       applyAt: undefined,
       errorMessage: undefined,
@@ -425,6 +430,221 @@ export function formatApplySummary(summary: ApplySummary): string {
 
   return `${lines.join("\n")}\n`;
 }
+
+// ── Per-type apply executors (v0.2+ Phase-2) ─────────────────────
+
+/** Read the current content at a file path, returning null if missing. */
+async function readCurrentContent(filePath: string): Promise<string | null> {
+  try {
+    return await fs.promises.readFile(filePath, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+/** Save previous content to item.rollbackState and write target content. */
+async function writeWithRollback(
+  item: RestoreItem,
+  filePath: string,
+  content: string
+): Promise<void> {
+  const prev = await readCurrentContent(filePath);
+  item.rollbackState = prev !== null ? { content: prev } : null;
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.promises.writeFile(filePath, content, "utf-8");
+}
+
+/**
+ * Apply handler for agent_config items (JSON/TOML config files).
+ */
+export const applyAgentConfig: ApplyHandler = async (item: RestoreItem): Promise<void> => {
+  const value = item.targetContent;
+  const filePath = item.dest;
+  const content = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  const prev = await readCurrentContent(filePath);
+  item.rollbackState = { filePath, previousContent: prev };
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.promises.writeFile(filePath, content + "\n", "utf-8");
+};
+
+/**
+ * Apply handler for agent_instruction items (CLAUDE.md / AGENTS.md).
+ */
+export const applyAgentInstruction: ApplyHandler = async (item: RestoreItem): Promise<void> => {
+  const content = typeof item.targetContent === "string"
+    ? item.targetContent
+    : String(item.targetContent ?? "");
+  const filePath = item.dest;
+  const prev = await readCurrentContent(filePath);
+  item.rollbackState = { filePath, previousContent: prev };
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.promises.writeFile(filePath, content, "utf-8");
+};
+
+/**
+ * Apply handler for hook items (executable scripts).
+ */
+export const applyHook: ApplyHandler = async (item: RestoreItem): Promise<void> => {
+  const content = typeof item.targetContent === "string"
+    ? item.targetContent
+    : String(item.targetContent ?? "");
+  const filePath = item.dest;
+  const prev = await readCurrentContent(filePath);
+  item.rollbackState = { filePath, previousContent: prev };
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.promises.writeFile(filePath, content, "utf-8");
+  await fs.promises.chmod(filePath, 0o755);
+};
+
+/**
+ * Apply handler for mcp_server items.
+ * Adds/updates an MCP server entry in the project's .mcp.json.
+ */
+export const applyMcpServer: ApplyHandler = async (item: RestoreItem): Promise<void> => {
+  const mcpPath = path.join(path.dirname(item.dest), ".mcp.json");
+  const mcpDir = path.dirname(mcpPath);
+
+  let mcpConfig: Record<string, unknown> = { mcpServers: {} };
+  const existing = await readCurrentContent(mcpPath);
+  if (existing) {
+    try { mcpConfig = JSON.parse(existing); } catch { mcpConfig = { mcpServers: {} }; }
+  }
+  if (!mcpConfig.mcpServers || typeof mcpConfig.mcpServers !== "object") {
+    mcpConfig.mcpServers = {};
+  }
+
+  const serverName = item.itemId.split(".").pop() ?? "unknown";
+  const servers = mcpConfig.mcpServers as Record<string, unknown>;
+  const prevEntry = servers[serverName] ?? null;
+
+  servers[serverName] = item.targetContent;
+  item.rollbackState = {
+    mcpPath, previousEntry: prevEntry,
+    mcpConfig: JSON.parse(JSON.stringify(mcpConfig))
+  };
+
+  await fs.promises.mkdir(mcpDir, { recursive: true });
+  await fs.promises.writeFile(mcpPath, JSON.stringify(mcpConfig, null, 2) + "\n", "utf-8");
+};
+
+/**
+ * Apply handler for permission items (settings.json permission rules).
+ */
+export const applyPermission: ApplyHandler = async (item: RestoreItem): Promise<void> => {
+  const filePath = item.dest;
+  const targetDir = path.dirname(filePath);
+
+  let settings: Record<string, unknown> = {};
+  const existing = await readCurrentContent(filePath);
+  if (existing) {
+    try { settings = JSON.parse(existing); } catch { settings = {}; }
+  }
+
+  item.rollbackState = { filePath, previousContent: existing };
+
+  const permValue = item.targetContent;
+  const permName = item.itemId.split(".").pop() ?? "permission";
+  if (!settings.permissions || typeof settings.permissions !== "object") {
+    settings.permissions = {};
+  }
+  (settings.permissions as Record<string, unknown>)[permName] = permValue;
+
+  await fs.promises.mkdir(targetDir, { recursive: true });
+  await fs.promises.writeFile(filePath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
+};
+
+/**
+ * Apply handler for env_key items (.env entries).
+ */
+export const applyEnvKey: ApplyHandler = async (item: RestoreItem): Promise<void> => {
+  const envPath = path.join(path.dirname(item.dest), ".env");
+  const keyName = item.itemId.split(".").pop() ?? "VAR";
+  const value = typeof item.targetContent === "string"
+    ? item.targetContent : String(item.targetContent ?? "");
+
+  const existing = await readCurrentContent(envPath);
+  item.rollbackState = { filePath: envPath, previousContent: existing };
+
+  const lines = existing ? existing.split("\n") : [];
+  const keyIndex = lines.findIndex((l) => l.trim().startsWith(`${keyName}=`));
+  const newLine = `${keyName}=${value}`;
+  if (keyIndex >= 0) { lines[keyIndex] = newLine; }
+  else { lines.push(newLine); }
+
+  await fs.promises.mkdir(path.dirname(envPath), { recursive: true });
+  await fs.promises.writeFile(envPath, lines.join("\n") + "\n", "utf-8");
+};
+
+/**
+ * Apply handler for skill items.
+ */
+export const applySkill: ApplyHandler = async (item: RestoreItem): Promise<void> => {
+  const skillPath = item.dest;
+  const content = typeof item.targetContent === "string"
+    ? item.targetContent : JSON.stringify(item.targetContent, null, 2);
+  const prev = await readCurrentContent(skillPath);
+  item.rollbackState = { filePath: skillPath, previousContent: prev };
+  await fs.promises.mkdir(path.dirname(skillPath), { recursive: true });
+  await fs.promises.writeFile(skillPath, content + "\n", "utf-8");
+};
+
+/** Default apply handler registry for known restore item types. */
+export function defaultApplyHandlerRegistry(): ApplyHandlerRegistry {
+  return {
+    agent_config: applyAgentConfig,
+    agent_instruction: applyAgentInstruction,
+    mcp_server: applyMcpServer,
+    permission: applyPermission,
+    hook: applyHook,
+    skill: applySkill,
+    env_key: applyEnvKey
+  };
+}
+
+/** Create a RestoreExecutor that dispatches to per-type apply handlers. */
+export function createDefaultApplyExecutor(
+  registry: ApplyHandlerRegistry
+): RestoreExecutor {
+  return async (item: RestoreItem): Promise<void> => {
+    const handler = registry[item.type];
+    if (!handler) {
+      item.skipReason = `No apply handler for type "${item.type}"`;
+      throw new Error(item.skipReason);
+    }
+    await handler(item);
+  };
+}
+
+/** Undo handler: restores previous file content from rollbackState. */
+export const restorePreviousContentUndoHandler: UndoHandler = async (
+  item: RestoreItem
+): Promise<void> => {
+  if (!item.rollbackState) return;
+  const state = item.rollbackState as Record<string, unknown>;
+  const prevContent = state.previousContent as string | null;
+  const filePath = state.filePath as string | undefined;
+  const mcpPath = state.mcpPath as string | undefined;
+  const envPath = state.envPath as string | undefined;
+
+  if (filePath) {
+    if (prevContent === null) {
+      await fs.promises.rm(filePath, { force: true }).catch(() => {});
+    } else {
+      await fs.promises.writeFile(filePath, prevContent, "utf-8");
+    }
+  } else if (mcpPath) {
+    const savedConfig = state.mcpConfig as Record<string, unknown> | null;
+    if (savedConfig) {
+      await fs.promises.writeFile(mcpPath, JSON.stringify(savedConfig, null, 2) + "\n", "utf-8");
+    }
+  } else if (envPath) {
+    if (prevContent === null) {
+      await fs.promises.rm(envPath, { force: true }).catch(() => {});
+    } else {
+      await fs.promises.writeFile(envPath, prevContent, "utf-8");
+    }
+  }
+};
 
 // ── Rollback execution (v0.2+ Phase-1) ──────────────────────────
 
@@ -770,36 +990,16 @@ export const restorePreviousStateUndoHandler: UndoHandler = async (
 };
 
 /**
- * Default undo handler registry for known restore item types.
- *
- * This registry provides default no-ops for types that don't have
- * concrete undo implementations (e.g., mcp_server, env_key).
- * As each type's concrete undo logic is implemented, register it here.
+ * Default undo handler registry using content-restore undo.
+ * Replaces the old no-op-based registry — all types now support rollback.
  */
 export function defaultUndoHandlerRegistry(): UndoHandlerRegistry {
-  return {
-    // env_key items: generic rollbackState-based undo
-    env_key: restorePreviousStateUndoHandler,
-    env: restorePreviousStateUndoHandler,
-
-    // mcp_server items: generic rollbackState-based undo
-    mcp_server: restorePreviousStateUndoHandler,
-
-    // skill items: generic rollbackState-based undo
-    skill: restorePreviousStateUndoHandler,
-
-    // agent_config and agent_instruction: rollbackState-based undo
-    agent_config: restorePreviousStateUndoHandler,
-    agent_instruction: restorePreviousStateUndoHandler,
-
-    // permission, hook, symlink: no-op by default (non-reversible in v0.2)
-    permission: noopUndoHandler,
-    hook: noopUndoHandler,
-    symlink: noopUndoHandler,
-
-    // catch-all for unknown types (no-op)
-    unsupported: noopUndoHandler
-  };
+  const handlers: Record<string, UndoHandler> = {};
+  for (const type of ["agent_config", "agent_instruction", "mcp_server", "permission", "hook", "skill", "env_key", "env", "symlink"]) {
+    handlers[type] = restorePreviousContentUndoHandler;
+  }
+  handlers.unsupported = noopUndoHandler;
+  return handlers;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
