@@ -10,7 +10,8 @@ import { buildGraph } from "./graph.js";
 import { buildProvenance } from "./provenance.js";
 import { renderMarkdownReport } from "./report.js";
 import { scanProject, type ScanResult } from "./scan.js";
-import { defaultStoreDir, ensureStore, listSnapshots, readSnapshot, writeSnapshot } from "./store.js";
+import { defaultStoreDir, ensureStore, listSnapshots, readSnapshot, snapshotExists, writeSnapshot } from "./store.js";
+import { buildRestorePlan } from "./restore.js";
 import type { AuditFinding, Snapshot, SnapshotManifest } from "./types.js";
 
 const HELP = `snaptailor
@@ -27,6 +28,9 @@ Core v0.1 commands:
   snaptailor audit current --project .
   snaptailor provenance current --project . --json
   snaptailor report current --project . --out snaptailor-report.md
+
+v0.2 commands (dry-run only):
+  snaptailor restore --snapshot <name> --dry-run --project .   generate a non-mutating restore plan as JSON
 `;
 
 interface RuntimeOptions {
@@ -331,6 +335,54 @@ async function run(args: string[]): Promise<number> {
     } else {
       process.stdout.write(markdown);
     }
+    return 0;
+  }
+
+  if (args[0] === "restore") {
+    const snapshotName = valueAfter(args, "--snapshot");
+    if (!snapshotName) {
+      process.stderr.write(formatSnapError({
+        code: "SNAPTAILOR_RESTORE_SNAPSHOT_REQUIRED",
+        problem: "Snapshot name is required for restore.",
+        cause: "`restore` was called without `--snapshot`.",
+        fix: "Run `snaptailor restore --snapshot <name> --dry-run --project .`."
+      }));
+      return 1;
+    }
+
+    if (!hasFlag(args, "--dry-run")) {
+      process.stderr.write(formatSnapError({
+        code: "SNAPTAILOR_DRY_RUN_REQUIRED",
+        problem: "v0.2 restore is dry-run only.",
+        cause: "`restore` was called without `--dry-run`.",
+        fix: "Add `--dry-run` to generate a non-mutating restore plan."
+      }));
+      return 1;
+    }
+
+    const options = runtimeOptions(args);
+    await ensureStore(options.storeDir);
+
+    const exists = await snapshotExists(options.storeDir, snapshotName);
+    if (!exists) {
+      process.stderr.write(formatSnapError({
+        code: "SNAPTAILOR_SNAPSHOT_NOT_FOUND",
+        problem: `Snapshot "${snapshotName}" not found.`,
+        cause: "The named snapshot does not exist in the store.",
+        fix: "Run `snaptailor snapshot list` to see available snapshots."
+      }));
+      return 1;
+    }
+
+    const plan = await buildRestorePlan({
+      sourceSnapshot: snapshotName,
+      projectPath: options.projectPath,
+      homeDir: options.homeDir,
+      storeDir: options.storeDir,
+      dryRun: true
+    });
+
+    process.stdout.write(json(plan));
     return 0;
   }
 

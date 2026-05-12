@@ -21,7 +21,7 @@ export type CaptureStatus =
   | "unsafe_to_export"
   | "unsupported";
 
-export type Severity = "low" | "medium" | "high" | "critical";
+export type Severity = "none" | "low" | "medium" | "high" | "critical";
 
 export interface DiscoveredItem {
   id: string;
@@ -99,4 +99,84 @@ export interface ScanOptions {
   homeDir: string;
   storeDir: string;
   explain?: boolean;
+}
+
+// ── Restore dry-run types (v0.2) ──────────────────────────────
+
+export type RestoreAction = "create" | "update" | "skip" | "conflict" | "unsupported";
+
+export interface ItemDiff {
+  changes: string[];
+  additions: string[];
+  removals: string[];
+}
+
+export interface RestorePlanItem {
+  itemId: string;
+  agent: AgentId;
+  kind: EvidenceKind;
+  sourcePath: string;
+  dependsOn: string[];
+  action: RestoreAction;
+  currentState: DiscoveredItem | null;
+  targetState: DiscoveredItem | null;
+  diff: ItemDiff;
+  riskLevel: Severity;
+  riskReason: string;
+  needsConfirmation: boolean;
+  confirmationPrompt: string;
+  rollbackInstruction: string;
+}
+
+export interface UnsupportedPlanItem {
+  itemId: string;
+  agent: AgentId;
+  kind: EvidenceKind;
+  sourcePath: string;
+  reason: string;
+}
+
+export interface RollbackStep {
+  itemId: string;
+  action: string;
+  instruction: string;
+}
+
+export interface RollbackPlan {
+  steps: RollbackStep[];
+}
+
+export interface RiskSummary {
+  none: number;
+  low: number;
+  medium: number;
+  high: number;
+  critical: number;
+}
+
+export interface RestorePlanMetadata {
+  plannerVersion: string;
+  generatedBy: string;
+}
+
+export interface RestorePlan {
+  planId: string;
+  sourceSnapshot: string;
+  targetProject: string;
+  createdAt: string;
+  itemCount: number;
+  riskSummary: RiskSummary;
+  items: RestorePlanItem[];
+  rollbackPlan: RollbackPlan;
+  executionOrder: string[];
+  unsupportedItems: UnsupportedPlanItem[];
+  planMetadata: RestorePlanMetadata;
+}
+
+export interface RestoreOptions {
+  sourceSnapshot: string;
+  projectPath: string;
+  homeDir: string;
+  storeDir: string;
+  dryRun: boolean;
 }
