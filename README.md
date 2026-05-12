@@ -2,7 +2,7 @@
 
 Read-only drift diagnosis and security audit for AI coding agent setups.
 
-snaptailor v0.1 does not restore, import, share, or execute anything. It reads local agent configuration, builds a metadata-only evidence inventory, explains what changed, and flags risky state.
+snaptailor reads local agent configuration, builds a metadata-only evidence inventory, explains what changed, and flags risky state. v0.2+ adds restore planning and execution.
 
 ## Trust Contract
 
@@ -16,14 +16,14 @@ By default snaptailor:
 - omits raw secrets and raw `.env` values
 - does not follow symlinks
 
-## First Run
+## Install
 
 ```bash
 npm install -g snaptailor
 snaptailor scan --project .
 ```
 
-The first scan should print the trust preflight, detected agents, high-signal findings, blind spots, and the next command to create a baseline.
+First scan prints the trust preflight, detected agents, high-signal findings, blind spots, and the next command to create a baseline.
 
 ## Inspect What Will Be Scanned
 
@@ -31,7 +31,7 @@ The first scan should print the trust preflight, detected agents, high-signal fi
 snaptailor scan --project . --explain
 ```
 
-Use this before creating a baseline if you want to see the read/write contract and supported paths.
+Shows the read/write contract and supported paths before creating a baseline.
 
 ## Create First Baseline
 
@@ -65,7 +65,20 @@ Findings include executable config additions, remote MCP changes, permission wil
 snaptailor report current --project . --out snaptailor-report.md
 ```
 
-This exports a human-readable report, not a restorable bundle.
+Exports a human-readable report, not a restorable bundle.
+
+## Restore Planning (v0.2)
+
+```bash
+# Generate a non-mutating restore plan
+snaptailor restore --snapshot baseline --dry-run --project .
+
+# Apply restore items sequentially (best-effort by default)
+snaptailor restore --snapshot baseline --apply --project .
+
+# Stop on first failure
+snaptailor restore --snapshot baseline --apply --fail-fast --project .
+```
 
 ## Machine-Readable Output
 
@@ -76,14 +89,11 @@ snaptailor provenance current --project . --json
 snaptailor audit current --project . --json
 ```
 
-Use JSON output in CI, local scripts, or agent workflows.
+## Not In v0.1/v0.2
 
-## Not In v0.1
-
-- `restore --apply`
-- third-party bundle import
+- `restore --apply` with real per-type file executors (currently no-op stub)
+- `.stailor` bundle import/export
 - team sharing
 - desktop UI
 - cloud sync
 - raw secret capture
-
