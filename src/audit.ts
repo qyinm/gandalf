@@ -193,7 +193,7 @@ export function auditEvidence(evidence: DiscoveredItem[], graph: GraphNode[]): A
   findings.push(...projectOverrideFindings(graph, evidenceById));
 
   return findings.sort((left, right) => {
-    const severityRank = { critical: 0, high: 1, medium: 2, low: 3 };
+    const severityRank: Record<Severity, number> = { none: 4, critical: 0, high: 1, medium: 2, low: 3 };
     return severityRank[left.severity] - severityRank[right.severity] || left.code.localeCompare(right.code);
   });
 }
