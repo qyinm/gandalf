@@ -11,7 +11,7 @@ import { buildProvenance } from "./provenance.js";
 import { renderMarkdownReport } from "./report.js";
 import { scanProject, type ScanResult } from "./scan.js";
 import { defaultStoreDir, ensureStore, listSnapshots, readSnapshot, snapshotExists, writeSnapshot } from "./store.js";
-import { buildRestorePlan, applyRestoreItems, applyWithRollback, formatApplySummary, formatRollbackSummary, createDefaultUndoExecutor, defaultUndoHandlerRegistry, parseDryRunOutput } from "./restore.js";
+import { buildRestorePlan, applyRestoreItems, applyWithRollback, formatApplySummary, formatRollbackSummary, createDefaultUndoExecutor, defaultUndoHandlerRegistry, parseDryRunOutput, createDefaultApplyExecutor, defaultApplyHandlerRegistry } from "./restore.js";
 import type { AuditFinding, ApplySummary, ApplyWithRollbackResult, RestoreExecutor, RestoreItem, UndoExecutor, Snapshot, SnapshotManifest } from "./types.js";
 
 const HELP = `snaptailor
@@ -436,14 +436,12 @@ async function run(args: string[]): Promise<number> {
       defaultUndoHandlerRegistry()
     );
 
-    // Apply executor — currently a no-op stub that marks items as applied.
-    // Real item-type-specific executors will be implemented in Phase-2+.
-    const applyExecutor: RestoreExecutor = async (item: RestoreItem): Promise<void> => {
-      // Phase-1: no-op executor — does not perform actual mutations.
-      // Items are marked as "applied" for rollback testing purposes.
-      // Real mutation logic will be wired in per-type apply handlers.
-      return;
-    };
+    // Apply executor — dispatches to per-type handlers (agent_config,
+    // agent_instruction, mcp_server, permission, hook, skill, env_key).
+    // Each handler saves previous state to item.rollbackState before mutating.
+    const applyExecutor: RestoreExecutor = createDefaultApplyExecutor(
+      defaultApplyHandlerRegistry()
+    );
 
     const result = await applyWithRollback(parsed.items, applyExecutor, {
       failFast: isFailFast,
