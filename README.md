@@ -19,7 +19,7 @@ By default snaptailor:
 ## Install
 
 ```bash
-npm install -g snaptailor
+npm install -g @qxinm/snaptailor
 snaptailor scan --project .
 ```
 
