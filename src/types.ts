@@ -180,3 +180,146 @@ export interface RestoreOptions {
   storeDir: string;
   dryRun: boolean;
 }
+
+// ── Restore apply types (v0.2+ Phase-1) ──────────────────────────
+
+export type RestoreItemStatus = "pending" | "applied" | "failed" | "skipped" | "unsupported";
+
+export interface RestoreItem {
+  /** Unique identifier linking back to the plan item */
+  itemId: string;
+
+  /** Target path/file/resource being restored */
+  path: string;
+
+  /** Type of restore item (e.g. claude, codex, mcp_server, skill, env) */
+  type: string;
+
+  /** Source reference path or identifier for the restore data */
+  source: string;
+
+  /** Destination path where the restore is applied */
+  dest: string;
+
+  /** Current execution status */
+  status: RestoreItemStatus;
+
+  /** Error message if execution failed */
+  errorMessage?: string;
+
+  /** Reason if skipped or unsupported */
+  skipReason?: string;
+
+  /** Execution order (1-based, derived from topological sort) */
+  executionOrder: number;
+
+  /** Previous state saved for potential rollback */
+  rollbackState: Record<string, unknown> | null;
+
+  /** Whether this item supports rollback */
+  canRollback: boolean;
+
+  /** ISO timestamp when the item was applied */
+  applyAt?: string;
+}
+
+/** Options for `applyRestoreItems` execution loop */
+export interface ApplyOptions {
+  /** When true, abort execution on the first failure */
+  failFast: boolean;
+  /** Optional signal to abort execution */
+  signal?: AbortSignal;
+  /**
+   * When true, trigger automatic rollback of applied items after
+   * the apply loop completes. Uses the undoExecutor from RollbackOptions.
+   */
+  rollback?: boolean;
+}
+
+/** Summary of an apply execution */
+export interface ApplySummary {
+  total: number;
+  successful: number;
+  failed: number;
+  skipped: number;
+  unsupported: number;
+  /** Per-item failure details */
+  failures: Array<{ itemId: string; reason: string }>;
+  /**
+   * Ordered list of successfully-applied restore items (append-only).
+   * Items are appended in execution order as they are applied.
+   * Used as the authoritative source for rollback targeting.
+   */
+  appliedItems: RestoreItem[];
+  /**
+   * Mutable runtime registry mapping itemId → current status.
+   * Accumulated inline during execution so the restore loop can query
+   * any item's completion/failure state at any point without iterating
+   * the full items array or summary structures.
+   *
+   * Populated on every status transition: pending → applied/failed/skipped.
+   * Updated immediately in the apply loop — never stale.
+   */
+  statusRegistry: Record<string, RestoreItemStatus>;
+}
+
+/** Executor function signature for applying a single restore item */
+export type RestoreExecutor = (item: RestoreItem) => Promise<void>;
+
+// ── Rollback / undo types (v0.2+ Phase-1) ─────────────────────────
+
+/** Executor function signature for undoing a single restore item's apply() side effects */
+export type UndoExecutor = (item: RestoreItem) => Promise<void>;
+
+export type UndoStatus = "undone" | "skipped" | "failed";
+
+/** Per-item undo result */
+export interface UndoResult {
+  itemId: string;
+  status: UndoStatus;
+  reason?: string;
+}
+
+// ── Per-item undo handler types ────────────────────────────────
+
+/** Per-item undo handler function — reverses a single item's apply() side effects */
+export type UndoHandler = (item: RestoreItem) => Promise<void>;
+
+/** Registry mapping item type strings to their undo handlers */
+export type UndoHandlerRegistry = Record<string, UndoHandler>;
+
+/** Summary of a rollback/undo execution */
+export interface RollbackSummary {
+  total: number;
+  undone: number;
+  skipped: number;
+  failed: number;
+  results: UndoResult[];
+}
+
+/**
+ * Options for rolling back applied restore items.
+ * Provides the undo executor and optional signal for cancellation.
+ */
+export interface RollbackOptions {
+  /** The undo executor that reverses side effects for each item type */
+  undoExecutor: UndoExecutor;
+  /** Optional signal to abort rollback execution */
+  signal?: AbortSignal;
+  /**
+   * When true, abort rollback execution on the first per-item failure.
+   * Default: false (best-effort continuation — remaining items are still undone).
+   */
+  failFast?: boolean;
+}
+
+/**
+ * Combined result of an apply-with-rollback execution.
+ * Contains both the apply and rollback summaries when rollback is triggered.
+ */
+export interface ApplyWithRollbackResult {
+  /** Summary of the apply execution */
+  applySummary: ApplySummary;
+  /** Summary of the rollback execution (undefined if rollback was not requested) */
+  rollbackSummary?: RollbackSummary;
+}
