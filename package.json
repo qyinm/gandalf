@@ -4,20 +4,22 @@
   "description": "Read-only drift diagnosis and security audit for AI coding agent setups.",
   "type": "module",
   "bin": {
-    "snaptailor": "./dist/src/cli.js"
+    "snaptailor": "dist/src/cli.js"
   },
   "files": [
-    "dist",
-    "README.md",
-    "PLAN.md",
-    "PRODUCT.md",
-    "TODOS.md"
+    "dist/src",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test \"dist/**/*.test.js\"",
-    "check": "npm run build && npm test"
+    "check": "npm run build && npm test",
+    "prepublishOnly": "npm run check",
+    "prepack": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "ai-agent",
@@ -26,7 +28,19 @@
     "audit",
     "diff"
   ],
-  "license": "UNLICENSED",
+  "license": "MIT",
+  "author": "qyinm",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qyinm/snaptailor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/qyinm/snaptailor/issues"
+  },
+  "homepage": "https://github.com/qyinm/snaptailor#readme",
+  "engines": {
+    "node": ">=18"
+  },
   "devDependencies": {
     "@types/node": "^22.15.21",
     "typescript": "^5.8.3"
