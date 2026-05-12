@@ -11,8 +11,8 @@ import { buildProvenance } from "./provenance.js";
 import { renderMarkdownReport } from "./report.js";
 import { scanProject, type ScanResult } from "./scan.js";
 import { defaultStoreDir, ensureStore, listSnapshots, readSnapshot, snapshotExists, writeSnapshot } from "./store.js";
-import { buildRestorePlan } from "./restore.js";
-import type { AuditFinding, Snapshot, SnapshotManifest } from "./types.js";
+import { buildRestorePlan, applyRestoreItems, applyWithRollback, formatApplySummary, formatRollbackSummary, createDefaultUndoExecutor, defaultUndoHandlerRegistry, parseDryRunOutput } from "./restore.js";
+import type { AuditFinding, ApplySummary, ApplyWithRollbackResult, RestoreExecutor, RestoreItem, UndoExecutor, Snapshot, SnapshotManifest } from "./types.js";
 
 const HELP = `snaptailor
 
@@ -31,6 +31,11 @@ Core v0.1 commands:
 
 v0.2 commands (dry-run only):
   snaptailor restore --snapshot <name> --dry-run --project .   generate a non-mutating restore plan as JSON
+
+v0.2+ commands (apply + rollback):
+  snaptailor restore --snapshot <name> --apply --project .              apply restore items sequentially
+  snaptailor restore --snapshot <name> --apply --fail-fast --project .  stop on first failure during apply
+  snaptailor restore --snapshot <name> --apply --rollback --project .   apply then automatically rollback
 `;
 
 interface RuntimeOptions {
@@ -350,12 +355,25 @@ async function run(args: string[]): Promise<number> {
       return 1;
     }
 
-    if (!hasFlag(args, "--dry-run")) {
+    const isDryRun = hasFlag(args, "--dry-run");
+    const isApply = hasFlag(args, "--apply");
+
+    if (!isDryRun && !isApply) {
       process.stderr.write(formatSnapError({
-        code: "SNAPTAILOR_DRY_RUN_REQUIRED",
-        problem: "v0.2 restore is dry-run only.",
-        cause: "`restore` was called without `--dry-run`.",
-        fix: "Add `--dry-run` to generate a non-mutating restore plan."
+        code: "SNAPTAILOR_RESTORE_MODE_REQUIRED",
+        problem: "Either --dry-run or --apply is required for restore.",
+        cause: "`restore` was called without `--dry-run` or `--apply`.",
+        fix: "Add `--dry-run` to generate a non-mutating restore plan, or `--apply` to execute restore items."
+      }));
+      return 1;
+    }
+
+    if (isDryRun && isApply) {
+      process.stderr.write(formatSnapError({
+        code: "SNAPTAILOR_RESTORE_MODE_CONFLICT",
+        problem: "--dry-run and --apply are mutually exclusive.",
+        cause: "Both `--dry-run` and `--apply` were passed.",
+        fix: "Use `--dry-run` to preview changes, or `--apply` to execute them."
       }));
       return 1;
     }
@@ -374,6 +392,21 @@ async function run(args: string[]): Promise<number> {
       return 1;
     }
 
+    // ── dry-run mode: build plan and output as JSON ───────────
+    if (isDryRun) {
+      const plan = await buildRestorePlan({
+        sourceSnapshot: snapshotName,
+        projectPath: options.projectPath,
+        homeDir: options.homeDir,
+        storeDir: options.storeDir,
+        dryRun: true
+      });
+
+      process.stdout.write(json(plan));
+      return 0;
+    }
+
+    // ── apply mode: build plan, parse items, execute ──────────
     const plan = await buildRestorePlan({
       sourceSnapshot: snapshotName,
       projectPath: options.projectPath,
@@ -382,8 +415,55 @@ async function run(args: string[]): Promise<number> {
       dryRun: true
     });
 
-    process.stdout.write(json(plan));
-    return 0;
+    // Serialize the plan and parse it into executable RestoreItems
+    const planJson = json(plan);
+    const parsed = parseDryRunOutput(planJson);
+    if (parsed.errors.length > 0) {
+      process.stderr.write(formatSnapError({
+        code: "SNAPTAILOR_RESTORE_PARSE_ERROR",
+        problem: "Failed to parse restore plan for execution.",
+        cause: parsed.errors[0]?.message ?? "Unknown parse error",
+        fix: "This is an internal error. Verify the snapshot is valid and try again."
+      }));
+      return 1;
+    }
+
+    const isFailFast = hasFlag(args, "--fail-fast");
+    const isRollback = hasFlag(args, "--rollback");
+
+    // Create the default undo executor from the built-in registry
+    const undoExecutor: UndoExecutor = createDefaultUndoExecutor(
+      defaultUndoHandlerRegistry()
+    );
+
+    // Apply executor — currently a no-op stub that marks items as applied.
+    // Real item-type-specific executors will be implemented in Phase-2+.
+    const applyExecutor: RestoreExecutor = async (item: RestoreItem): Promise<void> => {
+      // Phase-1: no-op executor — does not perform actual mutations.
+      // Items are marked as "applied" for rollback testing purposes.
+      // Real mutation logic will be wired in per-type apply handlers.
+      return;
+    };
+
+    const result = await applyWithRollback(parsed.items, applyExecutor, {
+      failFast: isFailFast,
+      rollback: isRollback,
+      undoExecutor
+    });
+
+    // Render apply summary
+    process.stdout.write(formatApplySummary(result.applySummary));
+
+    // Render rollback summary if rollback was triggered
+    if (result.rollbackSummary) {
+      process.stdout.write("\n");
+      process.stdout.write(formatRollbackSummary(result.rollbackSummary));
+    }
+
+    // Exit with non-zero if there were failures
+    const hasFailures = result.applySummary.failed > 0 ||
+      (result.rollbackSummary?.failed ?? 0) > 0;
+    return hasFailures ? 1 : 0;
   }
 
   process.stderr.write(formatSnapError({
