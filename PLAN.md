@@ -299,8 +299,8 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 
 - [done] TypeScript CLI scaffold, lockfile, build, and Node test harness are implemented.
 - [done] Shared user-facing error contract is implemented and tested.
-- [done] Validation incident template and seed backlog are documented in `docs/validation-incidents.md`.
-- [done] Replace seed incident patterns with 10 real target-operator incidents before claiming product validation complete. See `docs/validation-incidents.md`.
+- [done] Validation incident template and seed backlog are documented in `docs/internal/validation-incidents.md`.
+- [done] Replace seed incident patterns with 10 real target-operator incidents before claiming product validation complete. See `docs/internal/validation-incidents.md`.
 - [done] Choose TypeScript for fastest parser iteration and CLI distribution, with minimal dependencies and a lockfile.
 - [done] Add CLI scaffold, tests, lint/typecheck, fixture harness, and temp-home integration test harness.
 
@@ -344,7 +344,7 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
   - audit current setup
   - export a redacted report, not a restorable bundle
   - use JSON in CI or agent workflows
-- [done] Dogfood on at least three real agent setups before adding write features. Results are summarized in `docs/dogfood.md`.
+- [done] Dogfood on at least three real agent setups before adding write features. Results are summarized in `docs/internal/dogfood.md`.
 
 ## Test Diagram
 
