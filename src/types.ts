@@ -332,3 +332,105 @@ export interface ApplyWithRollbackResult {
   /** Summary of the rollback execution (undefined if rollback was not requested) */
   rollbackSummary?: RollbackSummary;
 }
+
+// ── Bundle types (v0.2+) ────────────────────────────────────────
+
+/**
+ * Bundle manifest stored in .stailor/manifest.json inside every .stailor archive.
+ */
+export interface BundleManifest {
+  formatVersion: 1;
+  snapshotName: string;
+  createdAt: string;
+  projectPath: string;
+  includesContent: boolean;
+  contentFileCount: number;
+  contentTotalBytes: number;
+  security: {
+    rawSecretsIncluded: false;
+    redactionPolicy: "metadata-only" | "structured_safe_fields_only";
+    signed: boolean;
+    signatureAlgorithm?: string;
+  };
+}
+
+/**
+ * Checksums for every tar entry inside a .stailor bundle.
+ * Stored in .stailor/checksums.json.
+ */
+export interface BundleChecksums {
+  algorithm: "SHA-256";
+  entries: Record<string, string>; // tar entry path → hex digest
+}
+
+/**
+ * Options for `bundleExport`.
+ */
+export interface BundleExportOptions {
+  snapshotName: string;
+  outputPath: string;
+  storeDir: string;
+  projectPath: string;
+  homeDir: string;
+  includeContent?: boolean;
+}
+
+/**
+ * Options for `bundleImport`.
+ */
+export interface BundleImportOptions {
+  bundlePath: string;
+  storeDir: string;
+  projectPath: string;
+  homeDir: string;
+  applyContent?: boolean;
+  dryRun?: boolean;
+  trust?: boolean;
+}
+
+/**
+ * Result of a bundle import operation.
+ */
+export interface BundleImportResult {
+  snapshotName: string;
+  evidenceCount: number;
+  includesContent: boolean;
+  contentApplied: boolean;
+  warnings: string[];
+}
+
+/**
+ * Result of a bundle inspect operation.
+ */
+export interface BundleInspectResult {
+  bundlePath: string;
+  formatVersion: number;
+  snapshotName: string;
+  createdAt: string;
+  projectPath: string;
+  includesContent: boolean;
+  contentFileCount: number;
+  contentTotalBytes: number;
+  checksumAlgorithm: string;
+  bundleChecksum: string;
+  isSigned: boolean;
+  signatureAlgorithm?: string;
+}
+
+// ── Tar types ───────────────────────────────────────────────────
+
+/**
+ * A single entry in a tar archive, held in memory.
+ */
+export interface TarEntry {
+  /** Entry path inside the archive (POSIX, relative) */
+  path: string;
+  /** File content as Buffer */
+  content: Buffer;
+  /** File mode (default 0o644) */
+  mode: number;
+  /** File modification time (Unix timestamp, default Date.now()) */
+  mtime: number;
+  /** Entry type: 'file' or 'directory' */
+  type: "file" | "directory";
+}

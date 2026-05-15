@@ -12,6 +12,7 @@ import { renderMarkdownReport } from "./report.js";
 import { scanProject, type ScanResult } from "./scan.js";
 import { defaultStoreDir, ensureStore, listSnapshots, readSnapshot, snapshotExists, writeSnapshot } from "./store.js";
 import { buildRestorePlan, applyRestoreItems, applyWithRollback, formatApplySummary, formatRollbackSummary, createDefaultUndoExecutor, defaultUndoHandlerRegistry, parseDryRunOutput, createDefaultApplyExecutor, defaultApplyHandlerRegistry } from "./restore.js";
+import { bundleExport, bundleImport, bundleInspect } from "./bundle.js";
 import type { AuditFinding, ApplySummary, ApplyWithRollbackResult, RestoreExecutor, RestoreItem, UndoExecutor, Snapshot, SnapshotManifest } from "./types.js";
 
 const HELP = `snaptailor
@@ -36,6 +37,13 @@ v0.2+ commands (apply + rollback):
   snaptailor restore --snapshot <name> --apply --project .              apply restore items sequentially
   snaptailor restore --snapshot <name> --apply --fail-fast --project .  stop on first failure during apply
   snaptailor restore --snapshot <name> --apply --rollback --project .   apply then automatically rollback
+
+v0.2+ bundle commands:
+  snaptailor bundle export --name <snapshot> --out <file.stailor> --project .   export snapshot to .stailor bundle
+  snaptailor bundle import <file.stailor> --project .                           import .stailor bundle into local store
+  snaptailor bundle inspect <file.stailor>                                      inspect bundle metadata
+  snaptailor bundle import <file.stailor> --dry-run --project .                 validate bundle without importing
+  snaptailor bundle export --name <snapshot> --out <file.stailor> --include-content --project .   export with raw file contents
 `;
 
 interface RuntimeOptions {
@@ -462,6 +470,111 @@ async function run(args: string[]): Promise<number> {
     const hasFailures = result.applySummary.failed > 0 ||
       (result.rollbackSummary?.failed ?? 0) > 0;
     return hasFailures ? 1 : 0;
+  }
+
+  if (args[0] === "bundle") {
+    const sub = args[1];
+    const options = runtimeOptions(args);
+
+    if (sub === "export") {
+      const snapshotName = valueAfter(args, "--name");
+      const outputPath = valueAfter(args, "--out");
+      if (!snapshotName || !outputPath) {
+        process.stderr.write(formatSnapError({
+          code: "SNAPTAILOR_BUNDLE_MISSING_ARGS",
+          problem: "Bundle export requires --name and --out.",
+          cause: "`bundle export` was called without required flags.",
+          fix: "Run `snaptailor bundle export --name <snapshot> --out <file.stailor> --project .`."
+        }));
+        return 1;
+      }
+      await ensureStore(options.storeDir);
+      const result = await bundleExport({
+        snapshotName,
+        outputPath: path.resolve(outputPath),
+        storeDir: options.storeDir,
+        projectPath: options.projectPath,
+        homeDir: options.homeDir,
+        includeContent: hasFlag(args, "--include-content")
+      });
+      if (hasFlag(args, "--json")) {
+        process.stdout.write(json(result));
+      } else {
+        process.stdout.write(`Exported ${snapshotName} to ${result.bundlePath}\n`);
+      }
+      return 0;
+    }
+
+    if (sub === "import") {
+      const bundlePath = args[2];
+      if (!bundlePath) {
+        process.stderr.write(formatSnapError({
+          code: "SNAPTAILOR_BUNDLE_MISSING_ARGS",
+          problem: "Bundle import requires a .stailor file path.",
+          cause: "`bundle import` was called without a bundle path.",
+          fix: "Run `snaptailor bundle import <file.stailor> --project .`."
+        }));
+        return 1;
+      }
+      await ensureStore(options.storeDir);
+      const result = await bundleImport({
+        bundlePath: path.resolve(bundlePath),
+        storeDir: options.storeDir,
+        projectPath: options.projectPath,
+        homeDir: options.homeDir,
+        applyContent: hasFlag(args, "--apply-content"),
+        dryRun: hasFlag(args, "--dry-run"),
+        trust: hasFlag(args, "--trust")
+      });
+      if (hasFlag(args, "--json")) {
+        process.stdout.write(json(result));
+      } else {
+        process.stdout.write(`Imported snapshot: ${result.snapshotName}\n`);
+        process.stdout.write(`Evidence items: ${result.evidenceCount}\n`);
+        if (result.contentApplied) {
+          process.stdout.write("Content files: applied\n");
+        }
+      }
+      return 0;
+    }
+
+    if (sub === "inspect") {
+      const bundlePath = args[2];
+      if (!bundlePath) {
+        process.stderr.write(formatSnapError({
+          code: "SNAPTAILOR_BUNDLE_MISSING_ARGS",
+          problem: "Bundle inspect requires a .stailor file path.",
+          cause: "`bundle inspect` was called without a bundle path.",
+          fix: "Run `snaptailor bundle inspect <file.stailor>`."
+        }));
+        return 1;
+      }
+      const result = await bundleInspect(path.resolve(bundlePath));
+      if (hasFlag(args, "--json")) {
+        process.stdout.write(json(result));
+      } else {
+        process.stdout.write(`Bundle: ${result.bundlePath}\n`);
+        process.stdout.write(`  Format: ${result.formatVersion}\n`);
+        process.stdout.write(`  Snapshot: ${result.snapshotName}\n`);
+        process.stdout.write(`  Created: ${result.createdAt}\n`);
+        process.stdout.write(`  Project: ${result.projectPath}\n`);
+        process.stdout.write(`  Includes content: ${result.includesContent}\n`);
+        if (result.includesContent) {
+          process.stdout.write(`  Content files: ${result.contentFileCount} (${result.contentTotalBytes} bytes)\n`);
+        }
+        process.stdout.write(`  Bundle checksum: ${result.bundleChecksum.slice(0, 16)}...\n`);
+        process.stdout.write(`  Signed: ${result.isSigned}\n`);
+      }
+      return 0;
+    }
+
+    process.stderr.write(formatSnapError({
+      code: "SNAPTAILOR_UNKNOWN_SUBCOMMAND",
+      problem: "Unknown bundle subcommand.",
+      cause: `snaptailor bundle does not recognize "${sub ?? ""}".`,
+      fix: "Run `snaptailor --help` to see supported bundle commands."
+    }));
+    return 1;
   }
 
   process.stderr.write(formatSnapError({
