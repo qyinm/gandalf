@@ -28,23 +28,44 @@ export function parseJson(text: string): ParseResult {
 
 export function parseTomlKeyValues(text: string): ParseResult {
   const value: Record<string, unknown> = {};
+  const lines = text.split(/\r?\n/);
 
-  for (const [index, rawLine] of text.split(/\r?\n/).entries()) {
-    const line = rawLine.trim();
+  for (let index = 0; index < lines.length; index++) {
+    let line = lines[index].trim();
     if (!line || line.startsWith("#")) {
       continue;
     }
+    // Skip section headers (e.g. [features], [mcp_servers.pencil], [plugins."foo@bar"])
     if (line.startsWith("[") && line.endsWith("]")) {
       continue;
     }
 
     const match = /^([A-Za-z0-9_.-]+)\s*=\s*(.*)$/.exec(line);
     if (!match) {
-      return { ok: false, error: `Invalid TOML key/value at line ${index + 1}` };
+      // Lines that don't match key=value are silently skipped.
+      // This handles multi-line array/table values (e.g. args = [\n  "--app",\n  "desktop",\n])
+      // and any other TOML constructs the simple parser doesn't understand.
+      continue;
     }
 
     const [, key, rawValue] = match;
-    value[key] = isSecretLikeKey(key) ? "[redacted]" : parseTomlScalar(rawValue);
+    let processedValue = rawValue.trim();
+
+    // Accumulate continuation lines for multi-line inline arrays
+    // e.g. args = [\n  "--app",\n  "desktop",\n]
+    if (processedValue.startsWith("[") && !processedValue.endsWith("]")) {
+      const arrayLines = [processedValue];
+      while (++index < lines.length) {
+        const continuationLine = lines[index].trim();
+        arrayLines.push(continuationLine);
+        if (continuationLine.endsWith("]") || continuationLine.endsWith("],")) {
+          break;
+        }
+      }
+      processedValue = arrayLines.join(" ");
+    }
+
+    value[key] = isSecretLikeKey(key) ? "[redacted]" : parseTomlScalar(processedValue);
   }
 
   return { ok: true, value };
