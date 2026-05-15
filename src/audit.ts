@@ -157,14 +157,18 @@ export function auditEvidence(evidence: DiscoveredItem[], graph: GraphNode[]): A
     }
 
     if (item.kind === "symlink" && (item.captureStatus === "omitted" || item.metadata?.skipped === true)) {
-      findings.push(finding(
-        "SYMLINK_SKIPPED",
-        "high",
-        "A symlink was found and not followed.",
-        `${item.sourcePath} points outside the scanned file content boundary.`,
-        "Inspect the symlink manually and replace it with a regular config file if it should be captured.",
-        item
-      ));
+      // Symlinks inside skill directories are expected (skills are often symlinked to repos).
+      // Skip the finding to avoid noise.
+      if (!item.sourcePath.includes("/skills/")) {
+        findings.push(finding(
+          "SYMLINK_SKIPPED",
+          "high",
+          "A symlink was found and not followed.",
+          `${item.sourcePath} points outside the scanned file content boundary.`,
+          "Inspect the symlink manually and replace it with a regular config file if it should be captured.",
+          item
+        ));
+      }
     }
 
     if (item.kind === "unsupported" || item.captureStatus === "unsupported") {
