@@ -294,7 +294,52 @@ function emitJsonEvidence(target: ScanTarget, value: unknown, evidence: Discover
     }
   }
 
+  // Extract hook commands from settings.json (e.g. ~/.claude/settings.json)
+  if (target.sourcePath.endsWith("/settings.json") || target.sourcePath.endsWith("settings.json")) {
+    const hooksValue = isObject(value) ? (value as Record<string, unknown>)["hooks"] : undefined;
+    if (isObject(hooksValue)) {
+      for (const [eventName, eventHooks] of Object.entries(hooksValue as Record<string, unknown>)) {
+        if (!Array.isArray(eventHooks)) continue;
+        for (let i = 0; i < eventHooks.length; i++) {
+          const entry = eventHooks[i];
+          if (!isObject(entry)) continue;
+          const matcher = typeof (entry as Record<string, unknown>).matcher === "string"
+            ? (entry as Record<string, unknown>).matcher as string
+            : "*";
+          const nestedHooks = (entry as Record<string, unknown>)["hooks"];
+          if (!Array.isArray(nestedHooks)) continue;
+          for (let j = 0; j < nestedHooks.length; j++) {
+            const hook = nestedHooks[j];
+            if (!isObject(hook)) continue;
+            const command = (hook as Record<string, unknown>).command;
+            if (typeof command !== "string") continue;
+            evidence.push({
+              ...baseItem(
+                {
+                  ...target,
+                  kind: "hook",
+                  sensitivity: "command_config",
+                  contentPolicy: "structured_safe_fields_only"
+                },
+                "captured",
+                { executable: true, eventName, matcher, command },
+                hook
+              ),
+              id: itemId(target, `hook-${eventName}-${i}`),
+              kind: "hook",
+              name: `${eventName}.${matcher}`
+            });
+          }
+        }
+      }
+    }
+  }
+
   evidence.push(baseItem(target, "captured", undefined, value));
+}
+
+function isObject(value: unknown): boolean {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function mcpServers(value: unknown): Record<string, unknown> | undefined {
