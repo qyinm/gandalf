@@ -1030,9 +1030,11 @@ function resolveSourcePathByKind(kind: EvidenceKind, name: string): string {
 }
 
 function resolveAgent(name: string): AgentId {
-  if (name.startsWith("claude") || name.includes("claude")) return "claude-code";
-  if (name.startsWith("codex") || name.includes("codex")) return "codex";
-  if (name.startsWith("cursor") || name.includes("cursor")) return "cursor";
+  // Use word-boundary matching to avoid false positives like "precursor" → "cursor"
+  const word = (s: string) => new RegExp(`\\b${s}\\b`, "i");
+  if (word("claude").test(name)) return "claude-code";
+  if (word("codex").test(name)) return "codex";
+  if (word("cursor").test(name)) return "cursor";
   return "unknown";
 }
 
@@ -1041,6 +1043,13 @@ function findMatchingEvidence(
   evidence: DiscoveredItem[],
   target: boolean
 ): DiscoveredItem | null {
+  // First pass: match both kind AND name (exact match)
+  for (const item of evidence) {
+    if (item.kind === change.entityKind && item.name === change.entityName) {
+      return item;
+    }
+  }
+  // Fallback: match by kind only (partial match for items without names)
   for (const item of evidence) {
     if (item.kind === change.entityKind) {
       return item;
