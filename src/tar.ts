@@ -21,6 +21,11 @@
  *   305     8     devminor
  *   313     155   prefix
  *   468     45    padding
+ *
+ * SECURITY: Only regular files (typeflag '0') and directories (typeflag '5')
+ * are accepted. Symlink ('2'), hardlink ('1'), device ('3','4'), and FIFO ('6')
+ * entries are rejected to prevent path traversal via symlink targets.
+ * Entries with non-empty linkname fields are also rejected.
  */
 
 import { createHash } from "node:crypto";
@@ -115,6 +120,23 @@ export async function readTar(
 
     const header = decodeHeader(headerBlock);
     offset += HEADER_SIZE;
+
+    // SECURITY: Reject non-file, non-directory entries (symlink, hardlink, device, FIFO)
+    if (header.typeflag !== "0" && header.typeflag !== "5") {
+      throw new Error(
+        `Unsupported tar entry type "${header.typeflag}" for "${header.name}". ` +
+        `Only regular files (typeflag '0') and directories (typeflag '5') are accepted.`
+      );
+    }
+
+    // SECURITY: Reject entries with non-empty linkname (symlink targets, hardlink targets)
+    if (header.linkname.length > 0) {
+      throw new Error(
+        `Tar entry "${header.name}" has a non-empty linkname field ("${header.linkname}"). ` +
+        `Link entries are not supported for security reasons.`
+      );
+    }
+
     const size = header.typeflag === "5" ? 0 : header.size;
 
     // Validate size

@@ -415,6 +415,17 @@ async function run(args: string[]): Promise<number> {
     }
 
     // ── apply mode: build plan, parse items, execute ──────────
+    // SECURITY: --apply is experimental in v0.1; require explicit opt-in
+    if (!process.env.SNAPTAILOR_EXPERIMENTAL && !hasFlag(args, "--experimental")) {
+      process.stderr.write(formatSnapError({
+        code: "SNAPTAILOR_EXPERIMENTAL_REQUIRED",
+        problem: "Restore --apply requires --experimental flag in v0.1.",
+        cause: "--apply was used without SNAPTAILOR_EXPERIMENTAL=1 or --experimental.",
+        fix: "Set SNAPTAILOR_EXPERIMENTAL=1 or pass --experimental to enable experimental features."
+      }));
+      return 1;
+    }
+
     const plan = await buildRestorePlan({
       sourceSnapshot: snapshotName,
       projectPath: options.projectPath,
@@ -489,13 +500,27 @@ async function run(args: string[]): Promise<number> {
         return 1;
       }
       await ensureStore(options.storeDir);
+
+      const includeContent = hasFlag(args, "--include-content");
+      if (includeContent) {
+        if (!process.env.SNAPTAILOR_EXPERIMENTAL && !hasFlag(args, "--experimental")) {
+          process.stderr.write(formatSnapError({
+            code: "SNAPTAILOR_EXPERIMENTAL_REQUIRED",
+            problem: "Bundle export --include-content requires --experimental flag in v0.1.",
+            cause: "--include-content was used without SNAPTAILOR_EXPERIMENTAL=1 or --experimental.",
+            fix: "Set SNAPTAILOR_EXPERIMENTAL=1 or pass --experimental to enable experimental features."
+          }));
+          return 1;
+        }
+      }
+
       const result = await bundleExport({
         snapshotName,
         outputPath: path.resolve(outputPath),
         storeDir: options.storeDir,
         projectPath: options.projectPath,
         homeDir: options.homeDir,
-        includeContent: hasFlag(args, "--include-content")
+        includeContent
       });
       if (hasFlag(args, "--json")) {
         process.stdout.write(json(result));
@@ -517,12 +542,26 @@ async function run(args: string[]): Promise<number> {
         return 1;
       }
       await ensureStore(options.storeDir);
+
+      const applyContent = hasFlag(args, "--apply-content");
+      if (applyContent) {
+        if (!process.env.SNAPTAILOR_EXPERIMENTAL && !hasFlag(args, "--experimental")) {
+          process.stderr.write(formatSnapError({
+            code: "SNAPTAILOR_EXPERIMENTAL_REQUIRED",
+            problem: "Bundle import --apply-content requires --experimental flag in v0.1.",
+            cause: "--apply-content was used without SNAPTAILOR_EXPERIMENTAL=1 or --experimental.",
+            fix: "Set SNAPTAILOR_EXPERIMENTAL=1 or pass --experimental to enable experimental features."
+          }));
+          return 1;
+        }
+      }
+
       const result = await bundleImport({
         bundlePath: path.resolve(bundlePath),
         storeDir: options.storeDir,
         projectPath: options.projectPath,
         homeDir: options.homeDir,
-        applyContent: hasFlag(args, "--apply-content"),
+        applyContent,
         dryRun: hasFlag(args, "--dry-run"),
         trust: hasFlag(args, "--trust")
       });

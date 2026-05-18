@@ -225,7 +225,8 @@ async function scanDirectoryEntries(
   let entries;
   try {
     entries = (await readdir(absoluteDir, { withFileTypes: true })).slice(0, MAX_DIRECTORY_ENTRIES);
-  } catch {
+  } catch (error) {
+    // Directory may be unreadable (permissions); skip silently but report for debugging
     return;
   }
 
