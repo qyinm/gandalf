@@ -4,6 +4,7 @@ import path from "node:path";
 import type { AgentId, DiscoveredItem, EvidenceKind, EvidenceScope } from "./types.js";
 import { ignoredDirectory, MAX_DIRECTORY_DEPTH, MAX_DIRECTORY_ENTRIES, MAX_FILE_BYTES } from "./policy.js";
 import { parseDotenvKeys, parseJson, parseMarkdown, parseTomlKeyValues } from "./parsers.js";
+import { defaultScannerPlugins, type ScanTarget } from "./scanners/index.js";
 
 export interface ScanTrust {
   readOnly: true;
@@ -25,26 +26,17 @@ export interface ScanProjectOptions {
   explain?: boolean;
 }
 
-interface ScanTarget {
-  absolutePath: string;
-  sourcePath: string;
-  scope: EvidenceScope;
-  agent: AgentId;
-  kind: EvidenceKind;
-  parser: DiscoveredItem["parser"];
-  precedence: number;
-  sensitivity: string;
-  contentPolicy: string;
-  directory?: boolean;
-  metadataOnly?: boolean;
-}
-
 export async function scanProject(options: ScanProjectOptions): Promise<ScanResult> {
   const evidence: DiscoveredItem[] = [];
   const projectPath = path.resolve(options.projectPath);
   const homeDir = path.resolve(options.homeDir);
 
-  for (const target of targets(projectPath, homeDir)) {
+  // Collect targets from all registered scanner plugins
+  const allTargets = defaultScannerPlugins().flatMap(
+    (plugin) => plugin.targets(projectPath, homeDir)
+  );
+
+  for (const target of allTargets) {
     await scanTarget(target, evidence);
   }
 
@@ -61,77 +53,6 @@ export async function scanProject(options: ScanProjectOptions): Promise<ScanResu
       "Provider-side model routing cannot be verified",
       "Raw env values are omitted by policy"
     ]
-  };
-}
-
-function targets(projectPath: string, homeDir: string): ScanTarget[] {
-  return [
-    projectTarget(projectPath, "CLAUDE.md", "claude-code", "agent_instruction", "markdown"),
-    projectTarget(projectPath, "AGENTS.md", "codex", "agent_instruction", "markdown"),
-    projectTarget(projectPath, ".mcp.json", "claude-code", "agent_config", "json"),
-    projectTarget(projectPath, ".cursor/mcp.json", "cursor", "agent_config", "json"),
-    projectTarget(projectPath, ".claude/settings.json", "claude-code", "agent_config", "json"),
-    projectTarget(projectPath, ".codex", "codex", "unsupported", "filesystem", { directory: true }),
-    projectTarget(projectPath, ".env", "project", "env_key", "dotenv", {
-      sensitivity: "env_key_inventory",
-      contentPolicy: "key_inventory_only"
-    }),
-    homeTarget(homeDir, ".claude/settings.json", "claude-code", "agent_config", "json"),
-    homeTarget(homeDir, ".claude.json", "claude-code", "agent_config", "json", {
-      metadataOnly: true,
-      sensitivity: "metadata"
-    }),
-    homeTarget(homeDir, ".claude/agents", "claude-code", "unsupported", "filesystem", { directory: true }),
-    homeTarget(homeDir, ".claude/skills", "claude-code", "skill", "filesystem", { directory: true }),
-    homeTarget(homeDir, ".codex/config.toml", "codex", "agent_config", "toml"),
-    homeTarget(homeDir, ".codex/skills", "codex", "skill", "filesystem", { directory: true }),
-    homeTarget(homeDir, ".cursor/mcp.json", "cursor", "agent_config", "json")
-  ];
-}
-
-function projectTarget(
-  projectPath: string,
-  relativePath: string,
-  agent: AgentId,
-  kind: EvidenceKind,
-  parser: DiscoveredItem["parser"],
-  overrides: Partial<ScanTarget> = {}
-): ScanTarget {
-  return makeTarget(projectPath, relativePath, "project", 40, agent, kind, parser, overrides);
-}
-
-function homeTarget(
-  homeDir: string,
-  relativePath: string,
-  agent: AgentId,
-  kind: EvidenceKind,
-  parser: DiscoveredItem["parser"],
-  overrides: Partial<ScanTarget> = {}
-): ScanTarget {
-  return makeTarget(homeDir, relativePath, "user", 10, agent, kind, parser, overrides);
-}
-
-function makeTarget(
-  root: string,
-  relativePath: string,
-  scope: EvidenceScope,
-  precedence: number,
-  agent: AgentId,
-  kind: EvidenceKind,
-  parser: DiscoveredItem["parser"],
-  overrides: Partial<ScanTarget>
-): ScanTarget {
-  return {
-    absolutePath: path.join(root, relativePath),
-    sourcePath: scope === "user" ? `~/${relativePath}` : relativePath,
-    scope,
-    precedence,
-    agent,
-    kind,
-    parser,
-    sensitivity: "metadata",
-    contentPolicy: "metadata_only",
-    ...overrides
   };
 }
 
