@@ -1,4 +1,4 @@
-export type AgentId = "claude-code" | "codex" | "cursor" | "project" | "unknown";
+export type AgentId = "claude-code" | "codex" | "cursor" | "pi-agent" | "project" | "unknown";
 
 export type EvidenceKind =
   | "agent_config"
