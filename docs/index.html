@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>snaptailor — A Master Tailor for Your AI Agent</title>
-  <meta name="description" content="snaptailor: Read-only drift diagnosis and security audit for AI coding agent setups. Snapshot, diff, audit, and restore your AI agent environment." />
+  <meta name="description" content="snaptailor: Read-only drift diagnosis and security audit for AI coding agent setups. Snapshot, diff, audit, restore, and bundle your AI agent environment." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet" />
@@ -37,7 +37,7 @@
     <div class="container">
       <div class="hero__badge">
         <span class="hero__badge-line"></span>
-        v0.1 — Read-Only Drift Diagnosis
+        v0.1 — Drift Diagnosis, Restore & Bundle
         <span class="hero__badge-line"></span>
       </div>
       <h1 class="hero__title">
@@ -45,7 +45,7 @@
         <span class="hero__title-em">Your AI Agent</span>
       </h1>
       <p class="hero__subtitle">
-        Snapshot, compare, audit, and restore your coding agent environment —<br />
+        Snapshot, compare, audit, restore, and bundle your coding agent environment —<br />
         with the precision of Savile Row craftsmanship.
       </p>
       <div class="hero__actions">
@@ -66,7 +66,9 @@
         </div>
         <pre class="terminal__body"><code><span class="terminal__prompt">$</span> snaptailor scan --project .
 <span class="terminal__prompt">$</span> snaptailor diff baseline current --project .
-<span class="terminal__prompt">$</span> snaptailor audit current --project .</code></pre>
+<span class="terminal__prompt">$</span> snaptailor audit current --project .
+<span class="terminal__prompt">$</span> snaptailor restore --snapshot baseline --dry-run --project .
+<span class="terminal__prompt">$</span> snaptailor bundle export --name baseline --out backup.stailor</code></pre>
       </div>
     </div>
   </section>
@@ -78,7 +80,7 @@
         <i data-lucide="shield" class="pledge__icon" size="20"></i>
         <p class="pledge__text">
           By design, snaptailor is <strong>read-only</strong>. It never executes MCP commands, scripts, or plugins.
-          It never phones home. It never alters your configuration. It stores metadata-first and
+          It never phones home. It never alters your configuration without explicit consent. It stores metadata-first and
           omits raw secrets. <em>The integrity of your workshop is our first principle.</em>
         </p>
       </div>
@@ -99,7 +101,7 @@
         <div class="service-card">
           <div class="service-card__icon"><i data-lucide="search" size="28"></i></div>
           <h3 class="service-card__title">Semantic Diff</h3>
-          <p class="service-card__desc">Pinpoint every change between any two snapshots. See prompt edits, MCP additions, permission shifts, and more.</p>
+          <p class="service-card__desc">Pinpoint every change between any two snapshots. See prompt edits, MCP additions, permission shifts, env key changes, and more.</p>
         </div>
         <div class="service-card">
           <div class="service-card__icon"><i data-lucide="shield" size="28"></i></div>
@@ -109,17 +111,17 @@
         <div class="service-card">
           <div class="service-card__icon"><i data-lucide="folder-tree" size="28"></i></div>
           <h3 class="service-card__title">Provenance</h3>
-          <p class="service-card__desc">Trace every setting to its origin — user config, project config, environment variables, or MCP servers.</p>
+          <p class="service-card__desc">Trace every setting to its origin — MCP server, env key, skill, hook, permission — back to user config, project config, or agent type.</p>
         </div>
         <div class="service-card">
           <div class="service-card__icon"><i data-lucide="history" size="28"></i></div>
-          <h3 class="service-card__title">Restore Planning</h3>
-          <p class="service-card__desc">Generate a non-mutating restore plan. Review every change before committing. Roll back with confidence. <span class="label label--soon">v0.2</span></p>
+          <h3 class="service-card__title">Restore & Rollback</h3>
+          <p class="service-card__desc">Generate a restore plan, execute per-type file restoration, and roll back automatically with LIFO undo — all available now.</p>
         </div>
         <div class="service-card">
           <div class="service-card__icon"><i data-lucide="package" size="28"></i></div>
-          <h3 class="service-card__title">Export & Share</h3>
-          <p class="service-card__desc">Export redacted reports and bundles. Share your perfect fit with the team. <span class="label label--soon">v0.2</span></p>
+          <h3 class="service-card__title">Export & Bundle</h3>
+          <p class="service-card__desc">Export snapshots to portable <code>.stailor</code> bundles (POSIX tar, SHA-256 verified). Import and inspect without full unpacking.</p>
         </div>
       </div>
     </div>
@@ -146,7 +148,7 @@
   <section class="guide" id="use">
     <div class="container">
       <h2 class="section__title">How to Use</h2>
-      <p class="section__subtitle">Four steps to a perfectly fitted agent environment.</p>
+      <p class="section__subtitle">Five steps to a perfectly fitted agent environment.</p>
       <div class="guide__steps">
 
         <div class="guide__step">
@@ -156,7 +158,7 @@
           </div>
           <div class="guide__step-content">
             <h3>Measure</h3>
-            <p>Scan your project to detect agents, MCP servers, skills, and settings.</p>
+            <p>Scan your project to detect agents, MCP servers, skills, hooks, env keys, and settings.</p>
             <div class="guide__code">
               <pre><code>snaptailor scan --project . --explain</code></pre>
               <button class="copy-btn" data-copy="snaptailor scan --project . --explain" aria-label="Copy command">
@@ -173,10 +175,10 @@
           </div>
           <div class="guide__step-content">
             <h3>Cut</h3>
-            <p>Create a baseline snapshot to preserve the current configuration.</p>
+            <p>Create a baseline snapshot. v0.1 snapshots are metadata-only (<code>--metadata-only</code> required).</p>
             <div class="guide__code">
-              <pre><code>snaptailor snapshot create --name baseline --project .</code></pre>
-              <button class="copy-btn" data-copy="snaptailor snapshot create --name baseline --project ." aria-label="Copy command">
+              <pre><code>snaptailor snapshot create --name baseline --metadata-only --project .</code></pre>
+              <button class="copy-btn" data-copy="snaptailor snapshot create --name baseline --metadata-only --project ." aria-label="Copy command">
                 <i data-lucide="copy" size="16"></i>
               </button>
             </div>
@@ -190,10 +192,11 @@
           </div>
           <div class="guide__step-content">
             <h3>Fit</h3>
-            <p>After changes, diff against baseline and audit for risks.</p>
+            <p>After changes, diff against baseline, audit for risks, and trace provenance.</p>
             <div class="guide__code">
               <pre><code>snaptailor diff baseline current --project .
-snaptailor audit current --project .</code></pre>
+snaptailor audit current --project .
+snaptailor provenance current --project .</code></pre>
               <button class="copy-btn" data-copy="snaptailor diff baseline current --project . && snaptailor audit current --project ." aria-label="Copy command">
                 <i data-lucide="copy" size="16"></i>
               </button>
@@ -203,15 +206,35 @@ snaptailor audit current --project .</code></pre>
 
         <div class="guide__step">
           <div class="guide__step-marker">
-            <i data-lucide="rotate-ccw" size="20"></i>
+            <i data-lucide="history" size="20"></i>
             <span class="guide__step-number">04</span>
           </div>
           <div class="guide__step-content">
             <h3>Restore</h3>
-            <p>Generate a restore plan and roll back to the perfect fit.</p>
+            <p>Generate a dry-run plan, then apply with per-type file executors. Apply mode requires <code>--experimental</code> in v0.1.</p>
             <div class="guide__code">
-              <pre><code>snaptailor restore --snapshot baseline --dry-run --project .</code></pre>
+              <pre><code>snaptailor restore --snapshot baseline --dry-run --project .
+snaptailor restore --snapshot baseline --apply --experimental --project .</code></pre>
               <button class="copy-btn" data-copy="snaptailor restore --snapshot baseline --dry-run --project ." aria-label="Copy command">
+                <i data-lucide="copy" size="16"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="guide__step">
+          <div class="guide__step-marker">
+            <i data-lucide="package" size="20"></i>
+            <span class="guide__step-number">05</span>
+          </div>
+          <div class="guide__step-content">
+            <h3>Bundle</h3>
+            <p>Export snapshots to portable <code>.stailor</code> bundles. Import on any machine, inspect without unpacking.</p>
+            <div class="guide__code">
+              <pre><code>snaptailor bundle export --name baseline --out backup.stailor --project .
+snaptailor bundle inspect backup.stailor
+snaptailor bundle import backup.stailor --project .</code></pre>
+              <button class="copy-btn" data-copy="snaptailor bundle export --name baseline --out backup.stailor --project ." aria-label="Copy command">
                 <i data-lucide="copy" size="16"></i>
               </button>
             </div>
@@ -246,9 +269,14 @@ snaptailor audit current --project .</code></pre>
           <p>Diff and audit to keep everything aligned</p>
         </div>
         <div class="philosophy__item">
-          <i data-lucide="rotate-ccw" size="24"></i>
+          <i data-lucide="history" size="24"></i>
           <h3>Restore</h3>
           <p>Roll back to the perfect fit at any time</p>
+        </div>
+        <div class="philosophy__item">
+          <i data-lucide="package" size="24"></i>
+          <h3>Bundle</h3>
+          <p>Export and share portable agent configurations</p>
         </div>
       </div>
     </div>
