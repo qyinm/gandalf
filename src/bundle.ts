@@ -281,7 +281,7 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
       const relativePath = entry.path.slice("content/".length);
       const resolved = resolveSourcePath(relativePath, homeDir, projectPath);
       const isUnderRoot = allRoots.some(
-        (root) => resolved.startsWith(path.resolve(root))
+        (root) => isStrictlyUnder(resolved, root)
       );
       if (!isUnderRoot) {
         throw new Error(
@@ -291,7 +291,7 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     } else {
       // Non-content paths (.stailor/*, snapshot/*) — validate against any root
       const isUnderRoot = allRoots.some(
-        (root) => path.resolve(root, entry.path).startsWith(path.resolve(root))
+        (root) => isStrictlyUnder(path.resolve(root, entry.path), root)
       );
       if (!isUnderRoot) {
         throw new Error(`Entry path "${entry.path}" is not valid`);
@@ -309,7 +309,10 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
   if (applyContent) {
     const BLOCKED_HOME_PREFIXES = [
       ".ssh", ".aws", ".gnupg", ".config", ".local", ".npm",
-      ".docker", ".kube", ".credentials", ".heroku", ".netrc"
+      ".docker", ".kube", ".credentials", ".heroku", ".netrc",
+      ".env", ".gitconfig", ".git-credentials", ".npmrc",
+      ".bash_profile", ".bashrc", ".zshrc", ".profile",
+      ".pgpass", ".gem"
     ];
     const contentEntries = entries.filter((e) => e.path.startsWith("content/"));
     for (const entry of contentEntries) {
@@ -449,4 +452,14 @@ function resolveSourcePath(sourcePath: string, homeDir: string, projectPath: str
     return path.resolve(homeDir, sourcePath.slice(2));
   }
   return path.resolve(projectPath, sourcePath);
+}
+
+/**
+ * Strict path containment check: verifies that `resolved` is either equal to
+ * `root` or a direct descendant (separated by path.sep). Prevents sibling
+ * directory prefix collisions like "/Users/alice-other" passing as "/Users/alice".
+ */
+function isStrictlyUnder(resolved: string, root: string): boolean {
+  const normalized = path.resolve(root);
+  return resolved === normalized || resolved.startsWith(normalized + path.sep);
 }
