@@ -17,7 +17,7 @@ import { createHash } from "node:crypto";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { readSnapshot } from "./store.js";
-import { readTar, validateTarPath, writeTar } from "./tar.js";
+import { readTar, writeTar } from "./tar.js";
 import type {
   BundleChecksums,
   BundleExportOptions,
@@ -160,7 +160,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<{ bund
         totalContentBytes += content.length;
         contentCount++;
       } catch {
-        // File may not exist or be unreadable; skip
+        // File may not exist or be unreadable; skip (best-effort content collection)
         continue;
       }
     }
@@ -179,10 +179,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<{ bund
     }
   }
 
-  // Write tar
-  const archiveChecksum = await writeTar(entries, outputPath);
-
-  // Compute per-entry checksums
+  // Compute per-entry checksums BEFORE writing the tar (avoids double write)
   const entryChecksums: Record<string, string> = {};
   for (const entry of entries) {
     const hash = createHash("sha256");
@@ -190,9 +187,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<{ bund
     entryChecksums[entry.path] = hash.digest("hex");
   }
 
-  // We need to re-write the tar with checksums included.
-  // Since tar is sequential, we rebuild with the checksums entry added.
-  // Add .stailor/checksums.json
+  // Build .stailor/checksums.json entry
   const checksumsEntry: TarEntry = {
     path: ".stailor/checksums.json",
     content: Buffer.from(JSON.stringify({ algorithm: "SHA-256", entries: entryChecksums } as BundleChecksums, null, 2) + "\n", "utf-8"),
@@ -201,7 +196,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<{ bund
     type: "file"
   };
 
-  // Rebuild: insert checksums after manifest
+  // Insert checksums after manifest in the entries array
   const finalEntries: TarEntry[] = [];
   let checksumsInserted = false;
   for (const entry of entries) {
@@ -215,9 +210,10 @@ export async function bundleExport(options: BundleExportOptions): Promise<{ bund
     finalEntries.push(checksumsEntry);
   }
 
-  const finalChecksum = await writeTar(finalEntries, outputPath);
+  // Single write: tar contains all entries including checksums
+  const archiveChecksum = await writeTar(finalEntries, outputPath);
 
-  return { bundlePath: outputPath, checksum: finalChecksum };
+  return { bundlePath: outputPath, checksum: archiveChecksum };
 }
 
 // ── Import ──────────────────────────────────────────────────────
@@ -264,10 +260,43 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     }
   }
 
-  // Validate all paths are safe
-  const quarantineRoot = `/tmp/.stailor-quarantine-${Date.now()}`;
+  // Validate all paths are safe — validate against the REAL destination roots
+  // (homeDir and projectPath), not a temporary quarantine root.
+  // This ensures path validation matches actual content resolution.
+  const allRoots = [homeDir, projectPath];
   for (const entry of entries) {
-    validateTarPath(entry.path, quarantineRoot);
+    // Basic path traversal check (.., null bytes, absolute paths)
+    if (entry.path.includes("..")) {
+      throw new Error(`Path traversal detected: "${entry.path}" contains ".."`);
+    }
+    if (entry.path.includes("\0")) {
+      throw new Error(`Path traversal detected: "${entry.path}" contains null byte`);
+    }
+    if (path.isAbsolute(entry.path)) {
+      throw new Error(`Path traversal detected: "${entry.path}" is absolute`);
+    }
+
+    // Validate against each root — content/ paths must resolve within at least one root
+    if (entry.path.startsWith("content/")) {
+      const relativePath = entry.path.slice("content/".length);
+      const resolved = resolveSourcePath(relativePath, homeDir, projectPath);
+      const isUnderRoot = allRoots.some(
+        (root) => resolved.startsWith(path.resolve(root))
+      );
+      if (!isUnderRoot) {
+        throw new Error(
+          `Content path "${relativePath}" resolves outside home and project directories`
+        );
+      }
+    } else {
+      // Non-content paths (.stailor/*, snapshot/*) — validate against any root
+      const isUnderRoot = allRoots.some(
+        (root) => path.resolve(root, entry.path).startsWith(path.resolve(root))
+      );
+      if (!isUnderRoot) {
+        throw new Error(`Entry path "${entry.path}" is not valid`);
+      }
+    }
   }
 
   // Validate bundle size
@@ -276,11 +305,32 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     throw new Error(`Bundle too large: ${bundleStat.size} bytes (max ${MAX_BUNDLE_BYTES})`);
   }
 
-  // Validate content paths if applyContent
+  // Validate content paths if applyContent (additional security: block dangerous home paths)
   if (applyContent) {
+    const BLOCKED_HOME_PREFIXES = [
+      ".ssh", ".aws", ".gnupg", ".config", ".local", ".npm",
+      ".docker", ".kube", ".credentials", ".heroku", ".netrc"
+    ];
     const contentEntries = entries.filter((e) => e.path.startsWith("content/"));
     for (const entry of contentEntries) {
       const relativePath = entry.path.slice("content/".length);
+
+      // Home-relative paths (starting with ~/) are blocked entirely —
+      // bundle content must be project-relative
+      if (relativePath.startsWith("~/")) {
+        throw new Error(
+          `Home-relative content path "${relativePath}" is not allowed. ` +
+          `Bundle content must be project-relative.`
+        );
+      }
+
+      // Block known sensitive home directory paths
+      for (const prefix of BLOCKED_HOME_PREFIXES) {
+        if (relativePath.includes(`/${prefix}/`) || relativePath.startsWith(`${prefix}/`)) {
+          throw new Error(`Blocked content path prefix: "${relativePath}"`);
+        }
+      }
+
       const resolved = resolveSourcePath(relativePath, homeDir, projectPath);
       // Verify resolved path is within home or project
       const homeResolved = path.resolve(homeDir);
