@@ -1,0 +1,155 @@
+/**
+ * Command-pattern implementations for `diff`, `audit`, and `provenance`.
+ *
+ * Each command is a standalone exported const matching the Command interface
+ * from ./index.ts. Internal helpers (currentState, snapshotByRef, renderers)
+ * are defined locally to keep cli.ts decoupled.
+ */
+
+import { diffGraphs, type GraphDiff } from "../diff.js";
+import { valueAfter, hasFlag, json, runtimeOptions } from "../cli-shared.js";
+import { ensureStore, readSnapshot } from "../store.js";
+import { scanProject, type ScanResult } from "../scan.js";
+import { buildGraph } from "../graph.js";
+import { auditEvidence } from "../audit.js";
+import { buildProvenance } from "../provenance.js";
+import { formatSnapError } from "../errors.js";
+import type { Snapshot, SnapshotManifest, AuditFinding } from "../types.js";
+import type { Command, CommandContext } from "./index.js";
+
+// ── Internal helpers ───────────────────────────────────────────
+
+interface CurrentState {
+  scan: ScanResult;
+  snapshot: Snapshot;
+  storeFindings: AuditFinding[];
+}
+
+async function currentState(args: string[], name = "current"): Promise<CurrentState> {
+  const options = runtimeOptions(args);
+  const storeFindings = await ensureStore(options.storeDir);
+  const scan = await scanProject(options);
+  const graph = buildGraph(scan.evidence);
+  const auditFindings = [...storeFindings, ...auditEvidence(scan.evidence, graph)];
+  const provenance = buildProvenance(graph, scan.evidence);
+  const manifest: SnapshotManifest = {
+    schemaVersion: "0.1",
+    name,
+    createdAt: new Date().toISOString(),
+    projectPath: options.projectPath,
+    security: {
+      rawSecretsIncluded: false,
+      redactionPolicy: "metadata-only"
+    }
+  };
+
+  return {
+    scan,
+    storeFindings,
+    snapshot: {
+      manifest,
+      evidence: scan.evidence,
+      graph,
+      auditFindings,
+      provenance
+    }
+  };
+}
+
+async function snapshotByRef(ref: string, args: string[]): Promise<Snapshot> {
+  if (ref === "current") {
+    return (await currentState(args)).snapshot;
+  }
+  return await readSnapshot(runtimeOptions(args).storeDir, ref);
+}
+
+function renderDiffText(diff: GraphDiff): string {
+  const lines = ["snaptailor diff", "", "Semantic changes"];
+  if (diff.semanticChanges.length === 0) {
+    lines.push("  none");
+  } else {
+    for (const change of diff.semanticChanges) {
+      lines.push(`  ${change.severity.toUpperCase()}  ${change.code}: ${change.entityName}`);
+    }
+  }
+
+  lines.push("", "Raw source changes");
+  if (diff.rawSourceChanges.length === 0) {
+    lines.push("  none");
+  } else {
+    for (const change of diff.rawSourceChanges) {
+      lines.push(`  ${change.status}: ${change.sourcePath}`);
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+function renderFindingsText(findings: AuditFinding[]): string {
+  if (findings.length === 0) {
+    return "No findings.\n";
+  }
+  return `${findings.map((finding) => `${finding.severity.toUpperCase()} ${finding.code}: ${finding.problem}`).join("\n")}\n`;
+}
+
+// ── diff command ───────────────────────────────────────────────
+
+export const diffCommand: Command = {
+  name: "diff",
+  description: "Show semantic and raw-source changes between two snapshots",
+  async execute(ctx: CommandContext): Promise<number> {
+    const baseline = ctx.args[1];
+    const target = ctx.args[2];
+    if (!baseline || !target) {
+      process.stderr.write(
+        formatSnapError({
+          code: "SNAPTAILOR_DIFF_REFS_REQUIRED",
+          problem: "Two snapshot references are required.",
+          cause: "`diff` was called without baseline and target references.",
+          fix: "Run `snaptailor diff baseline current --project .`."
+        })
+      );
+      return 1;
+    }
+
+    const before = await snapshotByRef(baseline, ctx.args);
+    const after = await snapshotByRef(target, ctx.args);
+    const diff = diffGraphs(before.graph, after.graph);
+
+    process.stdout.write(hasFlag(ctx.args, "--json") ? json(diff) : renderDiffText(diff));
+    return 0;
+  }
+};
+
+// ── audit command ──────────────────────────────────────────────
+
+export const auditCommand: Command = {
+  name: "audit",
+  description: "Run audit rules on a snapshot and print findings",
+  async execute(ctx: CommandContext): Promise<number> {
+    const ref = ctx.args[1] ?? "current";
+    const snapshot = await snapshotByRef(ref, ctx.args);
+
+    process.stdout.write(
+      hasFlag(ctx.args, "--json")
+        ? json(snapshot.auditFindings)
+        : renderFindingsText(snapshot.auditFindings)
+    );
+    return 0;
+  }
+};
+
+// ── provenance command ─────────────────────────────────────────
+
+export const provenanceCommand: Command = {
+  name: "provenance",
+  description: "Show provenance for every node in a snapshot graph",
+  async execute(ctx: CommandContext): Promise<number> {
+    const ref = ctx.args[1] ?? "current";
+    const snapshot = await snapshotByRef(ref, ctx.args);
+
+    // Provenance always outputs JSON (structured data is the primary format)
+    process.stdout.write(json(snapshot.provenance));
+    return 0;
+  }
+};
