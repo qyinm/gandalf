@@ -68,9 +68,10 @@ export function homeTarget(
 import { claudeCodeScanner } from "./claude-code.js";
 import { codexScanner } from "./codex.js";
 import { cursorScanner } from "./cursor.js";
+import { opencodeScanner } from "./opencode.js";
 import { piAgentScanner } from "./pi.js";
 import { projectScanner } from "./project.js";
 
 export function defaultScannerPlugins(): ScannerPlugin[] {
-  return [claudeCodeScanner, codexScanner, cursorScanner, piAgentScanner, projectScanner];
+  return [claudeCodeScanner, codexScanner, cursorScanner, opencodeScanner, piAgentScanner, projectScanner];
 }
