@@ -1,0 +1,62 @@
+name: snaptailor audit
+on:
+  pull_request:
+    paths:
+      - '.mcp.json'
+      - '**/.mcp.json'
+      - 'CLAUDE.md'
+      - 'AGENTS.md'
+      - '.claude/**'
+      - '.cursor/**'
+      - '.codex/**'
+      - '.env'
+      - '.pi/**'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install snaptailor from npm registry
+        run: npm install -g @qxinm/snaptailor
+
+      - name: Create baseline snapshot (if stored)
+        run: |
+          # Create baseline from current state for diff context
+          snaptailor snapshot create --name pr-baseline \
+            --metadata-only --project . || echo "::warning::Baseline creation failed"
+
+      - name: Audit changed configuration
+        id: audit
+        continue-on-error: true
+        run: |
+          echo '## snaptailor audit results' > audit-comment.md
+          echo '' >> audit-comment.md
+          echo '### Detected Agents' >> audit-comment.md
+          echo '```' >> audit-comment.md
+          snaptailor scan --project . >> audit-comment.md 2>&1
+          echo '```' >> audit-comment.md
+          echo '' >> audit-comment.md
+          echo '### Audit Findings' >> audit-comment.md
+          echo '```' >> audit-comment.md
+          snaptailor audit current --project . >> audit-comment.md 2>&1
+          echo '```' >> audit-comment.md
+
+      - name: Comment PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('audit-comment.md', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

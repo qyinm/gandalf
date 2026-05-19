@@ -8,6 +8,7 @@ import { diffCommand, auditCommand, provenanceCommand } from "./commands/diff.js
 import { reportCommand } from "./commands/report.js";
 import { restoreCommand } from "./commands/restore.js";
 import { bundleCommand } from "./commands/bundle.js";
+import { schemaCommand } from "./commands/schema.js";
 import { hasFlag, runtimeOptions } from "./cli-shared.js";
 
 const HELP = `snaptailor
@@ -52,6 +53,7 @@ const registry = new Map<string, import("./commands/index.js").Command>([
   ["report", reportCommand],
   ["restore", restoreCommand],
   ["bundle", bundleCommand],
+  ["schema", schemaCommand],
 ]);
 
 // ── CLI Entry Point ────────────────────────────────────────────
