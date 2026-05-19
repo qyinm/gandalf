@@ -89,7 +89,20 @@ function renderFindingsText(findings: AuditFinding[]): string {
   if (findings.length === 0) {
     return "No findings.\n";
   }
-  return `${findings.map((finding) => `${finding.severity.toUpperCase()} ${finding.code}: ${finding.problem}`).join("\n")}\n`;
+
+  const MAX_DISPLAY = 12;
+  const display = findings.slice(0, MAX_DISPLAY);
+  const remaining = findings.length - display.length;
+
+  const lines = display.map(
+    (f) => `${f.severity.toUpperCase()} ${f.code}: ${f.problem}`
+  );
+
+  if (remaining > 0) {
+    lines.push(`  ... and ${remaining} more finding(s). Use --json to see all.`);
+  }
+
+  return `${lines.join("\n")}\n`;
 }
 
 // ── diff command ───────────────────────────────────────────────

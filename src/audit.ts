@@ -102,9 +102,12 @@ export function auditEvidence(evidence: DiscoveredItem[], graph: GraphNode[]): A
 
   for (const item of evidence) {
     if (hasExecutableConfig(item)) {
+      // Local stdio MCP commands and hooks are normal agent config, not necessarily
+      // security incidents. Use medium severity for the general case; high severity
+      // is reserved for wildcard permissions, parse failures, and critical findings.
       findings.push(finding(
         "EXECUTABLE_CONFIG_ADDED",
-        "high",
+        "medium",
         "Configuration references an executable command or hook.",
         `${item.sourcePath} contains executable configuration for ${item.name ?? item.id}.`,
         "Confirm the command is trusted and keep only explicit, necessary executable entries.",
