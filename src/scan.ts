@@ -216,8 +216,34 @@ function emitJsonEvidence(target: ScanTarget, value: unknown, evidence: Discover
     }
   }
 
-  // Extract hook commands from settings.json (e.g. ~/.claude/settings.json)
+  // Extract hook commands and permissions from settings.json
   if (target.sourcePath.endsWith("/settings.json") || target.sourcePath.endsWith("settings.json")) {
+    const value_ = isObject(value) ? (value as Record<string, unknown>) : {};
+    
+    // Extract permissions
+    const perms = permissionsFrom(value_);
+    if (perms) {
+      for (const [permName, permRule] of Object.entries(perms)) {
+        evidence.push({
+          ...baseItem(
+            {
+              ...target,
+              kind: "permission",
+              sensitivity: "command_config",
+              contentPolicy: "structured_safe_fields_only"
+            },
+            "captured",
+            undefined,
+            { rule: permRule }
+          ),
+          id: itemId(target, `perm-${permName}`),
+          kind: "permission",
+          name: String(permRule)
+        });
+      }
+    }
+
+    // Extract hooks
     const hooksValue = isObject(value) ? (value as Record<string, unknown>)["hooks"] : undefined;
     if (isObject(hooksValue)) {
       for (const [eventName, eventHooks] of Object.entries(hooksValue as Record<string, unknown>)) {
@@ -275,6 +301,19 @@ function mcpServers(value: unknown): Record<string, unknown> | undefined {
   }
 
   return servers as Record<string, unknown>;
+}
+
+/**
+ * Extract permission rules from a Claude Code settings.json value.
+ * Permissions are typically under the "permissions" key as an object
+ * of rule names to rule values (e.g. {"allow": ["Bash(npm test)"]}).
+ */
+function permissionsFrom(value: Record<string, unknown>): Record<string, unknown> | undefined {
+  const perms = value["permissions"];
+  if (!perms || typeof perms !== "object" || Array.isArray(perms)) {
+    return undefined;
+  }
+  return perms as Record<string, unknown>;
 }
 
 function baseItem(
