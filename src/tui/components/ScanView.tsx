@@ -22,6 +22,10 @@ interface ScanViewProps {
   auditFindings: AuditFinding[];
   blindSpots: string[];
   readOnly: boolean;
+  /** Scroll offset into the evidence + findings list (default 0) */
+  scrollOffset?: number;
+  /** Number of items visible at once (default 10) */
+  windowSize?: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -56,6 +60,8 @@ export default function ScanView({
   auditFindings,
   blindSpots,
   readOnly,
+  scrollOffset = 0,
+  windowSize = 10,
 }: ScanViewProps) {
   const trustColor = readOnly ? "green" : "red";
   const agents = [...new Set(evidence.map((e) => e.agent))].sort();
@@ -106,27 +112,30 @@ export default function ScanView({
         </Box>
       )}
 
-      {/* Evidence table */}
+      {/* Evidence table — scrollable */}
       {tableData.length > 0 && (
         <Box marginBottom={1} flexDirection="column">
-          <Text bold>Discovered Evidence</Text>
+          <Text bold>Discovered Evidence ({tableData.length})</Text>
           <SimpleTable
-            data={tableData.slice(0, 50)}
+            data={tableData.slice(scrollOffset, scrollOffset + windowSize)}
             columns={["agent", "kind", "scope", "source", "status"]}
           />
-          {tableData.length > 50 && (
-            <Text color="yellow">
-              ... and {tableData.length - 50} more items
+          {scrollOffset > 0 && (
+            <Text dimColor>  ↑ {scrollOffset} above</Text>
+          )}
+          {scrollOffset + windowSize < tableData.length && (
+            <Text dimColor>
+              ↓ {tableData.length - scrollOffset - windowSize} more below
             </Text>
           )}
         </Box>
       )}
 
-      {/* Findings */}
-      {sortedFindings.length > 0 && (
-        <Box marginBottom={1} flexDirection="column">
-          <Text bold>Findings ({sortedFindings.length})</Text>
-          {sortedFindings.slice(0, 15).map((f, i) => (
+{/* Findings */}
+       {sortedFindings.length > 0 && (
+         <Box marginBottom={1} flexDirection="column">
+           <Text bold>Findings ({sortedFindings.length})</Text>
+           {sortedFindings.map((f, i) => (
             <Text key={i}>
               <Text color={severityColor(f.severity)}>
                 {f.severity.toUpperCase().padEnd(9)}
@@ -134,11 +143,6 @@ export default function ScanView({
               {f.problem}
             </Text>
           ))}
-          {sortedFindings.length > 15 && (
-            <Text color="yellow">
-              ... and {sortedFindings.length - 15} more findings
-            </Text>
-          )}
         </Box>
       )}
 
