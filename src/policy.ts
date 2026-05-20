@@ -1,8 +1,29 @@
+import type { EvidenceKind, RestorePolicy } from "./types.js";
+
 export const MAX_FILE_BYTES = 256 * 1024;
 export const MAX_DIRECTORY_DEPTH = 4;
 export const MAX_DIRECTORY_ENTRIES = 250;
 
 const SECRET_KEY_PATTERN = /(api[_-]?key|token|secret|password|passwd|credential|private[_-]?key|auth|bearer)/i;
+
+/** Map evidence kind to its restore policy. */
+export function restorePolicyFor(kind: EvidenceKind): RestorePolicy {
+  switch (kind) {
+    case "agent_instruction":
+    case "agent_config":
+    case "skill":
+      return "full_content_supported";
+    case "mcp_server":
+    case "permission":
+    case "hook":
+      return "structured_fields_only";
+    case "env_key":
+      return "key_inventory_only";
+    case "symlink":
+    case "unsupported":
+      return "not_supported";
+  }
+}
 
 export function isSecretLikeKey(key: string): boolean {
   return SECRET_KEY_PATTERN.test(key);
