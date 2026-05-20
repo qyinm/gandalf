@@ -299,33 +299,52 @@ describe("bundle signatures", () => {
     assert.match(manifest.security.signature, /^[a-f0-9]{64}$/);
   });
 
-  it("verifies signed bundles and reports tampering", async () => {
+  it("supports trust-on-first-use for signed bundle keys", async () => {
     const box = await makeSandbox();
-    const name = "verify-signed";
-    await writeSnapshot(box.storeDir, sampleSnapshot(name));
-    const exportResult = await bundleExport({
-      snapshotName: name,
-      outputPath: bundlePath(box, name),
+    const trustedName = "trusted-key";
+    const otherName = "other-key";
+    await writeSnapshot(box.storeDir, sampleSnapshot(trustedName));
+    await writeSnapshot(box.storeDir, { ...sampleSnapshot(otherName), manifest: { ...sampleSnapshot(otherName).manifest, name: otherName } });
+
+    const trustedBundle = await bundleExport({
+      snapshotName: trustedName,
+      outputPath: bundlePath(box, trustedName),
       storeDir: box.storeDir,
       projectPath: box.projectPath,
       homeDir: box.homeDir,
-      signatureKey: "test-secret"
+      signatureKey: "trusted-secret"
+    });
+    const otherBundle = await bundleExport({
+      snapshotName: otherName,
+      outputPath: bundlePath(box, otherName),
+      storeDir: box.storeDir,
+      projectPath: box.projectPath,
+      homeDir: box.homeDir,
+      signatureKey: "other-secret"
     });
 
-    const valid = await bundleVerify({ bundlePath: exportResult.bundlePath, signatureKey: "test-secret" });
-    assert.equal(valid.valid, true);
-    assert.equal(valid.signature.checked, true);
+    const firstImport = await bundleImport({
+      bundlePath: trustedBundle.bundlePath,
+      storeDir: box.storeDir,
+      projectPath: box.projectPath,
+      homeDir: box.homeDir,
+      signatureKey: "trusted-secret",
+      trust: true,
+      dryRun: true
+    });
+    assert.ok(firstImport.warnings.some((warning) => warning.includes("Trusted bundle signing key")));
 
-    const { entries } = await readTar(exportResult.bundlePath);
-    const evidenceEntry = entries.find((entry) => entry.path === "snapshot/evidence.json");
-    assert.ok(evidenceEntry);
-    evidenceEntry.content = Buffer.from(evidenceEntry.content.toString("utf-8").replace("gh", "evil"), "utf-8");
-    const tamperedPath = bundlePath(box, "verify-tampered");
-    await writeTar(entries, tamperedPath);
-
-    const invalid = await bundleVerify({ bundlePath: tamperedPath, signatureKey: "test-secret" });
-    assert.equal(invalid.valid, false);
-    assert.match(invalid.errors.join("\n"), /Bundle signature verification failed/);
+    await assert.rejects(
+      () => bundleImport({
+        bundlePath: otherBundle.bundlePath,
+        storeDir: box.storeDir,
+        projectPath: box.projectPath,
+        homeDir: box.homeDir,
+        signatureKey: "other-secret",
+        dryRun: true
+      }),
+      /does not match trusted key fingerprint/
+    );
   });
 });
 

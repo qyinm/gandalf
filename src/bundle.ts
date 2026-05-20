@@ -17,7 +17,7 @@
 
 import { createHash, createHmac } from "node:crypto";
 import { execSync } from "node:child_process";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, stat, writeFile, mkdir } from "node:fs/promises";
 import { homedir, platform, hostname } from "node:os";
 import path from "node:path";
 import { restorePolicyFor } from "./policy.js";
@@ -92,6 +92,40 @@ function verifyBundleSignature(entries: TarEntry[], manifest: BundleManifest, ke
   if (!expected) return { ok: false, checked: true, warning: "Signed bundle manifest is missing security.signature." };
   const actual = signBundleEntries(entries, manifest, key);
   return { ok: actual === expected, checked: true, warning: actual === expected ? undefined : "Bundle signature verification failed." };
+}
+
+function keyFingerprint(key: string): string {
+  return createHash("sha256").update(key).digest("hex");
+}
+
+function trustedKeyPath(storeDir: string): string {
+  return path.join(storeDir, "trust", "bundle-signing-key.json");
+}
+
+async function enforceBundleKeyTrust(storeDir: string, key: string, trust: boolean | undefined): Promise<string | undefined> {
+  const fingerprint = keyFingerprint(key);
+  const filePath = trustedKeyPath(storeDir);
+  let trusted: { fingerprint?: string } | undefined;
+  try {
+    trusted = JSON.parse(await readFile(filePath, "utf-8")) as { fingerprint?: string };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT") throw error;
+  }
+
+  if (!trusted?.fingerprint) {
+    if (!trust) {
+      return "No trusted bundle signing key is recorded. Re-run with --trust after verifying the source.";
+    }
+    await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+    await writeFile(filePath, JSON.stringify({ fingerprint, trustedAt: new Date().toISOString() }, null, 2) + "\n", { mode: 0o600 });
+    return `Trusted bundle signing key fingerprint ${fingerprint.slice(0, 12)}…`;
+  }
+
+  if (trusted.fingerprint !== fingerprint) {
+    throw new Error(`Bundle signing key fingerprint ${fingerprint.slice(0, 12)}… does not match trusted key fingerprint ${trusted.fingerprint.slice(0, 12)}…`);
+  }
+  return undefined;
 }
 
 /** Result of a bundle export, including any warnings. */
@@ -573,6 +607,9 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
   if (!signatureVerification.ok) {
     throw new Error(signatureVerification.warning ?? "Bundle signature verification failed.");
   }
+  const trustWarning = signatureVerification.checked && signatureKey
+    ? await enforceBundleKeyTrust(storeDir, signatureKey, options.trust)
+    : undefined;
 
   // Validate checksums
   const checksumsEntry = entries.find((e) => e.path === ".stailor/checksums.json");
@@ -736,6 +773,9 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
   const warnings: string[] = [];
   if (signatureVerification.warning) {
     warnings.push(signatureVerification.warning);
+  }
+  if (trustWarning) {
+    warnings.push(trustWarning);
   }
 
   if (sourceMachine && sourceMachine.homeDir !== targetHome) {
