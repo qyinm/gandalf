@@ -2,9 +2,13 @@ name: Publish
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+    paths:
+      - package.json
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   publish:
@@ -12,6 +16,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -19,17 +25,45 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
+      - name: Read package version
+        id: package
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          NAME="$(node -p "require('./package.json').name")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check npm version
+        id: npm
+        shell: bash
+        run: |
+          if npm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - run: npm ci
+        if: steps.npm.outputs.publish == 'true'
       - run: npm run typecheck
+        if: steps.npm.outputs.publish == 'true'
       - run: npm run build
+        if: steps.npm.outputs.publish == 'true'
       - run: npm test
+        if: steps.npm.outputs.publish == 'true'
 
       - run: npm publish
+        if: steps.npm.outputs.publish == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
+        if: steps.npm.outputs.publish == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.package.outputs.tag }}
+          name: ${{ steps.package.outputs.tag }}
           generate_release_notes: true
           make_latest: true
