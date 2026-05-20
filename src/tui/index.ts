@@ -10,26 +10,30 @@ export { detectTuiMode, isTui, isInkMode, isClackMode } from "./tui-mode.js";
 export type { TuiMode, TuiOptions } from "./tui-mode.js";
 
 // ── Ink renderer entry ─────────────────────────────────────────
-// Ink requires React. We dynamically import both so non-TUI code
+// Ink requires React. We dynamically import it so non-TUI code
 // paths never pay the React/Ink import cost.
 
-import type { ReactElement } from "react";
-
 /**
- * Render data through an Ink React component and return the exit code.
+ * Render a component factory through Ink and return the exit code.
  *
- * Callers pass a pre-built React element. Ink handles terminal rendering.
+ * For use in .ts files (no JSX transform): pass a factory function that
+ * creates the React element.
  *
  * Usage:
  * ```ts
- * import { renderInk } from "../tui/index.js";
- * const exitCode = await renderInk(<ScanView data={state} />);
+ * import { renderComponent } from "../tui/index.js";
+ * import React from "react";
+ * const exitCode = await renderComponent(
+ *   () => React.createElement(ScanView, { evidence })
+ * );
  * ```
  */
-export async function renderInk(element: ReactElement): Promise<number> {
+export async function renderComponent(
+  factory: () => React.ReactElement
+): Promise<number> {
   try {
     const { render } = await import("ink");
-    const { waitUntilExit } = render(element);
+    const { waitUntilExit } = render(factory());
     await waitUntilExit();
     return 0;
   } catch (err) {

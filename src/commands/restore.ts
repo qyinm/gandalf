@@ -12,6 +12,7 @@
 
 import { hasFlag, json, runtimeOptions, valueAfter } from "../cli-shared.js";
 import { formatSnapError } from "../errors.js";
+import { detectTuiMode } from "../tui/index.js";
 import {
   applyWithRollback,
   buildRestorePlan,
@@ -34,6 +35,12 @@ export const restoreCommand: Command = {
 
   async execute(ctx: CommandContext): Promise<number> {
     const { args, options } = ctx;
+
+    // ── --tui: interactive wizard ────────────────────────────
+    if (detectTuiMode(args).mode !== "none" && !hasFlag(args, "--json")) {
+      const { restoreWizard } = await import("../tui/wizards/restore-confirm.js");
+      return restoreWizard(options);
+    }
 
     // ── Required: --snapshot ────────────────────────────────
     const snapshotName = valueAfter(args, "--snapshot");

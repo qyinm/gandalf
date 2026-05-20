@@ -6,8 +6,10 @@
  * are defined locally to keep cli.ts decoupled.
  */
 
+import React from "react";
 import { diffGraphs, type GraphDiff } from "../diff.js";
 import { valueAfter, hasFlag, json, runtimeOptions } from "../cli-shared.js";
+import { isInkMode, renderComponent } from "../tui/index.js";
 import { ensureStore, readSnapshot } from "../store.js";
 import { scanProject, type ScanResult } from "../scan.js";
 import { buildGraph } from "../graph.js";
@@ -130,7 +132,20 @@ export const diffCommand: Command = {
     const after = await snapshotByRef(target, ctx.args);
     const diff = diffGraphs(before.graph, after.graph);
 
-    process.stdout.write(hasFlag(ctx.args, "--json") ? json(diff) : renderDiffText(diff));
+    if (hasFlag(ctx.args, "--json")) {
+      process.stdout.write(json(diff));
+      return 0;
+    }
+    if (isInkMode(ctx.args)) {
+      const { default: DiffView } = await import("../tui/components/DiffView.js");
+      return renderComponent(
+        () => React.createElement(DiffView, {
+          semanticChanges: diff.semanticChanges,
+          rawSourceChanges: diff.rawSourceChanges,
+        })
+      );
+    }
+    process.stdout.write(renderDiffText(diff));
     return 0;
   }
 };
@@ -144,11 +159,17 @@ export const auditCommand: Command = {
     const ref = ctx.args[1] ?? "current";
     const snapshot = await snapshotByRef(ref, ctx.args);
 
-    process.stdout.write(
-      hasFlag(ctx.args, "--json")
-        ? json(snapshot.auditFindings)
-        : renderFindingsText(snapshot.auditFindings)
-    );
+    if (hasFlag(ctx.args, "--json")) {
+      process.stdout.write(json(snapshot.auditFindings));
+      return 0;
+    }
+    if (isInkMode(ctx.args)) {
+      const { default: AuditView } = await import("../tui/components/AuditView.js");
+      return renderComponent(
+        () => React.createElement(AuditView, { findings: snapshot.auditFindings })
+      );
+    }
+    process.stdout.write(renderFindingsText(snapshot.auditFindings));
     return 0;
   }
 };

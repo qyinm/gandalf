@@ -5,6 +5,7 @@
  * an --explain breakdown of considered paths, or --json structured output.
  */
 
+import React from "react";
 import type { AuditFinding, Snapshot, SnapshotManifest } from "../types.js";
 import type { ScanResult } from "../scan.js";
 import { hasFlag, json, runtimeOptions } from "../cli-shared.js";
@@ -14,6 +15,7 @@ import { buildGraph } from "../graph.js";
 import { auditEvidence } from "../audit.js";
 import { buildProvenance } from "../provenance.js";
 import { ensureStore } from "../store.js";
+import { isInkMode, renderComponent } from "../tui/index.js";
 
 // ── Internal types ─────────────────────────────────────────────
 
@@ -133,10 +135,29 @@ export const scanCommand: Command = {
   description: "Scan project for agent configuration and emit evidence inventory",
   async execute(ctx: CommandContext): Promise<number> {
     const state = await currentState(ctx.args);
+
+    // --json: always wins
+    if (hasFlag(ctx.args, "--json")) {
+      process.stdout.write(json(state));
+      return 0;
+    }
+
+    // --tui: render with Ink
+    if (isInkMode(ctx.args)) {
+      const { default: ScanView } = await import("../tui/components/ScanView.js");
+      return renderComponent(
+        () => React.createElement(ScanView, {
+          evidence: state.scan.evidence,
+          auditFindings: state.snapshot.auditFindings,
+          blindSpots: state.scan.blindSpots,
+          readOnly: state.scan.trust.readOnly,
+        })
+      );
+    }
+
+    // Plain text
     process.stdout.write(
-      hasFlag(ctx.args, "--json")
-        ? json(state)
-        : hasFlag(ctx.args, "--explain")
+      hasFlag(ctx.args, "--explain")
         ? renderExplainText(state)
         : renderScanText(state)
     );
