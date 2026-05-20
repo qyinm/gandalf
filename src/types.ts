@@ -429,6 +429,10 @@ export interface MachineDiff {
   sourcePlatform: string;
   targetPlatform: string;
   sourceHostname: string;
+  /** True when source and target OS differ (e.g., darwin → linux). */
+  crossOS: boolean;
+  /** OS-specific differences between source and target. */
+  osDifferences: string[];
   /** Paths that were remapped from source home to target home. */
   remappedPaths: string[];
   /** MCP binaries detected on source machine. */

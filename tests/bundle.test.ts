@@ -13,7 +13,7 @@
  */
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { platform, tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 
@@ -422,5 +422,84 @@ describe("bundle import -- dry-run", () => {
     assert.equal(result.snapshotName, name);
     assert.equal(result.contentApplied, false);
     assert.deepEqual(allBefore, allAfter); // store unchanged
+  });
+
+  it("reports cross-OS compatibility differences in machine diff", async () => {
+    const box = await makeSandbox();
+    const sourcePlatform = platform() === "darwin" ? "linux" : "darwin";
+    const entries = makeMinimalBundle(box, "cross-os", [
+      {
+        path: "content/{home}/.claude/settings.json",
+        content: Buffer.from("{}", "utf-8"),
+        mode: 0o644,
+        mtime: 1000000,
+        type: "file"
+      }
+    ]);
+    const manifestEntry = entries.find((entry) => entry.path === ".stailor/manifest.json");
+    assert.ok(manifestEntry);
+    const manifest = JSON.parse(manifestEntry.content.toString("utf-8"));
+    manifest.sourceMachine = {
+      hostname: "source-host",
+      platform: sourcePlatform,
+      arch: "arm64",
+      homeDir: "/Users/source",
+      projectPath: "/Users/source/project"
+    };
+    manifestEntry.content = Buffer.from(JSON.stringify(manifest) + "\n", "utf-8");
+
+    const bundleFilePath = bundlePath(box, "cross-os");
+    await writeTar(entries, bundleFilePath);
+
+    const result = await bundleImport({
+      bundlePath: bundleFilePath,
+      storeDir: box.storeDir,
+      projectPath: box.projectPath,
+      homeDir: box.homeDir,
+      dryRun: true
+    });
+
+    assert.equal(result.machineDiff?.crossOS, true);
+    assert.ok(result.machineDiff?.osDifferences.some((difference) => difference.includes("cross-OS restore")));
+    const expectedSourcePrefix = sourcePlatform === "linux" ? "/home/source" : "/Users/source";
+    assert.ok(result.machineDiff?.remappedPaths.some((mapping) => mapping.includes(`${expectedSourcePrefix}/.claude/settings.json`)));
+  });
+
+  it("normalizes source home prefixes to the source OS when reporting remapped paths", async () => {
+    const box = await makeSandbox();
+    const entries = makeMinimalBundle(box, "source-home-normalization", [
+      {
+        path: "content/{home}/.codex/config.toml",
+        content: Buffer.from("model = 'gpt-5'", "utf-8"),
+        mode: 0o644,
+        mtime: 1000000,
+        type: "file"
+      }
+    ]);
+    const manifestEntry = entries.find((entry) => entry.path === ".stailor/manifest.json");
+    assert.ok(manifestEntry);
+    const manifest = JSON.parse(manifestEntry.content.toString("utf-8"));
+    manifest.sourceMachine = {
+      hostname: "linux-box",
+      platform: "linux",
+      homeDir: "/Users/alice",
+      projectPath: "/Users/alice/project"
+    };
+    manifestEntry.content = Buffer.from(JSON.stringify(manifest) + "\n", "utf-8");
+
+    const bundleFilePath = bundlePath(box, "source-home-normalization");
+    await writeTar(entries, bundleFilePath);
+
+    const result = await bundleImport({
+      bundlePath: bundleFilePath,
+      storeDir: box.storeDir,
+      projectPath: box.projectPath,
+      homeDir: box.homeDir,
+      dryRun: true
+    });
+
+    assert.ok(result.machineDiff?.remappedPaths.some((mapping) =>
+      mapping.startsWith("/home/alice/.codex/config.toml →")
+    ));
   });
 });

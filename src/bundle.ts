@@ -56,14 +56,41 @@ export interface BundleExportResult {
 // ── Path normalisation ───────────────────────────────────────────
 
 /**
+ * Normalize a home directory prefix to the conventional root for a platform.
+ * This keeps cross-OS reports stable when a manifest records a macOS-style
+ * home for a Linux source (or vice versa), e.g. /Users/alice ↔ /home/alice.
+ */
+function normaliseHomeForPlatform(homeDir: string, machinePlatform: string): string {
+  const macMatch = homeDir.match(/^\/Users\/([^/]+)(?:\/)?$/);
+  const linuxMatch = homeDir.match(/^\/home\/([^/]+)(?:\/)?$/);
+
+  if (machinePlatform === "linux" && macMatch) {
+    return `/home/${macMatch[1]}`;
+  }
+  if (machinePlatform === "darwin" && linuxMatch) {
+    return `/Users/${linuxMatch[1]}`;
+  }
+  return homeDir;
+}
+
+/**
  * Normalise a sourcePath for bundle storage.
- * Home-relative paths (starting with ~/) become {home}/... for portability.
+ * Home-relative paths (starting with ~/) and absolute paths under the current
+ * home directory become {home}/... for portability.
  * Project-relative paths are stored as-is.
  */
-function normaliseSourcePath(sourcePath: string): string {
+function normaliseSourcePath(sourcePath: string, homeDir: string): string {
   if (sourcePath.startsWith("~/")) {
     return `${HOME_TOKEN}/${sourcePath.slice(2)}`;
   }
+
+  const resolvedSource = path.resolve(sourcePath);
+  const resolvedHome = path.resolve(homeDir);
+  if (path.isAbsolute(sourcePath) && (resolvedSource === resolvedHome || resolvedSource.startsWith(resolvedHome + path.sep))) {
+    const homeRelative = path.relative(resolvedHome, resolvedSource);
+    return homeRelative.length > 0 ? `${HOME_TOKEN}/${homeRelative}` : HOME_TOKEN;
+  }
+
   return sourcePath;
 }
 
@@ -300,7 +327,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
 
         const content = await readFile(sourceAbs);
         // Normalise home paths to {home}/... for cross-machine portability
-        const normalisedPath = normaliseSourcePath(item.sourcePath);
+        const normalisedPath = normaliseSourcePath(item.sourcePath, homeDir);
         const tarPath = `content/${normalisedPath}`;
         entries.push({
           path: tarPath,
@@ -517,16 +544,33 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
   // Build remapped paths list
   const remappedPaths: string[] = [];
   const contentEntries = entries.filter((e) => e.path.startsWith("content/") && e.type === "file");
+  const sourceHome = sourceMachine ? normaliseHomeForPlatform(sourceMachine.homeDir, sourceMachine.platform) : undefined;
+  const normalisedTargetHome = normaliseHomeForPlatform(targetHome, targetPlatform);
   for (const entry of contentEntries) {
     const relativePath = entry.path.slice("content/".length);
     if (relativePath.startsWith(`${HOME_TOKEN}/`)) {
       const homeRelative = relativePath.slice(HOME_TOKEN.length + 1);
-      const sourceAbs = sourceMachine ? path.join(sourceMachine.homeDir, homeRelative) : `source:${homeRelative}`;
-      const targetAbs = path.join(targetHome, homeRelative);
-      if (sourceAbs !== targetAbs) {
-        remappedPaths.push(`${sourceAbs} → ${targetAbs}`);
-      }
+      const sourceAbs = sourceHome ? path.join(sourceHome, homeRelative) : `source:${homeRelative}`;
+      const targetAbs = path.join(normalisedTargetHome, homeRelative);
+      remappedPaths.push(`${sourceAbs} → ${targetAbs}`);
     }
+  }
+
+  // Detect OS-level differences
+  const crossOS = sourceMachine ? sourceMachine.platform !== targetPlatform : false;
+  const osDifferences: string[] = [];
+  if (crossOS && sourceMachine) {
+    osDifferences.push(`${sourceMachine.platform} → ${targetPlatform} (cross-OS restore)`);
+    if (sourceMachine.platform === "darwin" && targetPlatform !== "darwin") {
+      osDifferences.push("macOS extended attributes and ACLs not preserved on non-macOS");
+    }
+    if (sourceMachine.platform === "darwin") {
+      osDifferences.push("macOS uses case-insensitive FS by default; Linux is case-sensitive — filename conflicts possible");
+    }
+    if (targetPlatform === "win32") {
+      osDifferences.push("Windows uses \\ path separator — paths will be normalized");
+    }
+    osDifferences.push("Binary/script files copied as-is; manual line-ending normalization may be needed");
   }
 
   // Extract MCP binaries from evidence and check availability
@@ -545,6 +589,8 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     sourcePlatform: sourceMachine?.platform ?? "unknown",
     targetPlatform,
     sourceHostname: sourceMachine?.hostname ?? "unknown",
+    crossOS,
+    osDifferences,
     remappedPaths,
     sourceMcpBinaries,
     mcpBinaryReport
@@ -682,6 +728,9 @@ export async function bundleInspect(bundlePath: string): Promise<BundleInspectRe
 function resolveSourcePath(sourcePath: string, homeDir: string, projectPath: string): string {
   if (sourcePath.startsWith("~/")) {
     return path.resolve(homeDir, sourcePath.slice(2));
+  }
+  if (path.isAbsolute(sourcePath)) {
+    return path.resolve(sourcePath);
   }
   return path.resolve(projectPath, sourcePath);
 }
