@@ -130,11 +130,20 @@ function resolveSnapshotPathsForImport<T extends { sourcePath: string }>(items: 
 
 // ── MCP binary detection ─────────────────────────────────────────
 
+function classifyMcpBinary(command: string, homeDir?: string): McpBinaryInfo["binaryKind"] {
+  if (command === "npx" || command === "uvx") return "package_runner";
+  if (path.isAbsolute(command)) {
+    if (homeDir && isStrictlyUnder(command, homeDir)) return "source_local_path";
+    return "path_binary";
+  }
+  return "command";
+}
+
 /**
  * Extract MCP binary information from evidence items.
  * Looks for items with kind "mcp_server" and extracts command/url from their value.
  */
-function extractMcpBinaries(evidence: DiscoveredItem[]): McpBinaryInfo[] {
+function extractMcpBinaries(evidence: DiscoveredItem[], sourceHomeDir?: string): McpBinaryInfo[] {
   const binaries: McpBinaryInfo[] = [];
   for (const item of evidence) {
     if (item.kind !== "mcp_server") continue;
@@ -150,7 +159,8 @@ function extractMcpBinaries(evidence: DiscoveredItem[]): McpBinaryInfo[] {
         evidenceId: item.id,
         command: command ?? url ?? "unknown",
         args,
-        url
+        url,
+        binaryKind: url ? "remote_url" : classifyMcpBinary(command ?? "", sourceHomeDir)
       });
     }
   }
@@ -170,7 +180,19 @@ function checkMcpBinaryAvailability(sourceBinaries: McpBinaryInfo[]): McpBinaryR
         evidenceId: bin.evidenceId,
         command: bin.url,
         availableOnTarget: true, // URLs can't be checked — assume reachable
+        binaryKind: "remote_url",
         warning: "Remote URL — availability cannot be verified locally"
+      });
+      continue;
+    }
+
+    if (bin.binaryKind === "source_local_path") {
+      reports.push({
+        evidenceId: bin.evidenceId,
+        command: bin.command,
+        availableOnTarget: false,
+        binaryKind: bin.binaryKind,
+        warning: `MCP command points to a source machine local binary path (${bin.command}); install or remap it on this machine.`
       });
       continue;
     }
@@ -182,15 +204,21 @@ function checkMcpBinaryAvailability(sourceBinaries: McpBinaryInfo[]): McpBinaryR
         evidenceId: bin.evidenceId,
         command: bin.command,
         availableOnTarget: resolved.length > 0,
+        binaryKind: bin.binaryKind,
         resolvedPath: resolved || undefined,
-        warning: resolved.length === 0 ? `Binary "${bin.command}" not found on this machine` : undefined
+        warning: bin.binaryKind === "package_runner"
+          ? `Package runner ${bin.command} is available at ${resolved}; package arguments may still differ on this machine.`
+          : (resolved.length === 0 ? `Binary "${bin.command}" not found on this machine` : undefined)
       });
     } catch {
       reports.push({
         evidenceId: bin.evidenceId,
         command: bin.command,
         availableOnTarget: false,
-        warning: `Binary "${bin.command}" not found on this machine`
+        binaryKind: bin.binaryKind,
+        warning: bin.binaryKind === "package_runner"
+          ? `Package runner ${bin.command} not found on this machine; MCP package cannot be launched.`
+          : `Binary "${bin.command}" not found on this machine`
       });
     }
   }
@@ -620,7 +648,7 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
   const evidenceEntry = entries.find((e) => e.path === "snapshot/evidence.json");
   if (evidenceEntry) {
     const evidence: DiscoveredItem[] = JSON.parse(evidenceEntry.content.toString("utf-8"));
-    sourceMcpBinaries = extractMcpBinaries(evidence);
+    sourceMcpBinaries = extractMcpBinaries(evidence, sourceHome);
     mcpBinaryReport = checkMcpBinaryAvailability(sourceMcpBinaries);
   }
 
