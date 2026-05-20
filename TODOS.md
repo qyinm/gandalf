@@ -24,7 +24,7 @@ Priority order within each section.
   - Store paths as `{home}/.claude/settings.json` in bundle manifest
   - Resolve `{home}` to `$HOME` on restore
 - [x] **P1** MCP binary path detection and mismatch warning (`npx`, `uvx`, local bins).
-- [ ] **P1** Restore dry-run with machine-specific diff report.
+- [x] **P1** Restore dry-run with machine-specific diff report.
 - [x] **P2** OS-aware path normalization (macOS `/Users/` ↔ Linux `/home/`).
 - [ ] **P2** Cross-machine dogfood: export on macOS, import on Linux.
 
