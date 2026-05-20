@@ -178,7 +178,7 @@ export function auditEvidence(evidence: DiscoveredItem[], graph: GraphNode[]): A
       findings.push(finding(
         "UNSUPPORTED_AGENT_STATE",
         "medium",
-        "Agent state was detected but cannot be interpreted by snaptailor v0.1.",
+        "Agent state was detected but cannot yet be interpreted by snaptailor.",
         `${item.sourcePath} is present, but its semantics are unsupported.`,
         "Treat this as a blind spot and inspect the source manually before relying on the snapshot.",
         item

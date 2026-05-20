@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import {
+  agentStoreDir,
   ensureStore,
+  listAgents,
   listSnapshots,
   readSnapshot,
   snapshotExists,
@@ -156,5 +158,62 @@ describe("snapshot store", () => {
       }
     });
     assert.deepEqual(redactions, []);
+  });
+});
+
+describe("per-agent snapshot store", () => {
+  it("agentStoreDir returns store/agent for scoped paths, store root for unscoped", () => {
+    assert.equal(agentStoreDir("/store", "claude-code"), "/store/claude-code");
+    assert.equal(agentStoreDir("/store", "codex"), "/store/codex");
+    assert.equal(agentStoreDir("/store"), "/store");
+  });
+
+  it("writes and reads snapshots per agent", async () => {
+    const storeDir = await tempStore();
+    const ccSnap = snapshot("baseline");
+    const codexSnap = snapshot("codex-baseline");
+
+    await writeSnapshot(storeDir, ccSnap, "claude-code");
+    await writeSnapshot(storeDir, codexSnap, "codex");
+
+    // Check isolation: each agent's snapshots live under their own subdir
+    const ccDir = path.join(storeDir, "claude-code", "baseline");
+    const codexDir = path.join(storeDir, "codex", "codex-baseline");
+    assert.equal((await stat(ccDir)).isDirectory(), true);
+    assert.equal((await stat(codexDir)).isDirectory(), true);
+
+    // Flat store listing should NOT see agent-scoped snapshots
+    assert.deepEqual(await listSnapshots(storeDir), []);
+
+    // Agent-scoped listing should work
+    const ccSnaps = await listSnapshots(storeDir, "claude-code");
+    assert.deepEqual(ccSnaps, ["baseline"]);
+
+    const codexSnaps = await listSnapshots(storeDir, "codex");
+    assert.deepEqual(codexSnaps, ["codex-baseline"]);
+
+    // Read back
+    assert.deepEqual(await readSnapshot(storeDir, "baseline", "claude-code"), ccSnap);
+    assert.deepEqual(await readSnapshot(storeDir, "codex-baseline", "codex"), codexSnap);
+
+    // Snapshot exists check
+    assert.equal(await snapshotExists(storeDir, "baseline", "claude-code"), true);
+    assert.equal(await snapshotExists(storeDir, "baseline", "codex"), false);
+  });
+
+  it("listAgents returns agents with snapshots", async () => {
+    const storeDir = await tempStore();
+    await writeSnapshot(storeDir, snapshot("v1"), "claude-code");
+    await writeSnapshot(storeDir, snapshot("v1"), "codex");
+    await writeSnapshot(storeDir, snapshot("v1"), "cursor");
+
+    const agents = await listAgents(storeDir);
+    assert.deepEqual(agents, ["claude-code", "codex", "cursor"]);
+  });
+
+  it("listAgents returns empty for empty store", async () => {
+    const storeDir = await tempStore();
+    await ensureStore(storeDir);
+    assert.deepEqual(await listAgents(storeDir), []);
   });
 });

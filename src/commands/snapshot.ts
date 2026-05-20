@@ -94,24 +94,28 @@ export const snapshotCommand: Command = {
         process.stderr.write(
           formatSnapError({
             code: "SNAPTAILOR_METADATA_ONLY_REQUIRED",
-            problem: "v0.1 snapshots are metadata-only.",
+            problem: "Snapshots are metadata-only.",
             cause: "`snapshot create` was called without `--metadata-only`.",
-            fix: "Add `--metadata-only`; raw content snapshots are not supported in v0.1."
+            fix: "Add `--metadata-only`; raw content snapshot storage is not supported."
           })
         );
         return 1;
       }
 
       const state = await currentState(args, name);
-      await writeSnapshot(options.storeDir, state.snapshot);
-      process.stdout.write(`Created metadata-only snapshot: ${name}\n`);
+      await writeSnapshot(options.storeDir, state.snapshot, options.agent);
+      process.stdout.write(`Created metadata-only snapshot: ${name}`);
+      if (options.agent) process.stdout.write(` (agent: ${options.agent})`);
+      process.stdout.write("\n");
       return 0;
     }
 
     /* ---------- snapshot list ---------- */
     if (sub === "list") {
-      const names = await listSnapshots(options.storeDir);
-      process.stdout.write(names.length === 0 ? "No snapshots.\n" : `${names.join("\n")}\n`);
+      const names = await listSnapshots(options.storeDir, options.agent);
+      process.stdout.write(names.length === 0
+        ? "No snapshots.\n"
+        : `${names.join("\n")}\n`);
       return 0;
     }
 
@@ -129,7 +133,7 @@ export const snapshotCommand: Command = {
         );
         return 1;
       }
-      const snapshot = await readSnapshot(options.storeDir, name);
+      const snapshot = await readSnapshot(options.storeDir, name, options.agent);
       process.stdout.write(hasFlag(args, "--json") ? json(snapshot) : `${snapshot.manifest.name}\n`);
       return 0;
     }
