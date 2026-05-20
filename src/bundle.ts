@@ -580,7 +580,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
  *   - OS differences are noted
  */
 export async function bundleImport(options: BundleImportOptions): Promise<BundleImportResult> {
-  const { bundlePath, storeDir, projectPath, homeDir, applyContent, dryRun } = options;
+  const { bundlePath, storeDir, projectPath, homeDir, applyContent, dryRun, quarantine } = options;
   const signatureKey = resolveSignatureKey(options.signatureKey);
 
   // Read bundle
@@ -853,16 +853,30 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
 
   await writeSnapshot(storeDir, snapshot);
 
-  // Apply content files with {home} resolution
+  // Apply or quarantine content files with {home} resolution
   let contentApplied = false;
+  let quarantinedContentDir: string | undefined;
   if (applyContent) {
     const applyEntries = entries.filter((e) => e.path.startsWith("content/") && e.type === "file");
-    for (const entry of applyEntries) {
-      const relativePath = entry.path.slice("content/".length);
-      const resolved = resolveBundlePath(relativePath, homeDir, projectPath);
-      await writeFile(resolved, entry.content);
+    if (quarantine) {
+      const safeSnapshotName = manifest.snapshotName.replace(/[^a-zA-Z0-9._-]/g, "-");
+      quarantinedContentDir = path.join(storeDir, "quarantine", `${safeSnapshotName}-${Date.now()}`);
+      for (const entry of applyEntries) {
+        const relativePath = entry.path.slice("content/".length);
+        const quarantinePath = path.join(quarantinedContentDir, relativePath.replace(new RegExp(HOME_TOKEN, "g"), "home"));
+        await mkdir(path.dirname(quarantinePath), { recursive: true, mode: 0o700 });
+        await writeFile(quarantinePath, entry.content);
+      }
+      warnings.push(`Content files quarantined for inspection at ${quarantinedContentDir}; no target files were modified.`);
+    } else {
+      for (const entry of applyEntries) {
+        const relativePath = entry.path.slice("content/".length);
+        const resolved = resolveBundlePath(relativePath, homeDir, projectPath);
+        await mkdir(path.dirname(resolved), { recursive: true });
+        await writeFile(resolved, entry.content);
+      }
+      contentApplied = true;
     }
-    contentApplied = true;
   }
 
   return {
@@ -870,6 +884,7 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     evidenceCount: snapshot.evidence.length,
     includesContent: manifest.includesContent,
     contentApplied,
+    quarantinedContentDir,
     warnings,
     machineDiff
   };

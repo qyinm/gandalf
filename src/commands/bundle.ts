@@ -118,6 +118,7 @@ export const bundleCommand: Command = {
         homeDir: options.homeDir,
         applyContent,
         dryRun: isDryRun,
+        quarantine: hasFlag(args, "--quarantine"),
         trust: hasFlag(args, "--trust")
       });
 
@@ -162,6 +163,9 @@ export const bundleCommand: Command = {
         }
         if (result.contentApplied) {
           process.stdout.write("Content files: applied\n");
+        }
+        if (result.quarantinedContentDir) {
+          process.stdout.write(`Content files: quarantined at ${result.quarantinedContentDir}\n`);
         }
         if (result.warnings.length > 0) {
           process.stdout.write(`\nWarnings:\n`);
