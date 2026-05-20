@@ -12,6 +12,7 @@ export function restorePolicyFor(kind: EvidenceKind): RestorePolicy {
     case "agent_instruction":
     case "agent_config":
     case "skill":
+    case "extension":
       return "full_content_supported";
     case "mcp_server":
     case "permission":

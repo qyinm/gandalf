@@ -23,6 +23,19 @@ interface PiSkillFile {
   root: string;
 }
 
+interface PiExtensionTarget {
+  absolutePath: string;
+  sourcePath: string;
+  scope: EvidenceScope;
+  precedence: number;
+  source: string;
+}
+
+interface PiExtensionFile {
+  filePath: string;
+  root: string;
+}
+
 interface PiFrontmatter {
   name?: string;
   description?: string;
@@ -38,10 +51,6 @@ export const piAgentScanner: ScannerPlugin = {
   targets(projectPath: string, homeDir: string): ScanTarget[] {
     return [
       projectTarget(projectPath, ".pi/settings.json", "pi-agent", "agent_config", "json"),
-      projectTarget(projectPath, ".pi/extensions", "pi-agent", "unsupported", "filesystem", {
-        directory: true,
-        sensitivity: "extensions",
-      }),
       projectTarget(projectPath, ".pi/themes", "pi-agent", "unsupported", "filesystem", {
         directory: true,
         sensitivity: "themes",
@@ -59,10 +68,6 @@ export const piAgentScanner: ScannerPlugin = {
         directory: true,
         sensitivity: "custom_agents",
       }),
-      homeTarget(homeDir, ".pi/agent/extensions", "pi-agent", "unsupported", "filesystem", {
-        directory: true,
-        sensitivity: "extensions",
-      }),
       homeTarget(homeDir, ".pi/agent/themes", "pi-agent", "unsupported", "filesystem", {
         directory: true,
         sensitivity: "themes",
@@ -76,7 +81,12 @@ export const piAgentScanner: ScannerPlugin = {
 
   async scan({ projectPath, homeDir }): Promise<DiscoveredItem[]> {
     const configEvidence = await scanTargets(this.targets(projectPath, homeDir));
+    const extensionEvidence: DiscoveredItem[] = [];
     const skillEvidence: DiscoveredItem[] = [];
+
+    for (const target of await piExtensionTargets(projectPath, homeDir)) {
+      extensionEvidence.push(...await scanPiExtensionTarget(target));
+    }
 
     for (const target of await piSkillTargets(projectPath, homeDir)) {
       skillEvidence.push(...await scanPiSkillTarget(target));
@@ -84,10 +94,39 @@ export const piAgentScanner: ScannerPlugin = {
 
     return [
       ...configEvidence,
+      ...dedupePiExtensions(extensionEvidence),
       ...dedupePiSkills(skillEvidence),
     ];
   },
 };
+
+async function piExtensionTargets(projectPath: string, homeDir: string): Promise<PiExtensionTarget[]> {
+  const targets: PiExtensionTarget[] = [
+    makePiExtensionTarget(homeDir, ".pi/agent/extensions", "user", 10, "auto"),
+    makePiExtensionTarget(projectPath, ".pi/extensions", "project", 40, "auto"),
+  ];
+
+  targets.push(...await configuredExtensionTargets(projectPath, homeDir));
+  targets.push(...await packageExtensionTargets(projectPath, homeDir));
+
+  return targets;
+}
+
+function makePiExtensionTarget(
+  root: string,
+  relativePath: string,
+  scope: EvidenceScope,
+  precedence: number,
+  source: string
+): PiExtensionTarget {
+  return {
+    absolutePath: join(root, relativePath),
+    sourcePath: scope === "user" ? `~/${relativePath}` : relativePath,
+    scope,
+    precedence,
+    source,
+  };
+}
 
 async function piSkillTargets(projectPath: string, homeDir: string): Promise<PiSkillTarget[]> {
   const targets: PiSkillTarget[] = [
@@ -159,6 +198,30 @@ function findGitRepoRoot(startDir: string): string | null {
   }
 }
 
+async function configuredExtensionTargets(projectPath: string, homeDir: string): Promise<PiExtensionTarget[]> {
+  const targets: PiExtensionTarget[] = [];
+  const settings = [
+    { path: join(homeDir, ".pi/agent/settings.json"), baseDir: join(homeDir, ".pi/agent"), scope: "user" as const, precedence: 20 },
+    { path: join(projectPath, ".pi/settings.json"), baseDir: join(projectPath, ".pi"), scope: "project" as const, precedence: 50 },
+  ];
+
+  for (const setting of settings) {
+    const value = await readJsonObject(setting.path);
+    for (const rawPath of arrayOfStrings(value?.["extensions"])) {
+      const absolutePath = resolveConfiguredPath(rawPath, setting.baseDir, homeDir);
+      targets.push({
+        absolutePath,
+        sourcePath: displayPath(absolutePath, homeDir, projectPath),
+        scope: setting.scope,
+        precedence: setting.precedence,
+        source: "settings",
+      });
+    }
+  }
+
+  return targets;
+}
+
 async function configuredSkillTargets(projectPath: string, homeDir: string): Promise<PiSkillTarget[]> {
   const targets: PiSkillTarget[] = [];
   const settings = [
@@ -179,6 +242,43 @@ async function configuredSkillTargets(projectPath: string, homeDir: string): Pro
         includeRootFiles: true,
         source: "settings",
       });
+    }
+  }
+
+  return targets;
+}
+
+async function packageExtensionTargets(projectPath: string, homeDir: string): Promise<PiExtensionTarget[]> {
+  const targets: PiExtensionTarget[] = [];
+  const settings = [
+    { path: join(homeDir, ".pi/agent/settings.json"), scope: "user" as const, precedence: 25 },
+    { path: join(projectPath, ".pi/settings.json"), scope: "project" as const, precedence: 55 },
+  ];
+
+  for (const setting of settings) {
+    const value = await readJsonObject(setting.path);
+    for (const spec of arrayOfStrings(value?.["packages"])) {
+      const packageRoot = resolvePackageRoot(spec);
+      if (!packageRoot) {
+        continue;
+      }
+
+      const packageJson = await readJsonObject(join(packageRoot, "package.json"));
+      const piValue = packageJson?.["pi"];
+      const piConfig = isObject(piValue) ? piValue as Record<string, unknown> : {};
+      const extensionPaths = arrayOfStrings(piConfig["extensions"]);
+      const rawPaths = extensionPaths.length > 0 ? extensionPaths : ["extensions"];
+
+      for (const rawPath of rawPaths) {
+        const absolutePath = resolveConfiguredPath(rawPath, packageRoot, homeDir);
+        targets.push({
+          absolutePath,
+          sourcePath: displayPath(absolutePath, homeDir, projectPath),
+          scope: setting.scope,
+          precedence: setting.precedence,
+          source: "package",
+        });
+      }
     }
   }
 
@@ -258,6 +358,167 @@ function nodeModuleRoots(): string[] {
     "/usr/local/lib/node_modules",
   ];
   return [...new Set(roots.map((root) => resolve(root)))];
+}
+
+async function scanPiExtensionTarget(target: PiExtensionTarget): Promise<DiscoveredItem[]> {
+  const extensionFiles = await findPiExtensionFiles(target.absolutePath);
+  const evidence: DiscoveredItem[] = [];
+
+  for (const extensionFile of extensionFiles) {
+    let stats;
+    let realFilePath: string | undefined;
+    try {
+      stats = await stat(extensionFile.filePath);
+      realFilePath = await realpath(extensionFile.filePath);
+    } catch {
+      continue;
+    }
+
+    const sourcePath = displayExtensionSourcePath(target, extensionFile);
+    const entrypoint = dirnameBasename(extensionFile.filePath);
+    const isIndexEntrypoint = entrypoint === "index.ts" || entrypoint === "index.js";
+
+    evidence.push({
+      id: itemId(target.scope, "pi-agent", sourcePath, "extension"),
+      agent: "pi-agent",
+      kind: "extension",
+      sourcePath,
+      scope: target.scope,
+      precedence: target.precedence,
+      parser: "filesystem",
+      sensitivity: "command_config",
+      contentPolicy: "metadata_only",
+      restorePolicy: "full_content_supported",
+      captureStatus: "captured",
+      confidence: "high",
+      name: extensionNameFromPath(extensionFile.filePath, extensionFile.root),
+      metadata: {
+        present: true,
+        source: target.source,
+        executable: true,
+        entrypoint,
+        extensionStyle: isIndexEntrypoint ? "directory_index" : "single_file",
+        sizeBytes: stats.size,
+        realPath: realFilePath,
+      },
+    });
+  }
+
+  return evidence;
+}
+
+async function findPiExtensionFiles(root: string): Promise<PiExtensionFile[]> {
+  let stats;
+  try {
+    stats = await stat(root);
+  } catch {
+    return [];
+  }
+
+  if (stats.isFile()) {
+    return isExtensionFile(root) ? [{ filePath: root, root }] : [];
+  }
+  if (!stats.isDirectory()) {
+    return [];
+  }
+  return collectPiExtensionEntries(root, root);
+}
+
+async function collectPiExtensionEntries(dir: string, root: string): Promise<PiExtensionFile[]> {
+  const manifestEntries = await resolvePiExtensionEntries(dir, root);
+  if (manifestEntries.length > 0) {
+    return manifestEntries;
+  }
+
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const discovered: PiExtensionFile[] = [];
+  for (const entry of entries) {
+    if (entry.name.startsWith(".") || entry.name === "node_modules") {
+      continue;
+    }
+
+    const entryPath = join(dir, entry.name);
+    let stats;
+    try {
+      stats = await stat(entryPath);
+    } catch {
+      continue;
+    }
+
+    if (stats.isFile() && isExtensionFile(entryPath)) {
+      discovered.push({ filePath: entryPath, root });
+    } else if (stats.isDirectory()) {
+      discovered.push(...await resolvePiExtensionEntries(entryPath, root));
+    }
+  }
+
+  return discovered;
+}
+
+async function resolvePiExtensionEntries(dir: string, root: string): Promise<PiExtensionFile[]> {
+  const packageJson = await readJsonObject(join(dir, "package.json"));
+  const piValue = packageJson?.["pi"];
+  const piConfig = isObject(piValue) ? piValue as Record<string, unknown> : {};
+  const manifestExtensions = arrayOfStrings(piConfig["extensions"]);
+  const files: PiExtensionFile[] = [];
+
+  for (const rawPath of manifestExtensions) {
+    const resolvedPath = resolve(dir, rawPath);
+    files.push(...await findPiExtensionFilesFromManifestPath(resolvedPath, root));
+  }
+  if (files.length > 0) {
+    return files;
+  }
+
+  for (const indexFile of [join(dir, "index.ts"), join(dir, "index.js")]) {
+    try {
+      if ((await stat(indexFile)).isFile()) {
+        return [{ filePath: indexFile, root }];
+      }
+    } catch {
+      // Keep checking candidates.
+    }
+  }
+
+  return [];
+}
+
+async function findPiExtensionFilesFromManifestPath(absolutePath: string, root: string): Promise<PiExtensionFile[]> {
+  let stats;
+  try {
+    stats = await stat(absolutePath);
+  } catch {
+    return [];
+  }
+
+  if (stats.isFile()) {
+    return isExtensionFile(absolutePath) ? [{ filePath: absolutePath, root }] : [];
+  }
+  if (stats.isDirectory()) {
+    return collectPiExtensionEntries(absolutePath, root);
+  }
+  return [];
+}
+
+function isExtensionFile(filePath: string): boolean {
+  return filePath.endsWith(".ts") || filePath.endsWith(".js");
+}
+
+function extensionNameFromPath(filePath: string, root: string): string {
+  const entrypoint = dirnameBasename(filePath);
+  if (entrypoint === "index.ts" || entrypoint === "index.js") {
+    if (existsSync(join(root, "package.json"))) {
+      return dirnameBasename(root);
+    }
+    return dirnameBasename(dirname(filePath));
+  }
+  return entrypoint.replace(/\.(ts|js)$/, "");
 }
 
 async function scanPiSkillTarget(target: PiSkillTarget): Promise<DiscoveredItem[]> {
@@ -424,6 +685,25 @@ async function skillEntrypointStatus(root: string, skillFile: string): Promise<s
   return "captured";
 }
 
+function dedupePiExtensions(evidence: DiscoveredItem[]): DiscoveredItem[] {
+  const result: DiscoveredItem[] = [];
+  const realPaths = new Set<string>();
+
+  for (const item of evidence) {
+    const realPath = typeof item.metadata?.["realPath"] === "string" ? item.metadata["realPath"] : undefined;
+    if (realPath && realPaths.has(realPath)) {
+      continue;
+    }
+
+    result.push(item);
+    if (realPath) {
+      realPaths.add(realPath);
+    }
+  }
+
+  return result;
+}
+
 function dedupePiSkills(evidence: DiscoveredItem[]): DiscoveredItem[] {
   const result: DiscoveredItem[] = [];
   const skillIndexes = new Map<string, number>();
@@ -465,6 +745,14 @@ function dedupePiSkills(evidence: DiscoveredItem[]): DiscoveredItem[] {
   }
 
   return result;
+}
+
+function displayExtensionSourcePath(target: PiExtensionTarget, extensionFile: PiExtensionFile): string {
+  const relativePath = relative(target.absolutePath, extensionFile.filePath).split(sep).join("/");
+  if (!relativePath) {
+    return target.sourcePath;
+  }
+  return `${target.sourcePath}/${relativePath}`;
 }
 
 function displaySkillSourcePath(target: PiSkillTarget, skillFile: PiSkillFile): string {

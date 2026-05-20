@@ -52,7 +52,7 @@ function hasExecutableConfig(item: DiscoveredItem): boolean {
     return true;
   }
 
-  if ((item.kind === "hook" || item.kind === "skill") && item.metadata?.executable === true) {
+  if ((item.kind === "hook" || item.kind === "skill" || item.kind === "extension") && item.metadata?.executable === true) {
     return true;
   }
 
