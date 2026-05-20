@@ -49,21 +49,10 @@ export const bundleCommand: Command = {
 
       await ensureStore(options.storeDir);
 
-      const includeContent = hasFlag(args, "--include-content");
-      if (includeContent) {
-        const experimental = hasFlag(args, "--experimental");
-        if (!process.env.SNAPTAILOR_EXPERIMENTAL && !experimental) {
-          process.stderr.write(
-            formatSnapError({
-              code: "SNAPTAILOR_EXPERIMENTAL_REQUIRED",
-              problem: "Bundle export --include-content requires --experimental flag in v0.1.",
-              cause: "--include-content was used without SNAPTAILOR_EXPERIMENTAL=1 or --experimental.",
-              fix: "Set SNAPTAILOR_EXPERIMENTAL=1 or pass --experimental to enable experimental features."
-            })
-          );
-          return 1;
-        }
-      }
+      // Content is included by default. Use --metadata-only to opt out.
+      // --include-content is kept for backward compatibility (no-op).
+      const metadataOnly = hasFlag(args, "--metadata-only");
+      const includeContent = !metadataOnly;
 
       const result = await bundleExport({
         snapshotName,

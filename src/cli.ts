@@ -35,11 +35,11 @@ v0.2+ commands (apply + rollback):
   snaptailor restore --snapshot <name> --apply --rollback --project .   apply then automatically rollback
 
 v0.2+ bundle commands:
-  snaptailor bundle export --name <snapshot> --out <file.stailor> --project .   export snapshot to .stailor bundle
+  snaptailor bundle export --name <snapshot> --out <file.stailor> --project .   export snapshot to .stailor bundle (includes content by default)
+  snaptailor bundle export --name <snapshot> --out <file.stailor> --metadata-only --project .   export metadata-only bundle
   snaptailor bundle import <file.stailor> --project .                           import .stailor bundle into local store
   snaptailor bundle inspect <file.stailor>                                      inspect bundle metadata
   snaptailor bundle import <file.stailor> --dry-run --project .                 validate bundle without importing
-  snaptailor bundle export --name <snapshot> --out <file.stailor> --include-content --project .   export with raw file contents
 `;
 
 // ── Command Registry ───────────────────────────────────────────
