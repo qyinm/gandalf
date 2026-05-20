@@ -16,7 +16,8 @@
     "test": "node --test $(find dist -name '*.test.js' | sort)",
     "check": "npm run build && npm test",
     "prepublishOnly": "npm run check",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "dogfood:cross-machine": "node scripts/cross-machine-dogfood.mjs"
   },
   "publishConfig": {
     "access": "public"

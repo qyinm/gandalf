@@ -37,3 +37,20 @@ Only finding: `MEDIUM SECRET_LIKE_VALUE_OMITTED` — expected, from a skill dire
 - The TOML parser fix allowed `~/.codex/config.toml` to be fully parsed (27 key-value pairs extracted), adding 40 more evidence items.
 - Reports are still large (79KB) because the provenance section lists every evidence item. This is acceptable for v0.1 but could be summarized in a future iteration.
 - No restore/import/share path was needed for dogfood.
+
+## Cross-machine bundle dogfood
+
+Command:
+
+```bash
+npm run dogfood:cross-machine
+```
+
+This builds a disposable macOS-side snapshot/bundle, then runs `bundle import --dry-run --json` inside a Linux `node:22-bookworm` Docker container with separate `/home/snaptailor`, `/linux/project`, and `/linux/store` paths.
+
+Validation checks:
+
+- import remains non-mutating (`--dry-run`, no content applied)
+- machine diff reports `darwin → linux`
+- `crossOS=true`
+- source-local MCP binary paths are reported unavailable on the Linux target
