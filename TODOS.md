@@ -30,7 +30,7 @@ Priority order within each section.
 
 ## v0.3: Bundle Security
 
-- [ ] **P2** Bundle signature: HMAC-SHA256 on manifest + content.
+- [x] **P2** Bundle signature: HMAC-SHA256 on manifest + content.
 - [ ] **P2** `snaptailor bundle verify <file.stailor>` command.
 - [ ] **P3** Trust-on-first-use key management.
 - [ ] **P3** Quarantine mode: imports are inspected before content is applied.
