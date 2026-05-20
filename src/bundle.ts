@@ -3,7 +3,7 @@
  *
  * A .stailor bundle is a POSIX ustar tar archive containing:
  *   .stailor/format-version   — "1"
- *   .stailor/manifest.json    — BundleManifest
+ *   .stailor/manifest.json    — BundleManifest (includes sourceMachine)
  *   .stailor/checksums.json   — BundleChecksums
  *   snapshot/evidence.json    — DiscoveredItem[]
  *   snapshot/graph.json       — GraphNode[]
@@ -11,10 +11,14 @@
  *   snapshot/checksums.json   — ChecksumRecord
  *   snapshot/redactions.json  — redaction log
  *   content/...               — optional raw file contents (full_content_supported items only)
+ *
+ * Home paths are stored as {home}/... in the bundle for cross-machine compatibility.
  */
 
 import { createHash } from "node:crypto";
+import { execSync } from "node:child_process";
 import { readFile, stat, writeFile } from "node:fs/promises";
+import { homedir, platform, hostname } from "node:os";
 import path from "node:path";
 import { restorePolicyFor } from "./policy.js";
 import { readSnapshot } from "./store.js";
@@ -27,11 +31,18 @@ import type {
   BundleInspectResult,
   BundleManifest,
   DiscoveredItem,
-  RestorePolicy,
+  MachineDiff,
+  McpBinaryInfo,
+  McpBinaryReport,
+  SourceMachine,
   TarEntry
 } from "./types.js";
 
 const FORMAT_VERSION = "1";
+
+/** Token used in bundle paths to represent the source home directory. */
+const HOME_TOKEN = "{home}";
+
 const MAX_BUNDLE_BYTES = parseInt(process.env.SNAPTAILOR_MAX_BUNDLE_BYTES ?? "", 10) || 500 * 1024 * 1024;
 const MAX_CONTENT_BYTES = parseInt(process.env.SNAPTAILOR_MAX_CONTENT_BYTES ?? "", 10) || 50 * 1024 * 1024;
 
@@ -42,16 +53,118 @@ export interface BundleExportResult {
   warnings: string[];
 }
 
+// ── Path normalisation ───────────────────────────────────────────
+
+/**
+ * Normalise a sourcePath for bundle storage.
+ * Home-relative paths (starting with ~/) become {home}/... for portability.
+ * Project-relative paths are stored as-is.
+ */
+function normaliseSourcePath(sourcePath: string): string {
+  if (sourcePath.startsWith("~/")) {
+    return `${HOME_TOKEN}/${sourcePath.slice(2)}`;
+  }
+  return sourcePath;
+}
+
+/**
+ * Resolve a normalised bundle path to an absolute path on the target machine.
+ * {home} is replaced with the current home directory.
+ */
+function resolveBundlePath(normalisedPath: string, homeDir: string, projectPath: string): string {
+  if (normalisedPath.startsWith(`${HOME_TOKEN}/`)) {
+    return path.resolve(homeDir, normalisedPath.slice(HOME_TOKEN.length + 1));
+  }
+  return path.resolve(projectPath, normalisedPath);
+}
+
+// ── MCP binary detection ─────────────────────────────────────────
+
+/**
+ * Extract MCP binary information from evidence items.
+ * Looks for items with kind "mcp_server" and extracts command/url from their value.
+ */
+function extractMcpBinaries(evidence: DiscoveredItem[]): McpBinaryInfo[] {
+  const binaries: McpBinaryInfo[] = [];
+  for (const item of evidence) {
+    if (item.kind !== "mcp_server") continue;
+    const value = item.value as Record<string, unknown> | undefined;
+    if (!value || typeof value !== "object") continue;
+
+    const command = typeof value.command === "string" ? value.command : undefined;
+    const url = typeof value.url === "string" ? value.url : undefined;
+
+    if (command || url) {
+      const args = Array.isArray(value.args) ? value.args.filter((a): a is string => typeof a === "string") : undefined;
+      binaries.push({
+        evidenceId: item.id,
+        command: command ?? url ?? "unknown",
+        args,
+        url
+      });
+    }
+  }
+  return binaries;
+}
+
+/**
+ * Check which MCP binaries are available on the current machine.
+ */
+function checkMcpBinaryAvailability(sourceBinaries: McpBinaryInfo[]): McpBinaryReport[] {
+  const reports: McpBinaryReport[] = [];
+
+  for (const bin of sourceBinaries) {
+    // URLs are not "binaries" — they're remote endpoints
+    if (bin.url) {
+      reports.push({
+        evidenceId: bin.evidenceId,
+        command: bin.url,
+        availableOnTarget: true, // URLs can't be checked — assume reachable
+        warning: "Remote URL — availability cannot be verified locally"
+      });
+      continue;
+    }
+
+    // "npx" and "uvx" are package runners — check if they exist
+    try {
+      const resolved = execSync(`which "${bin.command}" 2>/dev/null`, { encoding: "utf-8", timeout: 2000 }).trim();
+      reports.push({
+        evidenceId: bin.evidenceId,
+        command: bin.command,
+        availableOnTarget: resolved.length > 0,
+        resolvedPath: resolved || undefined,
+        warning: resolved.length === 0 ? `Binary "${bin.command}" not found on this machine` : undefined
+      });
+    } catch {
+      reports.push({
+        evidenceId: bin.evidenceId,
+        command: bin.command,
+        availableOnTarget: false,
+        warning: `Binary "${bin.command}" not found on this machine`
+      });
+    }
+  }
+
+  return reports;
+}
+
+// ── Machine info ─────────────────────────────────────────────────
+
+function captureSourceMachine(): SourceMachine {
+  return {
+    homeDir: homedir(),
+    platform: platform(),
+    hostname: hostname()
+  };
+}
+
 // ── Export ──────────────────────────────────────────────────────
 
 /**
  * Export a snapshot to a .stailor bundle file.
  *
- * Content inclusion respects per-kind restore policies:
- *   - full_content_supported  → file bytes included in content/ entries
- *   - structured_fields_only  → already captured in evidence.json, no content/ entry
- *   - key_inventory_only      → key names only in evidence.json, no content/ entry
- *   - not_supported           → warning emitted, no content included
+ * Content inclusion respects per-kind restore policies.
+ * Home paths are normalised to {home}/... for cross-machine portability.
  */
 export async function bundleExport(options: BundleExportOptions): Promise<BundleExportResult> {
   const { snapshotName, outputPath, storeDir, projectPath, homeDir, includeContent } = options;
@@ -70,6 +183,9 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
 
   const warnings: string[] = [];
 
+  // Capture source machine info for cross-machine compatibility
+  const sourceMachine = captureSourceMachine();
+
   // Build tar entries
   const entries: TarEntry[] = [];
 
@@ -85,7 +201,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     type: "file"
   });
 
-  // Build manifest (content stats populated later if includeContent)
+  // Build manifest
   const manifest: BundleManifest = {
     formatVersion: 1,
     snapshotName,
@@ -94,6 +210,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     includesContent: includeContent ?? false,
     contentFileCount: 0,
     contentTotalBytes: 0,
+    sourceMachine,
     security: {
       rawSecretsIncluded: false,
       redactionPolicy: "metadata-only",
@@ -132,16 +249,10 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     });
   }
 
-  // Optional content files — per-kind restore policy filtering
+  // Optional content files — per-kind restore policy filtering with path normalisation
   if (includeContent) {
     let totalContentBytes = 0;
     let contentCount = 0;
-
-    // Filter evidence by restore policy:
-    //   full_content_supported  → include file content
-    //   structured_fields_only  → skip (already in evidence.json)
-    //   key_inventory_only      → skip (key names only, already in evidence.json)
-    //   not_supported           → skip, warn
 
     // Collect not_supported items for warnings
     const notSupported = snapshot.evidence.filter(
@@ -161,7 +272,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
         item.captureStatus === "captured" &&
         restorePolicyFor(item.kind) === "full_content_supported" &&
         item.sourcePath &&
-        !item.sourcePath.startsWith("~/.env") // env keys are key_inventory_only anyway, but safety gate
+        !item.sourcePath.startsWith("~/.env")
     );
 
     // Deduplicate by sourcePath
@@ -178,7 +289,6 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     entries.push({ path: "content/", content: Buffer.alloc(0), mode: 0o755, mtime: Date.now(), type: "directory" });
 
     for (const item of uniqueItems) {
-      // Resolve source path to absolute
       const sourceAbs = resolveSourcePath(item.sourcePath, homeDir, projectPath);
       try {
         const fileStat = await stat(sourceAbs);
@@ -189,7 +299,9 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
         }
 
         const content = await readFile(sourceAbs);
-        const tarPath = `content/${item.sourcePath}`;
+        // Normalise home paths to {home}/... for cross-machine portability
+        const normalisedPath = normaliseSourcePath(item.sourcePath);
+        const tarPath = `content/${normalisedPath}`;
         entries.push({
           path: tarPath,
           content,
@@ -200,12 +312,11 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
         totalContentBytes += content.length;
         contentCount++;
       } catch {
-        // File may not exist or be unreadable; skip (best-effort content collection)
         continue;
       }
     }
 
-    // Report structured_fields_only and key_inventory_only counts for transparency
+    // Report structured_fields_only and key_inventory_only counts
     const structuredItems = snapshot.evidence.filter(
       (item) =>
         item.captureStatus === "captured" &&
@@ -223,7 +334,6 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     // Update manifest with content stats
     manifest.contentFileCount = contentCount;
     manifest.contentTotalBytes = totalContentBytes;
-    // Re-write manifest with updated content stats
     const manifestIndex = entries.findIndex((e) => e.path === ".stailor/manifest.json");
     if (manifestIndex >= 0) {
       entries[manifestIndex] = {
@@ -233,7 +343,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     }
   }
 
-  // Compute per-entry checksums BEFORE writing the tar (avoids double write)
+  // Compute per-entry checksums
   const entryChecksums: Record<string, string> = {};
   for (const entry of entries) {
     const hash = createHash("sha256");
@@ -250,7 +360,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     type: "file"
   };
 
-  // Insert checksums after manifest in the entries array
+  // Insert checksums after manifest
   const finalEntries: TarEntry[] = [];
   let checksumsInserted = false;
   for (const entry of entries) {
@@ -264,7 +374,6 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     finalEntries.push(checksumsEntry);
   }
 
-  // Single write: tar contains all entries including checksums
   const archiveChecksum = await writeTar(finalEntries, outputPath);
 
   return { bundlePath: outputPath, checksum: archiveChecksum, warnings };
@@ -274,9 +383,14 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
 
 /**
  * Import a .stailor bundle into the local snapshot store.
+ *
+ * On import, cross-machine compatibility is assessed:
+ *   - Home paths ({home}/...) are remapped to the current machine's $HOME
+ *   - MCP binary availability is checked and reported
+ *   - OS differences are noted
  */
 export async function bundleImport(options: BundleImportOptions): Promise<BundleImportResult> {
-  const { bundlePath, storeDir, projectPath, homeDir, applyContent, dryRun, trust } = options;
+  const { bundlePath, storeDir, projectPath, homeDir, applyContent, dryRun } = options;
 
   // Read bundle
   const { entries, checksum: bundleChecksum } = await readTar(bundlePath);
@@ -303,7 +417,7 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
   if (checksumsEntry) {
     const checksums: BundleChecksums = JSON.parse(checksumsEntry.content.toString("utf-8"));
     for (const entry of entries) {
-      if (entry.path === ".stailor/checksums.json") continue; // skip self
+      if (entry.path === ".stailor/checksums.json") continue;
       const expected = checksums.entries[entry.path];
       if (expected) {
         const actual = createHash("sha256").update(entry.content).digest("hex");
@@ -314,12 +428,9 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     }
   }
 
-  // Validate all paths are safe — validate against the REAL destination roots
-  // (homeDir and projectPath), not a temporary quarantine root.
-  // This ensures path validation matches actual content resolution.
+  // Validate all paths are safe
   const allRoots = [homeDir, projectPath];
   for (const entry of entries) {
-    // Basic path traversal check (.., null bytes, absolute paths)
     if (entry.path.includes("..")) {
       throw new Error(`Path traversal detected: "${entry.path}" contains ".."`);
     }
@@ -330,20 +441,17 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
       throw new Error(`Path traversal detected: "${entry.path}" is absolute`);
     }
 
-    // Validate against each root — content/ paths must resolve within at least one root
     if (entry.path.startsWith("content/")) {
       const relativePath = entry.path.slice("content/".length);
-      const resolved = resolveSourcePath(relativePath, homeDir, projectPath);
-      const isUnderRoot = allRoots.some(
-        (root) => isStrictlyUnder(resolved, root)
-      );
+      // Resolve with {home} handling
+      const resolved = resolveBundlePath(relativePath, homeDir, projectPath);
+      const isUnderRoot = allRoots.some((root) => isStrictlyUnder(resolved, root));
       if (!isUnderRoot) {
         throw new Error(
           `Content path "${relativePath}" resolves outside home and project directories`
         );
       }
     } else {
-      // Non-content paths (.stailor/*, snapshot/*) — validate against any root
       const isUnderRoot = allRoots.some(
         (root) => isStrictlyUnder(path.resolve(root, entry.path), root)
       );
@@ -359,7 +467,7 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     throw new Error(`Bundle too large: ${bundleStat.size} bytes (max ${MAX_BUNDLE_BYTES})`);
   }
 
-  // Validate content paths if applyContent (additional security: block dangerous home paths)
+  // Validate content paths if applyContent
   if (applyContent) {
     const BLOCKED_HOME_PREFIXES = [
       ".ssh", ".aws", ".gnupg", ".config", ".local", ".npm",
@@ -372,24 +480,25 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     for (const entry of contentEntries) {
       const relativePath = entry.path.slice("content/".length);
 
-      // Home-relative paths (starting with ~/) are blocked entirely —
-      // bundle content must be project-relative
-      if (relativePath.startsWith("~/")) {
+      // Home-relative paths (either legacy ~/ or {home}/ format)
+      const isHomeRelative =
+        relativePath.startsWith("~/") ||
+        relativePath.startsWith(`${HOME_TOKEN}/`);
+      if (isHomeRelative) {
         throw new Error(
           `Home-relative content path "${relativePath}" is not allowed. ` +
           `Bundle content must be project-relative.`
         );
       }
 
-      // Block known sensitive home directory paths
+      // Block known sensitive directory paths (regardless of home-relative)
       for (const prefix of BLOCKED_HOME_PREFIXES) {
         if (relativePath.includes(`/${prefix}/`) || relativePath.startsWith(`${prefix}/`)) {
           throw new Error(`Blocked content path prefix: "${relativePath}"`);
         }
       }
 
-      const resolved = resolveSourcePath(relativePath, homeDir, projectPath);
-      // Verify resolved path is within home or project
+      const resolved = resolveBundlePath(relativePath, homeDir, projectPath);
       const homeResolved = path.resolve(homeDir);
       const projectResolved = path.resolve(projectPath);
       if (!resolved.startsWith(homeResolved) && !resolved.startsWith(projectResolved)) {
@@ -398,18 +507,86 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     }
   }
 
+  // ── Cross-machine compatibility assessment ──────────────────
+
+  const sourceMachine = manifest.sourceMachine;
+  const targetHome = homedir();
+  const targetPlatform = platform();
+  const targetHostname = hostname();
+
+  // Build remapped paths list
+  const remappedPaths: string[] = [];
+  const contentEntries = entries.filter((e) => e.path.startsWith("content/") && e.type === "file");
+  for (const entry of contentEntries) {
+    const relativePath = entry.path.slice("content/".length);
+    if (relativePath.startsWith(`${HOME_TOKEN}/`)) {
+      const homeRelative = relativePath.slice(HOME_TOKEN.length + 1);
+      const sourceAbs = sourceMachine ? path.join(sourceMachine.homeDir, homeRelative) : `source:${homeRelative}`;
+      const targetAbs = path.join(targetHome, homeRelative);
+      if (sourceAbs !== targetAbs) {
+        remappedPaths.push(`${sourceAbs} → ${targetAbs}`);
+      }
+    }
+  }
+
+  // Extract MCP binaries from evidence and check availability
+  let sourceMcpBinaries: McpBinaryInfo[] = [];
+  let mcpBinaryReport: McpBinaryReport[] = [];
+  const evidenceEntry = entries.find((e) => e.path === "snapshot/evidence.json");
+  if (evidenceEntry) {
+    const evidence: DiscoveredItem[] = JSON.parse(evidenceEntry.content.toString("utf-8"));
+    sourceMcpBinaries = extractMcpBinaries(evidence);
+    mcpBinaryReport = checkMcpBinaryAvailability(sourceMcpBinaries);
+  }
+
+  const machineDiff: MachineDiff = {
+    sourceHome: sourceMachine?.homeDir ?? "unknown",
+    targetHome,
+    sourcePlatform: sourceMachine?.platform ?? "unknown",
+    targetPlatform,
+    sourceHostname: sourceMachine?.hostname ?? "unknown",
+    remappedPaths,
+    sourceMcpBinaries,
+    mcpBinaryReport
+  };
+
+  // Collect machine-related warnings
+  const warnings: string[] = [];
+
+  if (sourceMachine && sourceMachine.homeDir !== targetHome) {
+    warnings.push(
+      `Home directory differs: source=${sourceMachine.homeDir}, target=${targetHome}. ` +
+      `${remappedPaths.length} path(s) will be remapped.`
+    );
+  }
+
+  if (sourceMachine && sourceMachine.platform !== targetPlatform) {
+    warnings.push(
+      `Platform differs: source=${sourceMachine.platform}, target=${targetPlatform}. ` +
+      `Cross-OS restore may have issues with binary paths and file permissions.`
+    );
+  }
+
+  const unavailableBinaries = mcpBinaryReport.filter((b) => !b.availableOnTarget);
+  if (unavailableBinaries.length > 0) {
+    warnings.push(
+      `${unavailableBinaries.length} MCP binary/bundles not found on this machine: ` +
+      unavailableBinaries.map((b) => b.command).join(", ")
+    );
+  }
+
   if (dryRun) {
     return {
       snapshotName: manifest.snapshotName,
       evidenceCount: entries.filter((e) => e.path.startsWith("snapshot/")).length,
       includesContent: manifest.includesContent,
       contentApplied: false,
-      warnings: []
+      warnings,
+      machineDiff
     };
   }
 
   // Read snapshot data from entries
-  const evidenceEntry = entries.find((e) => e.path === "snapshot/evidence.json");
   const graphEntry = entries.find((e) => e.path === "snapshot/graph.json");
   const auditEntry = entries.find((e) => e.path === "snapshot/audit-findings.json");
 
@@ -417,7 +594,7 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     throw new Error("Invalid bundle: missing snapshot data files");
   }
 
-  // Write snapshot to store using the existing store format
+  // Write snapshot to store
   const { writeSnapshot } = await import("./store.js");
   const snapshot = {
     manifest: {
@@ -438,13 +615,13 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
 
   await writeSnapshot(storeDir, snapshot);
 
-  // Apply content files if requested
+  // Apply content files with {home} resolution
   let contentApplied = false;
   if (applyContent) {
-    const contentEntries = entries.filter((e) => e.path.startsWith("content/") && e.type === "file");
-    for (const entry of contentEntries) {
+    const applyEntries = entries.filter((e) => e.path.startsWith("content/") && e.type === "file");
+    for (const entry of applyEntries) {
       const relativePath = entry.path.slice("content/".length);
-      const resolved = resolveSourcePath(relativePath, homeDir, projectPath);
+      const resolved = resolveBundlePath(relativePath, homeDir, projectPath);
       await writeFile(resolved, entry.content);
     }
     contentApplied = true;
@@ -455,7 +632,8 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     evidenceCount: snapshot.evidence.length,
     includesContent: manifest.includesContent,
     contentApplied,
-    warnings: []
+    warnings,
+    machineDiff
   };
 }
 
@@ -467,14 +645,12 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
 export async function bundleInspect(bundlePath: string): Promise<BundleInspectResult> {
   const { entries, checksum: bundleChecksum } = await readTar(bundlePath);
 
-  // Read manifest
   const manifestEntry = entries.find((e) => e.path === ".stailor/manifest.json");
   if (!manifestEntry) {
     throw new Error("Invalid bundle: missing .stailor/manifest.json");
   }
   const manifest: BundleManifest = JSON.parse(manifestEntry.content.toString("utf-8"));
 
-  // Read checksums
   const checksumsEntry = entries.find((e) => e.path === ".stailor/checksums.json");
   const checksums: BundleChecksums | null = checksumsEntry
     ? JSON.parse(checksumsEntry.content.toString("utf-8"))
@@ -492,14 +668,16 @@ export async function bundleInspect(bundlePath: string): Promise<BundleInspectRe
     checksumAlgorithm: checksums?.algorithm ?? "SHA-256",
     bundleChecksum,
     isSigned: manifest.security.signed,
-    signatureAlgorithm: manifest.security.signatureAlgorithm
+    signatureAlgorithm: manifest.security.signatureAlgorithm,
+    sourceMachine: manifest.sourceMachine
   };
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
 
 /**
- * Resolve a sourcePath (which may start with ~/) to an absolute path.
+ * Resolve a raw sourcePath (which may start with ~/) to an absolute path.
+ * Used during EXPORT only — imports use resolveBundlePath().
  */
 function resolveSourcePath(sourcePath: string, homeDir: string, projectPath: string): string {
   if (sourcePath.startsWith("~/")) {
@@ -509,9 +687,7 @@ function resolveSourcePath(sourcePath: string, homeDir: string, projectPath: str
 }
 
 /**
- * Strict path containment check: verifies that `resolved` is either equal to
- * `root` or a direct descendant (separated by path.sep). Prevents sibling
- * directory prefix collisions like "/Users/alice-other" passing as "/Users/alice".
+ * Strict path containment check.
  */
 function isStrictlyUnder(resolved: string, root: string): boolean {
   const normalized = path.resolve(root);
