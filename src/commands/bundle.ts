@@ -9,7 +9,7 @@
 
 import path from "node:path";
 
-import { bundleExport, bundleImport, bundleInspect } from "../bundle.js";
+import { bundleExport, bundleImport, bundleInspect, bundleVerify } from "../bundle.js";
 import { hasFlag, json, runtimeOptions, valueAfter } from "../cli-shared.js";
 import { formatSnapError } from "../errors.js";
 import { ensureStore } from "../store.js";
@@ -210,6 +210,41 @@ export const bundleCommand: Command = {
         process.stdout.write(`  Signed: ${result.isSigned}\n`);
       }
       return 0;
+    }
+
+    /* ---------- bundle verify ---------- */
+    if (sub === "verify") {
+      const bundlePath = args[2];
+      if (!bundlePath) {
+        process.stderr.write(
+          formatSnapError({
+            code: "SNAPTAILOR_BUNDLE_MISSING_ARGS",
+            problem: "Bundle verify requires a .stailor file path.",
+            cause: "`bundle verify` was called without a bundle path.",
+            fix: "Run `snaptailor bundle verify <file.stailor>`."
+          })
+        );
+        return 1;
+      }
+
+      const result = await bundleVerify({ bundlePath: path.resolve(bundlePath) });
+      if (hasFlag(args, "--json")) {
+        process.stdout.write(json(result));
+      } else {
+        process.stdout.write(`${result.valid ? "Bundle verification passed" : "Bundle verification failed"}: ${result.bundlePath}\n`);
+        if (result.snapshotName) process.stdout.write(`  Snapshot: ${result.snapshotName}\n`);
+        process.stdout.write(`  Checksums: ${result.checksums.checked ? (result.checksums.ok ? "ok" : "failed") : "not checked"} (${result.checksums.entriesChecked} entries)\n`);
+        process.stdout.write(`  Signature: ${result.signature.signed ? (result.signature.checked ? (result.signature.ok ? "ok" : "failed") : "signed, not checked") : "unsigned"}\n`);
+        if (result.warnings.length > 0) {
+          process.stdout.write(`\nWarnings:\n`);
+          for (const warning of result.warnings) process.stdout.write(`  - ${warning}\n`);
+        }
+        if (result.errors.length > 0) {
+          process.stdout.write(`\nErrors:\n`);
+          for (const error of result.errors) process.stdout.write(`  - ${error}\n`);
+        }
+      }
+      return result.valid ? 0 : 1;
     }
 
     /* ---------- unknown subcommand ---------- */

@@ -30,6 +30,8 @@ import type {
   BundleImportResult,
   BundleInspectResult,
   BundleManifest,
+  BundleVerifyOptions,
+  BundleVerifyResult,
   DiscoveredItem,
   GraphNode,
   MachineDiff,
@@ -867,6 +869,87 @@ export async function bundleInspect(bundlePath: string): Promise<BundleInspectRe
     signatureAlgorithm: manifest.security.signatureAlgorithm,
     sourceMachine: manifest.sourceMachine
   };
+}
+
+// ── Verify ──────────────────────────────────────────────────────
+
+export async function bundleVerify(options: BundleVerifyOptions): Promise<BundleVerifyResult> {
+  const { entries } = await readTar(options.bundlePath);
+  const signatureKey = resolveSignatureKey(options.signatureKey);
+  const warnings: string[] = [];
+  const errors: string[] = [];
+
+  const base: BundleVerifyResult = {
+    bundlePath: options.bundlePath,
+    valid: false,
+    checksums: { checked: false, ok: false, entriesChecked: 0 },
+    signature: { signed: false, checked: false, ok: true },
+    warnings,
+    errors
+  };
+
+  const formatEntry = entries.find((e) => e.path === ".stailor/format-version");
+  if (!formatEntry) {
+    errors.push("Invalid bundle: missing .stailor/format-version");
+  } else {
+    const formatVersion = formatEntry.content.toString("utf-8").trim();
+    if (formatVersion !== FORMAT_VERSION) {
+      errors.push(`Unsupported bundle format version: "${formatVersion}" (expected "${FORMAT_VERSION}")`);
+    } else {
+      base.formatVersion = Number(formatVersion);
+    }
+  }
+
+  const manifestEntry = entries.find((e) => e.path === ".stailor/manifest.json");
+  if (!manifestEntry) {
+    errors.push("Invalid bundle: missing .stailor/manifest.json");
+    base.valid = false;
+    return base;
+  }
+
+  let manifest: BundleManifest;
+  try {
+    manifest = JSON.parse(manifestEntry.content.toString("utf-8")) as BundleManifest;
+    base.snapshotName = manifest.snapshotName;
+  } catch (error) {
+    errors.push(`Invalid bundle manifest JSON: ${error instanceof Error ? error.message : String(error)}`);
+    base.valid = false;
+    return base;
+  }
+
+  const signatureVerification = verifyBundleSignature(entries, manifest, signatureKey);
+  base.signature = {
+    signed: manifest.security.signed,
+    checked: signatureVerification.checked,
+    ok: signatureVerification.ok,
+    algorithm: manifest.security.signatureAlgorithm
+  };
+  if (signatureVerification.warning) {
+    if (signatureVerification.ok) warnings.push(signatureVerification.warning);
+    else errors.push(signatureVerification.warning);
+  }
+
+  const checksumsEntry = entries.find((e) => e.path === ".stailor/checksums.json");
+  if (!checksumsEntry) {
+    errors.push("Invalid bundle: missing .stailor/checksums.json");
+  } else {
+    base.checksums.checked = true;
+    const checksums = JSON.parse(checksumsEntry.content.toString("utf-8")) as BundleChecksums;
+    for (const entry of entries) {
+      if (entry.path === ".stailor/checksums.json") continue;
+      const expected = checksums.entries[entry.path];
+      if (!expected) continue;
+      base.checksums.entriesChecked += 1;
+      const actual = createHash("sha256").update(entry.content).digest("hex");
+      if (actual !== expected) {
+        errors.push(`Checksum mismatch for "${entry.path}": expected ${expected}, got ${actual}`);
+      }
+    }
+    base.checksums.ok = !errors.some((error) => error.startsWith("Checksum mismatch"));
+  }
+
+  base.valid = errors.length === 0;
+  return base;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
