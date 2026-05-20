@@ -352,12 +352,24 @@ export interface BundleManifest {
   includesContent: boolean;
   contentFileCount: number;
   contentTotalBytes: number;
+  /** Information about the machine that created this bundle. */
+  sourceMachine: SourceMachine;
   security: {
     rawSecretsIncluded: false;
     redactionPolicy: "metadata-only" | "structured_safe_fields_only";
     signed: boolean;
     signatureAlgorithm?: string;
   };
+}
+
+/**
+ * Machine metadata captured at bundle export time.
+ * Used during import to detect path/binary differences.
+ */
+export interface SourceMachine {
+  homeDir: string;
+  platform: NodeJS.Platform;
+  hostname: string;
 }
 
 /**
@@ -403,6 +415,41 @@ export interface BundleImportResult {
   includesContent: boolean;
   contentApplied: boolean;
   warnings: string[];
+  /** Machine compatibility report (always present, even on dry-run). */
+  machineDiff?: MachineDiff;
+}
+
+/**
+ * Cross-machine compatibility report.
+ * Shows path remapping, binary availability, and OS differences.
+ */
+export interface MachineDiff {
+  sourceHome: string;
+  targetHome: string;
+  sourcePlatform: string;
+  targetPlatform: string;
+  sourceHostname: string;
+  /** Paths that were remapped from source home to target home. */
+  remappedPaths: string[];
+  /** MCP binaries detected on source machine. */
+  sourceMcpBinaries: McpBinaryInfo[];
+  /** MCP binary availability on target machine. */
+  mcpBinaryReport: McpBinaryReport[];
+}
+
+export interface McpBinaryInfo {
+  evidenceId: string;
+  command: string;
+  args?: string[];
+  url?: string;
+}
+
+export interface McpBinaryReport {
+  evidenceId: string;
+  command: string;
+  availableOnTarget: boolean;
+  resolvedPath?: string;
+  warning?: string;
 }
 
 /**
@@ -421,6 +468,8 @@ export interface BundleInspectResult {
   bundleChecksum: string;
   isSigned: boolean;
   signatureAlgorithm?: string;
+  /** Machine that created this bundle. */
+  sourceMachine?: SourceMachine;
 }
 
 // ── Tar types ───────────────────────────────────────────────────
