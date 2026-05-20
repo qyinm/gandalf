@@ -12,7 +12,7 @@
  * - Dry-run import
  */
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { platform, tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
@@ -345,6 +345,50 @@ describe("bundle signatures", () => {
       }),
       /does not match trusted key fingerprint/
     );
+  });
+
+  it("quarantines content for inspection instead of applying target files", async () => {
+    const box = await makeSandbox();
+    const name = "quarantine-content";
+    const projectFile = path.join(box.projectPath, "config", "tool.json");
+    await mkdir(path.dirname(projectFile), { recursive: true });
+    await writeFile(projectFile, "safe content", "utf-8");
+    await writeSnapshot(box.storeDir, {
+      ...sampleSnapshot(name),
+      evidence: [
+        {
+          ...sampleSnapshot(name).evidence[0],
+          id: "project.config.tool",
+          kind: "agent_config",
+          sourcePath: "config/tool.json",
+          restorePolicy: "full_content_supported"
+        }
+      ]
+    });
+    const exported = await bundleExport({
+      snapshotName: name,
+      outputPath: bundlePath(box, name),
+      storeDir: box.storeDir,
+      projectPath: box.projectPath,
+      homeDir: box.homeDir,
+      includeContent: true
+    });
+    await writeFile(projectFile, "local content", "utf-8");
+
+    const imported = await bundleImport({
+      bundlePath: exported.bundlePath,
+      storeDir: box.storeDir,
+      projectPath: box.projectPath,
+      homeDir: box.homeDir,
+      applyContent: true,
+      quarantine: true
+    });
+
+    assert.equal(imported.contentApplied, false);
+    assert.ok(imported.quarantinedContentDir);
+    assert.equal(await readFile(projectFile, "utf-8"), "local content");
+    assert.equal(await readFile(path.join(imported.quarantinedContentDir, "config", "tool.json"), "utf-8"), "safe content");
+    assert.ok(imported.warnings.some((warning) => warning.includes("quarantined")));
   });
 });
 

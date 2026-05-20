@@ -406,6 +406,8 @@ export interface BundleImportOptions {
   homeDir: string;
   applyContent?: boolean;
   dryRun?: boolean;
+  /** Stage content under the snapshot store instead of applying it to target paths. */
+  quarantine?: boolean;
   trust?: boolean;
   /** Optional HMAC key. Defaults to SNAPTAILOR_BUNDLE_KEY when present. */
   signatureKey?: string;
@@ -419,6 +421,8 @@ export interface BundleImportResult {
   evidenceCount: number;
   includesContent: boolean;
   contentApplied: boolean;
+  /** Directory where content was staged when quarantine mode is enabled. */
+  quarantinedContentDir?: string;
   warnings: string[];
   /** Machine compatibility report (always present, even on dry-run). */
   machineDiff?: MachineDiff;
