@@ -38,8 +38,8 @@ Priority order within each section.
 ## Housekeeping
 
 - [x] **P3** Remove untracked `true` file.
-- [ ] **P3** GitHub repo topics 설정.
-- [ ] **P3** GitHub release 생성 (v0.1.0 기반).
+- [x] **P3** GitHub repo topics 설정.
+- [x] **P3** GitHub release 생성 (v0.1.0 기반).
 
 ## Deferred
 
