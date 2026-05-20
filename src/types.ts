@@ -11,6 +11,12 @@ export type EvidenceKind =
   | "symlink"
   | "unsupported";
 
+export type RestorePolicy =
+  | "full_content_supported"
+  | "structured_fields_only"
+  | "key_inventory_only"
+  | "not_supported";
+
 export type EvidenceScope = "user" | "project" | "managed" | "unknown";
 
 export type CaptureStatus =
@@ -33,7 +39,7 @@ export interface DiscoveredItem {
   parser: "json" | "toml" | "markdown" | "dotenv" | "filesystem" | "unknown";
   sensitivity: string;
   contentPolicy: string;
-  restorePolicy: "not_supported_v0_1";
+  restorePolicy: RestorePolicy;
   captureStatus: CaptureStatus;
   confidence: "low" | "medium" | "high";
   name?: string;

@@ -13,7 +13,7 @@ function item(overrides: Partial<DiscoveredItem> & Pick<DiscoveredItem, "id" | "
     parser: "json",
     sensitivity: "command_config",
     contentPolicy: "structured_safe_fields_only",
-    restorePolicy: "not_supported_v0_1",
+    restorePolicy: "not_supported",
     captureStatus: "captured",
     confidence: "high",
     ...overrides
