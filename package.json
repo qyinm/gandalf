@@ -1,6 +1,6 @@
 {
   "name": "@qxinm/snaptailor",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Read-only drift diagnosis and security audit for AI coding agent setups.",
   "type": "module",
   "bin": {
