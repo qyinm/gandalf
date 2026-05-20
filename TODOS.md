@@ -4,33 +4,21 @@ Direction: **Reproducible AI Coding Agent Environment**
 
 Priority order within each section.
 
-## v0.3: Restore Policy Matrix (active)
+## ✅ v0.3: Restore Policy Matrix (done)
 
-- [ ] **P0** Map `restorePolicy` per evidence kind in `src/types.ts`:
-  - `agent_instruction` → `full_content_supported`
-  - `mcp_server` → `structured_fields_only`
-  - `permission` → `structured_fields_only`
-  - `skill` → `full_content_supported`
-  - `hook` → `structured_fields_only`
-  - `env_key` → `key_inventory_only`
-  - `symlink` → `not_supported`
-  - `unsupported` → `not_supported`
-- [ ] **P0** Wire restore policies into the evidence pipeline so snapshots carry accurate restore metadata.
-- [ ] **P1** Implement per-kind content capture in bundle export:
-  - `full_content_supported`: read and include actual file bytes
-  - `structured_fields_only`: include parsed fields, omit raw values
-  - `key_inventory_only`: key names only
-  - `not_supported`: warn during export
+- [x] **P0** Map `restorePolicy` per evidence kind in `src/types.ts`
+- [x] **P0** Wire restore policies into the evidence pipeline
+- [x] **P1** Implement per-kind content capture in bundle export
 - [ ] **P1** Add restore policy validation: fail bundle export if `not_supported` items would silently lose data.
 
-## v0.3: Content Bundles as Default
+## ✅ v0.3: Content Bundles as Default (done)
 
-- [ ] **P1** Flip default: `bundle export` includes content by default.
-- [ ] **P1** Add `--metadata-only` flag as the opt-in for metadata-only bundles.
-- [ ] **P1** Bundle size reporting and warnings for large bundles (>50MB).
-- [ ] **P2** Deprecate `--experimental` requirement for content inclusion once per-kind policies are in place.
+- [x] **P1** Flip default: `bundle export` includes content by default.
+- [x] **P1** Add `--metadata-only` flag as the opt-in for metadata-only bundles.
+- [x] **P1** Bundle size reporting and warnings for large bundles (>50MB).
+- [x] **P2** Deprecate `--experimental` requirement for content inclusion.
 
-## v0.3: Cross-Machine Restore
+## v0.3: Cross-Machine Restore (next)
 
 - [ ] **P1** Home directory abstraction:
   - Store paths as `{home}/.claude/settings.json` in bundle manifest
@@ -49,7 +37,7 @@ Priority order within each section.
 
 ## Housekeeping
 
-- [ ] **P3** Remove untracked `true` file.
+- [x] **P3** Remove untracked `true` file.
 - [ ] **P3** GitHub repo topics 설정.
 - [ ] **P3** GitHub release 생성 (v0.1.0 기반).
 
