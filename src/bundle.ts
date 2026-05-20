@@ -10,12 +10,13 @@
  *   snapshot/audit-findings.json — AuditFinding[]
  *   snapshot/checksums.json   — ChecksumRecord
  *   snapshot/redactions.json  — redaction log
- *   content/...               — optional raw file contents
+ *   content/...               — optional raw file contents (full_content_supported items only)
  */
 
 import { createHash } from "node:crypto";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { restorePolicyFor } from "./policy.js";
 import { readSnapshot } from "./store.js";
 import { readTar, writeTar } from "./tar.js";
 import type {
@@ -26,6 +27,7 @@ import type {
   BundleInspectResult,
   BundleManifest,
   DiscoveredItem,
+  RestorePolicy,
   TarEntry
 } from "./types.js";
 
@@ -33,12 +35,25 @@ const FORMAT_VERSION = "1";
 const MAX_BUNDLE_BYTES = parseInt(process.env.SNAPTAILOR_MAX_BUNDLE_BYTES ?? "", 10) || 500 * 1024 * 1024;
 const MAX_CONTENT_BYTES = parseInt(process.env.SNAPTAILOR_MAX_CONTENT_BYTES ?? "", 10) || 50 * 1024 * 1024;
 
+/** Result of a bundle export, including any warnings. */
+export interface BundleExportResult {
+  bundlePath: string;
+  checksum: string;
+  warnings: string[];
+}
+
 // ── Export ──────────────────────────────────────────────────────
 
 /**
  * Export a snapshot to a .stailor bundle file.
+ *
+ * Content inclusion respects per-kind restore policies:
+ *   - full_content_supported  → file bytes included in content/ entries
+ *   - structured_fields_only  → already captured in evidence.json, no content/ entry
+ *   - key_inventory_only      → key names only in evidence.json, no content/ entry
+ *   - not_supported           → warning emitted, no content included
  */
-export async function bundleExport(options: BundleExportOptions): Promise<{ bundlePath: string; checksum: string }> {
+export async function bundleExport(options: BundleExportOptions): Promise<BundleExportResult> {
   const { snapshotName, outputPath, storeDir, projectPath, homeDir, includeContent } = options;
 
   // Read snapshot from store
@@ -52,6 +67,8 @@ export async function bundleExport(options: BundleExportOptions): Promise<{ bund
       `First: ${unsafeItems[0].sourcePath}`
     );
   }
+
+  const warnings: string[] = [];
 
   // Build tar entries
   const entries: TarEntry[] = [];
@@ -68,17 +85,15 @@ export async function bundleExport(options: BundleExportOptions): Promise<{ bund
     type: "file"
   });
 
-  // Build manifest
-  const contentFileCount = 0;
-  const contentTotalBytes = 0;
+  // Build manifest (content stats populated later if includeContent)
   const manifest: BundleManifest = {
     formatVersion: 1,
     snapshotName,
     createdAt: snapshot.manifest.createdAt,
     projectPath,
     includesContent: includeContent ?? false,
-    contentFileCount,
-    contentTotalBytes,
+    contentFileCount: 0,
+    contentTotalBytes: 0,
     security: {
       rawSecretsIncluded: false,
       redactionPolicy: "metadata-only",
@@ -117,14 +132,36 @@ export async function bundleExport(options: BundleExportOptions): Promise<{ bund
     });
   }
 
-  // Optional content files
+  // Optional content files — per-kind restore policy filtering
   if (includeContent) {
     let totalContentBytes = 0;
     let contentCount = 0;
 
-    // Collect content from captured evidence items
+    // Filter evidence by restore policy:
+    //   full_content_supported  → include file content
+    //   structured_fields_only  → skip (already in evidence.json)
+    //   key_inventory_only      → skip (key names only, already in evidence.json)
+    //   not_supported           → skip, warn
+
+    // Collect not_supported items for warnings
+    const notSupported = snapshot.evidence.filter(
+      (item) => restorePolicyFor(item.kind) === "not_supported"
+    );
+    if (notSupported.length > 0) {
+      warnings.push(
+        `${notSupported.length} evidence item(s) have restorePolicy=not_supported ` +
+        `and will not be included as content. ` +
+        `First: ${notSupported[0].sourcePath} (kind: ${notSupported[0].kind})`
+      );
+    }
+
+    // Only include file content for full_content_supported items with captured status
     const contentItems = snapshot.evidence.filter(
-      (item) => item.captureStatus === "captured" && item.sourcePath && !item.sourcePath.startsWith("~/.env")
+      (item) =>
+        item.captureStatus === "captured" &&
+        restorePolicyFor(item.kind) === "full_content_supported" &&
+        item.sourcePath &&
+        !item.sourcePath.startsWith("~/.env") // env keys are key_inventory_only anyway, but safety gate
     );
 
     // Deduplicate by sourcePath
@@ -146,7 +183,10 @@ export async function bundleExport(options: BundleExportOptions): Promise<{ bund
       try {
         const fileStat = await stat(sourceAbs);
         if (!fileStat.isFile()) continue;
-        if (fileStat.size > MAX_CONTENT_BYTES) continue;
+        if (fileStat.size > MAX_CONTENT_BYTES) {
+          warnings.push(`Skipped large file: ${item.sourcePath} (${fileStat.size} bytes > ${MAX_CONTENT_BYTES} limit)`);
+          continue;
+        }
 
         const content = await readFile(sourceAbs);
         const tarPath = `content/${item.sourcePath}`;
@@ -165,11 +205,25 @@ export async function bundleExport(options: BundleExportOptions): Promise<{ bund
       }
     }
 
+    // Report structured_fields_only and key_inventory_only counts for transparency
+    const structuredItems = snapshot.evidence.filter(
+      (item) =>
+        item.captureStatus === "captured" &&
+        (restorePolicyFor(item.kind) === "structured_fields_only" ||
+         restorePolicyFor(item.kind) === "key_inventory_only")
+    );
+    if (structuredItems.length > 0) {
+      const kinds = Array.from(new Set(structuredItems.map((i) => i.kind))).join(", ");
+      warnings.push(
+        `${structuredItems.length} evidence item(s) (${kinds}) use structured/key-inventory capture. ` +
+        `Data is in evidence.json, not included as separate content files.`
+      );
+    }
+
     // Update manifest with content stats
     manifest.contentFileCount = contentCount;
     manifest.contentTotalBytes = totalContentBytes;
     // Re-write manifest with updated content stats
-    // Find and replace the manifest entry
     const manifestIndex = entries.findIndex((e) => e.path === ".stailor/manifest.json");
     if (manifestIndex >= 0) {
       entries[manifestIndex] = {
@@ -213,7 +267,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<{ bund
   // Single write: tar contains all entries including checksums
   const archiveChecksum = await writeTar(finalEntries, outputPath);
 
-  return { bundlePath: outputPath, checksum: archiveChecksum };
+  return { bundlePath: outputPath, checksum: archiveChecksum, warnings };
 }
 
 // ── Import ──────────────────────────────────────────────────────

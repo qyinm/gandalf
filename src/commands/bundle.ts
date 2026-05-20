@@ -78,6 +78,12 @@ export const bundleCommand: Command = {
         process.stdout.write(json(result));
       } else {
         process.stdout.write(`Exported ${snapshotName} to ${result.bundlePath}\n`);
+        if (result.warnings && result.warnings.length > 0) {
+          process.stdout.write(`\nWarnings:\n`);
+          for (const warning of result.warnings) {
+            process.stdout.write(`  - ${warning}\n`);
+          }
+        }
       }
       return 0;
     }
