@@ -15,6 +15,8 @@ import SimpleTable from "./SimpleTable.js";
 
 import type { AuditFinding, DiscoveredItem } from "../../types.js";
 
+export const DEFAULT_SCAN_WINDOW_SIZE = 10;
+
 // ── Props ────────────────────────────────────────────────────
 
 interface ScanViewProps {
@@ -61,7 +63,7 @@ export default function ScanView({
   blindSpots,
   readOnly,
   scrollOffset = 0,
-  windowSize = 10,
+  windowSize = DEFAULT_SCAN_WINDOW_SIZE,
 }: ScanViewProps) {
   const trustColor = readOnly ? "green" : "red";
   const agents = [...new Set(evidence.map((e) => e.agent))].sort();
@@ -77,6 +79,8 @@ export default function ScanView({
   const sortedFindings = [...auditFindings].sort(
     (a, b) => severityRank(b.severity) - severityRank(a.severity)
   );
+  const maxScrollOffset = Math.max(0, tableData.length - windowSize);
+  const clampedScrollOffset = Math.min(Math.max(0, scrollOffset), maxScrollOffset);
 
   return (
     <Box flexDirection="column" paddingX={0}>
@@ -117,15 +121,15 @@ export default function ScanView({
         <Box marginBottom={1} flexDirection="column">
           <Text bold>Discovered Evidence ({tableData.length})</Text>
           <SimpleTable
-            data={tableData.slice(scrollOffset, scrollOffset + windowSize)}
+            data={tableData.slice(clampedScrollOffset, clampedScrollOffset + windowSize)}
             columns={["agent", "kind", "scope", "source", "status"]}
           />
-          {scrollOffset > 0 && (
-            <Text dimColor>  ↑ {scrollOffset} above</Text>
+          {clampedScrollOffset > 0 && (
+            <Text dimColor>  ↑ {clampedScrollOffset} above</Text>
           )}
-          {scrollOffset + windowSize < tableData.length && (
+          {clampedScrollOffset + windowSize < tableData.length && (
             <Text dimColor>
-              ↓ {tableData.length - scrollOffset - windowSize} more below
+              ↓ {tableData.length - clampedScrollOffset - windowSize} more below
             </Text>
           )}
         </Box>

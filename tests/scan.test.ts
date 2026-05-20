@@ -123,4 +123,233 @@ describe("scanProject", () => {
     assert.equal(scan.evidence.some((item) => item.sourcePath.includes("node_modules")), false);
     assert.equal(scan.evidence.some((item) => item.name === "ignored"), false);
   });
+
+  it("discovers OpenCode native and compatible skill roots", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    const skillPaths = [
+      join(projectPath, ".opencode", "skills", "project-open", "SKILL.md"),
+      join(homeDir, ".config", "opencode", "skills", "global-open", "SKILL.md"),
+      join(projectPath, ".claude", "skills", "project-claude", "SKILL.md"),
+      join(homeDir, ".claude", "skills", "global-claude", "SKILL.md"),
+      join(projectPath, ".agents", "skills", "project-agent", "SKILL.md"),
+      join(homeDir, ".agents", "skills", "global-agent", "SKILL.md"),
+    ];
+
+    for (const skillPath of skillPaths) {
+      const skillName = skillPath.split("/").at(-2)!;
+      await mkdir(join(skillPath, ".."), { recursive: true });
+      await writeFile(skillPath, `---\nname: ${skillName}\ndescription: ${skillName} skill\n---\n`, "utf8");
+    }
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const opencodeSkillSources = scan.evidence
+      .filter((item) => item.agent === "opencode" && item.kind === "skill")
+      .map((item) => item.sourcePath);
+
+    assert.ok(opencodeSkillSources.includes(".opencode/skills/project-open"));
+    assert.ok(opencodeSkillSources.includes("~/.config/opencode/skills/global-open"));
+    assert.ok(opencodeSkillSources.includes(".claude/skills/project-claude"));
+    assert.ok(opencodeSkillSources.includes("~/.claude/skills/global-claude"));
+    assert.ok(opencodeSkillSources.includes(".agents/skills/project-agent"));
+    assert.ok(opencodeSkillSources.includes("~/.agents/skills/global-agent"));
+    assert.equal(opencodeSkillSources.some((source) => source.endsWith("/SKILL.md")), false);
+    assert.ok(
+      scan.evidence.some(
+        (item) =>
+          item.agent === "opencode" &&
+          item.kind === "skill" &&
+          item.name === "global-agent" &&
+          item.metadata?.["entrypointStatus"] === "captured"
+      )
+    );
+  });
+
+  it("summarizes a skill with a symlinked SKILL.md as one skill item", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    await mkdir(join(homeDir, ".agents", "skills", "office-hours"), { recursive: true });
+    await writeFile(
+      join(homeDir, "office-hours-source.md"),
+      "---\nname: office-hours\ndescription: Office hours skill\n---\n",
+      "utf8"
+    );
+    await symlink(
+      join(homeDir, "office-hours-source.md"),
+      join(homeDir, ".agents", "skills", "office-hours", "SKILL.md")
+    );
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const officeHoursItems = scan.evidence.filter(
+      (item) => item.agent === "opencode" && item.sourcePath.includes("office-hours")
+    );
+
+    assert.equal(officeHoursItems.length, 1);
+    assert.equal(officeHoursItems[0]?.kind, "skill");
+    assert.equal(officeHoursItems[0]?.name, "office-hours");
+    assert.equal(officeHoursItems[0]?.sourcePath, "~/.agents/skills/office-hours");
+    assert.equal(officeHoursItems[0]?.metadata?.["entrypointStatus"], "symlink_followed");
+  });
+
+  it("discovers OpenCode plugin package skills from the runtime cache", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    const skillPath = join(
+      homeDir,
+      ".cache",
+      "opencode",
+      "packages",
+      "superpowers",
+      "node_modules",
+      "superpowers",
+      "skills",
+      "brainstorm",
+      "SKILL.md"
+    );
+    await mkdir(join(skillPath, ".."), { recursive: true });
+    await writeFile(
+      skillPath,
+      "---\nname: brainstorm\ndescription: Generate options\n---\n",
+      "utf8"
+    );
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+
+    assert.ok(
+      scan.evidence.some(
+        (item) =>
+          item.agent === "opencode" &&
+          item.kind === "skill" &&
+          item.name === "brainstorm" &&
+          item.sourcePath ===
+            "~/.cache/opencode/packages/superpowers/node_modules/superpowers/skills/brainstorm"
+      )
+    );
+  });
+
+  it("matches OpenCode runtime quirks for built-in, uppercase entrypoint, and name mismatch skills", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    const uppercaseSkillPath = join(
+      homeDir,
+      ".agents",
+      "skills",
+      "better-auth-security-best-practices",
+      "SKILL.MD"
+    );
+    const mismatchSkillPath = join(homeDir, ".claude", "skills", "gstack-claude", "SKILL.md");
+    await mkdir(join(uppercaseSkillPath, ".."), { recursive: true });
+    await mkdir(join(mismatchSkillPath, ".."), { recursive: true });
+    await writeFile(
+      uppercaseSkillPath,
+      "---\nname: better-auth-security-best-practices\ndescription: Security skill\n---\n",
+      "utf8"
+    );
+    await writeFile(
+      mismatchSkillPath,
+      "---\nname: claude\ndescription: Claude compatibility skill\n---\n",
+      "utf8"
+    );
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const opencodeSkills = scan.evidence.filter((item) => item.agent === "opencode" && item.kind === "skill");
+
+    assert.ok(opencodeSkills.some((item) => item.name === "customize-opencode" && item.scope === "managed"));
+    assert.ok(opencodeSkills.some((item) => item.name === "better-auth-security-best-practices"));
+    assert.ok(
+      opencodeSkills.some(
+        (item) =>
+          item.name === "claude" &&
+          item.sourcePath === "~/.claude/skills/gstack-claude" &&
+          item.metadata?.["nameMatchesDirectory"] === false
+      )
+    );
+  });
+
+  it("deduplicates OpenCode skills by effective skill name", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    await mkdir(join(homeDir, ".claude", "skills", "review"), { recursive: true });
+    await mkdir(join(homeDir, ".agents", "skills", "review"), { recursive: true });
+    await writeFile(
+      join(homeDir, ".claude", "skills", "review", "SKILL.md"),
+      "---\nname: review\ndescription: Review code\n---\n",
+      "utf8"
+    );
+    await writeFile(
+      join(homeDir, ".agents", "skills", "review", "SKILL.md"),
+      "---\nname: review\ndescription: Review code\n---\n",
+      "utf8"
+    );
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const reviewItems = scan.evidence.filter(
+      (item) => item.agent === "opencode" && item.kind === "skill" && item.name === "review"
+    );
+
+    assert.equal(reviewItems.length, 1);
+    assert.deepEqual(reviewItems[0]?.metadata?.["duplicateSources"], ["~/.agents/skills/review"]);
+  });
+
+  it("discovers Pi skills using Pi-specific roots and validation rules", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    await mkdir(join(homeDir, ".pi", "agent", "skills"), { recursive: true });
+    await mkdir(join(projectPath, ".pi", "skills", "project-pi"), { recursive: true });
+    await mkdir(join(homeDir, ".agents", "skills", "global-agent"), { recursive: true });
+
+    await writeFile(
+      join(homeDir, ".pi", "agent", "skills", "root-file.md"),
+      "---\nname: root-file\ndescription: Root file skill\n---\n",
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, ".pi", "skills", "project-pi", "SKILL.md"),
+      "---\nname: different-name\ndescription: Pi allows name mismatch\n---\n",
+      "utf8"
+    );
+    await writeFile(
+      join(homeDir, ".agents", "skills", "global-agent", "SKILL.md"),
+      "---\nname: global-agent\ndescription: Global agent skill\n---\n",
+      "utf8"
+    );
+    await writeFile(
+      join(homeDir, ".agents", "skills", "ignored-root.md"),
+      "---\nname: ignored-root\ndescription: Pi ignores root md files in .agents skills\n---\n",
+      "utf8"
+    );
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const piSkills = scan.evidence.filter((item) => item.agent === "pi-agent" && item.kind === "skill");
+
+    assert.ok(piSkills.some((item) => item.name === "root-file" && item.sourcePath === "~/.pi/agent/skills/root-file.md"));
+    assert.ok(
+      piSkills.some(
+        (item) =>
+          item.name === "different-name" &&
+          item.sourcePath === ".pi/skills/project-pi" &&
+          item.metadata?.["nameMatchesDirectory"] === false
+      )
+    );
+    assert.ok(piSkills.some((item) => item.name === "global-agent" && item.sourcePath === "~/.agents/skills/global-agent"));
+    assert.equal(piSkills.some((item) => item.name === "ignored-root"), false);
+  });
+
+  it("loads Pi skills from settings paths and filters missing descriptions", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    await mkdir(join(projectPath, ".pi"), { recursive: true });
+    await mkdir(join(projectPath, "custom-skills", "loaded"), { recursive: true });
+    await mkdir(join(projectPath, "custom-skills", "missing-description"), { recursive: true });
+    await writeFile(join(projectPath, ".pi", "settings.json"), JSON.stringify({ skills: ["../custom-skills"] }), "utf8");
+    await writeFile(
+      join(projectPath, "custom-skills", "loaded", "SKILL.md"),
+      "---\nname: loaded\ndescription: Loaded from settings\n---\n",
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "custom-skills", "missing-description", "SKILL.md"),
+      "---\nname: missing-description\n---\n",
+      "utf8"
+    );
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const piSkills = scan.evidence.filter((item) => item.agent === "pi-agent" && item.kind === "skill");
+
+    assert.ok(piSkills.some((item) => item.name === "loaded" && item.sourcePath === "custom-skills/loaded"));
+    assert.equal(piSkills.some((item) => item.name === "missing-description"), false);
+  });
 });
