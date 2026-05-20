@@ -95,6 +95,7 @@ export const bundleCommand: Command = {
       await ensureStore(options.storeDir);
 
       const applyContent = hasFlag(args, "--apply-content");
+      const isDryRun = hasFlag(args, "--dry-run");
       if (applyContent) {
         const experimental = hasFlag(args, "--experimental");
         if (!process.env.SNAPTAILOR_EXPERIMENTAL && !experimental) {
@@ -116,17 +117,50 @@ export const bundleCommand: Command = {
         projectPath: options.projectPath,
         homeDir: options.homeDir,
         applyContent,
-        dryRun: hasFlag(args, "--dry-run"),
+        dryRun: isDryRun,
         trust: hasFlag(args, "--trust")
       });
 
       if (hasFlag(args, "--json")) {
         process.stdout.write(json(result));
       } else {
-        process.stdout.write(`Imported snapshot: ${result.snapshotName}\n`);
-        process.stdout.write(`Evidence items: ${result.evidenceCount}\n`);
+        if (result.machineDiff) {
+          const md = result.machineDiff;
+          process.stdout.write(`Bundle source: ${md.sourceHostname} (${md.sourcePlatform})\n`);
+          process.stdout.write(`Source home: ${md.sourceHome}\n`);
+          process.stdout.write(`Target home: ${md.targetHome}\n`);
+          if (md.remappedPaths.length > 0) {
+            process.stdout.write(`Remapped paths: ${md.remappedPaths.length}\n`);
+            for (const p of md.remappedPaths.slice(0, 5)) {
+              process.stdout.write(`  ${p}\n`);
+            }
+            if (md.remappedPaths.length > 5) {
+              process.stdout.write(`  ... and ${md.remappedPaths.length - 5} more\n`);
+            }
+          }
+          if (md.mcpBinaryReport.length > 0) {
+            const unavailable = md.mcpBinaryReport.filter((b) => !b.availableOnTarget);
+            process.stdout.write(`MCP binaries: ${md.mcpBinaryReport.length} total, ${md.mcpBinaryReport.length - unavailable.length} available, ${unavailable.length} missing\n`);
+            for (const b of unavailable) {
+              process.stdout.write(`  MISSING: ${b.command}\n`);
+            }
+          }
+          if (md.sourcePlatform !== md.targetPlatform) {
+            process.stdout.write(`Warning: Cross-OS restore (${md.sourcePlatform} → ${md.targetPlatform})\n`);
+          }
+        }
+        if (!isDryRun) {
+          process.stdout.write(`\nImported snapshot: ${result.snapshotName}\n`);
+          process.stdout.write(`Evidence items: ${result.evidenceCount}\n`);
+        }
         if (result.contentApplied) {
           process.stdout.write("Content files: applied\n");
+        }
+        if (result.warnings.length > 0) {
+          process.stdout.write(`\nWarnings:\n`);
+          for (const warning of result.warnings) {
+            process.stdout.write(`  - ${warning}\n`);
+          }
         }
       }
       return 0;
@@ -160,6 +194,10 @@ export const bundleCommand: Command = {
         process.stdout.write(`  Includes content: ${result.includesContent}\n`);
         if (result.includesContent) {
           process.stdout.write(`  Content files: ${result.contentFileCount} (${result.contentTotalBytes} bytes)\n`);
+        }
+        if (result.sourceMachine) {
+          process.stdout.write(`  Source machine: ${result.sourceMachine.hostname} (${result.sourceMachine.platform})\n`);
+          process.stdout.write(`  Source home: ${result.sourceMachine.homeDir}\n`);
         }
         process.stdout.write(`  Bundle checksum: ${result.bundleChecksum.slice(0, 16)}...\n`);
         process.stdout.write(`  Signed: ${result.isSigned}\n`);
