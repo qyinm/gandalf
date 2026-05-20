@@ -12,14 +12,14 @@
  * - Dry-run import
  */
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { platform, tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 
 import { writeSnapshot, readSnapshot, listSnapshots } from "../src/store.js";
 import { bundleExport, bundleImport, bundleInspect } from "../src/bundle.js";
-import { writeTar } from "../src/tar.js";
+import { readTar, writeTar } from "../src/tar.js";
 import type { Snapshot, TarEntry } from "../src/types.js";
 
 // -- Test helpers -------------------------------------------------
@@ -182,32 +182,55 @@ describe("bundle export/import roundtrip", () => {
     assert.deepEqual(imported.auditFindings, sampleSnapshot(snapshotName).auditFindings);
   });
 
-  it("exports and imports to a fresh store", async () => {
+  it("stores home-scoped evidence paths as {home} and resolves them on import", async () => {
     const box = await makeSandbox();
-    const name = "unique-snap";
-    await writeSnapshot(box.storeDir, sampleSnapshot(name));
+    const name = "home-abstraction";
+    const homeSettingsPath = path.join(box.homeDir, ".claude", "settings.json");
+    await mkdir(path.dirname(homeSettingsPath), { recursive: true });
+    await writeFile(homeSettingsPath, "{}", "utf-8");
+
+    const snapshot = sampleSnapshot(name);
+    snapshot.evidence[0] = {
+      ...snapshot.evidence[0],
+      kind: "agent_config",
+      sourcePath: homeSettingsPath,
+      restorePolicy: "full_content_supported",
+      value: {}
+    };
+    snapshot.graph[0] = {
+      ...snapshot.graph[0],
+      sourcePath: homeSettingsPath,
+      entityKind: "agent_config"
+    };
+    snapshot.provenance[0] = {
+      ...snapshot.provenance[0],
+      sourcePath: homeSettingsPath
+    };
+    await writeSnapshot(box.storeDir, snapshot);
 
     const exportResult = await bundleExport({
       snapshotName: name,
       outputPath: bundlePath(box, name),
       storeDir: box.storeDir,
       projectPath: box.projectPath,
-      homeDir: box.homeDir
+      homeDir: box.homeDir,
+      includeContent: true
     });
+    const { entries } = await readTar(exportResult.bundlePath);
+    const bundledEvidence = JSON.parse(entries.find((entry) => entry.path === "snapshot/evidence.json")!.content.toString("utf-8"));
+    assert.equal(bundledEvidence[0].sourcePath, "{home}/.claude/settings.json");
 
     const importBox = await makeSandbox();
-    const importResult = await bundleImport({
+    await bundleImport({
       bundlePath: exportResult.bundlePath,
       storeDir: importBox.storeDir,
       projectPath: importBox.projectPath,
       homeDir: importBox.homeDir
     });
-
-    assert.equal(importResult.snapshotName, name);
-    assert.ok(importResult.evidenceCount > 0);
-
     const imported = await readSnapshot(importBox.storeDir, name);
-    assert.equal(imported.manifest.name, name);
+    assert.equal(imported.evidence[0].sourcePath, path.join(importBox.homeDir, ".claude", "settings.json"));
+    assert.equal(imported.graph[0].sourcePath, path.join(importBox.homeDir, ".claude", "settings.json"));
+    assert.equal(imported.provenance[0].sourcePath, path.join(importBox.homeDir, ".claude", "settings.json"));
   });
 });
 

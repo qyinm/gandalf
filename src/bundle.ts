@@ -31,9 +31,11 @@ import type {
   BundleInspectResult,
   BundleManifest,
   DiscoveredItem,
+  GraphNode,
   MachineDiff,
   McpBinaryInfo,
   McpBinaryReport,
+  ProvenanceEntry,
   SourceMachine,
   TarEntry
 } from "./types.js";
@@ -103,6 +105,27 @@ function resolveBundlePath(normalisedPath: string, homeDir: string, projectPath:
     return path.resolve(homeDir, normalisedPath.slice(HOME_TOKEN.length + 1));
   }
   return path.resolve(projectPath, normalisedPath);
+}
+
+function normaliseSnapshotPathsForBundle<T extends { sourcePath: string }>(items: T[], homeDir: string): T[] {
+  return items.map((item) => ({
+    ...item,
+    sourcePath: normaliseSourcePath(item.sourcePath, homeDir)
+  }));
+}
+
+function resolveSnapshotPathForImport(sourcePath: string, homeDir: string): string {
+  if (sourcePath.startsWith(`${HOME_TOKEN}/`)) {
+    return path.resolve(homeDir, sourcePath.slice(HOME_TOKEN.length + 1));
+  }
+  return sourcePath;
+}
+
+function resolveSnapshotPathsForImport<T extends { sourcePath: string }>(items: T[], homeDir: string): T[] {
+  return items.map((item) => ({
+    ...item,
+    sourcePath: resolveSnapshotPathForImport(item.sourcePath, homeDir)
+  }));
 }
 
 // ── MCP binary detection ─────────────────────────────────────────
@@ -272,10 +295,14 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
   entries.push({ path: "snapshot/", content: Buffer.alloc(0), mode: 0o755, mtime: Date.now(), type: "directory" });
 
   // snapshot/ files
+  const bundledEvidence = normaliseSnapshotPathsForBundle(snapshot.evidence, homeDir);
+  const bundledGraph = normaliseSnapshotPathsForBundle(snapshot.graph, homeDir);
+  const bundledProvenance = normaliseSnapshotPathsForBundle(snapshot.provenance, homeDir);
   const snapshotFiles: Array<{ name: string; data: unknown }> = [
-    { name: "evidence.json", data: snapshot.evidence },
-    { name: "graph.json", data: snapshot.graph },
+    { name: "evidence.json", data: bundledEvidence },
+    { name: "graph.json", data: bundledGraph },
     { name: "audit-findings.json", data: snapshot.auditFindings },
+    { name: "provenance.json", data: bundledProvenance },
     { name: "checksums.json", data: {} },
     { name: "redactions.json", data: [] }
   ];
@@ -649,10 +676,23 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
   // Read snapshot data from entries
   const graphEntry = entries.find((e) => e.path === "snapshot/graph.json");
   const auditEntry = entries.find((e) => e.path === "snapshot/audit-findings.json");
+  const provenanceEntry = entries.find((e) => e.path === "snapshot/provenance.json");
 
   if (!evidenceEntry || !graphEntry || !auditEntry) {
     throw new Error("Invalid bundle: missing snapshot data files");
   }
+
+  const importedEvidence = resolveSnapshotPathsForImport(
+    JSON.parse(evidenceEntry.content.toString("utf-8")) as DiscoveredItem[],
+    homeDir
+  );
+  const importedGraph = resolveSnapshotPathsForImport(
+    JSON.parse(graphEntry.content.toString("utf-8")) as GraphNode[],
+    homeDir
+  );
+  const importedProvenance = provenanceEntry
+    ? resolveSnapshotPathsForImport(JSON.parse(provenanceEntry.content.toString("utf-8")) as ProvenanceEntry[], homeDir)
+    : [];
 
   // Write snapshot to store
   const { writeSnapshot } = await import("./store.js");
@@ -667,10 +707,10 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
         redactionPolicy: "metadata-only" as const
       }
     },
-    evidence: JSON.parse(evidenceEntry.content.toString("utf-8")),
-    graph: JSON.parse(graphEntry.content.toString("utf-8")),
+    evidence: importedEvidence,
+    graph: importedGraph,
     auditFindings: JSON.parse(auditEntry.content.toString("utf-8")),
-    provenance: []
+    provenance: importedProvenance
   };
 
   await writeSnapshot(storeDir, snapshot);

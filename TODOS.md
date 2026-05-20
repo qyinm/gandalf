@@ -20,7 +20,7 @@ Priority order within each section.
 
 ## v0.3: Cross-Machine Restore (next)
 
-- [ ] **P1** Home directory abstraction:
+- [x] **P1** Home directory abstraction:
   - Store paths as `{home}/.claude/settings.json` in bundle manifest
   - Resolve `{home}` to `$HOME` on restore
 - [ ] **P1** MCP binary path detection and mismatch warning (`npx`, `uvx`, local bins).
