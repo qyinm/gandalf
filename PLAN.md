@@ -6,52 +6,75 @@ Source: [PRODUCT.md](PRODUCT.md)
 
 ## Final Direction
 
-snaptailor v0.1 is a local-first, read-only drift diagnosis and security audit tool for AI coding agent setups.
+snaptailor is a **reproducible AI coding agent environment** tool — like a Docker image for your MCP servers, skills, permissions, hooks, and agent configurations.
 
-The product should not start as "Docker image for agents" or "restore my whole agent environment." That promise is too broad, too risky, and too close to dotfile backup. The sharp wedge is:
+The product wedge is:
 
-> Tell me exactly what changed in my AI agent setup, where it came from, why it matters, and what might be risky.
+> Export your entire agent setup as a `.stailor` bundle. Import it on any machine. Get the exact same environment — instantly.
 
-Snapshot and restore remain part of the long-term product, but v0.1 proves the differentiated layer first: semantic diff, provenance, reproducibility gaps, and risk findings.
+This is a deliberate pivot from the original v0.1 "read-only diagnosis" framing. The read-only scan/diff/audit pipeline remains as the diagnostic layer that gives users confidence in what's being captured and restored. But the product is not a diagnostic tool — it's a **reproducibility engine**.
+
+Read-only diagnosis was the right first step to build trust and prove the evidence model. Now the goal is full environment portability.
 
 ## Target User
 
-Initial operator: a developer who runs Claude Code, Codex, Cursor, MCP servers, custom skills, project instructions, hooks, and local scripts across multiple repos.
+Developer who runs Claude Code, Codex, Cursor, OpenCode, Pi Agent — with custom MCP servers, skills, project instructions, hooks, and environment keys — across multiple machines.
 
-Concrete painful moment:
+Concrete moments:
 
-> Yesterday this repo worked well with my coding agent. Today the output is worse or riskier. I changed prompts, MCPs, skills, permissions, and local config, and I need to know what changed.
+> I set up my agents perfectly on my work Mac. I want the same setup on my personal laptop without redoing everything.
+
+> My teammate has a great MCP config and skill setup. I want exactly that on my machine.
+
+> I messed up my agent settings yesterday. I want to roll back to last week's snapshot.
+
+> I'm switching between macOS and Linux. My agent environment should follow me.
+
+> We ship agent configuration as part of the repo. CI should verify it's safe and reproducible.
 
 ## Adjacent Landscape
 
-- chezmoi already manages dotfiles with templates, encryption, scripts, and multi-machine sync. snaptailor should not compete as generic dotfile management. Source: https://www.chezmoi.io/
-- Claude Code has hierarchical settings, MCP config, skills, subagents, memory files, and permission rules. Agent state is already multi-layered. Source: https://docs.claude.com/en/docs/claude-code/settings
-- Claude Code and Cursor expose MCP configuration as project/user state with different file locations and scope semantics. Sources: https://docs.claude.com/en/docs/claude-code/mcp and https://docs.cursor.com/advanced/model-context-protocol
-- Codex CLI has local config and MCP support, so the long-term product should compare across agents. Source: https://platform.openai.com/docs/docs-mcp
-- AGHub is already near "unified MCP and portable skills." snaptailor must differentiate on read-only drift explanation, provenance, and security audit, not MCP toggles. Source: https://aghub.akr.moe/
+- **chezmoi** manages dotfiles with templates, encryption, scripts, and multi-machine sync. snaptailor is narrower and deeper: it targets AI agent configuration specifically, with semantic understanding of MCP servers, skill graphs, and permission rules. Source: https://www.chezmoi.io/
+- **Claude Code** has hierarchical settings, MCP config, skills, subagents, memory files, and permission rules. snaptailor captures the full surface and can restore it. Source: https://docs.claude.com/en/docs/claude-code/settings
+- **Claude Code and Cursor** expose MCP configuration as project/user state with different file locations and scope semantics. Sources: https://docs.claude.com/en/docs/claude-code/mcp and https://docs.cursor.com/advanced/model-context-protocol
+- **Codex CLI** has local config and MCP support. Source: https://platform.openai.com/docs/docs-mcp
+- **AGHub** is near "unified MCP and portable skills." snaptailor differentiates on bundle portability, restore safety (rollback), and cross-agent coverage. Source: https://aghub.akr.moe/
+- **Docker / Nix / Dev Containers** solve general environment reproducibility. snaptailor solves the agent-config layer specifically — the files and settings that live in `~/.claude/`, `.mcp.json`, `CLAUDE.md`, etc.
 
 ## Product Promise Boundaries
 
-### v0.1 Promise
+### v0.2 Promise (current)
 
-- Read local user and project agent config.
-- Never execute hooks, MCP commands, scripts, plugins, or agent tools.
-- Never mutate user/project config.
+- Scan and capture agent configurations from 6 agents (Claude Code, Codex, Cursor, OpenCode, Pi Agent, Project).
+- Bundle entire or partial agent environments into `.stailor` archives.
+- Restore bundles on other machines with per-type apply handlers and rollback safety.
+- Read-only audit and diff between snapshots for change detection.
+- Metadata-only by default; full content with explicit `--include-content`.
+- Never execute hooks, MCP commands, scripts, plugins, or agent tools during scan.
 - Never use network by default.
-- Produce an evidence inventory, semantic diff, provenance report, and risk audit.
-- Make unsupported or non-reproducible state visible instead of pretending it was captured.
+- Local store: `~/.snaptailor` with `0700` permissions.
 
-### Not v0.1
+### v0.3+ Target
 
-- `restore --apply`
-- Importing or applying bundles from other people.
-- Sharing complete snapshots.
-- Raw file-content bundles.
-- Cloud sync.
-- Desktop UI.
-- "Complete agent state" claims.
+- **Full environment reproducibility**: export → import produces identical agent behavior.
+- **Cross-machine path remapping**: `~/.claude/` on macOS → `~/.claude/` on Linux, MCP binary paths resolved per-platform.
+- **Content bundles as default**: `--include-content` becomes the standard; metadata-only becomes an opt-in `--metadata-only` flag.
+- **Signed bundles**: verify bundle integrity and provenance before import.
+- **Partial restore**: choose which agents/skills/MCPs to restore from a bundle.
+- **Env value handling**: safe, encrypted-at-rest env value storage in bundles (with explicit user opt-in).
+- **Cross-OS restore**: macOS ↔ Linux path resolution.
+- **CI integration**: `snaptailor bundle export` in CI, `snaptailor bundle validate` as a pre-merge check.
+
+### NOT Yet
+
+- Cloud sync / team sharing server.
+- Desktop UI (TUI/GUI).
+- Marketplace or skill registry.
+- Remote agent execution or orchestration.
 
 ## Core Commands
+
+### Diagnostic (v0.1, stable)
 
 ```bash
 snaptailor scan --project .
@@ -65,61 +88,83 @@ snaptailor provenance current --project . --json
 snaptailor report current --project . --out snaptailor-report.md
 ```
 
+### Reproducibility (v0.2, active development)
+
+```bash
+# Export current environment to a portable bundle
+snaptailor bundle export --name <snapshot> --out <file.stailor> --include-content --project .
+
+# Import and restore on another machine
+snaptailor bundle import <file.stailor> --apply-content --project .
+
+# Safe preview before importing
+snaptailor bundle import <file.stailor> --dry-run --project .
+snaptailor bundle inspect <file.stailor>
+
+# Snapshot-based restore with rollback
+snaptailor restore --snapshot <name> --dry-run --project .
+snaptailor restore --snapshot <name> --apply --project .
+snaptailor restore --snapshot <name> --apply --rollback --project .
+```
+
 `current` is a pseudo-snapshot generated from a fresh read-only scan. It is never stored unless the user explicitly creates a snapshot.
 
 ## First Five Minutes
 
-The first useful moment must not require a before/after diff.
+The first useful moment must sell the reproducibility promise immediately.
 
 ```bash
-npm install -g snaptailor
-snaptailor scan --project .
+npm install -g @qxinm/snaptailor
+
+# Export your current setup
+snaptailor bundle export --name my-setup --out my-setup.stailor --include-content --project ~/my-project
+
+# On another machine — or after breaking something — restore it
+snaptailor bundle import my-setup.stailor --apply-content --project ~/my-project
 ```
 
 Expected first-run output:
 
 ```text
-snaptailor scan
+snaptailor bundle export
 
-Read-only: yes
+Read-only during scan: yes
 Network: disabled
 Commands executed: none
-Writes: ~/.snaptailor/index only
 
-Detected agents
-  Claude Code  user config found, project config found
-  Codex        user config found, AGENTS.md missing
-  Cursor       project MCP config found
+Exported agents
+  Claude Code  ✓ 12 items (settings, MCP, skills, hooks, instructions)
+  Codex        ✓ 3 items (config, MCP, instructions)
+  Cursor       ✓ 2 items (MCP config)
+  OpenCode     ✓ 4 items (config, skills)
+  Pi Agent     ✓ 8 items (extensions, skills, themes, prompts)
+  Project      ✓ 5 items (AGENTS.md, .mcp.json, .env keys)
 
-High-signal findings
-  HIGH   Claude Code permission wildcard added in project settings
-  MED    MCP server "github" command changed since last baseline
-  MED    Skill folder contains executable hook-like script
+Bundle: my-setup.stailor (34 evidence items, 1.2 MB)
+Content included: yes
+Signed: no (v0.3+)
 
-Blind spots
-  Remote MCP server behavior cannot be captured
-  Provider-side model routing cannot be verified
-  Raw env values are omitted by policy
-
-Next
-  snaptailor snapshot create --name baseline --metadata-only --project .
+Next on another machine:
+  snaptailor bundle import my-setup.stailor --apply-content --project .
 ```
 
-Target time to first useful report: under 60 seconds.
+Target time to first bundle: under 10 seconds.
 
-## Supported Surface In v0.1
+## Supported Surface
 
-Support two high-signal surfaces deeply, with a scanner plugin interface for later expansion:
+Six agents + project-local context, with a scanner plugin interface for expansion:
 
-- Claude Code deep support: `~/.claude/settings.json`, `~/.claude.json` metadata only, `~/.claude/agents/`, `~/.claude/skills/`, project `.claude/`, project `.mcp.json`, `CLAUDE.md`.
-- Project-local agent context: `AGENTS.md`, `CLAUDE.md`, `.mcp.json`, `.cursor/mcp.json`, `.claude/settings.json`, `.codex/` if present.
-- Codex and Cursor v0.1 support is metadata-level unless the scanner can resolve semantics safely.
-- Generic include paths are opt-in only.
-- `.env` handling is key inventory only by default: key names, file presence, and capture status. No raw values and no unsalted raw hashes.
+- **Claude Code** deep: `~/.claude/settings.json`, `~/.claude.json`, `~/.claude/agents/`, `~/.claude/skills/`, project `.claude/`, project `.mcp.json`, `CLAUDE.md`, hook commands from settings.json.
+- **Codex**: `~/.codex/config.toml`, project `.codex/`, `AGENTS.md`.
+- **Cursor**: `~/.cursor/mcp.json`, project `.cursor/mcp.json`.
+- **OpenCode**: config, skills.
+- **Pi Agent**: settings, extensions, skills, themes, prompts, agents, models.
+- **Project-local**: `AGENTS.md`, `CLAUDE.md`, `CODE.md`, `.mcp.json`, `.env` (key inventory).
+- **Scanner Plugin Interface**: `ScannerPlugin { agentId, agentName, description, targets() }` — add new agents without touching core.
 
 ## Evidence Inventory Contract
 
-v0.1 snapshots are metadata-first. Raw content is captured only for known-safe structured fields.
+Snapshots follow a metadata-first model with opt-in content inclusion.
 
 ```text
 snapshot/
@@ -147,13 +192,13 @@ Every scanner emits a policy-aware intermediate item:
   "parser": "json",
   "sensitivity": "command_config",
   "contentPolicy": "structured_safe_fields_only",
-  "restorePolicy": "not_supported_v0_1",
+  "restorePolicy": "full_content_supported",
   "captureStatus": "captured",
   "confidence": "high"
 }
 ```
 
-Implementation status: shared TypeScript model lives in `src/types.ts`.
+Implementation status: TypeScript model in `src/types.ts`. **restorePolicy is the active development surface — currently defaulting to `"not_supported_v0_1"`, needs per-kind policy mapping.**
 
 ### Capture Status Values
 
@@ -163,6 +208,13 @@ Implementation status: shared TypeScript model lives in `src/types.ts`.
 - `parse_failed`: file existed but could not be parsed.
 - `unsafe_to_export`: evidence can be used locally but must not leave the machine.
 - `unsupported`: detected, but semantics are unknown.
+
+### Restore Policy Values (v0.2+)
+
+- `full_content_supported`: item can be fully captured and restored (e.g., CLAUDE.md, skill files).
+- `structured_fields_only`: only structured fields are captured; raw values omitted (e.g., MCP server URLs but not env secrets).
+- `key_inventory_only`: only key names, not values (e.g., `.env` keys).
+- `not_supported`: item cannot be restored (e.g., remote MCP behavior, provider-side routing).
 
 ## Architecture
 
@@ -185,7 +237,7 @@ Implementation status: shared TypeScript model lives in `src/types.ts`.
               \                v                   /
                +----------------------------------+
                | Evidence inventory               |
-               | DiscoveredItem + capture policy  |
+               | DiscoveredItem + restore policy  |
                +----------------+-----------------+
                                 |
                                 v
@@ -194,15 +246,22 @@ Implementation status: shared TypeScript model lives in `src/types.ts`.
                | source/scope/precedence/confidence|
                +---------+------------+-----------+
                          |            |
-                         v            v
-          +---------------------+  +----------------------+
-          | Semantic diff engine|  | Audit rules engine   |
-          +----------+----------+  +----------+-----------+
-                     \                       /
-                      v                     v
-                 +-----------------------------+
-                 | Report + JSON outputs       |
-                 +-----------------------------+
+              +----------+----------+ +----------+-----------+
+              |                     | |                      |
+              v                     v v                      v
+    +------------------+  +------------------+  +----------------------+
+    | Semantic diff    |  | Audit rules      |  | Bundle export/import |
+    +------------------+  +------------------+  +----------------------+
+              |                     |                      |
+              v                     v                      v
+    +------------------+  +------------------+  +----------------------+
+    | Report + JSON    |  | Restore planner  |  | .stailor tar bundle  |
+    +------------------+  +------------------+  +----------------------+
+                                     |
+                                     v
+                          +----------------------+
+                          | Apply + Rollback     |
+                          +----------------------+
 ```
 
 ## Semantic Diff Model
@@ -211,14 +270,8 @@ Diff both raw source changes and effective resolved state.
 
 Identity fields:
 
-- `agent`
-- `scope`
-- `sourcePath`
-- `entityKind`
-- `entityName`
-- `effectiveValue`
-- `overriddenBy`
-- `confidence`
+- `agent`, `scope`, `sourcePath`, `entityKind`, `entityName`
+- `effectiveValue`, `overriddenBy`, `confidence`
 
 High-signal diffs:
 
@@ -245,44 +298,28 @@ Initial audit findings:
 - `UNSUPPORTED_AGENT_STATE`: detected state exists but cannot be interpreted.
 - `WORLD_WRITABLE_STORE`: local snaptailor store permissions are unsafe.
 
-Each finding includes:
-
-```json
-{
-  "code": "PERMISSION_WILDCARD_ADDED",
-  "severity": "high",
-  "problem": "Project settings added a broad shell permission.",
-  "cause": ".claude/settings.json contains Bash(*)",
-  "fix": "Replace with explicit allowed commands.",
-  "path": ".claude/settings.json",
-  "evidenceId": "claude.project.permissions.shell"
-}
-```
+Each finding includes `code`, `severity`, `problem`, `cause`, `fix`, `path`, `evidenceId`.
 
 ## Trust And Security Model
 
-- Local only by default.
-- No telemetry in v0.1.
-- No command execution while scanning.
-- No network access while scanning.
+- Local only by default. No telemetry.
+- No command execution while scanning. No network access while scanning.
 - Store path: `~/.snaptailor`, created with `0700`.
 - Write only to `~/.snaptailor` unless `--out` is explicitly provided.
 - Never follow symlinks by default. Record symlink metadata only.
 - Reject world/group-writable snapshot stores.
 - Limit scan size, file count, depth, and parse time.
 - Ignore common large or irrelevant directories: `node_modules`, `.git`, build outputs, caches, logs, model weights.
-- Use HMAC or omit fingerprints for sensitive values. Do not store unsalted hashes of secrets.
-- Export, import, restore, and share are not implemented in v0.1.
+- Bundles are metadata-only by default. Content inclusion requires explicit `--include-content` flag.
+- Restore is opt-in: requires `--apply` flag. Dry-run is always available.
+- Rollback is automatic when `--rollback` is requested; items are undone in reverse execution order.
+- Signed bundles and provenance verification planned for v0.3.
 
 ## Error Contract
 
 Every user-facing error must include:
 
-- `code`
-- `problem`
-- `cause`
-- `fix`
-- `path` when relevant
+- `code`, `problem`, `cause`, `fix`, `path` (when relevant)
 
 Example:
 
@@ -297,119 +334,151 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 
 ### Milestone 0: Validation And Repo Scaffold
 
-- [done] TypeScript CLI scaffold, lockfile, build, and Node test harness are implemented.
-- [done] Shared user-facing error contract is implemented and tested.
-- [done] Validation incident template and seed backlog are documented in `docs/internal/validation-incidents.md`.
-- [done] Replace seed incident patterns with 10 real target-operator incidents before claiming product validation complete. See `docs/internal/validation-incidents.md`.
-- [done] Choose TypeScript for fastest parser iteration and CLI distribution, with minimal dependencies and a lockfile.
-- [done] Add CLI scaffold, tests, lint/typecheck, fixture harness, and temp-home integration test harness.
+- [done] TypeScript CLI scaffold, lockfile, build, and Node test harness.
+- [done] Shared user-facing error contract implemented and tested.
+- [done] Validation incident template and seed backlog documented.
+- [done] Replace seed incident patterns with 10 real target-operator incidents.
+- [done] Choose TypeScript for fastest parser iteration and CLI distribution.
 
 ### Milestone 1: Read-Only Scan
 
 - [done] Implement trust preflight and `scan --explain`.
-- [done] Implement path discovery for Claude Code and project-local agent files.
+- [done] Implement path discovery for all supported agents.
 - [done] Emit evidence inventory with capture status.
-- [done] Enforce no symlink following, size caps, parse timeouts, and no network/command execution.
+- [done] Enforce no symlink following, size caps, parse timeouts, no network/command execution.
 
 ### Milestone 2: Metadata Snapshot Store
 
 - [done] Create `~/.snaptailor` with `0700`.
 - [done] Store metadata-only snapshots.
-- [done] Add snapshot store helpers for create, list, and show.
-- [done] Add checksums for observed files and safe structured fields.
+- [done] Snapshot store helpers for create, list, and show.
+- [done] Checksums for observed files and safe structured fields.
 
 ### Milestone 3: Normalized Graph And Diff
 
-- [done] Build agent-state graph with scope, precedence, confidence, and source references.
-- [done] Implement `current` pseudo-snapshot in the analysis layer.
-- [done] Implement semantic diff plus raw source-change summary.
-- [done] Add `--json` to scan, snapshot show, diff, audit, provenance, and report in CLI integration.
-- [done] `scan --explain` prints the considered evidence paths.
+- [done] Build agent-state graph with scope, precedence, confidence.
+- [done] Implement `current` pseudo-snapshot.
+- [done] Semantic diff plus raw source-change summary.
+- [done] `--json` on scan, snapshot show, diff, audit, provenance, report.
 
 ### Milestone 4: Audit And Provenance
 
-- [done] Implement audit rules listed above.
-- [done] Implement provenance report showing where every effective value came from.
-- [done] Implement reproducibility gap inputs via capture statuses and blind spots.
-- [done] Implement markdown report renderer for `snaptailor-report.md`.
-- [done] Wire `scan`, `snapshot`, `diff`, `audit`, `provenance`, and `report` through the CLI.
-- [done] Add explicit reproducibility gap section to markdown reports.
+- [done] 9 audit rules implemented.
+- [done] Provenance report showing where every effective value came from.
+- [done] Reproducibility gap inputs via capture statuses and blind spots.
+- [done] Markdown report renderer.
 
 ### Milestone 5: Docs And Dogfood
 
-- [done] Add copy-paste workflows in `README.md`:
-  - inspect what will be scanned
-  - create first baseline
-  - see what changed since baseline
-  - audit current setup
-  - export a redacted report, not a restorable bundle
-  - use JSON in CI or agent workflows
-- [done] Dogfood on at least three real agent setups before adding write features. Results are summarized in `docs/internal/dogfood.md`.
+- [done] Copy-paste workflows in `README.md`.
+- [done] Dogfood on three real agent setups.
+
+### Milestone 6: Bundle Format (v0.2)
+
+- [done] `.stailor` tar-based bundle format: export, import, inspect.
+- [done] Bundle manifest with format version, security metadata, checksums.
+- [done] Content inclusion with `--include-content` flag.
+- [done] Path traversal hardening: reject `..`, `~/`, absolute paths, `.ssh`.
+- [done] Tar security: symlink/hardlink rejection, size limits, checksum validation.
+
+### Milestone 7: Restore Engine (v0.2)
+
+- [done] Restore planner: dry-run plan generation with risk assessment.
+- [done] Per-type apply handlers with fail-fast support.
+- [done] Rollback engine: LIFO reverse-iteration undo with status tracking.
+- [done] `applyWithRollback` orchestration: apply → rollback on failure.
+- [done] Status registry for runtime item state queries.
+- [done] Human-readable apply/rollback summary formatting.
+
+### Milestone 8: Restore Policy Matrix (v0.3)
+
+- [ ] Map `restorePolicy` per evidence kind: which items are `full_content_supported`, `structured_fields_only`, `key_inventory_only`, or `not_supported`.
+- [ ] Wire restore policies into the evidence pipeline so snapshots carry accurate restore metadata.
+- [ ] Implement per-kind content capture: read actual file contents for full-content items, structured fields for MCP config, key names only for env.
+- [ ] Add restore policy validation: fail bundle export if `not_supported` items would silently lose data.
+
+### Milestone 9: Content Bundles as Default (v0.3)
+
+- [ ] Flip default: `bundle export` includes content by default; `--metadata-only` becomes the opt-in flag.
+- [ ] Per-kind content capture: actual file bytes for CLAUDE.md, skill files, settings.json.
+- [ ] Bundle size reporting and warnings for large bundles.
+
+### Milestone 10: Cross-Machine Restore (v0.3)
+
+- [ ] Home directory abstraction: store `~/.claude/settings.json` as `{home}/.claude/settings.json` in bundle; resolve to `$HOME` on restore.
+- [ ] MCP binary path remapping: detect `npx`, `uvx`, local binary paths and warn if they differ between export and import machines.
+- [ ] OS-aware path normalization: macOS `/Users/` ↔ Linux `/home/`.
+- [ ] Restore dry-run with machine-specific diff: "on this machine, these items will be different."
+- [ ] Cross-machine dogfood: export on macOS, import on Linux (or vice versa).
+
+### Milestone 11: Bundle Security (v0.3)
+
+- [ ] Signed bundles: HMAC or Ed25519 signature on bundle manifest + content.
+- [ ] Bundle verification before import: `snaptailor bundle verify <file.stailor>`.
+- [ ] Trust-on-first-use key management for bundle signing.
+- [ ] Quarantine mode: imported bundles are inspected before content is applied.
+
+### Milestone 12: Scanner Expansion & CI
+
+- [ ] Windsurf scanner (if API/surface is stable).
+- [ ] Copilot scanner (if config surface is inspectable).
+- [ ] CI recipe: `snaptailor bundle export --validate` as pre-merge check.
+- [ ] CI recipe: `snaptailor diff baseline current` to detect agent config drift in PRs.
 
 ## Test Diagram
 
 ```text
-scan --project .
+bundle export --include-content --project .
   |
-  +-- trust preflight
-  |     +-- store path exists? permissions 0700?          [unit + temp-home]
-  |     +-- no network / no commands contract visible     [CLI snapshot]
+  +-- content capture per kind
+  |     +-- CLAUDE.md full content          [golden]
+  |     +-- MCP config structured fields    [golden]
+  |     +-- skill files full content        [fixture]
+  |     +-- .env key inventory only         [fixture]
   |
-  +-- discover paths
-  |     +-- existing Claude user/project config           [fixture]
-  |     +-- missing config                                [fixture]
-  |     +-- unreadable file                               [temp-home]
-  |     +-- symlink / broken symlink / symlink loop        [temp-home]
-  |     +-- huge folder / ignored dirs                    [temp-home]
+  +-- bundle import --apply-content
+  |     +-- cross-machine path resolution   [temp-home]
+  |     +-- MCP binary path mismatch warn   [unit]
+  |     +-- permission-preserving restore   [temp-home]
+  |     +-- idempotent re-import            [unit]
   |
-  +-- parse evidence
-  |     +-- valid JSON/TOML/Markdown frontmatter          [golden]
-  |     +-- malformed JSON/TOML                           [golden]
-  |     +-- binary/large file skipped                     [fixture]
-  |     +-- secret-like value omitted                     [unit + golden]
+  +-- bundle security
+  |     +-- signed bundle verification      [unit]
+  |     +-- unsigned bundle warning         [unit]
+  |     +-- quarantine mode enforce         [unit]
   |
-  +-- normalize graph
-  |     +-- user vs project precedence                    [unit]
-  |     +-- unsupported state retained as unsupported     [unit]
-  |
-  +-- diff baseline current
-  |     +-- MCP added/removed/changed                     [golden]
-  |     +-- permission wildcard added                     [golden]
-  |     +-- skill executable appeared                     [golden]
-  |
-  +-- audit current
-        +-- finding has code/problem/cause/fix/path       [unit]
-        +-- JSON schema stable                            [schema test]
-        +-- markdown report includes blind spots          [golden]
+  +-- restore policy matrix
+        +-- per-kind policy mapping         [unit]
+        +-- missing policy → safe default   [unit]
+        +-- not_supported items → export warn [unit]
 ```
 
 ## Failure Modes Registry
 
-| Failure mode | Severity | v0.1 response |
+| Failure mode | Severity | Response |
 |---|---:|---|
-| Tool leaks raw secret in snapshot/report | Critical | Central capture policy, omit unknown sensitive values, fixture tests |
-| Scanner follows symlink into unrelated secret tree | Critical | Do not follow symlinks by default, record metadata only |
+| Bundle leaks raw secret | Critical | Central capture policy, per-kind content rules, fixture tests |
+| Scanner follows symlink into secret tree | Critical | Do not follow symlinks by default |
+| Restore overwrites user's manual config | High | Dry-run required before apply, rollback available |
+| Cross-machine paths don't resolve | High | Path abstraction layer, dry-run machine-diff report |
+| MCP binary missing on target machine | High | Pre-import check, warning on missing `npx`/`uvx`/local bins |
 | Semantic diff misses project override | High | Graph includes scope, precedence, source, confidence |
-| Snapshot store is tampered with | High | `0700` store, checksums, unsafe permission finding |
+| Bundle is tampered with in transit | High | Signed bundles, checksum verification |
 | Malformed config crashes scan | High | Structured parser diagnostics and `parse_failed` evidence |
-| Huge folder makes scan unusable | Medium | Size/count/depth caps, ignored dirs, explicit exclusions |
-| User thinks "complete state" was captured | High | Reproducibility gap report and no complete-state claim |
-| Audit report is too noisy | Medium | Severity levels, confidence, high-signal initial rules |
+| User thinks env values are included | High | Explicit `--include-content` flag, bundle manifest states content policy |
 
 ## What Already Exists
 
 - Dotfile managers solve generic config sync.
 - Agent vendors expose some settings export/import inside their own tools.
 - MCP managers solve server toggling and install flow.
-- snaptailor's unique work is cross-scope, cross-agent explanation: semantic drift, provenance, risk, and unsupported-state visibility.
+- Docker/Nix/Dev Containers solve general environment reproducibility.
+- snaptailor's unique work: **cross-agent, cross-machine agent-config portability with restore safety and rollback**.
 
 ## NOT In Scope
 
-- Mutating config files.
-- Applying snapshots.
-- Importing third-party bundles.
-- Sharing restorable environments.
-- Raw secret capture.
+- Mutating config files without explicit user intent (always requires `--apply`).
+- Raw secret capture without explicit user opt-in.
 - Cloud-hosted team management.
 - Desktop UI.
 - Marketplace or skill registry.
@@ -418,33 +487,25 @@ scan --project .
 
 | # | Phase | Decision | Classification | Principle | Rationale | Rejected |
 |---|---|---|---|---|---|---|
-| 1 | CEO | Reframe v0.1 from restore/share to read-only drift diagnosis and audit | User Challenge | P1 + P2 | Both external voices flagged restore-first as strategically and technically risky; read-only diagnosis proves the differentiated wedge first | Backup/restore-first MVP |
-| 2 | CEO | Narrow initial operator to developers running coding agents across repos | Auto | P5 | A concrete operator makes the first workflow and copy-paste docs testable | Broad "AI power user" segment |
-| 3 | Eng | Use metadata-only snapshots in v0.1 | Auto | P1 | Avoids raw secret and supply-chain exposure while preserving diff/provenance value | Raw file-content bundles |
-| 4 | Eng | Add policy-aware `DiscoveredItem` before manifest/diff/report | Auto | P5 | Redaction and capture rules must be central, not downstream cleanup | Scanner emits raw bytes directly |
-| 5 | Eng | Defer import/export/restore/share | User Challenge | P1 + P3 | These require write safety and malicious bundle handling before the core value is proven | Implement `.stailor` bundles in v0.1 |
-| 6 | DX | Make `snaptailor scan --project .` the first useful report | Auto | P5 | First run must create value and trust before asking for baselines | Install, create snapshot, then empty diff |
-| 7 | DX | Add explicit error contract and stable JSON outputs | Auto | P1 | Developer tool adoption depends on automation and fixable errors | Human-only prose output |
+| 1 | CEO | Reframe v0.1 from restore/share to read-only drift diagnosis and audit | Superseded | See #8 | Original decision: both external voices flagged restore-first as strategically risky. Read-only diagnosis proved the evidence model was sound before adding write paths. | Backup/restore-first MVP |
+| 2 | CEO | Narrow initial operator to developers running coding agents across repos | Retained | P5 | A concrete operator makes the first workflow and copy-paste docs testable | Broad "AI power user" segment |
+| 3 | Eng | Use metadata-only snapshots in v0.1 | Retained | P1 | Avoids raw secret and supply-chain exposure. Content inclusion is now opt-in via `--include-content`. | Raw file-content bundles as default in v0.1 |
+| 4 | Eng | Add policy-aware `DiscoveredItem` before manifest/diff/report | Retained | P5 | Redaction and capture rules must be central, not downstream cleanup | Scanner emits raw bytes directly |
+| 5 | Eng | Defer import/export/restore/share | Superseded | See #8 | Original decision: these require write safety before core value is proven. Bundle and restore are now implemented and becoming the core workflow. | Implement `.stailor` bundles in v0.1 |
+| 6 | DX | Make `snaptailor scan --project .` the first useful report | Retained | P5 | First run must create value and trust. Now supplemented by `bundle export` as the primary first-run workflow. | Install, create snapshot, then empty diff |
+| 7 | DX | Add explicit error contract and stable JSON outputs | Retained | P1 | Developer tool adoption depends on automation and fixable errors | Human-only prose output |
+| 8 | CEO | **Pivot to reproducibility**: snaptailor's core value is "Docker image for AI agent environments" | Active (2026-05-20) | P1 + P2 | Read-only diagnosis was the trust-building foundation. Bundle + restore are already implemented. The product is now a reproducibility engine with diagnosis as a supporting layer. | Stay read-only diagnosis only |
 
 ## Review Scores
 
-- CEO: High concern on original plan. Revised direction accepted as the stronger wedge.
-- Design: Skipped. No UI surface in v0.1.
-- Eng: Original plan had critical restore/share/security risks. Revised plan reduces v0.1 blast radius to read-only scanning, graph, diff, audit, and report.
-- DX: Original first-use flow could be empty. Revised flow makes `scan` valuable under 60 seconds and adds trust preflight.
+- CEO: Originally high concern on restore-first plan. Now: **accepted the pivot to reproducibility** — the read-only foundation proved the evidence model, and bundle/restore is already implemented.
+- Design: Skipped. No UI surface.
+- Eng: Original plan had critical restore/share/security risks. Revised plan addresses these with per-kind restore policies, dry-run gating, signed bundles, and rollback safety.
+- DX: First-use flow now offers both `scan` (diagnosis) and `bundle export` (portability) as entry points.
 
 ## Cross-Phase Themes
 
-- Restore/share before diagnosis is the wrong first move. CEO, Eng, and DX all flagged it.
-- "Complete state" is an unsafe promise. The plan now uses evidence inventory and reproducibility gaps.
-- Trust is the product. No network, no command execution, no mutation, explicit capture status, and local-only defaults are v0.1 requirements.
-
-## GSTACK REVIEW REPORT
-
-| Review | Command | Scope | Runs | Status | Findings |
-|---|---|---|---:|---|---|
-| CEO Review | `/plan-ceo-review` via `/autoplan` | Strategy and scope | 1 | issues_resolved_in_plan | Restore-first challenged; wedge reframed to drift diagnosis |
-| Design Review | `/plan-design-review` via `/autoplan` | UI/UX | 0 | skipped | No UI scope in v0.1 |
-| Eng Review | `/plan-eng-review` via `/autoplan` | Architecture and tests | 1 | issues_resolved_in_plan | Secret handling, symlinks, store trust, restore risk addressed |
-| DX Review | `/plan-devex-review` via `/autoplan` | Developer experience | 1 | issues_resolved_in_plan | First useful report and trust preflight added |
-| Dual Voices | `/autoplan` | CEO, Eng, DX outside voices | 3 | issues_resolved_in_plan | Strong consensus on read-only diagnostic MVP |
+- **Reproducibility is the product.** Diagnosis is the trust layer that makes reproducibility safe.
+- **Trust is still the product.** No network, no command execution during scan, no mutation without `--apply`, rollback on failure.
+- **"Complete state" remains an unsafe promise.** Evidence inventory and reproducibility gaps are explicit. Some things (remote MCP behavior, provider routing) are inherently non-reproducible.
+- **Content bundles will become the default** once per-kind restore policies and signed verification are in place.

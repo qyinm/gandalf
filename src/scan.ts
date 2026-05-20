@@ -2,7 +2,7 @@ import { readdir, readFile, lstat } from "node:fs/promises";
 import path from "node:path";
 
 import type { AgentId, DiscoveredItem, EvidenceKind, EvidenceScope } from "./types.js";
-import { ignoredDirectory, MAX_DIRECTORY_DEPTH, MAX_DIRECTORY_ENTRIES, MAX_FILE_BYTES } from "./policy.js";
+import { ignoredDirectory, MAX_DIRECTORY_DEPTH, MAX_DIRECTORY_ENTRIES, MAX_FILE_BYTES, restorePolicyFor } from "./policy.js";
 import { parseDotenvKeys, parseJson, parseMarkdown, parseTomlKeyValues } from "./parsers.js";
 import { defaultScannerPlugins, type ScanTarget } from "./scanners/index.js";
 
@@ -74,7 +74,8 @@ async function scanTarget(target: ScanTarget, evidence: DiscoveredItem[]): Promi
       id: itemId(target, "symlink"),
       kind: "symlink",
       parser: "filesystem",
-      contentPolicy: "metadata_only"
+      contentPolicy: "metadata_only",
+      restorePolicy: restorePolicyFor("symlink")
     });
     return;
   }
@@ -166,7 +167,8 @@ async function scanDirectoryEntries(
         ...baseItem(childTarget, "omitted", { reason: "symlink_not_followed" }),
         id: itemId(childTarget, "symlink"),
         kind: "symlink",
-        parser: "filesystem"
+        parser: "filesystem",
+        restorePolicy: restorePolicyFor("symlink")
       });
     } else if (stats.isDirectory()) {
       evidence.push(baseItem(childTarget, target.kind === "skill" ? "captured" : "unsupported", { present: true }));
@@ -332,7 +334,7 @@ function baseItem(
     parser: target.parser,
     sensitivity: target.sensitivity,
     contentPolicy: target.contentPolicy,
-    restorePolicy: "not_supported_v0_1",
+    restorePolicy: restorePolicyFor(target.kind),
     captureStatus,
     confidence: "high",
     ...(value === undefined ? {} : { value }),
