@@ -6,7 +6,7 @@
 
 import React, { useState } from "react";
 import { Text, Box } from "ink";
-import Table from "ink-table";
+import SimpleTable from "./SimpleTable.js";
 
 import type { Snapshot } from "../../types.js";
 
@@ -67,10 +67,9 @@ export default function SnapshotList({
       </Box>
 
       {/* Table */}
-      <Table
+      <SimpleTable
         data={tableData}
         columns={["name", "created", "agents", "evidence"]}
-        padding={1}
       />
 
       {/* Pagination */}

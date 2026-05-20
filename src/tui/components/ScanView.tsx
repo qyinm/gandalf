@@ -4,14 +4,14 @@
  * Renders a rich terminal view of scan output including:
  * - Trust badges
  * - Detected agents per scope
- * - Evidence table
+ * - Evidence table (using SimpleTable, no CJS dep)
  * - Audit findings by severity
  * - Blind spots
  */
 
 import React from "react";
 import { Text, Box } from "ink";
-import Table from "ink-table";
+import SimpleTable from "./SimpleTable.js";
 
 import type { AuditFinding, DiscoveredItem } from "../../types.js";
 
@@ -57,13 +57,9 @@ export default function ScanView({
   blindSpots,
   readOnly,
 }: ScanViewProps) {
-  // ── Trust Section ─────────────────────────────────────────
   const trustColor = readOnly ? "green" : "red";
-
-  // ── Agent Summary ─────────────────────────────────────────
   const agents = [...new Set(evidence.map((e) => e.agent))].sort();
 
-  // ── Evidence Table ────────────────────────────────────────
   const tableData = evidence.map((item) => ({
     agent: agentLabel(item.agent),
     kind: item.kind,
@@ -72,7 +68,6 @@ export default function ScanView({
     status: item.captureStatus,
   }));
 
-  // ── Findings ──────────────────────────────────────────────
   const sortedFindings = [...auditFindings].sort(
     (a, b) => severityRank(b.severity) - severityRank(a.severity)
   );
@@ -115,10 +110,9 @@ export default function ScanView({
       {tableData.length > 0 && (
         <Box marginBottom={1} flexDirection="column">
           <Text bold>Discovered Evidence</Text>
-          <Table
+          <SimpleTable
             data={tableData.slice(0, 50)}
             columns={["agent", "kind", "scope", "source", "status"]}
-            padding={1}
           />
           {tableData.length > 50 && (
             <Text color="yellow">
@@ -160,8 +154,6 @@ export default function ScanView({
     </Box>
   );
 }
-
-// ── Helpers ──────────────────────────────────────────────────
 
 function severityRank(s: string): number {
   switch (s) {
