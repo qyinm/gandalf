@@ -32,7 +32,7 @@ import type { AgentId } from "../../types.js";
 import Sidebar, { buildAgentEntries, agentLabelStr } from "./Sidebar.js";
 import TabBar from "./TabBar.js";
 import type { TabId } from "./TabBar.js";
-import ScanView from "./ScanView.js";
+import ScanView, { DEFAULT_SCAN_WINDOW_SIZE } from "./ScanView.js";
 import AuditView from "./AuditView.js";
 import DiffView from "./DiffView.js";
 import SnapshotList from "./SnapshotList.js";
@@ -391,6 +391,12 @@ export default function Dashboard({ options }: DashboardProps) {
         ? buildAgentEntries(state.scan.evidence)
         : [];
       const maxCursor = Math.max(0, agents.length - 1);
+      const scanEvidenceCount = state.scan
+        ? state.selectedAgent
+          ? state.scan.evidence.filter((e) => e.agent === state.selectedAgent).length
+          : state.scan.evidence.length
+        : 0;
+      const maxScanScrollOffset = Math.max(0, scanEvidenceCount - DEFAULT_SCAN_WINDOW_SIZE);
 
       // q = quit
       if (input === "q" || key.escape) {
@@ -463,7 +469,7 @@ export default function Dashboard({ options }: DashboardProps) {
         if (state.activeTab === "scan") {
           setState((s) => ({
             ...s,
-            scanScrollOffset: s.scanScrollOffset + 1,
+            scanScrollOffset: Math.min(maxScanScrollOffset, s.scanScrollOffset + 1),
           }));
         } else {
           setState((s) => ({
