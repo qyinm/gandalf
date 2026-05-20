@@ -353,6 +353,34 @@ describe("scanProject", () => {
     assert.equal(piSkills.some((item) => item.name === "missing-description"), false);
   });
 
+  it("discovers Pi extension entrypoints from auto and settings paths", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    await mkdir(join(projectPath, ".pi", "extensions", "project-extension"), { recursive: true });
+    await mkdir(join(homeDir, ".pi", "agent", "extensions"), { recursive: true });
+    await mkdir(join(projectPath, ".pi"), { recursive: true });
+    await mkdir(join(projectPath, "custom-extension", "src"), { recursive: true });
+
+    await writeFile(join(projectPath, ".pi", "extensions", "project-extension", "index.ts"), "export default function () {}\n", "utf8");
+    await writeFile(join(homeDir, ".pi", "agent", "extensions", "global-extension.ts"), "export default function () {}\n", "utf8");
+    await writeFile(join(projectPath, "custom-extension", "package.json"), JSON.stringify({ pi: { extensions: ["./src/index.ts"] } }), "utf8");
+    await writeFile(join(projectPath, "custom-extension", "src", "index.ts"), "export default function () {}\n", "utf8");
+    await writeFile(join(projectPath, ".pi", "settings.json"), JSON.stringify({ extensions: ["../custom-extension"] }), "utf8");
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const piExtensions = scan.evidence.filter((item) => item.agent === "pi-agent" && item.kind === "extension");
+
+    assert.ok(
+      piExtensions.some(
+        (item) =>
+          item.name === "project-extension" &&
+          item.sourcePath === ".pi/extensions/project-extension/index.ts" &&
+          item.metadata?.["extensionStyle"] === "directory_index"
+      )
+    );
+    assert.ok(piExtensions.some((item) => item.name === "global-extension" && item.sourcePath === "~/.pi/agent/extensions/global-extension.ts"));
+    assert.ok(piExtensions.some((item) => item.name === "custom-extension" && item.sourcePath === "custom-extension/src/index.ts"));
+  });
+
   it("does not count Pi skills whose SKILL.md symlink cannot be followed", async () => {
     const { projectPath, homeDir, storeDir } = await makeSandbox();
     await mkdir(join(homeDir, ".agents", "skills", "broken-skill"), { recursive: true });

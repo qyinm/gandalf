@@ -6,6 +6,7 @@ export type EvidenceKind =
   | "mcp_server"
   | "permission"
   | "skill"
+  | "extension"
   | "env_key"
   | "hook"
   | "symlink"
