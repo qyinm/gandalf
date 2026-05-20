@@ -273,6 +273,66 @@ describe("bundle export policy validation", () => {
   });
 });
 
+// -- Bundle signatures -------------------------------------------
+
+describe("bundle signatures", () => {
+  it("signs manifest and content with HMAC-SHA256 when a signature key is provided", async () => {
+    const box = await makeSandbox();
+    const name = "signed-bundle";
+    await writeSnapshot(box.storeDir, sampleSnapshot(name));
+
+    const exportResult = await bundleExport({
+      snapshotName: name,
+      outputPath: bundlePath(box, name),
+      storeDir: box.storeDir,
+      projectPath: box.projectPath,
+      homeDir: box.homeDir,
+      signatureKey: "test-secret"
+    });
+
+    const inspectResult = await bundleInspect(exportResult.bundlePath);
+    assert.equal(inspectResult.isSigned, true);
+    assert.equal(inspectResult.signatureAlgorithm, "HMAC-SHA256");
+
+    const { entries } = await readTar(exportResult.bundlePath);
+    const manifest = JSON.parse(entries.find((entry) => entry.path === ".stailor/manifest.json")!.content.toString("utf-8"));
+    assert.match(manifest.security.signature, /^[a-f0-9]{64}$/);
+  });
+
+  it("rejects tampered signed bundles when the signature key is available", async () => {
+    const box = await makeSandbox();
+    const name = "tampered-signed";
+    await writeSnapshot(box.storeDir, sampleSnapshot(name));
+
+    const exportResult = await bundleExport({
+      snapshotName: name,
+      outputPath: bundlePath(box, name),
+      storeDir: box.storeDir,
+      projectPath: box.projectPath,
+      homeDir: box.homeDir,
+      signatureKey: "test-secret"
+    });
+
+    const { entries } = await readTar(exportResult.bundlePath);
+    const evidenceEntry = entries.find((entry) => entry.path === "snapshot/evidence.json");
+    assert.ok(evidenceEntry);
+    evidenceEntry.content = Buffer.from(evidenceEntry.content.toString("utf-8").replace("gh", "evil"), "utf-8");
+    const tamperedPath = bundlePath(box, "tampered-signed");
+    await writeTar(entries, tamperedPath);
+
+    await assert.rejects(
+      () => bundleImport({
+        bundlePath: tamperedPath,
+        storeDir: box.storeDir,
+        projectPath: box.projectPath,
+        homeDir: box.homeDir,
+        signatureKey: "test-secret"
+      }),
+      /Bundle signature verification failed/
+    );
+  });
+});
+
 // -- Export -> Inspect --
 
 describe("bundle inspect", () => {

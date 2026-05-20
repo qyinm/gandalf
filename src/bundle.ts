@@ -15,7 +15,7 @@
  * Home paths are stored as {home}/... in the bundle for cross-machine compatibility.
  */
 
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { execSync } from "node:child_process";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { homedir, platform, hostname } from "node:os";
@@ -47,6 +47,50 @@ const HOME_TOKEN = "{home}";
 
 const MAX_BUNDLE_BYTES = parseInt(process.env.SNAPTAILOR_MAX_BUNDLE_BYTES ?? "", 10) || 500 * 1024 * 1024;
 const MAX_CONTENT_BYTES = parseInt(process.env.SNAPTAILOR_MAX_CONTENT_BYTES ?? "", 10) || 50 * 1024 * 1024;
+const SIGNATURE_ALGORITHM = "HMAC-SHA256";
+
+function resolveSignatureKey(explicitKey?: string): string | undefined {
+  return explicitKey ?? process.env.SNAPTAILOR_BUNDLE_KEY;
+}
+
+function cloneManifestWithoutSignature(manifest: BundleManifest): BundleManifest {
+  return {
+    ...manifest,
+    security: {
+      ...manifest.security,
+      signature: undefined
+    }
+  };
+}
+
+function canonicalSignaturePayload(entries: TarEntry[], manifest: BundleManifest): Buffer {
+  const hmacEntries = entries
+    .filter((entry) => entry.path !== ".stailor/manifest.json" && entry.path !== ".stailor/checksums.json")
+    .filter((entry) => entry.type === "file")
+    .sort((a, b) => a.path.localeCompare(b.path));
+  const chunks: Buffer[] = [
+    Buffer.from(JSON.stringify(cloneManifestWithoutSignature(manifest)) + "\n", "utf-8")
+  ];
+  for (const entry of hmacEntries) {
+    chunks.push(Buffer.from(`${entry.path}\n${entry.content.length}\n`, "utf-8"));
+    chunks.push(entry.content);
+    chunks.push(Buffer.from("\n", "utf-8"));
+  }
+  return Buffer.concat(chunks);
+}
+
+function signBundleEntries(entries: TarEntry[], manifest: BundleManifest, key: string): string {
+  return createHmac("sha256", key).update(canonicalSignaturePayload(entries, manifest)).digest("hex");
+}
+
+function verifyBundleSignature(entries: TarEntry[], manifest: BundleManifest, key?: string): { ok: boolean; checked: boolean; warning?: string } {
+  if (!manifest.security.signed) return { ok: true, checked: false };
+  if (!key) return { ok: true, checked: false, warning: "Bundle is signed, but no signature key was provided; signature was not verified." };
+  const expected = manifest.security.signature;
+  if (!expected) return { ok: false, checked: true, warning: "Signed bundle manifest is missing security.signature." };
+  const actual = signBundleEntries(entries, manifest, key);
+  return { ok: actual === expected, checked: true, warning: actual === expected ? undefined : "Bundle signature verification failed." };
+}
 
 /** Result of a bundle export, including any warnings. */
 export interface BundleExportResult {
@@ -246,6 +290,7 @@ function captureSourceMachine(): SourceMachine {
  */
 export async function bundleExport(options: BundleExportOptions): Promise<BundleExportResult> {
   const { snapshotName, outputPath, storeDir, projectPath, homeDir, includeContent } = options;
+  const signatureKey = resolveSignatureKey(options.signatureKey);
 
   // Read snapshot from store
   const snapshot = await readSnapshot(storeDir, snapshotName);
@@ -306,7 +351,8 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     security: {
       rawSecretsIncluded: false,
       redactionPolicy: "metadata-only",
-      signed: false
+      signed: Boolean(signatureKey),
+      signatureAlgorithm: signatureKey ? SIGNATURE_ALGORITHM : undefined
     }
   };
 
@@ -439,6 +485,18 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     }
   }
 
+  // Compute and persist signature after content stats are final, but before checksums.
+  if (signatureKey) {
+    manifest.security.signature = signBundleEntries(entries, manifest, signatureKey);
+    const manifestIndex = entries.findIndex((e) => e.path === ".stailor/manifest.json");
+    if (manifestIndex >= 0) {
+      entries[manifestIndex] = {
+        ...entries[manifestIndex],
+        content: Buffer.from(JSON.stringify(manifest, null, 2) + "\n", "utf-8")
+      };
+    }
+  }
+
   // Compute per-entry checksums
   const entryChecksums: Record<string, string> = {};
   for (const entry of entries) {
@@ -487,6 +545,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
  */
 export async function bundleImport(options: BundleImportOptions): Promise<BundleImportResult> {
   const { bundlePath, storeDir, projectPath, homeDir, applyContent, dryRun } = options;
+  const signatureKey = resolveSignatureKey(options.signatureKey);
 
   // Read bundle
   const { entries, checksum: bundleChecksum } = await readTar(bundlePath);
@@ -507,6 +566,11 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     throw new Error("Invalid bundle: missing .stailor/manifest.json");
   }
   const manifest: BundleManifest = JSON.parse(manifestEntry.content.toString("utf-8"));
+
+  const signatureVerification = verifyBundleSignature(entries, manifest, signatureKey);
+  if (!signatureVerification.ok) {
+    throw new Error(signatureVerification.warning ?? "Bundle signature verification failed.");
+  }
 
   // Validate checksums
   const checksumsEntry = entries.find((e) => e.path === ".stailor/checksums.json");
@@ -668,6 +732,9 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
 
   // Collect machine-related warnings
   const warnings: string[] = [];
+  if (signatureVerification.warning) {
+    warnings.push(signatureVerification.warning);
+  }
 
   if (sourceMachine && sourceMachine.homeDir !== targetHome) {
     warnings.push(
