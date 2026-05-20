@@ -352,4 +352,15 @@ describe("scanProject", () => {
     assert.ok(piSkills.some((item) => item.name === "loaded" && item.sourcePath === "custom-skills/loaded"));
     assert.equal(piSkills.some((item) => item.name === "missing-description"), false);
   });
+
+  it("does not count Pi skills whose SKILL.md symlink cannot be followed", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    await mkdir(join(homeDir, ".agents", "skills", "broken-skill"), { recursive: true });
+    await symlink(join(homeDir, "missing", "SKILL.md"), join(homeDir, ".agents", "skills", "broken-skill", "SKILL.md"));
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const piSkills = scan.evidence.filter((item) => item.agent === "pi-agent" && item.kind === "skill");
+
+    assert.equal(piSkills.some((item) => item.name === "broken-skill"), false);
+  });
 });
