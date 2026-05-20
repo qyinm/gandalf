@@ -1,0 +1,39 @@
+/**
+ * Ink component for live report preview.
+ *
+ * Renders the markdown report output using ink-markdown.
+ */
+
+import React from "react";
+import { Text, Box } from "ink";
+import Markdown from "ink-markdown";
+
+// ── Props ────────────────────────────────────────────────────
+
+interface ReportPreviewProps {
+  markdown: string;
+}
+
+// ── Component ────────────────────────────────────────────────
+
+export default function ReportPreview({ markdown }: ReportPreviewProps) {
+  if (!markdown || markdown.trim().length === 0) {
+    return (
+      <Box flexDirection="column">
+        <Text bold>snaptailor report</Text>
+        <Text dimColor>Report is empty.</Text>
+      </Box>
+    );
+  }
+
+  return (
+    <Box flexDirection="column">
+      <Box marginBottom={1}>
+        <Text bold>snaptailor report preview</Text>
+      </Box>
+      <Markdown>
+        {markdown}
+      </Markdown>
+    </Box>
+  );
+}
