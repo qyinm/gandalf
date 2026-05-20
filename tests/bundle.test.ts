@@ -18,7 +18,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { writeSnapshot, readSnapshot, listSnapshots } from "../src/store.js";
-import { bundleExport, bundleImport, bundleInspect } from "../src/bundle.js";
+import { bundleExport, bundleImport, bundleInspect, bundleVerify } from "../src/bundle.js";
 import { readTar, writeTar } from "../src/tar.js";
 import type { Snapshot, TarEntry } from "../src/types.js";
 
@@ -299,11 +299,10 @@ describe("bundle signatures", () => {
     assert.match(manifest.security.signature, /^[a-f0-9]{64}$/);
   });
 
-  it("rejects tampered signed bundles when the signature key is available", async () => {
+  it("verifies signed bundles and reports tampering", async () => {
     const box = await makeSandbox();
-    const name = "tampered-signed";
+    const name = "verify-signed";
     await writeSnapshot(box.storeDir, sampleSnapshot(name));
-
     const exportResult = await bundleExport({
       snapshotName: name,
       outputPath: bundlePath(box, name),
@@ -313,23 +312,20 @@ describe("bundle signatures", () => {
       signatureKey: "test-secret"
     });
 
+    const valid = await bundleVerify({ bundlePath: exportResult.bundlePath, signatureKey: "test-secret" });
+    assert.equal(valid.valid, true);
+    assert.equal(valid.signature.checked, true);
+
     const { entries } = await readTar(exportResult.bundlePath);
     const evidenceEntry = entries.find((entry) => entry.path === "snapshot/evidence.json");
     assert.ok(evidenceEntry);
     evidenceEntry.content = Buffer.from(evidenceEntry.content.toString("utf-8").replace("gh", "evil"), "utf-8");
-    const tamperedPath = bundlePath(box, "tampered-signed");
+    const tamperedPath = bundlePath(box, "verify-tampered");
     await writeTar(entries, tamperedPath);
 
-    await assert.rejects(
-      () => bundleImport({
-        bundlePath: tamperedPath,
-        storeDir: box.storeDir,
-        projectPath: box.projectPath,
-        homeDir: box.homeDir,
-        signatureKey: "test-secret"
-      }),
-      /Bundle signature verification failed/
-    );
+    const invalid = await bundleVerify({ bundlePath: tamperedPath, signatureKey: "test-secret" });
+    assert.equal(invalid.valid, false);
+    assert.match(invalid.errors.join("\n"), /Bundle signature verification failed/);
   });
 });
 
