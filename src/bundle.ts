@@ -208,6 +208,20 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     );
   }
 
+  // Validate no unsupported restore data is silently dropped from content bundles.
+  if (includeContent) {
+    const unsupportedRestoreItems = snapshot.evidence.filter(
+      (item) => item.captureStatus === "captured" && restorePolicyFor(item.kind) === "not_supported"
+    );
+    if (unsupportedRestoreItems.length > 0) {
+      throw new Error(
+        `Cannot export content bundle: ${unsupportedRestoreItems.length} not_supported evidence item(s) would lose restore data. ` +
+        `First: ${unsupportedRestoreItems[0].sourcePath} (kind: ${unsupportedRestoreItems[0].kind}). ` +
+        `Use --metadata-only or remove unsupported items before exporting a restorable content bundle.`
+      );
+    }
+  }
+
   const warnings: string[] = [];
 
   // Capture source machine info for cross-machine compatibility
