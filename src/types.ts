@@ -359,6 +359,7 @@ export interface BundleManifest {
     redactionPolicy: "metadata-only" | "structured_safe_fields_only";
     signed: boolean;
     signatureAlgorithm?: string;
+    signature?: string;
   };
 }
 
@@ -391,6 +392,8 @@ export interface BundleExportOptions {
   projectPath: string;
   homeDir: string;
   includeContent?: boolean;
+  /** Optional HMAC key. Defaults to SNAPTAILOR_BUNDLE_KEY when present. */
+  signatureKey?: string;
 }
 
 /**
@@ -404,6 +407,8 @@ export interface BundleImportOptions {
   applyContent?: boolean;
   dryRun?: boolean;
   trust?: boolean;
+  /** Optional HMAC key. Defaults to SNAPTAILOR_BUNDLE_KEY when present. */
+  signatureKey?: string;
 }
 
 /**
