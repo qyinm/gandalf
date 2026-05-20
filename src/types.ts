@@ -446,12 +446,14 @@ export interface McpBinaryInfo {
   command: string;
   args?: string[];
   url?: string;
+  binaryKind?: "package_runner" | "source_local_path" | "path_binary" | "command" | "remote_url";
 }
 
 export interface McpBinaryReport {
   evidenceId: string;
   command: string;
   availableOnTarget: boolean;
+  binaryKind?: "package_runner" | "source_local_path" | "path_binary" | "command" | "remote_url";
   resolvedPath?: string;
   warning?: string;
 }

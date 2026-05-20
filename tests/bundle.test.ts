@@ -527,29 +527,37 @@ describe("bundle import -- dry-run", () => {
     assert.ok(result.machineDiff?.remappedPaths.some((mapping) => mapping.includes(`${expectedSourcePrefix}/.claude/settings.json`)));
   });
 
-  it("normalizes source home prefixes to the source OS when reporting remapped paths", async () => {
+  it("classifies MCP package runners and source-local binary mismatches", async () => {
     const box = await makeSandbox();
-    const entries = makeMinimalBundle(box, "source-home-normalization", [
-      {
-        path: "content/{home}/.codex/config.toml",
-        content: Buffer.from("model = 'gpt-5'", "utf-8"),
-        mode: 0o644,
-        mtime: 1000000,
-        type: "file"
-      }
-    ]);
+    const entries = makeMinimalBundle(box, "mcp-binaries", []);
     const manifestEntry = entries.find((entry) => entry.path === ".stailor/manifest.json");
     assert.ok(manifestEntry);
     const manifest = JSON.parse(manifestEntry.content.toString("utf-8"));
     manifest.sourceMachine = {
-      hostname: "linux-box",
-      platform: "linux",
-      homeDir: "/Users/alice",
-      projectPath: "/Users/alice/project"
+      hostname: "source-host",
+      platform: "darwin",
+      homeDir: "/Users/alice"
     };
     manifestEntry.content = Buffer.from(JSON.stringify(manifest) + "\n", "utf-8");
-
-    const bundleFilePath = bundlePath(box, "source-home-normalization");
+    entries.push({
+      path: "snapshot/evidence.json",
+      content: Buffer.from(JSON.stringify([
+        {
+          ...sampleSnapshot("mcp-binaries").evidence[0],
+          id: "mcp-npx",
+          value: { command: "npx", args: ["-y", "@modelcontextprotocol/server-github"] }
+        },
+        {
+          ...sampleSnapshot("mcp-binaries").evidence[0],
+          id: "mcp-local",
+          value: { command: "/Users/alice/.local/bin/private-mcp" }
+        }
+      ]) + "\n", "utf-8"),
+      mode: 0o644,
+      mtime: 1000000,
+      type: "file"
+    });
+    const bundleFilePath = bundlePath(box, "mcp-binaries");
     await writeTar(entries, bundleFilePath);
 
     const result = await bundleImport({
@@ -560,8 +568,12 @@ describe("bundle import -- dry-run", () => {
       dryRun: true
     });
 
-    assert.ok(result.machineDiff?.remappedPaths.some((mapping) =>
-      mapping.startsWith("/home/alice/.codex/config.toml →")
-    ));
+    const npxReport = result.machineDiff?.mcpBinaryReport.find((report) => report.evidenceId === "mcp-npx");
+    const localReport = result.machineDiff?.mcpBinaryReport.find((report) => report.evidenceId === "mcp-local");
+    assert.equal(npxReport?.binaryKind, "package_runner");
+    assert.match(npxReport?.warning ?? "", /Package runner npx/);
+    assert.equal(localReport?.binaryKind, "source_local_path");
+    assert.equal(localReport?.availableOnTarget, false);
+    assert.match(localReport?.warning ?? "", /source machine local binary path/);
   });
 });
