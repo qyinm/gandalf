@@ -16,7 +16,7 @@
  */
 
 import { createHash, createHmac } from "node:crypto";
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { readFile, stat, writeFile, mkdir } from "node:fs/promises";
 import { homedir, platform, hostname } from "node:os";
 import path from "node:path";
@@ -277,30 +277,21 @@ function checkMcpBinaryAvailability(sourceBinaries: McpBinaryInfo[]): McpBinaryR
       continue;
     }
 
-    // "npx" and "uvx" are package runners — check if they exist
-    try {
-      const resolved = execSync(`which "${bin.command}" 2>/dev/null`, { encoding: "utf-8", timeout: 2000 }).trim();
-      reports.push({
-        evidenceId: bin.evidenceId,
-        command: bin.command,
-        availableOnTarget: resolved.length > 0,
-        binaryKind: bin.binaryKind,
-        resolvedPath: resolved || undefined,
-        warning: bin.binaryKind === "package_runner"
+    // "npx" and "uvx" are package runners — check if they exist without invoking a shell.
+    const which = spawnSync("which", [bin.command], { encoding: "utf-8", timeout: 2000 });
+    const resolved = which.status === 0 ? (which.stdout ?? "").trim() : "";
+    reports.push({
+      evidenceId: bin.evidenceId,
+      command: bin.command,
+      availableOnTarget: resolved.length > 0,
+      binaryKind: bin.binaryKind,
+      resolvedPath: resolved || undefined,
+      warning: bin.binaryKind === "package_runner"
+        ? (resolved.length > 0
           ? `Package runner ${bin.command} is available at ${resolved}; package arguments may still differ on this machine.`
-          : (resolved.length === 0 ? `Binary "${bin.command}" not found on this machine` : undefined)
-      });
-    } catch {
-      reports.push({
-        evidenceId: bin.evidenceId,
-        command: bin.command,
-        availableOnTarget: false,
-        binaryKind: bin.binaryKind,
-        warning: bin.binaryKind === "package_runner"
-          ? `Package runner ${bin.command} not found on this machine; MCP package cannot be launched.`
-          : `Binary "${bin.command}" not found on this machine`
-      });
-    }
+          : `Package runner ${bin.command} not found on this machine; MCP package cannot be launched.`)
+        : (resolved.length === 0 ? `Binary "${bin.command}" not found on this machine` : undefined)
+    });
   }
 
   return reports;
@@ -329,7 +320,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
   const signatureKey = resolveSignatureKey(options.signatureKey);
 
   // Read snapshot from store
-  const snapshot = await readSnapshot(storeDir, snapshotName);
+  const snapshot = await readSnapshot(storeDir, snapshotName, options.agent);
 
   // Validate no unsafe-to-export items
   const unsafeItems = snapshot.evidence.filter((item) => item.captureStatus === "unsafe_to_export");
@@ -580,7 +571,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
  *   - OS differences are noted
  */
 export async function bundleImport(options: BundleImportOptions): Promise<BundleImportResult> {
-  const { bundlePath, storeDir, projectPath, homeDir, applyContent, dryRun, quarantine } = options;
+  const { bundlePath, storeDir, projectPath, homeDir, applyContent, dryRun, quarantine, agent } = options;
   const signatureKey = resolveSignatureKey(options.signatureKey);
 
   // Read bundle
@@ -851,7 +842,7 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     provenance: importedProvenance
   };
 
-  await writeSnapshot(storeDir, snapshot);
+  await writeSnapshot(storeDir, snapshot, agent);
 
   // Apply or quarantine content files with {home} resolution
   let contentApplied = false;

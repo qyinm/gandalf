@@ -1,17 +1,19 @@
 # snaptailor
 
-Reproducible AI coding agent environment — like a Docker image for your MCP servers, skills, and agent configs.
+Portable diagnostics and experimental restore tooling for AI coding agent environments — MCP servers, skills, permissions, hooks, and agent configs.
 
-snaptailor captures your entire agent setup (Claude Code, Codex, Cursor, OpenCode, Pi Agent) into a single `.stailor` bundle. Import it on any machine and get the exact same environment — MCP servers, skills, permissions, hooks, and all.
+snaptailor captures your agent setup (Claude Code, Codex, Cursor, OpenCode, Pi Agent) into snapshots and optional `.stailor` bundles. The safe path is inspect/verify/dry-run first; applying bundled content is experimental and project-relative only.
 
 ```bash
 npm install -g @qxinm/snaptailor
 
-# Machine A: export your setup
-snaptailor bundle export --name my-setup --out my-setup.stailor --include-content --project .
+# Machine A: export your setup (content included by default; use --metadata-only to opt out)
+snaptailor bundle export --name my-setup --out my-setup.stailor --project .
 
-# Machine B: restore it
-snaptailor bundle import my-setup.stailor --apply-content --project .
+# Machine B: verify and preview it safely
+snaptailor bundle verify my-setup.stailor
+snaptailor bundle import my-setup.stailor --dry-run --project .
+snaptailor bundle import my-setup.stailor --apply-content --quarantine --experimental --project .
 ```
 
 snaptailor also includes a full read-only diagnosis pipeline — scan, diff, audit, provenance — so you can see what changed and why before you commit to a restore.
@@ -26,10 +28,11 @@ By default snaptailor:
 - does **not** execute MCP commands, hooks, scripts, plugins, or agent tools
 - does **not** use the network
 - writes **only** to `~/.snaptailor`, unless `--out` is explicit
-- stores **metadata-first** snapshots (content requires explicit `--include-content`)
+- exports bundle content by default; use `--metadata-only` to opt out
 - omits raw secrets and raw `.env` values
 - does **not** follow symlinks
-- restores **only** with explicit `--apply` flag; rollback available with `--rollback`
+- snapshot restore requires explicit `--apply`; rollback is available with `restore --rollback`
+- bundle content apply requires `--apply-content` plus `--experimental`, is project-relative only, and should be previewed with `--dry-run` or `--quarantine` first
 
 ---
 
@@ -38,15 +41,18 @@ By default snaptailor:
 ### Reproducibility (bundle + restore)
 
 ```bash
-# Export current environment to a portable .stailor bundle
-snaptailor bundle export --name <snapshot> --out <file.stailor> --include-content --project .
+# Export current environment to a portable .stailor bundle (content included by default)
+snaptailor bundle export --name <snapshot> --out <file.stailor> --project .
+snaptailor bundle export --name <snapshot> --out <file.stailor> --metadata-only --project .
 
-# Import and restore on another machine
-snaptailor bundle import <file.stailor> --apply-content --project .
-
-# Safe preview
+# Safe preview and verification before importing
+snaptailor bundle verify <file.stailor>
 snaptailor bundle import <file.stailor> --dry-run --project .
 snaptailor bundle inspect <file.stailor>
+
+# Experimental content inspection/apply on another machine
+snaptailor bundle import <file.stailor> --apply-content --quarantine --experimental --project .
+snaptailor bundle import <file.stailor> --apply-content --experimental --project .
 
 # Snapshot-based restore with rollback safety
 snaptailor restore --snapshot <name> --dry-run --project .
@@ -55,7 +61,7 @@ snaptailor restore --snapshot <name> --apply --fail-fast --project .
 snaptailor restore --snapshot <name> --apply --rollback --project .
 ```
 
-Destructive operations (`--apply`, `--apply-content`, `--include-content`) require either `--experimental` or `SNAPTAILOR_EXPERIMENTAL=1`.
+Destructive operations (`restore --apply`, `bundle import --apply-content`) require either `--experimental` or `SNAPTAILOR_EXPERIMENTAL=1`. Bundle export includes supported file content by default; pass `--metadata-only` to export metadata only. Bundle `--apply-content` refuses home-relative content paths and known sensitive prefixes; use `--quarantine` to inspect content without writing target files.
 
 ### Diagnosis (scan + diff + audit)
 
@@ -124,11 +130,11 @@ Scanner plugin interface: add new agents by implementing `ScannerPlugin`.
 | Read-only scan, diff, audit, provenance, report | ✅ v0.1 (stable) |
 | Bundle export/import (.stailor format) | ✅ v0.2 (experimental) |
 | Restore engine (dry-run, apply, rollback) | ✅ v0.2 (experimental) |
-| Restore policy matrix (per-kind content rules) | 🚧 v0.3 |
-| Content bundles as default | 🚧 v0.3 |
-| Cross-machine path remapping | 📋 v0.3 |
-| Signed bundle verification | 📋 v0.3 |
-| Windsurf / Copilot scanners | 📋 v0.3+ |
+| Restore policy matrix (per-kind content rules) | ✅ v0.2.1 |
+| Content bundles as default | ✅ v0.2.1 |
+| Cross-machine path remapping | ✅ v0.2.1 |
+| Signed bundle verification | ✅ v0.2.1 |
+| Windsurf / Copilot scanners | 📋 future |
 
 ---
 
