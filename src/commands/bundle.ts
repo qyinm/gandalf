@@ -127,6 +127,7 @@ export const bundleCommand: Command = {
         if (result.machineDiff) {
           const md = result.machineDiff;
           process.stdout.write(`Bundle source: ${md.sourceHostname} (${md.sourcePlatform})\n`);
+          process.stdout.write(`Target machine: ${md.targetHostname} (${md.targetPlatform})\n`);
           process.stdout.write(`Source home: ${md.sourceHome}\n`);
           process.stdout.write(`Target home: ${md.targetHome}\n`);
           if (md.remappedPaths.length > 0) {
@@ -143,6 +144,12 @@ export const bundleCommand: Command = {
             process.stdout.write(`MCP binaries: ${md.mcpBinaryReport.length} total, ${md.mcpBinaryReport.length - unavailable.length} available, ${unavailable.length} missing\n`);
             for (const b of unavailable) {
               process.stdout.write(`  MISSING: ${b.command}\n`);
+            }
+          }
+          if (md.osDifferences.length > 0) {
+            process.stdout.write(`OS differences:\n`);
+            for (const difference of md.osDifferences) {
+              process.stdout.write(`  - ${difference}\n`);
             }
           }
           if (md.sourcePlatform !== md.targetPlatform) {

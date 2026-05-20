@@ -522,6 +522,7 @@ describe("bundle import -- dry-run", () => {
     });
 
     assert.equal(result.machineDiff?.crossOS, true);
+    assert.ok(result.machineDiff?.targetHostname);
     assert.ok(result.machineDiff?.osDifferences.some((difference) => difference.includes("cross-OS restore")));
     const expectedSourcePrefix = sourcePlatform === "linux" ? "/home/source" : "/Users/source";
     assert.ok(result.machineDiff?.remappedPaths.some((mapping) => mapping.includes(`${expectedSourcePrefix}/.claude/settings.json`)));

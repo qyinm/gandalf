@@ -428,7 +428,10 @@ export interface MachineDiff {
   targetHome: string;
   sourcePlatform: string;
   targetPlatform: string;
+  /** Hostname of the source machine that created the bundle. */
   sourceHostname: string;
+  /** Hostname of the target machine running import. */
+  targetHostname: string;
   /** True when source and target OS differ (e.g., darwin → linux). */
   crossOS: boolean;
   /** OS-specific differences between source and target. */

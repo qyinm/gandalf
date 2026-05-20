@@ -658,6 +658,7 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     sourcePlatform: sourceMachine?.platform ?? "unknown",
     targetPlatform,
     sourceHostname: sourceMachine?.hostname ?? "unknown",
+    targetHostname,
     crossOS,
     osDifferences,
     remappedPaths,
