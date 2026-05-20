@@ -185,6 +185,8 @@ export interface RestoreOptions {
   homeDir: string;
   storeDir: string;
   dryRun: boolean;
+  /** Optional agent scope for snapshot lookup. */
+  agent?: AgentId;
 }
 
 // ── Restore apply types (v0.2+ Phase-1) ──────────────────────────
@@ -394,6 +396,8 @@ export interface BundleExportOptions {
   includeContent?: boolean;
   /** Optional HMAC key. Defaults to SNAPTAILOR_BUNDLE_KEY when present. */
   signatureKey?: string;
+  /** Optional agent scope for snapshot lookup. */
+  agent?: AgentId;
 }
 
 /**
@@ -411,6 +415,8 @@ export interface BundleImportOptions {
   trust?: boolean;
   /** Optional HMAC key. Defaults to SNAPTAILOR_BUNDLE_KEY when present. */
   signatureKey?: string;
+  /** Optional agent scope for snapshot storage on import. */
+  agent?: AgentId;
 }
 
 /**

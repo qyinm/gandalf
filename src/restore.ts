@@ -206,7 +206,7 @@ export function parseDryRunOutput(input: string): ParseDryRunResult {
  * Used for both `--dry-run` (report generation) and `--apply` (execution input).
  */
 export async function buildRestorePlan(options: RestoreOptions): Promise<RestorePlan> {
-  const snapshot = await readSnapshot(options.storeDir, options.sourceSnapshot);
+  const snapshot = await readSnapshot(options.storeDir, options.sourceSnapshot, options.agent);
   const scan = await scanProject({
     projectPath: options.projectPath,
     homeDir: options.homeDir,

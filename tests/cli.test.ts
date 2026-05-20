@@ -18,19 +18,42 @@ function runCli(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}) {
 }
 
 describe("snaptailor CLI scaffold", () => {
-  it("prints help with the v0.1 read-only commands", () => {
+  it("prints help with current diagnosis, restore, and bundle safety commands", () => {
     const result = runCli(["--help"], process.cwd());
 
     assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Diagnosis commands:/);
     assert.match(result.stdout, /snaptailor scan --project/);
     assert.match(result.stdout, /snapshot create --name baseline --metadata-only/);
     assert.match(result.stdout, /diff baseline current --project/);
     assert.match(result.stdout, /audit current --project/);
     assert.match(result.stdout, /provenance current --project/);
     assert.match(result.stdout, /report current --project/);
+    assert.match(result.stdout, /snaptailor bundle verify <file\.stailor>/);
+    assert.match(result.stdout, /--apply-content --quarantine --experimental/);
+    assert.doesNotMatch(result.stdout, /v0\.1|dry-run only/);
   });
 
-  it("runs the read-only v0.1 workflow from scan to report", async () => {
+  it("prints current snapshot metadata-only guidance without stale version labels", async () => {
+    const root = await makeTempRoot();
+    const project = join(root, "project");
+    const home = join(root, "home");
+    const store = join(root, "store");
+    await mkdir(project, { recursive: true });
+    await mkdir(home, { recursive: true });
+
+    const result = runCli(["snapshot", "create", "--name", "baseline", "--project", project], project, {
+      HOME: home,
+      SNAPTAILOR_STORE: store
+    });
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Snapshots are metadata-only/);
+    assert.match(result.stderr, /Add `--metadata-only`/);
+    assert.doesNotMatch(result.stderr, /v0\.1/);
+  });
+
+  it("runs the read-only workflow from scan to report", async () => {
     const root = await makeTempRoot();
     const project = join(root, "project");
     const home = join(root, "home");

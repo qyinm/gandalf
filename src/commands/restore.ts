@@ -80,7 +80,7 @@ export const restoreCommand: Command = {
     // ── Validate snapshot exists ────────────────────────────
     await ensureStore(options.storeDir);
 
-    const exists = await snapshotExists(options.storeDir, snapshotName);
+    const exists = await snapshotExists(options.storeDir, snapshotName, options.agent);
     if (!exists) {
       process.stderr.write(
         formatSnapError({
@@ -100,7 +100,8 @@ export const restoreCommand: Command = {
         projectPath: options.projectPath,
         homeDir: options.homeDir,
         storeDir: options.storeDir,
-        dryRun: true
+        dryRun: true,
+        agent: options.agent
       });
 
       process.stdout.write(json(plan));
@@ -112,7 +113,7 @@ export const restoreCommand: Command = {
       process.stderr.write(
         formatSnapError({
           code: "SNAPTAILOR_EXPERIMENTAL_REQUIRED",
-          problem: "Restore --apply requires --experimental flag in v0.1.",
+          problem: "Restore --apply requires --experimental.",
           cause: "--apply was used without SNAPTAILOR_EXPERIMENTAL=1 or --experimental.",
           fix: "Set SNAPTAILOR_EXPERIMENTAL=1 or pass --experimental to enable experimental features."
         })
@@ -126,7 +127,8 @@ export const restoreCommand: Command = {
       projectPath: options.projectPath,
       homeDir: options.homeDir,
       storeDir: options.storeDir,
-      dryRun: true
+      dryRun: true,
+      agent: options.agent
     });
 
     // Serialize the plan and parse it into executable RestoreItems

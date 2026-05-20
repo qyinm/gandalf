@@ -2,9 +2,10 @@
  * Command-pattern implementation of the `bundle` CLI command.
  *
  * Subcommands:
- *   bundle export --name <snapshot> --out <file.stailor> [--include-content] [--experimental] [--json]
- *   bundle import <file.stailor> [--apply-content] [--dry-run] [--experimental] [--trust] [--json]
+ *   bundle export --name <snapshot> --out <file.stailor> [--metadata-only] [--json]
+ *   bundle import <file.stailor> [--apply-content] [--dry-run] [--quarantine] [--experimental] [--trust] [--json]
  *   bundle inspect <file.stailor> [--json]
+ *   bundle verify <file.stailor> [--json]
  */
 
 import path from "node:path";
@@ -20,10 +21,11 @@ import type { Command, CommandContext } from "./index.js";
 export const bundleCommand: Command = {
   name: "bundle",
   description:
-    "Export, import, and inspect .stailor bundle archives. " +
-    "Usage: snaptailor bundle export --name <snapshot> --out <file> [--include-content] [--experimental], " +
-    "snaptailor bundle import <file> [--apply-content] [--dry-run] [--experimental] [--trust], " +
-    "snaptailor bundle inspect <file>",
+    "Export, import, inspect, and verify .stailor bundle archives. " +
+    "Usage: snaptailor bundle export --name <snapshot> --out <file> [--metadata-only], " +
+    "snaptailor bundle import <file> [--dry-run] [--apply-content] [--quarantine] [--experimental] [--trust], " +
+    "snaptailor bundle inspect <file>, " +
+    "snaptailor bundle verify <file>",
 
   async execute(ctx: CommandContext): Promise<number> {
     const { args } = ctx;
@@ -60,7 +62,8 @@ export const bundleCommand: Command = {
         storeDir: options.storeDir,
         projectPath: options.projectPath,
         homeDir: options.homeDir,
-        includeContent
+        includeContent,
+        agent: options.agent
       });
 
       if (hasFlag(args, "--json")) {
@@ -102,7 +105,7 @@ export const bundleCommand: Command = {
           process.stderr.write(
             formatSnapError({
               code: "SNAPTAILOR_EXPERIMENTAL_REQUIRED",
-              problem: "Bundle import --apply-content requires --experimental flag in v0.1.",
+              problem: "Bundle import --apply-content requires --experimental.",
               cause: "--apply-content was used without SNAPTAILOR_EXPERIMENTAL=1 or --experimental.",
               fix: "Set SNAPTAILOR_EXPERIMENTAL=1 or pass --experimental to enable experimental features."
             })
@@ -119,7 +122,8 @@ export const bundleCommand: Command = {
         applyContent,
         dryRun: isDryRun,
         quarantine: hasFlag(args, "--quarantine"),
-        trust: hasFlag(args, "--trust")
+        trust: hasFlag(args, "--trust"),
+        agent: options.agent
       });
 
       if (hasFlag(args, "--json")) {

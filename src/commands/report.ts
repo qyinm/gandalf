@@ -64,7 +64,8 @@ async function snapshotByRef(ref: string, args: string[]): Promise<Snapshot> {
   if (ref === "current") {
     return (await currentState(args)).snapshot;
   }
-  return await readSnapshot(runtimeOptions(args).storeDir, ref);
+  const opts = runtimeOptions(args);
+  return await readSnapshot(opts.storeDir, ref, opts.agent);
 }
 
 function trustForReport(scan: ScanResult): { readOnly: boolean; network: "disabled"; commandsExecuted: number } {

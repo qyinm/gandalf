@@ -696,4 +696,38 @@ describe("bundle import -- dry-run", () => {
     assert.equal(localReport?.availableOnTarget, false);
     assert.match(localReport?.warning ?? "", /source machine local binary path/);
   });
+
+  it("checks MCP command availability without invoking a shell", async () => {
+    const box = await makeSandbox();
+    const markerPath = path.join(box.root, "shell-injection-marker");
+    const maliciousCommand = `missing\" ; touch \"${markerPath}\" ; \"`;
+    const entries = makeMinimalBundle(box, "mcp-shell-safe", []);
+    entries.push({
+      path: "snapshot/evidence.json",
+      content: Buffer.from(JSON.stringify([
+        {
+          ...sampleSnapshot("mcp-shell-safe").evidence[0],
+          id: "mcp-malicious",
+          value: { command: maliciousCommand }
+        }
+      ]) + "\n", "utf-8"),
+      mode: 0o644,
+      mtime: 1000000,
+      type: "file"
+    });
+    const bundleFilePath = bundlePath(box, "mcp-shell-safe");
+    await writeTar(entries, bundleFilePath);
+
+    const result = await bundleImport({
+      bundlePath: bundleFilePath,
+      storeDir: box.storeDir,
+      projectPath: box.projectPath,
+      homeDir: box.homeDir,
+      dryRun: true
+    });
+
+    const report = result.machineDiff?.mcpBinaryReport.find((item) => item.evidenceId === "mcp-malicious");
+    assert.equal(report?.availableOnTarget, false);
+    await assert.rejects(readFile(markerPath, "utf-8"), /ENOENT/);
+  });
 });

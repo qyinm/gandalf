@@ -219,6 +219,8 @@ describe("analysis modules", () => {
     assert.match(markdown, /Codex\s+project state found/);
     assert.match(markdown, /## High-signal findings/);
     assert.match(markdown, /UNSUPPORTED_AGENT_STATE/);
+    assert.doesNotMatch(markdown, /snaptailor v0\.1/);
+    assert.match(markdown, /cannot yet be interpreted by snaptailor/);
     assert.match(markdown, /## Blind spots/);
     assert.match(markdown, /Remote MCP server behavior cannot be captured/);
     assert.match(markdown, /## Reproducibility gaps/);

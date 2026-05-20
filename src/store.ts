@@ -12,7 +12,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import path from "node:path";
-import type { AuditFinding, DiscoveredItem, Snapshot } from "./types.js";
+import type { AgentId, AuditFinding, DiscoveredItem, Snapshot } from "./types.js";
 
 const SNAPSHOT_FILES = {
   manifest: "manifest.json",
@@ -33,6 +33,21 @@ type StoreSnapshot = Snapshot & {
 
 export function defaultStoreDir(homeDir: string): string {
   return path.join(homeDir, ".snaptailor");
+}
+
+/**
+ * Return the per-agent subdirectory within the store.
+ * When agent is omitted, returns the store root (backward compatible).
+ */
+export function agentStoreDir(storeDir: string, agent?: AgentId): string {
+  return agent ? path.join(storeDir, agent) : storeDir;
+}
+
+/**
+ * Return the full snapshot directory for a given agent-scoped snapshot.
+ */
+function snapshotDir(storeDir: string, name: string, agent?: AgentId): string {
+  return path.join(agentStoreDir(storeDir, agent), name);
 }
 
 export async function ensureStore(storeDir: string): Promise<AuditFinding[]> {
@@ -60,35 +75,74 @@ export async function ensureStore(storeDir: string): Promise<AuditFinding[]> {
   ];
 }
 
-export async function writeSnapshot(storeDir: string, snapshot: StoreSnapshot): Promise<void> {
+/**
+ * List the agent subdirectories in the store.
+ * Returns agent IDs that have at least one snapshot.
+ */
+export async function listAgents(storeDir: string): Promise<AgentId[]> {
+  if (!(await pathExists(storeDir))) {
+    return [];
+  }
+
+  const entries = await readdir(storeDir, { withFileTypes: true });
+  const agents: AgentId[] = [];
+  for (const entry of entries) {
+    if (entry.isDirectory() && isSafeAgentName(entry.name)) {
+      // Verify the directory actually contains snapshots (has subdirectories)
+      const sub = await readdir(path.join(storeDir, entry.name), { withFileTypes: true });
+      const hasSnapshots = sub.some((s) => s.isDirectory());
+      if (hasSnapshots) {
+        agents.push(entry.name as AgentId);
+      }
+    }
+  }
+  return agents.sort();
+}
+
+function isSafeAgentName(name: string): boolean {
+  return /^[a-z][a-z0-9_-]*$/.test(name) && !name.includes("..") && !name.includes("/");
+}
+
+export async function writeSnapshot(
+  storeDir: string,
+  snapshot: StoreSnapshot,
+  agent?: AgentId
+): Promise<void> {
   const name = validateSnapshotName(snapshot.manifest.name);
-  const snapshotDir = path.join(storeDir, name);
+  const dir = snapshotDir(storeDir, name, agent);
 
   await ensureStore(storeDir);
-  await mkdir(snapshotDir, { recursive: true, mode: 0o700 });
-  await chmod(snapshotDir, 0o700);
+  if (agent) {
+    await ensureStore(agentStoreDir(storeDir, agent));
+  }
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  await chmod(dir, 0o700);
 
   await Promise.all([
-    writeJsonAtomic(path.join(snapshotDir, SNAPSHOT_FILES.manifest), snapshot.manifest),
-    writeJsonAtomic(path.join(snapshotDir, SNAPSHOT_FILES.evidence), snapshot.evidence),
-    writeJsonAtomic(path.join(snapshotDir, SNAPSHOT_FILES.graph), snapshot.graph),
-    writeJsonAtomic(path.join(snapshotDir, SNAPSHOT_FILES.auditFindings), snapshot.auditFindings),
-    writeJsonAtomic(path.join(snapshotDir, SNAPSHOT_FILES.provenance), snapshot.provenance),
-    writeJsonAtomic(path.join(snapshotDir, SNAPSHOT_FILES.checksums), snapshot.checksums ?? checksumsFromEvidence(snapshot.evidence)),
-    writeJsonAtomic(path.join(snapshotDir, SNAPSHOT_FILES.redactions), snapshot.redactions ?? [])
+    writeJsonAtomic(path.join(dir, SNAPSHOT_FILES.manifest), snapshot.manifest),
+    writeJsonAtomic(path.join(dir, SNAPSHOT_FILES.evidence), snapshot.evidence),
+    writeJsonAtomic(path.join(dir, SNAPSHOT_FILES.graph), snapshot.graph),
+    writeJsonAtomic(path.join(dir, SNAPSHOT_FILES.auditFindings), snapshot.auditFindings),
+    writeJsonAtomic(path.join(dir, SNAPSHOT_FILES.provenance), snapshot.provenance),
+    writeJsonAtomic(path.join(dir, SNAPSHOT_FILES.checksums), snapshot.checksums ?? checksumsFromEvidence(snapshot.evidence)),
+    writeJsonAtomic(path.join(dir, SNAPSHOT_FILES.redactions), snapshot.redactions ?? [])
   ]);
 }
 
-export async function readSnapshot(storeDir: string, name: string): Promise<Snapshot> {
+export async function readSnapshot(
+  storeDir: string,
+  name: string,
+  agent?: AgentId
+): Promise<Snapshot> {
   const safeName = validateSnapshotName(name);
-  const snapshotDir = path.join(storeDir, safeName);
+  const dir = snapshotDir(storeDir, safeName, agent);
 
   const [manifest, evidence, graph, auditFindings, provenance] = await Promise.all([
-    readJson<Snapshot["manifest"]>(path.join(snapshotDir, SNAPSHOT_FILES.manifest)),
-    readJson<Snapshot["evidence"]>(path.join(snapshotDir, SNAPSHOT_FILES.evidence)),
-    readJson<Snapshot["graph"]>(path.join(snapshotDir, SNAPSHOT_FILES.graph)),
-    readJson<Snapshot["auditFindings"]>(path.join(snapshotDir, SNAPSHOT_FILES.auditFindings)),
-    readJson<Snapshot["provenance"]>(path.join(snapshotDir, SNAPSHOT_FILES.provenance))
+    readJson<Snapshot["manifest"]>(path.join(dir, SNAPSHOT_FILES.manifest)),
+    readJson<Snapshot["evidence"]>(path.join(dir, SNAPSHOT_FILES.evidence)),
+    readJson<Snapshot["graph"]>(path.join(dir, SNAPSHOT_FILES.graph)),
+    readJson<Snapshot["auditFindings"]>(path.join(dir, SNAPSHOT_FILES.auditFindings)),
+    readJson<Snapshot["provenance"]>(path.join(dir, SNAPSHOT_FILES.provenance))
   ]);
 
   return {
@@ -100,23 +154,52 @@ export async function readSnapshot(storeDir: string, name: string): Promise<Snap
   };
 }
 
-export async function listSnapshots(storeDir: string): Promise<string[]> {
-  if (!(await pathExists(storeDir))) {
+export async function listSnapshots(
+  storeDir: string,
+  agent?: AgentId
+): Promise<string[]> {
+  const baseDir = agentStoreDir(storeDir, agent);
+
+  if (!(await pathExists(baseDir))) {
     return [];
   }
 
-  const entries = await readdir(storeDir, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isDirectory() && isSafeSnapshotName(entry.name))
-    .map((entry) => entry.name)
-    .sort();
+  const entries = await readdir(baseDir, { withFileTypes: true });
+  const names: string[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !isSafeSnapshotName(entry.name)) continue;
+
+    if (agent) {
+      // Agent-scoped: every subdirectory is a snapshot
+      names.push(entry.name);
+    } else {
+      // Flat listing: only include directories that have a manifest.json
+      // (not agent directories, which contain subdirectories)
+      try {
+        await access(
+          path.join(baseDir, entry.name, SNAPSHOT_FILES.manifest),
+          constants.R_OK
+        );
+        names.push(entry.name);
+      } catch {
+        // No manifest.json — this is an agent directory, skip it
+      }
+    }
+  }
+
+  return names.sort();
 }
 
-export async function snapshotExists(storeDir: string, name: string): Promise<boolean> {
+export async function snapshotExists(
+  storeDir: string,
+  name: string,
+  agent?: AgentId
+): Promise<boolean> {
   const safeName = validateSnapshotName(name);
 
   try {
-    await access(path.join(storeDir, safeName, SNAPSHOT_FILES.manifest), constants.R_OK);
+    await access(path.join(snapshotDir(storeDir, safeName, agent), SNAPSHOT_FILES.manifest), constants.R_OK);
     return true;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
