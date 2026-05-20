@@ -14,6 +14,7 @@ import { bundleExport, bundleImport, bundleInspect, bundleVerify } from "../bund
 import { hasFlag, json, runtimeOptions, valueAfter } from "../cli-shared.js";
 import { formatSnapError } from "../errors.js";
 import { ensureStore } from "../store.js";
+import { detectTuiMode } from "../tui/index.js";
 import type { Command, CommandContext } from "./index.js";
 
 // ── Command definition ─────────────────────────────────────────
@@ -34,6 +35,11 @@ export const bundleCommand: Command = {
 
     /* ---------- bundle export ---------- */
     if (sub === "export") {
+      // --tui: interactive wizard
+      if (detectTuiMode(args).mode !== "none") {
+        const { bundleExportWizard } = await import("../tui/wizards/bundle-export.js");
+        return bundleExportWizard(options);
+      }
       const snapshotName = valueAfter(args, "--name");
       const outputPath = valueAfter(args, "--out");
 
@@ -82,6 +88,11 @@ export const bundleCommand: Command = {
 
     /* ---------- bundle import ---------- */
     if (sub === "import") {
+      // --tui: interactive wizard
+      if (detectTuiMode(args).mode !== "none") {
+        const { bundleImportWizard } = await import("../tui/wizards/bundle-import.js");
+        return bundleImportWizard(options);
+      }
       const bundlePath = args[2];
       if (!bundlePath) {
         process.stderr.write(

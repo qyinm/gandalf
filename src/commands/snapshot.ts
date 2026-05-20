@@ -20,7 +20,9 @@ import {
 } from "../store.js";
 import type { AuditFinding, Snapshot, SnapshotManifest } from "../types.js";
 import type { ScanResult } from "../scan.js";
+import React from "react";
 import { hasFlag, json, runtimeOptions, valueAfter } from "../cli-shared.js";
+import { isClackMode, detectTuiMode, isInkMode, renderComponent } from "../tui/index.js";
 import type { Command, CommandContext } from "./index.js";
 
 /* ------------------------------------------------------------------ */
@@ -78,6 +80,12 @@ export const snapshotCommand: Command = {
 
     /* ---------- snapshot create ---------- */
     if (sub === "create") {
+      // --tui: interactive wizard
+      const tuiOpts = detectTuiMode(args);
+      if (tuiOpts.mode !== "none") {
+        const { snapshotCreateWizard } = await import("../tui/wizards/snapshot-create.js");
+        return snapshotCreateWizard(options);
+      }
       const name = valueAfter(args, "--name");
       if (!name) {
         process.stderr.write(
@@ -113,6 +121,12 @@ export const snapshotCommand: Command = {
     /* ---------- snapshot list ---------- */
     if (sub === "list") {
       const names = await listSnapshots(options.storeDir, options.agent);
+      if (isInkMode(args)) {
+        const { default: SnapshotList } = await import("../tui/components/SnapshotList.js");
+        return renderComponent(
+          () => React.createElement(SnapshotList, { names })
+        );
+      }
       process.stdout.write(names.length === 0
         ? "No snapshots.\n"
         : `${names.join("\n")}\n`);
