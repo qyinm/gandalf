@@ -25,7 +25,7 @@ Priority order within each section.
   - Resolve `{home}` to `$HOME` on restore
 - [ ] **P1** MCP binary path detection and mismatch warning (`npx`, `uvx`, local bins).
 - [ ] **P1** Restore dry-run with machine-specific diff report.
-- [ ] **P2** OS-aware path normalization (macOS `/Users/` ↔ Linux `/home/`).
+- [x] **P2** OS-aware path normalization (macOS `/Users/` ↔ Linux `/home/`).
 - [ ] **P2** Cross-machine dogfood: export on macOS, import on Linux.
 
 ## v0.3: Bundle Security
