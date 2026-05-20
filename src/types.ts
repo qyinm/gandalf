@@ -486,6 +486,32 @@ export interface BundleInspectResult {
   sourceMachine?: SourceMachine;
 }
 
+export interface BundleVerifyOptions {
+  bundlePath: string;
+  /** Optional HMAC key. Defaults to SNAPTAILOR_BUNDLE_KEY when present. */
+  signatureKey?: string;
+}
+
+export interface BundleVerifyResult {
+  bundlePath: string;
+  valid: boolean;
+  formatVersion?: number;
+  snapshotName?: string;
+  checksums: {
+    checked: boolean;
+    ok: boolean;
+    entriesChecked: number;
+  };
+  signature: {
+    signed: boolean;
+    checked: boolean;
+    ok: boolean;
+    algorithm?: string;
+  };
+  warnings: string[];
+  errors: string[];
+}
+
 // ── Tar types ───────────────────────────────────────────────────
 
 /**
