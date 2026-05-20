@@ -211,6 +211,45 @@ describe("bundle export/import roundtrip", () => {
   });
 });
 
+// -- Export policy validation -------------------------------------
+
+describe("bundle export policy validation", () => {
+  it("rejects content bundles when not_supported evidence would lose restore data", async () => {
+    const box = await makeSandbox();
+    const name = "unsupported-policy";
+    const snapshot = sampleSnapshot(name);
+    snapshot.evidence.push({
+      id: "project.symlink.claude-settings",
+      agent: "claude-code",
+      kind: "symlink",
+      sourcePath: ".claude/settings.json",
+      scope: "project",
+      precedence: 40,
+      parser: "filesystem",
+      sensitivity: "path_only",
+      contentPolicy: "metadata_only",
+      restorePolicy: "not_supported",
+      captureStatus: "captured",
+      confidence: "high",
+      name: "settings-symlink",
+      value: { target: "/tmp/outside" }
+    });
+    await writeSnapshot(box.storeDir, snapshot);
+
+    await assert.rejects(
+      () => bundleExport({
+        snapshotName: name,
+        outputPath: bundlePath(box, name),
+        storeDir: box.storeDir,
+        projectPath: box.projectPath,
+        homeDir: box.homeDir,
+        includeContent: true
+      }),
+      /not_supported.*would lose restore data/
+    );
+  });
+});
+
 // -- Export -> Inspect --
 
 describe("bundle inspect", () => {

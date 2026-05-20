@@ -9,7 +9,7 @@ Priority order within each section.
 - [x] **P0** Map `restorePolicy` per evidence kind in `src/types.ts`
 - [x] **P0** Wire restore policies into the evidence pipeline
 - [x] **P1** Implement per-kind content capture in bundle export
-- [ ] **P1** Add restore policy validation: fail bundle export if `not_supported` items would silently lose data.
+- [x] **P1** Add restore policy validation: fail bundle export if `not_supported` items would silently lose data.
 
 ## ✅ v0.3: Content Bundles as Default (done)
 
