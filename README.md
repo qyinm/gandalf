@@ -20,6 +20,12 @@ snaptailor also includes a full read-only diagnosis pipeline — scan, diff, aud
 
 ---
 
+## Documentation
+
+- [Architecture overview](ARCHITECTURE.md) explains the CLI entry points, scanner plugin model, evidence graph, bundle format, restore planner, TUI layer, and trust boundaries.
+
+---
+
 ## Trust Contract
 
 By default snaptailor:
