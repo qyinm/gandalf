@@ -6,6 +6,7 @@ import type { AgentId, TimelineChangedSurface, TimelineEntry } from "../../types
 import type { TimelineCorruptEvent } from "../../store.js";
 import { buildTimelineViewModel } from "./TimelineViewModel.js";
 import { padDisplay } from "./TuiFormatters.js";
+import { NoTimelineEventsEmptyState } from "./TuiEmptyStates.js";
 
 interface TimelineViewProps {
   entries: TimelineEntry[];
@@ -44,10 +45,7 @@ export default function TimelineView({
       )}
 
       {model.emptyMessage && (
-        <Box flexDirection="column">
-          <Text dimColor>{model.emptyMessage}</Text>
-          <Text color="cyan">{model.emptyCommand}</Text>
-        </Box>
+        <NoTimelineEventsEmptyState command={model.emptyCommand} />
       )}
 
       {model.rows.length > 0 && (
