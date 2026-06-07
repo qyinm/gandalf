@@ -1,50 +1,33 @@
-# snaptailor Tasks
+# snaptailor TUI TODO ✅ COMPLETE
 
-Direction: **Reproducible AI Coding Agent Environment**
+> Ink (React) + Clack interactive prompts for snaptailor CLI
 
-Priority order within each section.
+---
 
-## ✅ v0.3: Restore Policy Matrix (done)
+## All phases complete!
 
-- [x] **P0** Map `restorePolicy` per evidence kind in `src/types.ts`
-- [x] **P0** Wire restore policies into the evidence pipeline
-- [x] **P1** Implement per-kind content capture in bundle export
-- [x] **P1** Add restore policy validation: fail bundle export if `not_supported` items would silently lose data.
+| Phase | Status | Commit | Files |
+|-------|--------|--------|-------|
+| **Phase 0**: Foundation | ✅ | `196e4b2` | tsconfig, deps, tui-mode.ts, index.ts (tty/--tui/--json detection) |
+| **Phase 1**: Clack Wizards | ✅ | `583c459` | bundle-export, bundle-import, restore-confirm, snapshot-create |
+| **Phase 2**: Ink Viewers | ✅ | `585187c` | ScanView, AuditView, DiffView, SnapshotList, ProvenanceView, ReportPreview |
+| **Phase 4**: DX + Wiring | ✅ | `02f0b54` | SimpleTable, all commands wired to --tui, smoke test |
+| **Phase 3**: Full Dashboard | ✅ | `d44644c` | Dashboard, ErrorPage, tui command, keyboard nav |
 
-## ✅ v0.3: Content Bundles as Default (done)
+## How to use
 
-- [x] **P1** Flip default: `bundle export` includes content by default.
-- [x] **P1** Add `--metadata-only` flag as the opt-in for metadata-only bundles.
-- [x] **P1** Bundle size reporting and warnings for large bundles (>50MB).
-- [x] **P2** Deprecate `--experimental` requirement for content inclusion.
+```bash
+# Launch interactive TUI dashboard
+snaptailor tui
 
-## v0.3: Cross-Machine Restore (next)
+# Or use --tui flag on any command for rich output
+snaptailor scan --project . --tui
+snaptailor diff baseline current --project . --tui
+snaptailor audit --tui
+snaptailor bundle export --tui
+snaptailor restore --tui
 
-- [x] **P1** Home directory abstraction:
-  - Store paths as `{home}/.claude/settings.json` in bundle manifest
-  - Resolve `{home}` to `$HOME` on restore
-- [x] **P1** MCP binary path detection and mismatch warning (`npx`, `uvx`, local bins).
-- [x] **P1** Restore dry-run with machine-specific diff report.
-- [x] **P2** OS-aware path normalization (macOS `/Users/` ↔ Linux `/home/`).
-- [x] **P2** Cross-machine dogfood: export on macOS, import on Linux.
-
-## v0.3: Bundle Security
-
-- [x] **P2** Bundle signature: HMAC-SHA256 on manifest + content.
-- [x] **P2** `snaptailor bundle verify <file.stailor>` command.
-- [x] **P3** Trust-on-first-use key management.
-- [x] **P3** Quarantine mode: imports are inspected before content is applied.
-
-## Housekeeping
-
-- [x] **P3** Remove untracked `true` file.
-- [x] **P3** GitHub repo topics 설정.
-- [x] **P3** GitHub release 생성 (v0.1.0 기반).
-
-## Deferred
-
-- Team sharing / cloud sync.
-- Desktop UI (TUI/GUI).
-- Windsurf / Copilot scanner plugins.
-- HMAC-based secret fingerprinting (for env values in bundles).
-- Marketplace or skill registry.
+# Standard CLI still works exactly as before
+snaptailor scan --project .
+snaptailor scan --project . --json
+```
