@@ -11,6 +11,7 @@ import {
 import {
   INITIAL_NAV_ITEM_ID,
   buildTuiNavigationModel,
+  navItemIdForSelection,
   selectTuiNavItem
 } from "../src/tui/components/TuiNavigationModel.js";
 import { buildAgentDetailViewModel } from "../src/tui/components/AgentDetailViewModel.js";
@@ -376,6 +377,22 @@ describe("TUI timeline model", () => {
 
     assert.equal(selection.screen, "timeline");
     assert.equal(selection.selectedAgent, "claude-code");
+  });
+
+  it("marks the agent nav item as selected when Timeline is agent-filtered", () => {
+    const selectedItemId = navItemIdForSelection({
+      screen: "timeline",
+      selectedAgent: "claude-code",
+      selectedProfile: "default"
+    });
+    const model = buildTuiNavigationModel({
+      evidence: [{ agent: "claude-code" }],
+      selectedItemId
+    });
+
+    assert.equal(selectedItemId, "agent:claude-code");
+    assert.equal(model.selectedItemId, "agent:claude-code");
+    assert.equal(model.flatItems[model.cursor]?.id, "agent:claude-code");
   });
 
   it("opens agent detail when selecting an agent outside Timeline", () => {

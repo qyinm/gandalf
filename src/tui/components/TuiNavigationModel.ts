@@ -115,7 +115,9 @@ export function buildTuiNavSections(evidence: Pick<DiscoveredItem, "agent">[]): 
 }
 
 export function navItemIdForSelection(selection: TuiNavigationSelection): string {
-  if (selection.screen === "timeline") return INITIAL_NAV_ITEM_ID;
+  if (selection.screen === "timeline") {
+    return selection.selectedAgent ? `agent:${selection.selectedAgent}` : INITIAL_NAV_ITEM_ID;
+  }
   if (selection.screen === "snapshots") return "history:snapshots";
   if (selection.screen === "profile") return `profile:${selection.selectedProfile || DEFAULT_PROFILE}`;
   if (selection.screen === "agent-detail" && selection.selectedAgent) return `agent:${selection.selectedAgent}`;
