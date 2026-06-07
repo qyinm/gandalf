@@ -17,6 +17,7 @@ import { buildAgentDetailViewModel } from "../src/tui/components/AgentDetailView
 import { buildSaveSetupViewModel } from "../src/tui/components/SaveSetupViewModel.js";
 import { buildSnapshotListViewModel } from "../src/tui/components/SnapshotListViewModel.js";
 import { buildCompareViewModel, latestSnapshotByCreatedAt } from "../src/tui/components/CompareViewModel.js";
+import { buildProfileViewModel } from "../src/tui/components/ProfileViewModel.js";
 import {
   formatAgentLabel,
   formatTimelineTimestamp,
@@ -576,5 +577,37 @@ describe("TUI compare model", () => {
     assert.deepEqual(model.summary, ["+ Skill: react-review"]);
     assert.equal(model.sections[0].title, "Claude Code");
     assert.equal(model.sections[0].rows.some((row) => row.marker === "+" && row.after === "skill: react-review"), true);
+  });
+});
+
+describe("TUI profile model", () => {
+  it("renders the default profile summary from snapshots, agents, and timeline", () => {
+    const model = buildProfileViewModel({
+      evidence: [
+        discoveredItem({ id: "claude", agent: "claude-code", kind: "agent_config" }),
+        discoveredItem({ id: "codex", agent: "codex", kind: "agent_config" })
+      ],
+      snapshotNames: ["baseline", "current"],
+      timelineEntries: [
+        timelineEntry({
+          id: "older",
+          observedAt: "2026-06-07T12:00:00.000",
+          afterSnapshotName: "baseline"
+        }),
+        timelineEntry({
+          id: "newer",
+          observedAt: "2026-06-08T14:22:00.000",
+          afterSnapshotName: "current"
+        })
+      ],
+      now: new Date("2026-06-08T15:00:00.000")
+    });
+
+    assert.equal(model.title, "Profiles");
+    assert.equal(model.profiles[0].name, "default");
+    assert.equal(model.profiles[0].selected, true);
+    assert.equal(model.profiles[0].snapshotCount, 2);
+    assert.equal(model.profiles[0].agents, "Claude Code, Codex");
+    assert.equal(model.profiles[0].changedAt, "Today 14:22");
   });
 });
