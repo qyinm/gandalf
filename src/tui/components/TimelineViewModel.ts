@@ -59,9 +59,9 @@ export interface CurrentSetupSummaryModel {
   mcpServers: number;
   hooks: number;
   permissions: number;
-  skillNames: string;
-  mcpServerNames: string;
-  hookNames: string;
+  skillRows: string[];
+  mcpServerRows: string[];
+  hookRows: string[];
   instructions: string;
 }
 
@@ -115,9 +115,9 @@ export function buildCurrentSetupSummaryModel(input: {
     mcpServers: countKind(evidence, "mcp_server"),
     hooks: countKind(evidence, "hook"),
     permissions: countKind(evidence, "permission"),
-    skillNames: namesForKind(evidence, "skill"),
-    mcpServerNames: namesForKind(evidence, "mcp_server"),
-    hookNames: namesForKind(evidence, "hook"),
+    skillRows: rowsForKind(evidence, "skill", input.agentFilter),
+    mcpServerRows: rowsForKind(evidence, "mcp_server", input.agentFilter),
+    hookRows: rowsForKind(evidence, "hook", input.agentFilter),
     instructions: instructionPaths.length > 0 ? instructionPaths.slice(0, 3).join(", ") : "none"
   };
 }
@@ -139,16 +139,36 @@ function countKind(evidence: Pick<DiscoveredItem, "kind">[], kind: DiscoveredIte
   return evidence.filter((item) => item.kind === kind).length;
 }
 
-function namesForKind(
-  evidence: Pick<DiscoveredItem, "id" | "kind" | "name">[],
+function rowsForKind(
+  evidence: Pick<DiscoveredItem, "agent" | "id" | "kind" | "name" | "sourcePath">[],
+  kind: DiscoveredItem["kind"],
+  agentFilter: AgentId | null
+): string[] {
+  const rows = evidence
+    .filter((item) => item.kind === kind)
+    .map((item) => {
+      const name = displayNameForItem(item);
+      return agentFilter ? name : `${formatAgentLabel(item.agent)}: ${name}`;
+    });
+  return [...new Set(rows)].sort().slice(0, 6);
+}
+
+function displayNameForItem(
+  item: Pick<DiscoveredItem, "id" | "kind" | "name" | "sourcePath">
+): string {
+  if (item.name) return item.name;
+  const parts = item.sourcePath.split("/").filter(Boolean);
+  const last = parts.at(-1);
+  if (last && last !== "SKILL.md") return last;
+  const parent = parts.at(-2);
+  if (parent) return parent;
+  return item.id;
+}
+
+export function currentSetupEmptyText(
   kind: DiscoveredItem["kind"]
 ): string {
-  const names = [...new Set(
-    evidence
-      .filter((item) => item.kind === kind)
-      .map((item) => item.name ?? item.id)
-  )].sort();
-  return names.length > 0 ? names.slice(0, 6).join(", ") : "none";
+  return `no ${kind.replace("_", " ")}s`;
 }
 
 export function timelineDetailModel(entry: TimelineEntry): TimelineDetailModel {

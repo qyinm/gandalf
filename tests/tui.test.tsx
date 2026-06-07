@@ -298,9 +298,9 @@ describe("TUI timeline model", () => {
     assert.equal(model.mcpServers, 1);
     assert.equal(model.hooks, 1);
     assert.equal(model.permissions, 1);
-    assert.equal(model.skillNames, "codex-skill, review");
-    assert.equal(model.mcpServerNames, "github");
-    assert.equal(model.hookNames, "pre");
+    assert.deepEqual(model.skillRows, ["Claude Code: review", "Codex: codex-skill"]);
+    assert.deepEqual(model.mcpServerRows, ["Claude Code: github"]);
+    assert.deepEqual(model.hookRows, ["Claude Code: pre"]);
     assert.equal(model.instructions, "/project/AGENTS.md");
   });
 
@@ -318,8 +318,9 @@ describe("TUI timeline model", () => {
     assert.equal(model.agents, 1);
     assert.equal(model.skills, 1);
     assert.equal(model.mcpServers, 1);
-    assert.equal(model.skillNames, "review");
-    assert.equal(model.mcpServerNames, "github");
+    assert.deepEqual(model.skillRows, ["review"]);
+    assert.deepEqual(model.mcpServerRows, ["github"]);
+    assert.deepEqual(model.hookRows, []);
   });
 
   it("separates writable and observe-only changed surfaces", () => {
