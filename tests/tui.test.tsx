@@ -14,6 +14,8 @@ import {
   selectTuiNavItem
 } from "../src/tui/components/TuiNavigationModel.js";
 import { buildAgentDetailViewModel } from "../src/tui/components/AgentDetailViewModel.js";
+import { buildSaveSetupViewModel } from "../src/tui/components/SaveSetupViewModel.js";
+import { buildSnapshotListViewModel } from "../src/tui/components/SnapshotListViewModel.js";
 import {
   formatAgentLabel,
   formatTimelineTimestamp,
@@ -430,5 +432,56 @@ describe("TUI agent detail model", () => {
     });
 
     assert.equal(model.emptyMessage, "No supported agent setup found.");
+  });
+});
+
+describe("TUI save setup model", () => {
+  it("uses capture baseline for the first full setup snapshot", () => {
+    const model = buildSaveSetupViewModel({ hasPreviousSnapshot: false });
+
+    assert.equal(model.title, "capture baseline");
+    assert.equal(model.detectedChanges[0], "capture baseline");
+    assert.equal(model.destinations[0].label, "Local history");
+    assert.equal(model.destinations[0].selected, true);
+    assert.equal(model.destinations[1].label, "Export as .hem");
+  });
+
+  it("generates deterministic titles from structured changes", () => {
+    const model = buildSaveSetupViewModel({
+      hasPreviousSnapshot: true,
+      diff: {
+        semanticChanges: [
+          {
+            code: "SKILL_ADDED",
+            entityKind: "skill",
+            entityName: "react-review",
+            severity: "low",
+            details: { changedFields: [], sourcePath: "/skills/react-review/SKILL.md" }
+          }
+        ],
+        rawSourceChanges: []
+      }
+    });
+
+    assert.equal(model.title, "install react-review skill");
+    assert.deepEqual(model.detectedChanges, ["install react-review skill"]);
+  });
+
+  it("renders no-change saved setup state without proposing duplicate changes", () => {
+    const model = buildSaveSetupViewModel({
+      hasPreviousSnapshot: true,
+      diff: { semanticChanges: [], rawSourceChanges: [] }
+    });
+
+    assert.equal(model.noChanges, true);
+    assert.equal(model.title, "current setup unchanged");
+    assert.deepEqual(model.detectedChanges, ["Current setup matches latest saved setup."]);
+  });
+
+  it("uses saved setup empty state copy for root snapshots", () => {
+    const model = buildSnapshotListViewModel({ names: [] });
+
+    assert.equal(model.emptyMessage, "No saved setups yet.");
+    assert.equal(model.emptyAction, "s save setup");
   });
 });

@@ -28,9 +28,10 @@ import { diffGraphs } from "../../diff.js";
 import type { AuditFinding } from "../../types.js";
 import type { ScanResult } from "../../scan.js";
 import type { RuntimeOptions } from "../../cli-shared.js";
-import type { AgentId, DaemonStatusReadResult, TimelineEntry } from "../../types.js";
+import type { AgentId, DaemonStatusReadResult, Snapshot, TimelineEntry } from "../../types.js";
 import type { TimelineCorruptEvent } from "../../store.js";
 import type { TimelineUndoPlan } from "../../timeline-undo.js";
+import type { GraphDiff } from "../../diff.js";
 
 import Sidebar, { buildAgentEntries, buildAgentFilterEntries, agentLabelStr } from "./Sidebar.js";
 import TabBar, { TABS } from "./TabBar.js";
@@ -39,6 +40,8 @@ import ScanView, { DEFAULT_SCAN_WINDOW_SIZE } from "./ScanView.js";
 import AuditView from "./AuditView.js";
 import DiffView from "./DiffView.js";
 import SnapshotList from "./SnapshotList.js";
+import SaveSetupView from "./SaveSetupView.js";
+import { buildSaveSetupViewModel } from "./SaveSetupViewModel.js";
 import ErrorPage from "./ErrorPage.js";
 import TimelineView from "./TimelineView.js";
 import { clampTimelineIndex } from "./TimelineViewModel.js";
@@ -74,8 +77,27 @@ type DashboardState = {
     | { type: "idle" }
     | { type: "rendered"; plan: TimelineUndoPlan }
     | { type: "error"; message: string };
-  /** snapshots for the currently selected agent */
+  /** full setup snapshots */
   snapshots: string[];
+  saveSetupState:
+    | { type: "idle" }
+    | { type: "loading" }
+    | {
+        type: "preview";
+        snapshot: Snapshot;
+        diff?: GraphDiff;
+        hasPreviousSnapshot: boolean;
+        title: string;
+      }
+    | {
+        type: "saving";
+        snapshot: Snapshot;
+        diff?: GraphDiff;
+        hasPreviousSnapshot: boolean;
+        title: string;
+      }
+    | { type: "saved"; name: string; diff?: GraphDiff; hasPreviousSnapshot: boolean }
+    | { type: "error"; message: string };
   /** diff-specific loading */
   diffState:
     | { type: "idle" }
@@ -118,6 +140,7 @@ export default function Dashboard({ options }: DashboardProps) {
     timelineCursor: 0,
     timelineUndoState: { type: "idle" },
     snapshots: [],
+    saveSetupState: { type: "idle" },
     diffState: { type: "idle" },
     error: null,
     scanScrollOffset: 0,
@@ -153,6 +176,7 @@ export default function Dashboard({ options }: DashboardProps) {
         const { readDaemonStatus } = await import("../../daemon.js");
         const daemonStatus = await readDaemonStatus(options);
         const timeline = await loadTimelineForAgent(firstAgent);
+        const snapshots = await listSnapshots(options.storeDir);
         const navModel = buildTuiNavigationModel({
           evidence: scan.evidence,
           selectedItemId: INITIAL_NAV_ITEM_ID
@@ -165,7 +189,8 @@ export default function Dashboard({ options }: DashboardProps) {
           findings,
           selectedAgent: firstAgent,
           sidebarCursor: navModel.cursor,
-          snapshots: [],
+          snapshots,
+          saveSetupState: { type: "idle" },
           timelineEntries: timeline.entries,
           timelineCorruptEvents: timeline.corruptEvents,
           timelineCursor: 0,
@@ -204,6 +229,7 @@ export default function Dashboard({ options }: DashboardProps) {
       const stillExists = currentAgent === null || agents.some((a) => a.id === currentAgent);
       const newAgent = stillExists ? currentAgent : null;
       const timeline = await loadTimelineForAgent(newAgent);
+      const snapshots = await listSnapshots(options.storeDir);
       const navModel = buildTuiNavigationModel({
         evidence: scan.evidence,
         selectedItemId: navItemIdForSelection({
@@ -214,11 +240,6 @@ export default function Dashboard({ options }: DashboardProps) {
         cursor: state.sidebarCursor
       });
 
-      let snapshots: string[] = [];
-      if (newAgent) {
-        snapshots = await listSnapshots(options.storeDir, newAgent);
-      }
-
       setState((s) => ({
         ...s,
         status: "ready",
@@ -226,6 +247,7 @@ export default function Dashboard({ options }: DashboardProps) {
         findings,
         selectedAgent: newAgent,
         snapshots,
+        saveSetupState: { type: "idle" },
         timelineEntries: timeline.entries,
         timelineCorruptEvents: timeline.corruptEvents,
         timelineCursor: clampTimelineIndex(s.timelineCursor, timeline.entries),
@@ -244,12 +266,10 @@ export default function Dashboard({ options }: DashboardProps) {
     async (agent: AgentId | null) => {
       const requestId = ++filterRequestRef.current;
       let snapshots: string[] = [];
-      if (agent) {
-        try {
-          snapshots = await listSnapshots(options.storeDir, agent);
-        } catch {
-          // silent
-        }
+      try {
+        snapshots = await listSnapshots(options.storeDir);
+      } catch {
+        // silent
       }
       const timeline = await loadTimelineForAgent(agent);
       if (filterRequestRef.current !== requestId) return;
@@ -278,7 +298,57 @@ export default function Dashboard({ options }: DashboardProps) {
   const runAction = useCallback(
     async (action: AgentAction) => {
       const agent = state.selectedAgent;
-      if (!agent || !state.scan) return;
+      if (!state.scan) return;
+
+      if (action === "save-snapshot") {
+        setState((s) => ({ ...s, activeTab: "snapshots", saveSetupState: { type: "loading" } }));
+        try {
+          const { captureCurrentState } = await import("../../current-state.js");
+          const { readSnapshot } = await import("../../store.js");
+          const current = await captureCurrentState(options);
+          const latestSnapshotName = state.snapshots[state.snapshots.length - 1];
+          let diff: GraphDiff | undefined;
+          if (latestSnapshotName) {
+            const latest = await readSnapshot(options.storeDir, latestSnapshotName);
+            diff = diffGraphs(latest.graph, current.snapshot.graph);
+          }
+          const model = buildSaveSetupViewModel({
+            diff,
+            hasPreviousSnapshot: Boolean(latestSnapshotName)
+          });
+          const snapshot: Snapshot = {
+            ...current.snapshot,
+            manifest: {
+              ...current.snapshot.manifest,
+              name: model.title
+            }
+          };
+
+          setState((s) => ({
+            ...s,
+            activeTab: "snapshots",
+            saveSetupState: {
+              type: "preview",
+              snapshot,
+              diff,
+              hasPreviousSnapshot: Boolean(latestSnapshotName),
+              title: model.title
+            }
+          }));
+        } catch (err) {
+          setState((s) => ({
+            ...s,
+            activeTab: "snapshots",
+            saveSetupState: {
+              type: "error",
+              message: err instanceof Error ? err.message : String(err)
+            }
+          }));
+        }
+        return;
+      }
+
+      if (!agent) return;
 
       if (action === "scan") {
         try {
@@ -303,31 +373,6 @@ export default function Dashboard({ options }: DashboardProps) {
               problem: `Scan failed: ${err instanceof Error ? err.message : String(err)}`,
               cause: `Could not scan ${agentLabelStr(agent)} configuration.`,
               fix: "Check agent config paths and permissions.",
-            },
-          }));
-        }
-      } else if (action === "save-snapshot") {
-        try {
-          const agentOpts = { ...options, agent };
-          const snapshotName = `${agent}-${Date.now()}`;
-          const { captureCurrentState } = await import("../../current-state.js");
-          const { writeSnapshot } = await import("../../store.js");
-          const current = await captureCurrentState(agentOpts, snapshotName);
-          await writeSnapshot(options.storeDir, current.snapshot, agent);
-          const snapshots = await listSnapshots(options.storeDir, agent);
-          setState((s) => ({
-            ...s,
-            snapshots,
-            activeTab: "snapshots",
-          }));
-        } catch (err) {
-          setState((s) => ({
-            ...s,
-            error: {
-              code: "HEM_SNAPSHOT_FAILED",
-              problem: `Snapshot failed: ${err instanceof Error ? err.message : String(err)}`,
-              cause: "Could not save snapshot.",
-              fix: "Check store permissions.",
             },
           }));
         }
@@ -434,6 +479,45 @@ export default function Dashboard({ options }: DashboardProps) {
     [options, state.selectedAgent, state.scan, reScan]
   );
 
+  const confirmSaveSetup = useCallback(async () => {
+    if (state.saveSetupState.type !== "preview") return;
+    const preview = state.saveSetupState;
+    setState((s) => ({
+      ...s,
+      saveSetupState: {
+        type: "saving",
+        snapshot: preview.snapshot,
+        diff: preview.diff,
+        hasPreviousSnapshot: preview.hasPreviousSnapshot,
+        title: preview.title
+      }
+    }));
+
+    try {
+      const { writeSnapshot } = await import("../../store.js");
+      await writeSnapshot(options.storeDir, preview.snapshot);
+      const snapshots = await listSnapshots(options.storeDir);
+      setState((s) => ({
+        ...s,
+        snapshots,
+        saveSetupState: {
+          type: "saved",
+          name: preview.snapshot.manifest.name,
+          diff: preview.diff,
+          hasPreviousSnapshot: preview.hasPreviousSnapshot
+        }
+      }));
+    } catch (err) {
+      setState((s) => ({
+        ...s,
+        saveSetupState: {
+          type: "error",
+          message: err instanceof Error ? err.message : String(err)
+        }
+      }));
+    }
+  }, [options.storeDir, state.saveSetupState]);
+
   // ── Keyboard ───────────────────────────────────────────────
 
   const handleInput = useCallback(
@@ -470,8 +554,12 @@ export default function Dashboard({ options }: DashboardProps) {
         return;
       }
 
-      // s = save snapshot (only if agent selected)
-      if (input === "s" && state.selectedAgent) {
+      // s = save setup / confirm save setup
+      if (input === "s" && state.saveSetupState.type === "preview") {
+        confirmSaveSetup();
+        return;
+      }
+      if (input === "s") {
         runAction("save-snapshot");
         return;
       }
@@ -646,7 +734,7 @@ export default function Dashboard({ options }: DashboardProps) {
         return;
       }
     },
-    [state, reScan, switchAgent, runAction]
+    [state, reScan, switchAgent, runAction, confirmSaveSetup]
   );
 
   useInput(handleInput);
@@ -762,8 +850,42 @@ export default function Dashboard({ options }: DashboardProps) {
   }
 
   function renderSnapshots() {
-    if (!state.selectedAgent) {
-      return <Text dimColor>Select an agent from the sidebar to view snapshots.</Text>;
+    if (state.saveSetupState.type === "loading") {
+      return (
+        <Box>
+          <Spinner type="dots" />
+          <Text> Preparing save setup...</Text>
+        </Box>
+      );
+    }
+
+    if (state.saveSetupState.type === "preview" || state.saveSetupState.type === "saving") {
+      return (
+        <SaveSetupView
+          diff={state.saveSetupState.diff}
+          hasPreviousSnapshot={state.saveSetupState.hasPreviousSnapshot}
+          saving={state.saveSetupState.type === "saving"}
+        />
+      );
+    }
+
+    if (state.saveSetupState.type === "saved") {
+      return (
+        <SaveSetupView
+          diff={state.saveSetupState.diff}
+          hasPreviousSnapshot={state.saveSetupState.hasPreviousSnapshot}
+          savedName={state.saveSetupState.name}
+        />
+      );
+    }
+
+    if (state.saveSetupState.type === "error") {
+      return (
+        <SaveSetupView
+          hasPreviousSnapshot={state.snapshots.length > 0}
+          error={state.saveSetupState.message}
+        />
+      );
     }
 
     return (

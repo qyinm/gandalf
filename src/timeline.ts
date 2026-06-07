@@ -139,9 +139,20 @@ function titleForDiff(diff: GraphDiff | undefined, agent?: AgentId): string {
     case "ENV_KEY_REMOVED":
       return scopedTitle(`remove ${first.entityName} env key`, agent);
     case "PERMISSION_WILDCARD_ADDED":
+    case "PERMISSION_CHANGED":
       return scopedTitle("update permissions", agent);
+    case "SKILL_ADDED":
+      return scopedTitle(`install ${first.entityName} skill`, agent);
+    case "SKILL_REMOVED":
+      return scopedTitle(`remove ${first.entityName} skill`, agent);
     case "SKILL_EXECUTABLE_APPEARED":
       return scopedTitle(`update ${first.entityName} skill`, agent);
+    case "HOOK_ADDED":
+    case "HOOK_REMOVED":
+    case "HOOK_CHANGED":
+      return scopedTitle("update hooks", agent);
+    case "INSTRUCTION_CHANGED":
+      return scopedTitle("update project instructions", agent);
     case "UNSUPPORTED_STATE_CHANGED":
       return scopedTitle("update unsupported setup", agent);
   }
