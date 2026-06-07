@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { daemonTrustHeaderModel } from "../src/tui/components/Dashboard.js";
 import { buildAgentFilterEntries } from "../src/tui/components/Sidebar.js";
 import {
+  buildCurrentSetupSummaryModel,
   buildTimelineViewModel,
   timelineDetailModel,
   timelineUndoPreviewModel
@@ -275,6 +276,50 @@ describe("TUI timeline model", () => {
     assert.equal(model.selectedEntry?.beforeSnapshotName, "before");
     assert.equal(model.selectedEntry?.afterSnapshotName, "changed-snapshot");
     assert.equal(model.selectedEntry?.highlights.length, 2);
+  });
+
+  it("summarizes the current setup above the Timeline", () => {
+    const model = buildCurrentSetupSummaryModel({
+      agentFilter: null,
+      evidence: [
+        discoveredItem({ id: "agent:claude", agent: "claude-code", kind: "agent_config" }),
+        discoveredItem({ id: "skill:review", agent: "claude-code", kind: "skill", name: "review" }),
+        discoveredItem({ id: "mcp:github", agent: "claude-code", kind: "mcp_server", name: "github" }),
+        discoveredItem({ id: "hook:pre", agent: "claude-code", kind: "hook", name: "pre" }),
+        discoveredItem({ id: "permission:bash", agent: "claude-code", kind: "permission", name: "bash" }),
+        discoveredItem({ id: "instructions", agent: "claude-code", kind: "agent_instruction", sourcePath: "/project/AGENTS.md" }),
+        discoveredItem({ id: "skill:codex", agent: "codex", kind: "skill", name: "codex-skill" })
+      ]
+    });
+
+    assert.equal(model.scopeLabel, "All agents");
+    assert.equal(model.agents, 2);
+    assert.equal(model.skills, 2);
+    assert.equal(model.mcpServers, 1);
+    assert.equal(model.hooks, 1);
+    assert.equal(model.permissions, 1);
+    assert.equal(model.skillNames, "codex-skill, review");
+    assert.equal(model.mcpServerNames, "github");
+    assert.equal(model.hookNames, "pre");
+    assert.equal(model.instructions, "/project/AGENTS.md");
+  });
+
+  it("summarizes the current setup for an agent-filtered Timeline", () => {
+    const model = buildCurrentSetupSummaryModel({
+      agentFilter: "claude-code",
+      evidence: [
+        discoveredItem({ id: "skill:review", agent: "claude-code", kind: "skill", name: "review" }),
+        discoveredItem({ id: "mcp:github", agent: "claude-code", kind: "mcp_server", name: "github" }),
+        discoveredItem({ id: "skill:codex", agent: "codex", kind: "skill", name: "codex-skill" })
+      ]
+    });
+
+    assert.equal(model.scopeLabel, "Claude Code");
+    assert.equal(model.agents, 1);
+    assert.equal(model.skills, 1);
+    assert.equal(model.mcpServers, 1);
+    assert.equal(model.skillNames, "review");
+    assert.equal(model.mcpServerNames, "github");
   });
 
   it("separates writable and observe-only changed surfaces", () => {
