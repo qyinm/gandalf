@@ -12,6 +12,7 @@ snaptailor bundle export --name my-setup --out my-setup.stailor --project .
 
 # Machine B: verify and preview it safely
 snaptailor bundle verify my-setup.stailor
+snaptailor doctor --project .
 snaptailor bundle import my-setup.stailor --dry-run --project .
 snaptailor bundle import my-setup.stailor --apply-content --quarantine --experimental --project .
 ```
@@ -39,6 +40,7 @@ By default snaptailor:
 - does **not** follow symlinks
 - snapshot restore requires explicit `--apply`; rollback is available with `restore --rollback`
 - bundle content apply requires `--apply-content` plus `--experimental`, is project-relative only, and should be previewed with `--dry-run` or `--quarantine` first
+- doctor/preflight checks report manual setup gaps; snaptailor does not install packages or restore raw secret values
 
 ---
 
@@ -53,6 +55,7 @@ snaptailor bundle export --name <snapshot> --out <file.stailor> --metadata-only 
 
 # Safe preview and verification before importing
 snaptailor bundle verify <file.stailor>
+snaptailor doctor --project .
 snaptailor bundle import <file.stailor> --dry-run --project .
 snaptailor bundle inspect <file.stailor>
 
@@ -68,6 +71,8 @@ snaptailor restore --snapshot <name> --apply --rollback --project .
 ```
 
 Destructive operations (`restore --apply`, `bundle import --apply-content`) require either `--experimental` or `SNAPTAILOR_EXPERIMENTAL=1`. Bundle export includes supported file content by default; pass `--metadata-only` to export metadata only. Bundle `--apply-content` refuses home-relative content paths and known sensitive prefixes; use `--quarantine` to inspect content without writing target files.
+
+`snaptailor doctor --project .` checks Mac readiness before import/apply. It reports missing local tools, MCP command availability, unverified remote MCP URLs, and env keys that need manual values. It never runs installers, contacts package registries, executes MCP commands, or prints raw secret values.
 
 ### Diagnosis (scan + diff + audit)
 
