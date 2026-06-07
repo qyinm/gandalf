@@ -381,7 +381,8 @@ describe("bundle signatures", () => {
       projectPath: box.projectPath,
       homeDir: box.homeDir,
       applyContent: true,
-      quarantine: true
+      quarantine: true,
+      targetPlatform: "darwin"
     });
 
     assert.equal(imported.contentApplied, false);
