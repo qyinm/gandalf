@@ -1,5 +1,5 @@
 /**
- * Ink component for snaptailor diff output.
+ * Ink component for hem diff output.
  *
  * Renders semantic changes and raw source changes with color coding:
  * - Added = green
@@ -71,7 +71,7 @@ export default function DiffView({
   if (!hasChanges) {
     return (
       <Box flexDirection="column">
-        <Text bold color="green">snaptailor diff</Text>
+        <Text bold color="green">hem diff</Text>
         <Text>No changes — baseline and current state match.</Text>
       </Box>
     );
@@ -89,7 +89,7 @@ export default function DiffView({
     <Box flexDirection="column">
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold>snaptailor diff</Text>
+        <Text bold>hem diff</Text>
       </Box>
 
       {/* Summary badges */}

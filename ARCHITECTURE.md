@@ -1,6 +1,6 @@
-# snaptailor Architecture
+# Hem Architecture
 
-snaptailor is a local-first CLI for inspecting, packaging, and restoring AI coding agent environments. It captures agent configuration surfaces such as MCP servers, skills, hooks, permissions, instructions, and project-local agent files into a normalized evidence model, then uses that model for snapshots, diffs, audits, reports, `.stailor` bundles, and experimental restore operations.
+Hem is a local-first CLI for inspecting, packaging, and restoring AI coding agent environments. It captures agent configuration surfaces such as MCP servers, skills, hooks, permissions, instructions, and project-local agent files into a normalized evidence model, then uses that model for snapshots, diffs, audits, reports, `.hem` bundles, and experimental restore operations.
 
 The core architectural rule is simple: scan paths are read-only and policy-aware; write paths are explicit, narrow, and reversible where possible.
 
@@ -8,7 +8,7 @@ The core architectural rule is simple: scan paths are read-only and policy-aware
 
 ```text
                 +----------------------+
-                | snaptailor CLI       |
+                | Hem CLI              |
                 | src/cli.ts           |
                 +----------+-----------+
                            |
@@ -61,7 +61,7 @@ The core architectural rule is simple: scan paths are read-only and policy-aware
                     |                                   |
                     v                                   v
           +-------------------+              +-------------------+
-          | .stailor bundles  |              | Restore planner   |
+          | .hem bundles     |              | Restore planner   |
           | src/bundle.ts     |              | src/restore.ts    |
           +-------------------+              +-------------------+
 ```
@@ -87,7 +87,7 @@ The rest of the system derives from that inventory:
 - `GraphNode[]` is built from evidence in `src/graph.ts`.
 - `AuditFinding[]` is produced from evidence plus graph context in `src/audit.ts`.
 - `ProvenanceEntry[]` records source, scope, precedence, confidence, and capture status in `src/provenance.ts`.
-- Snapshots persist all of the above as JSON files under `~/.snaptailor` through `src/store.ts`.
+- Snapshots persist all of the above as JSON files under `~/.hem` through `src/store.ts`.
 
 ## Scan Pipeline
 
@@ -126,7 +126,7 @@ This policy layer is intentionally separate from scanners so every feature downs
 
 ## Snapshot Store
 
-`src/store.ts` owns the local snapshot store. The default store path is `~/.snaptailor`, created with `0700` permissions.
+`src/store.ts` owns the local snapshot store. The default store path is `~/.hem`, created with `0700` permissions.
 
 A snapshot directory contains:
 
@@ -157,9 +157,9 @@ This path should remain non-mutating except for explicit snapshot/report output.
 
 ## Bundle Architecture
 
-`src/bundle.ts` implements `.stailor` export, import, inspect, and verify.
+`src/bundle.ts` implements `.hem` export, import, inspect, and verify.
 
-A `.stailor` file is a tar archive with metadata under `.stailor/`, normalized snapshot JSON under `snapshot/`, and optional captured file content under `content/`.
+A `.hem` file is a tar archive with metadata under `.hem/`, normalized snapshot JSON under `snapshot/`, and optional captured file content under `content/`.
 
 Bundle responsibilities include:
 
@@ -169,7 +169,7 @@ Bundle responsibilities include:
 - Detecting cross-OS differences and MCP binary availability on import.
 - Enforcing size limits for bundle and content entries.
 - Computing SHA-256 checksums for archive entries.
-- Supporting optional HMAC-SHA256 signatures via `SNAPTAILOR_BUNDLE_KEY` or an explicit key.
+- Supporting optional HMAC-SHA256 signatures via `HEM_BUNDLE_KEY` or an explicit key.
 - Supporting quarantine import so content can be staged for inspection before writing target files.
 
 Bundle import is not the same as blind restore. Dry-run, verification, quarantine, explicit content apply flags, and experimental gates are part of the trust boundary.
@@ -197,13 +197,13 @@ Command handlers decide whether to render text/JSON or delegate to the TUI layer
 
 ## Trust Boundaries
 
-snaptailor's safety model depends on keeping these boundaries intact:
+Hem's safety model depends on keeping these boundaries intact:
 
 - Scanning reads known local paths and does not execute MCP commands, hooks, scripts, plugins, or agent tools.
 - Scanning does not use the network.
 - Symlinks are detected but not followed.
 - Raw secrets are not stored; secret-like values are redacted or omitted.
-- Snapshot store writes are confined to `~/.snaptailor` unless the user gives an explicit output path.
+- Snapshot store writes are confined to `~/.hem` unless the user gives an explicit output path.
 - Content application requires explicit import/restore flags and is constrained by restore policy.
 - Restore and bundle import paths must remain project-relative or home-token-aware; path traversal and home-relative bundle writes should be rejected.
 

@@ -40,12 +40,12 @@ async function main() {
   }
   requireDocker();
 
-  const root = await mkdtemp(path.join(tmpdir(), "snaptailor-cross-machine-"));
+  const root = await mkdtemp(path.join(tmpdir(), "hem-cross-machine-"));
   try {
     const macProject = path.join(root, "mac-project");
     const macHome = path.join(root, "mac-home");
     const macStore = path.join(root, "mac-store");
-    const out = path.join(root, "mac-export.stailor");
+    const out = path.join(root, "mac-export.hem");
     await mkdir(macProject, { recursive: true });
     await mkdir(path.join(macHome, ".claude"), { recursive: true });
     await mkdir(path.join(macHome, ".local/bin"), { recursive: true });
@@ -58,14 +58,14 @@ async function main() {
       }
     }, null, 2));
 
-    const env = { HOME: macHome, SNAPTAILOR_STORE: macStore };
+    const env = { HOME: macHome, HEM_STORE: macStore };
     run(node, [cli, "snapshot", "create", "--name", "mac-baseline", "--metadata-only", "--project", macProject], { cwd: macProject, env });
     run(node, [cli, "bundle", "export", "--name", "mac-baseline", "--out", out, "--project", macProject], { cwd: macProject, env });
 
     const linuxScript = [
       "set -euo pipefail",
-      "mkdir -p /home/snaptailor /linux/project /linux/store",
-      "HOME=/home/snaptailor SNAPTAILOR_STORE=/linux/store node /repo/dist/src/cli.js bundle import /work/mac-export.stailor --dry-run --project /linux/project --json > /work/import.json"
+      "mkdir -p /home/hem /linux/project /linux/store",
+      "HOME=/home/hem HEM_STORE=/linux/store node /repo/dist/src/cli.js bundle import /work/mac-export.hem --dry-run --project /linux/project --json > /work/import.json"
     ].join(" && ");
     run("docker", [
       "run", "--rm",
@@ -92,7 +92,7 @@ async function main() {
     console.log("Cross-machine dogfood passed: macOS export dry-ran successfully inside Linux container.");
     console.log(`Bundle: ${out}`);
   } finally {
-    if (!process.env.SNAPTAILOR_KEEP_DOGFOOD) {
+    if (!process.env.HEM_KEEP_DOGFOOD) {
       await rm(root, { recursive: true, force: true });
     }
   }

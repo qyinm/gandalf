@@ -7,10 +7,10 @@ import { describe, it } from "node:test";
 import { scanProject } from "../src/scan.js";
 
 async function makeSandbox(): Promise<{ root: string; projectPath: string; homeDir: string; storeDir: string }> {
-  const root = await mkdtemp(join(tmpdir(), "snaptailor-scan-"));
+  const root = await mkdtemp(join(tmpdir(), "hem-scan-"));
   const projectPath = join(root, "project");
   const homeDir = join(root, "home");
-  const storeDir = join(homeDir, ".snaptailor");
+  const storeDir = join(homeDir, ".hem");
 
   await mkdir(projectPath, { recursive: true });
   await mkdir(homeDir, { recursive: true });
@@ -86,7 +86,7 @@ describe("scanProject", () => {
 
   it("captures dotenv key inventory while omitting secret-like values", async () => {
     const { projectPath, homeDir, storeDir } = await makeSandbox();
-    await writeFile(join(projectPath, ".env"), "OPENAI_API_KEY=sk-real-secret\nSNAPTAILOR_MODE=local\n", "utf8");
+    await writeFile(join(projectPath, ".env"), "OPENAI_API_KEY=sk-real-secret\nHEM_MODE=local\n", "utf8");
 
     const scan = await scanProject({ projectPath, homeDir, storeDir });
 
@@ -103,7 +103,7 @@ describe("scanProject", () => {
       scan.evidence.some(
         (item) =>
           item.kind === "env_key" &&
-          item.name === "SNAPTAILOR_MODE" &&
+          item.name === "HEM_MODE" &&
           item.captureStatus === "omitted" &&
           item.value === undefined
       )

@@ -1,73 +1,76 @@
-<!-- /autoplan restore point: /Users/hippoo/.gstack/projects/snaptailor/no-branch-autoplan-restore-20260512-000950.md -->
+<!-- /autoplan restore point: /Users/hippoo/.gstack/projects/hem/no-branch-autoplan-restore-20260512-000950.md -->
 
-# snaptailor Plan
+# Hem Plan
 
 Source: [PRODUCT.md](PRODUCT.md)
 
 ## Final Direction
 
-snaptailor is a **Mac-first reproducible AI coding agent environment** tool — like a Docker image for your MCP servers, skills, permissions, hooks, and agent configurations.
+Hem is a **local Time Machine for AI coding agent setups**. It saves, compares, and restores the MCP servers, skills, permissions, hooks, prompts, and agent configurations used by Claude Code, Codex, Cursor, OpenCode, and Pi Agent.
 
 The product wedge is:
 
-> Export your agent setup as a `.stailor` bundle. Preview readiness on another Mac. Restore the supported configuration safely.
+> Let AI coding power users experiment with skills and MCPs without losing track of what changed. Save the current setup, compare it with later changes, and restore the setup that worked.
 
-This is a deliberate pivot from the original v0.1 "read-only diagnosis" framing. The read-only scan/diff/audit pipeline remains as the diagnostic layer that gives users confidence in what's being captured and restored. But the product is not a diagnostic tool — it's a **reproducibility engine**.
+This is a deliberate pivot from the original v0.1 "read-only diagnosis" framing and the later portability-first framing. The read-only scan/diff/audit pipeline remains the trust layer, but the product is not primarily a diagnostic tool or a marketplace. It is a **local agent setup manager with Git-like history**.
 
-Read-only diagnosis was the right first step to build trust and prove the evidence model. The current goal is Mac-to-Mac portability with clear readiness checks before apply.
+Read-only diagnosis was the right first step to build trust and prove the evidence model. The current goal is local history first: inventory, save setup, compare, restore, profiles, and portable `.hem` bundles.
 
 ## Target User
 
-Developer who runs Claude Code, Codex, Cursor, OpenCode, Pi Agent — with custom MCP servers, skills, project instructions, hooks, and environment keys — across multiple machines.
+AI coding power user who runs Claude Code, Codex, Cursor, OpenCode, or Pi Agent with custom MCP servers, skills, project instructions, hooks, and environment keys.
 
 Concrete moments:
 
-> I set up my agents perfectly on my work Mac. I want the same setup on my personal laptop without redoing everything.
+> I asked an agent to install a skill. Now I do not know what changed or what I can safely delete.
 
-> My teammate has a great MCP config and skill setup. I want exactly that on my machine.
+> I added a new MCP and my setup got weird. I want to go back to the setup that worked.
 
-> I messed up my agent settings yesterday. I want to roll back to last week's snapshot.
+> I bought a new Mac. I want my existing Claude/Codex/Cursor setup without rebuilding it from memory.
 
-> I want to know what is ready, what needs manual install, and what needs secret input before I apply a bundle.
+> I want to see what skills and MCPs are installed across my agents right now.
 
 ## Adjacent Landscape
 
-- **chezmoi** manages dotfiles with templates, encryption, scripts, and multi-machine sync. snaptailor is narrower and deeper: it targets AI agent configuration specifically, with semantic understanding of MCP servers, skill graphs, and permission rules. Source: https://www.chezmoi.io/
-- **Claude Code** has hierarchical settings, MCP config, skills, subagents, memory files, and permission rules. snaptailor captures the full surface and can restore it. Source: https://docs.claude.com/en/docs/claude-code/settings
+- **chezmoi** manages dotfiles with templates, encryption, scripts, and multi-machine sync. Hem is narrower and deeper: it targets AI agent configuration specifically, with semantic understanding of MCP servers, skill graphs, and permission rules. Source: https://www.chezmoi.io/
+- **Claude Code** has hierarchical settings, MCP config, skills, subagents, memory files, and permission rules. Hem captures the full surface and can restore it. Source: https://docs.claude.com/en/docs/claude-code/settings
 - **Claude Code and Cursor** expose MCP configuration as project/user state with different file locations and scope semantics. Sources: https://docs.claude.com/en/docs/claude-code/mcp and https://docs.cursor.com/advanced/model-context-protocol
 - **Codex CLI** has local config and MCP support. Source: https://platform.openai.com/docs/docs-mcp
-- **AGHub** is near "unified MCP and portable skills." snaptailor differentiates on bundle portability, restore safety (rollback), and cross-agent coverage. Source: https://aghub.akr.moe/
-- **Docker / Nix / Dev Containers** solve general environment reproducibility. snaptailor solves the agent-config layer specifically — the files and settings that live in `~/.claude/`, `.mcp.json`, `CLAUDE.md`, etc.
+- **AGHub** is near "unified MCP and portable skills." hem differentiates on bundle portability, restore safety (rollback), and cross-agent coverage. Source: https://aghub.akr.moe/
+- **Docker / Nix / Dev Containers** solve general environment reproducibility. Hem solves the agent-config layer specifically — the files and settings that live in `~/.claude/`, `.mcp.json`, `CLAUDE.md`, etc.
 
 ## Product Promise Boundaries
 
 ### v0.2 Promise (current)
 
 - Scan and capture agent configurations from 6 agents (Claude Code, Codex, Cursor, OpenCode, Pi Agent, Project).
-- Bundle entire or partial agent environments into `.stailor` archives.
+- Bundle entire or partial agent environments into `.hem` archives.
 - Restore bundles on Macs with per-type apply handlers, rollback safety, and readiness preview.
 - Read-only audit and diff between snapshots for change detection.
 - Content included by default; metadata-only export is available with `--metadata-only`.
 - Doctor/preflight reports missing local tools, MCP command availability, unverified remote MCP URLs, and env key gaps without installing packages or restoring secrets.
 - Never execute hooks, MCP commands, scripts, plugins, or agent tools during scan.
 - Never use network by default.
-- Local store: `~/.snaptailor` with `0700` permissions.
+- Local store: `~/.hem` with `0700` permissions.
 
 ### v0.3+ Target
 
-- **Fuller environment reproducibility**: export → dry-run → doctor → import makes supported agent setup portable across Macs.
+- **Local profiles**: keep named setup lines such as `default`, `frontend`, and `clean-baseline`.
+- **Timeline-first TUI**: show current setup, filtered agent history, and Git-log-style snapshots.
+- **MCP/skills manager**: add, remove, disable, and preview changes with automatic pre-change snapshots.
+- **Fuller environment portability**: export → dry-run → doctor → import makes supported agent setup portable across Macs.
 - **Cross-machine path remapping**: source Mac home paths resolve to target Mac home paths.
 - **Content bundles as default**: supported content is included by default; metadata-only is an opt-in `--metadata-only` flag.
 - **Signed bundles**: verify bundle integrity and provenance before import.
 - **Partial restore**: choose which agents/skills/MCPs to restore from a bundle.
 - **Env value handling**: safe, encrypted-at-rest env value storage in bundles (with explicit user opt-in).
 - **Cross-OS restore**: macOS ↔ Linux path resolution.
-- **CI integration**: `snaptailor bundle export` in CI, `snaptailor bundle validate` as a pre-merge check.
+- **CI integration**: `hem bundle export` in CI, `hem bundle validate` as a pre-merge check.
 
 ### NOT Yet
 
 - Cloud sync / team sharing server.
-- Desktop UI (TUI/GUI).
+- Desktop UI.
 - Marketplace or skill registry.
 - Remote agent execution or orchestration.
 
@@ -76,59 +79,58 @@ Concrete moments:
 ### Diagnostic (v0.1, stable)
 
 ```bash
-snaptailor scan --project .
-snaptailor scan --project . --explain
-snaptailor snapshot create --name baseline --metadata-only --project .
-snaptailor snapshot list
-snaptailor snapshot show baseline --json
-snaptailor diff baseline current --project .
-snaptailor audit current --project .
-snaptailor provenance current --project . --json
-snaptailor report current --project . --out snaptailor-report.md
+hem scan --project .
+hem scan --project . --explain
+hem snapshot create --name baseline --metadata-only --project .
+hem snapshot list
+hem snapshot show baseline --json
+hem diff baseline current --project .
+hem audit current --project .
+hem provenance current --project . --json
+hem report current --project . --out hem-report.md
 ```
 
 ### Reproducibility (v0.2, active development)
 
 ```bash
 # Export current environment to a portable bundle
-snaptailor bundle export --name <snapshot> --out <file.stailor> --project .
+hem bundle export --name <snapshot> --out <file.hem> --project .
 
 # Import and restore on another machine
-snaptailor bundle import <file.stailor> --apply-content --project .
+hem bundle import <file.hem> --apply-content --project .
 
 # Safe preview before importing
-snaptailor doctor --project .
-snaptailor bundle import <file.stailor> --dry-run --project .
-snaptailor bundle inspect <file.stailor>
+hem doctor --project .
+hem bundle import <file.hem> --dry-run --project .
+hem bundle inspect <file.hem>
 
 # Snapshot-based restore with rollback
-snaptailor restore --snapshot <name> --dry-run --project .
-snaptailor restore --snapshot <name> --apply --project .
-snaptailor restore --snapshot <name> --apply --rollback --project .
+hem restore --snapshot <name> --dry-run --project .
+hem restore --snapshot <name> --apply --project .
+hem restore --snapshot <name> --apply --rollback --project .
 ```
 
 `current` is a pseudo-snapshot generated from a fresh read-only scan. It is never stored unless the user explicitly creates a snapshot.
 
 ## First Five Minutes
 
-The first useful moment must sell the reproducibility promise immediately.
+The first useful moment must sell local history immediately.
 
 ```bash
-npm install -g @qxinm/snaptailor
+npm install -g @qxinm/hem
 
-# Export your current setup
-snaptailor bundle export --name my-setup --out my-setup.stailor --project ~/my-project
+# Save the setup that works
+hem snapshot create --name baseline --metadata-only --project ~/my-project
 
-# On another Mac — or after breaking something — preview then restore it
-snaptailor doctor --project ~/my-project
-snaptailor bundle import my-setup.stailor --dry-run --project ~/my-project
-snaptailor bundle import my-setup.stailor --apply-content --quarantine --experimental --project ~/my-project
+# After agent-driven setup changes, compare and restore if needed
+hem diff baseline current --project ~/my-project
+hem restore --snapshot baseline --dry-run --project ~/my-project
 ```
 
 Expected first-run output:
 
 ```text
-snaptailor bundle export
+hem snapshot create
 
 Read-only during scan: yes
 Network: disabled
@@ -142,16 +144,16 @@ Exported agents
   Pi Agent     ✓ 8 items (extensions, skills, themes, prompts)
   Project      ✓ 5 items (AGENTS.md, .mcp.json, .env keys)
 
-Bundle: my-setup.stailor (34 evidence items, 1.2 MB)
-Content included: yes
-Signed: no (v0.3+)
+Saved setup: baseline
+Captured agents: Claude Code, Codex, Cursor
+Title: capture baseline
 
-Next on another machine:
-  snaptailor doctor --project .
-  snaptailor bundle import my-setup.stailor --dry-run --project .
+Next:
+  hem diff baseline current --project .
+  hem restore --snapshot baseline --dry-run --project .
 ```
 
-Target time to first bundle: under 10 seconds.
+Target time to first saved setup: under 10 seconds.
 
 ## Supported Surface
 
@@ -223,7 +225,7 @@ Implementation status: TypeScript model in `src/types.ts`. **restorePolicy is th
 
 ```text
                  +-------------------------+
-                 | snaptailor CLI          |
+                 | Hem CLI          |
                  +------------+------------+
                               |
                               v
@@ -258,7 +260,7 @@ Implementation status: TypeScript model in `src/types.ts`. **restorePolicy is th
               |                     |                      |
               v                     v                      v
     +------------------+  +------------------+  +----------------------+
-    | Report + JSON    |  | Restore planner  |  | .stailor tar bundle  |
+    | Report + JSON    |  | Restore planner  |  | .hem tar bundle  |
     +------------------+  +------------------+  +----------------------+
                                      |
                                      v
@@ -299,7 +301,7 @@ Initial audit findings:
 - `PARSE_FAILED`: a relevant config file cannot be parsed.
 - `SYMLINK_SKIPPED`: symlink found and not followed.
 - `UNSUPPORTED_AGENT_STATE`: detected state exists but cannot be interpreted.
-- `WORLD_WRITABLE_STORE`: local snaptailor store permissions are unsafe.
+- `WORLD_WRITABLE_STORE`: local Hem store permissions are unsafe.
 
 Each finding includes `code`, `severity`, `problem`, `cause`, `fix`, `path`, `evidenceId`.
 
@@ -307,8 +309,8 @@ Each finding includes `code`, `severity`, `problem`, `cause`, `fix`, `path`, `ev
 
 - Local only by default. No telemetry.
 - No command execution while scanning. No network access while scanning.
-- Store path: `~/.snaptailor`, created with `0700`.
-- Write only to `~/.snaptailor` unless `--out` is explicitly provided.
+- Store path: `~/.hem`, created with `0700`.
+- Write only to `~/.hem` unless `--out` is explicitly provided.
 - Never follow symlinks by default. Record symlink metadata only.
 - Reject world/group-writable snapshot stores.
 - Limit scan size, file count, depth, and parse time.
@@ -327,10 +329,10 @@ Every user-facing error must include:
 Example:
 
 ```text
-SNAPTAILOR_PARSE_FAILED
+HEM_PARSE_FAILED
 Problem: Could not parse Codex config.
 Cause: TOML syntax error at ~/.codex/config.toml:12.
-Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
+Fix: Run `hem scan --skip codex` or fix the TOML file.
 ```
 
 ## Implementation Plan
@@ -352,7 +354,7 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 
 ### Milestone 2: Metadata Snapshot Store
 
-- [done] Create `~/.snaptailor` with `0700`.
+- [done] Create `~/.hem` with `0700`.
 - [done] Store metadata-only snapshots.
 - [done] Snapshot store helpers for create, list, and show.
 - [done] Checksums for observed files and safe structured fields.
@@ -378,7 +380,7 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 
 ### Milestone 6: Bundle Format (v0.2)
 
-- [done] `.stailor` tar-based bundle format: export, import, inspect.
+- [done] `.hem` tar-based bundle format: export, import, inspect.
 - [done] Bundle manifest with format version, security metadata, checksums.
 - [done] Content inclusion with `--include-content` flag.
 - [done] Path traversal hardening: reject `..`, `~/`, absolute paths, `.ssh`.
@@ -417,7 +419,7 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 ### Milestone 11: Bundle Security (v0.3)
 
 - [ ] Signed bundles: HMAC or Ed25519 signature on bundle manifest + content.
-- [ ] Bundle verification before import: `snaptailor bundle verify <file.stailor>`.
+- [ ] Bundle verification before import: `hem bundle verify <file.hem>`.
 - [ ] Trust-on-first-use key management for bundle signing.
 - [ ] Quarantine mode: imported bundles are inspected before content is applied.
 
@@ -425,8 +427,8 @@ Fix: Run `snaptailor scan --skip codex` or fix the TOML file.
 
 - [ ] Windsurf scanner (if API/surface is stable).
 - [ ] Copilot scanner (if config surface is inspectable).
-- [ ] CI recipe: `snaptailor bundle export --validate` as pre-merge check.
-- [ ] CI recipe: `snaptailor diff baseline current` to detect agent config drift in PRs.
+- [ ] CI recipe: `hem bundle export --validate` as pre-merge check.
+- [ ] CI recipe: `hem diff baseline current` to detect agent config drift in PRs.
 
 ## Test Diagram
 
@@ -476,7 +478,7 @@ bundle export --include-content --project .
 - Agent vendors expose some settings export/import inside their own tools.
 - MCP managers solve server toggling and install flow.
 - Docker/Nix/Dev Containers solve general environment reproducibility.
-- snaptailor's unique work: **cross-agent, cross-machine agent-config portability with restore safety and rollback**.
+- Hem's unique work: **Git-like local history for cross-agent AI coding setups, with restore safety and portable profiles**.
 
 ## NOT In Scope
 
@@ -494,10 +496,10 @@ bundle export --include-content --project .
 | 2 | CEO | Narrow initial operator to developers running coding agents across repos | Retained | P5 | A concrete operator makes the first workflow and copy-paste docs testable | Broad "AI power user" segment |
 | 3 | Eng | Use metadata-only snapshots in v0.1 | Retained | P1 | Avoids raw secret and supply-chain exposure. Content inclusion is now opt-in via `--include-content`. | Raw file-content bundles as default in v0.1 |
 | 4 | Eng | Add policy-aware `DiscoveredItem` before manifest/diff/report | Retained | P5 | Redaction and capture rules must be central, not downstream cleanup | Scanner emits raw bytes directly |
-| 5 | Eng | Defer import/export/restore/share | Superseded | See #8 | Original decision: these require write safety before core value is proven. Bundle and restore are now implemented and becoming the core workflow. | Implement `.stailor` bundles in v0.1 |
-| 6 | DX | Make `snaptailor scan --project .` the first useful report | Retained | P5 | First run must create value and trust. Now supplemented by `bundle export` as the primary first-run workflow. | Install, create snapshot, then empty diff |
+| 5 | Eng | Defer import/export/restore/share | Superseded | See #8 | Original decision: these require write safety before core value is proven. Bundle and restore are now implemented and becoming the core workflow. | Implement `.hem` bundles in v0.1 |
+| 6 | DX | Make `hem scan --project .` the first useful report | Retained | P5 | First run must create value and trust. Now supplemented by `bundle export` as the primary first-run workflow. | Install, create snapshot, then empty diff |
 | 7 | DX | Add explicit error contract and stable JSON outputs | Retained | P1 | Developer tool adoption depends on automation and fixable errors | Human-only prose output |
-| 8 | CEO | **Pivot to reproducibility**: snaptailor's core value is "Docker image for AI agent environments" | Active (2026-05-20) | P1 + P2 | Read-only diagnosis was the trust-building foundation. Bundle + restore are already implemented. The product is now a reproducibility engine with diagnosis as a supporting layer. | Stay read-only diagnosis only |
+| 8 | CEO | **Pivot to local setup history**: Hem's core value is "Time Machine for AI agent setups" | Active (2026-06-07) | P1 + P2 | Read-only diagnosis proved the evidence model. Bundle + restore are useful, but the repeat-use wedge is local history: save, compare, restore, and profile agent setups while experimenting with MCPs and skills. | Portability-only framing as the primary product |
 
 ## Review Scores
 

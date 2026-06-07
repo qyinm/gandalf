@@ -1,121 +1,138 @@
-# snaptailor
+# Hem
 
-Portable diagnostics and experimental restore tooling for AI coding agent environments — MCP servers, skills, permissions, hooks, and agent configs.
+Time Machine for your AI coding agent setup.
 
-snaptailor captures your agent setup (Claude Code, Codex, Cursor, OpenCode, Pi Agent) into snapshots and optional `.stailor` bundles. The safe path is inspect/verify/dry-run first; applying bundled content is experimental and project-relative only.
+Hem helps you view, save, compare, and restore the MCP servers, skills, hooks, permissions, instructions, and agent configs used by Claude Code, Codex, Cursor, OpenCode, and Pi Agent.
+
+Use it when you let agents change their own setup, experiment with MCPs and skills, or move your agent environment to a new machine.
 
 ```bash
-npm install -g @qxinm/snaptailor
+npm install -g @qxinm/hem
 
-# Machine A: export your setup (content included by default; use --metadata-only to opt out)
-snaptailor bundle export --name my-setup --out my-setup.stailor --project .
+# Save a restore point
+hem snapshot create --name baseline --metadata-only --project .
 
-# Machine B: verify and preview it safely
-snaptailor bundle verify my-setup.stailor
-snaptailor doctor --project .
-snaptailor bundle import my-setup.stailor --dry-run --project .
-snaptailor bundle import my-setup.stailor --apply-content --quarantine --experimental --project .
+# See what changed after installing skills/MCPs
+hem diff baseline current --project .
+
+# Preview a restore before applying it
+hem restore --snapshot baseline --dry-run --project .
 ```
 
-snaptailor also includes a full read-only diagnosis pipeline — scan, diff, audit, provenance — so you can see what changed and why before you commit to a restore.
+Hem can also export a saved setup as a portable `.hem` bundle.
+
+```bash
+# Machine A: export your setup
+hem bundle export --name baseline --out daily.hem --project .
+
+# Machine B: verify, inspect, and preview it safely
+hem bundle verify daily.hem
+hem bundle inspect daily.hem
+hem doctor --project .
+hem bundle import daily.hem --dry-run --project .
+```
 
 ---
 
-## Documentation
+## Why Hem
 
-- [Architecture overview](ARCHITECTURE.md) explains the CLI entry points, scanner plugin model, evidence graph, bundle format, restore planner, TUI layer, and trust boundaries.
+AI coding power users constantly change their agent environment:
+
+- adding MCP servers
+- installing skills
+- editing prompts and instructions
+- changing hooks and permissions
+- asking agents to modify the setup for them
+
+The problem is that agent setup changes usually have no history. After a few experiments, it is hard to know what was original, what changed, and what can be safely removed.
+
+Hem gives that setup a local history:
+
+- **Current setup**: what is installed right now
+- **Snapshot**: a saved point in time
+- **Compare**: what changed between two points
+- **Restore**: go back to a saved setup
+- **Profile**: a named setup line, like `default`, `frontend`, or `clean-baseline`
+- **Bundle**: a portable `.hem` file for moving a setup between machines
 
 ---
 
 ## Trust Contract
 
-By default snaptailor:
+By default Hem:
 
 - reads local user and project agent configuration **only**
 - does **not** execute MCP commands, hooks, scripts, plugins, or agent tools
 - does **not** use the network
-- writes **only** to `~/.snaptailor`, unless `--out` is explicit
-- exports bundle content by default; use `--metadata-only` to opt out
+- writes **only** to `~/.hem`, unless `--out` is explicit
 - omits raw secrets and raw `.env` values
 - does **not** follow symlinks
-- snapshot restore requires explicit `--apply`; rollback is available with `restore --rollback`
-- bundle content apply requires `--apply-content` plus `--experimental`, is project-relative only, and should be previewed with `--dry-run` or `--quarantine` first
-- doctor/preflight checks report manual setup gaps; snaptailor does not install packages or restore raw secret values
+- requires explicit apply flags before restoring content
+- creates rollback paths for restore operations where supported
+- reports missing local tools and env keys without installing packages or restoring secret values
 
 ---
 
 ## Commands
 
-### Reproducibility (bundle + restore)
-
-```bash
-# Export current environment to a portable .stailor bundle (content included by default)
-snaptailor bundle export --name <snapshot> --out <file.stailor> --project .
-snaptailor bundle export --name <snapshot> --out <file.stailor> --metadata-only --project .
-
-# Safe preview and verification before importing
-snaptailor bundle verify <file.stailor>
-snaptailor doctor --project .
-snaptailor bundle import <file.stailor> --dry-run --project .
-snaptailor bundle inspect <file.stailor>
-
-# Experimental content inspection/apply on another machine
-snaptailor bundle import <file.stailor> --apply-content --quarantine --experimental --project .
-snaptailor bundle import <file.stailor> --apply-content --experimental --project .
-
-# Snapshot-based restore with rollback safety
-snaptailor restore --snapshot <name> --dry-run --project .
-snaptailor restore --snapshot <name> --apply --project .
-snaptailor restore --snapshot <name> --apply --fail-fast --project .
-snaptailor restore --snapshot <name> --apply --rollback --project .
-```
-
-Destructive operations (`restore --apply`, `bundle import --apply-content`) require either `--experimental` or `SNAPTAILOR_EXPERIMENTAL=1`. Bundle export includes supported file content by default; pass `--metadata-only` to export metadata only. Bundle `--apply-content` refuses home-relative content paths and known sensitive prefixes; use `--quarantine` to inspect content without writing target files.
-
-`snaptailor doctor --project .` checks Mac readiness before import/apply. It reports missing local tools, MCP command availability, unverified remote MCP URLs, and env keys that need manual values. It never runs installers, contacts package registries, executes MCP commands, or prints raw secret values.
-
-### Diagnosis (scan + diff + audit)
+### Local Setup History
 
 ```bash
 # Discover agents and config files
-snaptailor scan --project .
-snaptailor scan --project . --explain    # show paths considered
-snaptailor scan --project . --json       # machine-readable output
+hem scan --project .
+hem scan --project . --explain
+hem scan --project . --json
 
-# Capture point-in-time state
-snaptailor snapshot create --name baseline --metadata-only --project .
-snaptailor snapshot list
-snaptailor snapshot show baseline --json
+# Save point-in-time state
+hem snapshot create --name baseline --metadata-only --project .
+hem snapshot list
+hem snapshot show baseline --json
 
-# Compare two snapshots
-snaptailor diff baseline current --project .       # semantic + raw diff
-snaptailor diff baseline current --project . --json
+# Compare saved setup with current setup
+hem diff baseline current --project .
+hem diff baseline current --project . --json
 
-# Security/risk findings
-snaptailor audit current --project .
-snaptailor audit baseline --json
-
-# Trace evidence to source
-snaptailor provenance current --project .
-
-# Export human-readable report
-snaptailor report current --project . --out snaptailor-report.md
+# Restore with preview
+hem restore --snapshot baseline --dry-run --project .
+hem restore --snapshot baseline --apply --experimental --project .
+hem restore --snapshot baseline --apply --rollback --experimental --project .
 ```
 
----
-
-## Machine-Readable Output
-
-Every command supports `--json` for structured output.
+### Bundle And Move Setups
 
 ```bash
-snaptailor scan --project . --json
-snaptailor diff baseline current --project . --json
-snaptailor provenance current --project . --json
-snaptailor audit current --project . --json
-snaptailor report current --project . --json
-snaptailor bundle inspect baseline.stailor --json
+# Export current environment to a portable .hem bundle
+hem bundle export --name baseline --out daily.hem --project .
+hem bundle export --name baseline --out daily.hem --metadata-only --project .
+
+# Safe preview and verification before importing
+hem bundle verify daily.hem
+hem bundle inspect daily.hem
+hem doctor --project .
+hem bundle import daily.hem --dry-run --project .
+
+# Experimental content inspection/apply on another machine
+hem bundle import daily.hem --apply-content --quarantine --experimental --project .
+hem bundle import daily.hem --apply-content --experimental --project .
 ```
+
+Destructive operations require either `--experimental` or `HEM_EXPERIMENTAL=1`. Bundle content apply refuses known sensitive prefixes and should be previewed with `--dry-run` or `--quarantine` first.
+
+### Diagnosis
+
+```bash
+# Security/risk notes
+hem audit current --project .
+hem audit baseline --json
+
+# Trace evidence to source
+hem provenance current --project .
+
+# Export human-readable report
+hem report current --project . --out hem-report.md
+```
+
+Every command supports `--json` where structured output is useful.
 
 ---
 
@@ -138,22 +155,22 @@ Scanner plugin interface: add new agents by implementing `ScannerPlugin`.
 
 | Milestone | Status |
 |---|---|
-| Read-only scan, diff, audit, provenance, report | ✅ v0.1 (stable) |
-| Bundle export/import (.stailor format) | ✅ v0.2 (experimental) |
-| Restore engine (dry-run, apply, rollback) | ✅ v0.2 (experimental) |
-| Restore policy matrix (per-kind content rules) | ✅ v0.2.1 |
-| Content bundles as default | ✅ v0.2.1 |
-| Cross-machine path remapping | ✅ v0.2.1 |
-| Signed bundle verification | ✅ v0.2.1 |
-| Windsurf / Copilot scanners | 📋 future |
+| Read-only scan, diff, audit, provenance, report | ✅ v0.1 |
+| Bundle export/import (`.hem` format) | ✅ v0.2 experimental |
+| Restore engine (dry-run, apply, rollback) | ✅ v0.2 experimental |
+| TUI dashboard | ✅ v0.3 draft |
+| Timeline-first TUI | 📋 next |
+| Local profiles | 📋 next |
+| MCP/skills add-remove manager | 📋 future |
+| Cloud profiles and multi-machine sync | 📋 Pro |
 
 ---
 
 ## Development
 
 ```bash
-git clone git@github.com:qyinm/snaptailor.git
-cd snaptailor
+git clone git@github.com:qyinm/hem.git
+cd hem
 npm install
 npm run check        # build + test
 npm run typecheck    # TypeScript only, no emit

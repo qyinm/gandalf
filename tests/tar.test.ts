@@ -20,7 +20,7 @@ import { readTar, writeTar, validateTarPath } from "../src/tar.js";
 import type { TarEntry } from "../src/types.js";
 
 async function tmpPath(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "snaptailor-tar-"));
+  const dir = await mkdtemp(join(tmpdir(), "hem-tar-"));
   return join(dir, "archive.tar");
 }
 

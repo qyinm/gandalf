@@ -1,8 +1,8 @@
 /**
- * Clack wizard for `snaptailor bundle import`.
+ * Clack wizard for `hem bundle import`.
  *
  * Walks the user through:
- *   1. Picking a .stailor file
+ *   1. Picking a .hem file
  *   2. Dry-run preview
  *   3. Confirming content apply
  *   4. Executing the import
@@ -25,23 +25,23 @@ import { formatReadinessSummaryLines } from "../../readiness.js";
 export async function bundleImportWizard(
   options: RuntimeOptions
 ): Promise<number> {
-  clack.intro("snaptailor bundle import");
+  clack.intro("hem bundle import");
 
   await ensureStore(options.storeDir);
 
-  // ── Step 1: Pick a .stailor file ─────────────────────────
-  // Scan cwd for .stailor files
-  const stailorFiles = fs
+  // ── Step 1: Pick a .hem file ─────────────────────────
+  // Scan cwd for .hem files
+  const hemFiles = fs
     .readdirSync(options.projectPath)
-    .filter((f) => f.endsWith(".stailor"));
+    .filter((f) => f.endsWith(".hem"));
 
   let bundlePath: string | symbol;
 
-  if (stailorFiles.length > 0) {
+  if (hemFiles.length > 0) {
     bundlePath = await clack.select({
-      message: "Select a .stailor bundle to import:",
+      message: "Select a .hem bundle to import:",
       options: [
-        ...stailorFiles.map((name) => ({
+        ...hemFiles.map((name) => ({
           label: name,
           value: path.join(options.projectPath, name),
         })),
@@ -50,8 +50,8 @@ export async function bundleImportWizard(
     });
   } else {
     const result = await clack.text({
-      message: "Enter path to .stailor bundle:",
-      placeholder: "./my-setup.stailor",
+      message: "Enter path to .hem bundle:",
+      placeholder: "./my-setup.hem",
       validate: (val) => {
         if (!val || val.trim().length === 0) return "Path is required";
         if (!fs.existsSync(val)) return "File not found";
@@ -69,7 +69,7 @@ export async function bundleImportWizard(
   if (bundlePath === "__custom__") {
     const custom = await clack.text({
       message: "Enter bundle path:",
-      placeholder: "./my-setup.stailor",
+      placeholder: "./my-setup.hem",
       validate: (val) => {
         if (!val || val.trim().length === 0) return "Path is required";
         if (!fs.existsSync(val)) return "File not found";
@@ -95,7 +95,7 @@ export async function bundleImportWizard(
     spinner.stop("Inspect failed");
     process.stderr.write(
       formatSnapError({
-        code: "SNAPTAILOR_BUNDLE_INSPECT_FAILED",
+        code: "HEM_BUNDLE_INSPECT_FAILED",
         problem: `Failed to read bundle: ${err instanceof Error ? err.message : String(err)}`,
         cause: "The bundle file could not be read or is invalid.",
         fix: "Verify the bundle file and try again.",
@@ -159,7 +159,7 @@ export async function bundleImportWizard(
     drySpinner.stop("Dry-run failed");
     process.stderr.write(
       formatSnapError({
-        code: "SNAPTAILOR_BUNDLE_DRYRUN_FAILED",
+        code: "HEM_BUNDLE_DRYRUN_FAILED",
         problem: `Dry-run failed: ${err instanceof Error ? err.message : String(err)}`,
         cause: "The bundle could not be validated against this machine.",
         fix: "Check the bundle compatibility with your current environment.",
@@ -234,7 +234,7 @@ export async function bundleImportWizard(
     execSpinner.stop("Import failed");
     process.stderr.write(
       formatSnapError({
-        code: "SNAPTAILOR_BUNDLE_IMPORT_FAILED",
+        code: "HEM_BUNDLE_IMPORT_FAILED",
         problem: `Bundle import failed: ${err instanceof Error ? err.message : String(err)}`,
         cause: "An error occurred during bundle import.",
         fix: "Check the bundle file and try again.",

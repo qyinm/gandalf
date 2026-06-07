@@ -20,7 +20,7 @@ export default function ReportPreview({ markdown }: ReportPreviewProps) {
   if (!markdown || markdown.trim().length === 0) {
     return (
       <Box flexDirection="column">
-        <Text bold>snaptailor report</Text>
+        <Text bold>hem report</Text>
         <Text dimColor>Report is empty.</Text>
       </Box>
     );
@@ -29,7 +29,7 @@ export default function ReportPreview({ markdown }: ReportPreviewProps) {
   return (
     <Box flexDirection="column">
       <Box marginBottom={1}>
-        <Text bold>snaptailor report preview</Text>
+        <Text bold>hem report preview</Text>
       </Box>
       <Markdown>
         {markdown}

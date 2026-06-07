@@ -1,5 +1,5 @@
 /**
- * Ink component for snaptailor scan results.
+ * Ink component for hem scan results.
  *
  * Renders a rich terminal view of scan output including:
  * - Trust badges
@@ -86,7 +86,7 @@ export default function ScanView({
     <Box flexDirection="column" paddingX={0}>
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold>snaptailor scan</Text>
+        <Text bold>hem scan</Text>
       </Box>
 
       {/* Trust badge */}
