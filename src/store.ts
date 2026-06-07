@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import {
   access,
@@ -12,7 +12,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import path from "node:path";
-import type { AgentId, AuditFinding, DiscoveredItem, Snapshot } from "./types.js";
+import type { AgentId, AuditFinding, DiscoveredItem, Snapshot, TimelineEntry } from "./types.js";
 
 const SNAPSHOT_FILES = {
   manifest: "manifest.json",
@@ -23,6 +23,9 @@ const SNAPSHOT_FILES = {
   checksums: "checksums.json",
   redactions: "redactions.json"
 } as const;
+
+const TIMELINE_EVENTS_DIR = path.join("timeline", "events");
+const AGENT_STORE_DIRS: AgentId[] = ["claude-code", "codex", "cursor", "opencode", "pi-agent", "project", "unknown"];
 
 type ChecksumRecord = Record<string, { sourcePath: string; checksum: string }>;
 
@@ -87,7 +90,7 @@ export async function listAgents(storeDir: string): Promise<AgentId[]> {
   const entries = await readdir(storeDir, { withFileTypes: true });
   const agents: AgentId[] = [];
   for (const entry of entries) {
-    if (entry.isDirectory() && isSafeAgentName(entry.name)) {
+    if (entry.isDirectory() && isSafeAgentName(entry.name) && AGENT_STORE_DIRS.includes(entry.name as AgentId)) {
       // Verify the directory actually contains snapshots (has subdirectories)
       const sub = await readdir(path.join(storeDir, entry.name), { withFileTypes: true });
       const hasSnapshots = sub.some((s) => s.isDirectory());
@@ -210,6 +213,80 @@ export async function snapshotExists(
   }
 }
 
+export interface TimelineListOptions {
+  agent?: AgentId;
+  projectPath?: string;
+  limit?: number;
+  onCorruptEntry?: (event: TimelineCorruptEvent) => void;
+}
+
+export interface TimelineCorruptEvent {
+  filePath: string;
+  error: string;
+}
+
+export async function appendTimelineEntry(
+  storeDir: string,
+  entry: TimelineEntry
+): Promise<void> {
+  validateSnapshotName(entry.afterSnapshotName);
+  if (entry.beforeSnapshotName) {
+    validateSnapshotName(entry.beforeSnapshotName);
+  }
+  await ensureStore(storeDir);
+  const dir = timelineEventsDir(storeDir);
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  await chmod(dir, 0o700);
+  await writeJsonAtomic(timelineEntryPath(storeDir, entry), entry);
+}
+
+export async function listTimelineEntries(
+  storeDir: string,
+  options: TimelineListOptions = {}
+): Promise<TimelineEntry[]> {
+  const dir = timelineEventsDir(storeDir);
+  if (!(await pathExists(dir))) {
+    return [];
+  }
+
+  const entries = await readTimelineEntries(dir, options.onCorruptEntry);
+  const filtered = entries
+    .filter((entry) => options.projectPath === undefined || path.resolve(entry.projectPath) === path.resolve(options.projectPath))
+    .filter((entry) => options.agent === undefined || entry.agent === options.agent || entry.agents.includes(options.agent))
+    .sort((left, right) => right.observedAt.localeCompare(left.observedAt));
+
+  return typeof options.limit === "number"
+    ? filtered.slice(0, Math.max(0, options.limit))
+    : filtered;
+}
+
+export async function latestTimelineEntry(
+  storeDir: string,
+  options: Omit<TimelineListOptions, "limit"> = {}
+): Promise<TimelineEntry | undefined> {
+  return (await listTimelineEntries(storeDir, { ...options, limit: 1 }))[0];
+}
+
+export async function findTimelineEntry(
+  storeDir: string,
+  ref: string,
+  options: Pick<TimelineListOptions, "onCorruptEntry"> = {}
+): Promise<TimelineEntry | undefined> {
+  const entries = await listTimelineEntries(storeDir, options);
+  return entries.find((entry) => entry.id === ref || entry.afterSnapshotName === ref);
+}
+
+export function stateHash(snapshot: Snapshot): string {
+  const hash = createHash("sha256");
+  hash.update(JSON.stringify({
+    evidence: snapshot.evidence,
+    graph: snapshot.graph,
+    auditFindings: snapshot.auditFindings,
+    provenance: snapshot.provenance
+  }));
+  return `sha256:${hash.digest("hex")}`;
+}
+
 function validateSnapshotName(name: string): string {
   if (!isSafeSnapshotName(name)) {
     throw new Error(`Unsafe snapshot name: ${JSON.stringify(name)}`);
@@ -234,6 +311,34 @@ async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> 
 
 async function readJson<T>(filePath: string): Promise<T> {
   return JSON.parse(await readFile(filePath, "utf8")) as T;
+}
+
+function timelineEventsDir(storeDir: string): string {
+  return path.join(storeDir, TIMELINE_EVENTS_DIR);
+}
+
+function timelineEntryPath(storeDir: string, entry: TimelineEntry): string {
+  const observed = entry.observedAt.replace(/[:.]/g, "-");
+  return path.join(timelineEventsDir(storeDir), `${observed}-${entry.id}.json`);
+}
+
+async function readTimelineEntries(dir: string, onCorruptEntry?: (event: TimelineCorruptEvent) => void): Promise<TimelineEntry[]> {
+  const entries: TimelineEntry[] = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) {
+      continue;
+    }
+    try {
+      entries.push(await readJson<TimelineEntry>(path.join(dir, entry.name)));
+    } catch (error) {
+      // Corrupt timeline events should not hide the rest of the local history.
+      onCorruptEntry?.({
+        filePath: path.join(dir, entry.name),
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+  return entries;
 }
 
 function checksumsFromEvidence(evidence: DiscoveredItem[]): ChecksumRecord {

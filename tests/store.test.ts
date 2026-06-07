@@ -1,18 +1,21 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readdir, readFile, stat } from "node:fs/promises";
+import { chmod, mkdtemp, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import {
   agentStoreDir,
+  appendTimelineEntry,
   ensureStore,
+  findTimelineEntry,
   listAgents,
   listSnapshots,
+  listTimelineEntries,
   readSnapshot,
   snapshotExists,
   writeSnapshot
 } from "../src/store.js";
-import type { Snapshot } from "../src/types.js";
+import type { Snapshot, TimelineEntry } from "../src/types.js";
 
 async function tempStore(): Promise<string> {
   return mkdtemp(path.join(tmpdir(), "hem-store-test-"));
@@ -82,6 +85,45 @@ function snapshot(name: string): Snapshot {
         captureStatus: "captured"
       }
     ]
+  };
+}
+
+function timelineEntry(overrides: Partial<TimelineEntry> & Pick<TimelineEntry, "id" | "observedAt" | "afterSnapshotName">): TimelineEntry {
+  const { afterSnapshotName, observedAt, ...rest } = overrides;
+  return {
+    schemaVersion: "0.1",
+    source: "daemon",
+    eventKind: "setup_changed",
+    title: "update github mcp",
+    projectPath: "/tmp/project",
+    agents: ["claude-code"],
+    afterSnapshotName,
+    daemonRunId: "run-test",
+    createdAt: observedAt,
+    observedAt,
+    changedSurfaces: [
+      {
+        kind: "mcp_server",
+        changeType: "MCP_CHANGED",
+        path: ".mcp.json",
+        entityName: "github",
+        restorable: true,
+        observeOnly: false
+      }
+    ],
+    restoreReadiness: "full",
+    confidence: "high",
+    confidenceReason: "test",
+    evidenceCount: 1,
+    graphNodeCount: 1,
+    auditFindingCount: 0,
+    changes: {
+      hasChanges: true,
+      semanticChangeCount: 1,
+      rawSourceChangeCount: 0,
+      highlights: ["MCP_CHANGED: github"]
+    },
+    ...rest
   };
 }
 
@@ -215,5 +257,47 @@ describe("per-agent snapshot store", () => {
     const storeDir = await tempStore();
     await ensureStore(storeDir);
     assert.deepEqual(await listAgents(storeDir), []);
+  });
+});
+
+describe("timeline event store", () => {
+  it("persists immutable event files and sorts by observed time", async () => {
+    const storeDir = await tempStore();
+    const older = timelineEntry({
+      id: "older",
+      observedAt: "2026-06-07T00:00:00.000Z",
+      afterSnapshotName: "after-older"
+    });
+    const newer = timelineEntry({
+      id: "newer",
+      observedAt: "2026-06-07T00:01:00.000Z",
+      afterSnapshotName: "after-newer"
+    });
+
+    await appendTimelineEntry(storeDir, older);
+    await appendTimelineEntry(storeDir, newer);
+
+    assert.deepEqual((await listTimelineEntries(storeDir)).map((entry) => entry.id), ["newer", "older"]);
+    assert.equal((await findTimelineEntry(storeDir, "after-older"))?.id, "older");
+    assert.deepEqual(await listAgents(storeDir), []);
+  });
+
+  it("skips corrupt event files without hiding valid timeline history", async () => {
+    const storeDir = await tempStore();
+    await appendTimelineEntry(storeDir, timelineEntry({
+      id: "valid",
+      observedAt: "2026-06-07T00:00:00.000Z",
+      afterSnapshotName: "after-valid"
+    }));
+    await writeFile(path.join(storeDir, "timeline", "events", "bad.json"), "{bad json", "utf8");
+
+    const corruptEvents: { filePath: string; error: string }[] = [];
+    const entries = await listTimelineEntries(storeDir, {
+      onCorruptEntry: (event) => corruptEvents.push(event)
+    });
+    assert.deepEqual(entries.map((entry) => entry.id), ["valid"]);
+    assert.equal(corruptEvents.length, 1);
+    assert.equal(path.basename(corruptEvents[0].filePath), "bad.json");
+    assert.match(corruptEvents[0].error, /json/i);
   });
 });

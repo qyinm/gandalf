@@ -94,6 +94,7 @@ export function parseDryRunOutput(input: string): ParseDryRunResult {
   }
 
   const plan = parsed as Record<string, unknown>;
+  const targetProject = typeof plan.targetProject === "string" ? plan.targetProject : undefined;
 
   // Validate items array
   if (!Array.isArray(plan.items)) {
@@ -149,12 +150,14 @@ export function parseDryRunOutput(input: string): ParseDryRunResult {
       path: planItem.sourcePath,
       type: planItem.kind,
       source: planItem.sourcePath,
-      dest: planItem.sourcePath,
+      dest: resolvePlanDestination(planItem, targetProject),
+      action: planItem.action,
       status: "pending",
       executionOrder: order,
       rollbackState: null,
       targetContent: planItem.targetState?.value,
       canRollback,
+      metadata: restoreItemMetadata(planItem),
       applyAt: undefined,
       errorMessage: undefined,
       skipReason: undefined
@@ -183,6 +186,7 @@ export function parseDryRunOutput(input: string): ParseDryRunResult {
       type: unsupported.kind,
       source: unsupported.sourcePath,
       dest: unsupported.sourcePath,
+      action: "unsupported",
       status: "unsupported",
       executionOrder: nextAppendOrder++,
       rollbackState: null,
@@ -223,23 +227,18 @@ export async function buildRestorePlan(options: RestoreOptions): Promise<Restore
 
   // Generate restore items from semantic changes
   for (const change of diff.semanticChanges) {
-    const itemId = `${change.entityKind}:${change.entityName}:${randomUUID().slice(0, 8)}`;
-    const sourcePath = resolveSourcePathByKind(change.entityKind, change.entityName);
-
-    // Determine action based on change type
-    let action: RestoreAction;
-    if (change.code === "MCP_ADDED" || change.code === "ENV_KEY_ADDED") {
-      action = "create";
-    } else if (change.code === "MCP_CHANGED") {
-      action = "update";
-    } else {
-      // Removals and other changes become "skip" in the dry-run plan
-      action = "skip";
-    }
-
     // Find matching graph nodes for current/target state
     const currentState = findMatchingEvidence(change, scan.evidence, false);
     const targetState = findMatchingEvidence(change, snapshot.evidence, true);
+    const itemId = `${change.entityKind}:${change.entityName}:${randomUUID().slice(0, 8)}`;
+    const sourcePath = sourcePathForRestoreItem(
+      change.entityKind,
+      change.entityName,
+      currentState,
+      targetState,
+      typeof change.details.sourcePath === "string" ? change.details.sourcePath : undefined
+    );
+    const action = restoreActionForChange(change.code);
 
     const riskLevel = change.severity;
     riskCounts[riskLevel]++;
@@ -264,7 +263,7 @@ export async function buildRestorePlan(options: RestoreOptions): Promise<Restore
       confirmationPrompt: riskLevel === "high" || riskLevel === "critical"
         ? `Restore ${change.entityKind} "${change.entityName}" with risk ${riskLevel}. Continue?`
         : "",
-      rollbackInstruction: `Reverse ${action} for ${change.entityKind}: ${change.entityName}`
+      rollbackInstruction: rollbackInstructionFor(action, change.entityKind, change.entityName)
     });
     executionOrder.push(itemId);
   }
@@ -501,7 +500,7 @@ export const applyHook: ApplyHandler = async (item: RestoreItem): Promise<void> 
  * Adds/updates an MCP server entry in the project's .mcp.json.
  */
 export const applyMcpServer: ApplyHandler = async (item: RestoreItem): Promise<void> => {
-  const mcpPath = path.join(path.dirname(item.dest), ".mcp.json");
+  const mcpPath = mcpConfigPathForItem(item);
   const mcpDir = path.dirname(mcpPath);
 
   let mcpConfig: Record<string, unknown> = { mcpServers: {} };
@@ -513,15 +512,25 @@ export const applyMcpServer: ApplyHandler = async (item: RestoreItem): Promise<v
     mcpConfig.mcpServers = {};
   }
 
-  const serverName = item.itemId.split(".").pop() ?? "unknown";
+  const serverName = mcpServerNameForItem(item);
   const servers = mcpConfig.mcpServers as Record<string, unknown>;
   const prevEntry = servers[serverName] ?? null;
 
-  servers[serverName] = item.targetContent;
   item.rollbackState = {
-    mcpPath, previousEntry: prevEntry,
-    mcpConfig: JSON.parse(JSON.stringify(mcpConfig))
+    filePath: mcpPath,
+    previousContent: existing,
+    mcpPath,
+    previousEntry: prevEntry
   };
+
+  if (item.action === "delete") {
+    delete servers[serverName];
+  } else {
+    if (item.targetContent === undefined) {
+      throw new Error(`Missing target MCP server content for ${serverName}`);
+    }
+    servers[serverName] = item.targetContent;
+  }
 
   await fs.promises.mkdir(mcpDir, { recursive: true });
   await fs.promises.writeFile(mcpPath, JSON.stringify(mcpConfig, null, 2) + "\n", "utf-8");
@@ -1005,17 +1014,114 @@ export function defaultUndoHandlerRegistry(): UndoHandlerRegistry {
 // ── Helpers ─────────────────────────────────────────────────────
 
 function canRollbackAction(action: RestoreAction): boolean {
-  return action === "create" || action === "update";
+  return action === "create" || action === "update" || action === "delete";
 }
 
 function buildRollbackSteps(items: RestorePlanItem[]): Array<{ itemId: string; action: string; instruction: string }> {
   return items
     .filter((item) => canRollbackAction(item.action))
     .map((item) => ({
-      itemId: item.itemId,
-      action: item.action === "create" ? "delete" : "revert",
-      instruction: item.rollbackInstruction
-    }));
+	      itemId: item.itemId,
+	      action: rollbackActionFor(item.action),
+	      instruction: item.rollbackInstruction
+	    }));
+}
+
+function rollbackActionFor(action: RestoreAction): string {
+  if (action === "create") return "delete";
+  if (action === "delete") return "create";
+  return "revert";
+}
+
+function restoreActionForChange(code: string): RestoreAction {
+  switch (code) {
+    case "MCP_ADDED":
+      return "delete";
+    case "MCP_REMOVED":
+      return "create";
+    case "MCP_CHANGED":
+      return "update";
+    case "ENV_KEY_ADDED":
+      return "create";
+    default:
+      return "skip";
+  }
+}
+
+function rollbackInstructionFor(action: RestoreAction, kind: EvidenceKind, name: string): string {
+  if (action === "delete") {
+    return `Recreate deleted ${kind}: ${name}`;
+  }
+  if (action === "create") {
+    return `Remove created ${kind}: ${name}`;
+  }
+  return `Reverse ${action} for ${kind}: ${name}`;
+}
+
+function sourcePathForRestoreItem(
+  kind: EvidenceKind,
+  name: string,
+  currentState: DiscoveredItem | null,
+  targetState: DiscoveredItem | null,
+  diffSourcePath?: string
+): string {
+  return targetState?.sourcePath
+    ?? currentState?.sourcePath
+    ?? diffSourcePath
+    ?? resolveSourcePathByKind(kind, name);
+}
+
+function isVirtualSourcePath(sourcePath: string): boolean {
+  return /^[a-z_]+:/i.test(sourcePath);
+}
+
+function resolvePlanDestination(planItem: RestorePlanItem, targetProject?: string): string {
+  if (!targetProject || path.isAbsolute(planItem.sourcePath) || planItem.sourcePath.startsWith("~") || isVirtualSourcePath(planItem.sourcePath)) {
+    return planItem.sourcePath;
+  }
+
+  return path.resolve(targetProject, planItem.sourcePath);
+}
+
+function restoreItemMetadata(planItem: RestorePlanItem): Record<string, unknown> | undefined {
+  const metadata: Record<string, unknown> = {};
+
+  if (planItem.kind === "mcp_server") {
+    const serverName = planItem.targetState?.name ?? planItem.currentState?.name;
+    if (typeof serverName === "string" && serverName.length > 0) {
+      metadata.serverName = serverName;
+    }
+    metadata.sourcePath = planItem.sourcePath;
+  }
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+function mcpConfigPathForItem(item: RestoreItem): string {
+  const metadataPath = item.metadata?.mcpPath;
+  if (typeof metadataPath === "string" && metadataPath.length > 0) {
+    return metadataPath;
+  }
+
+  if (path.basename(item.dest) === ".mcp.json") {
+    return item.dest;
+  }
+
+  return path.join(path.dirname(item.dest), ".mcp.json");
+}
+
+function mcpServerNameForItem(item: RestoreItem): string {
+  const metadataName = item.metadata?.serverName;
+  if (typeof metadataName === "string" && metadataName.length > 0) {
+    return metadataName;
+  }
+
+  const colonParts = item.itemId.split(":");
+  if (colonParts.length >= 2 && colonParts[1]) {
+    return colonParts[1];
+  }
+
+  return item.itemId.split(".").pop() ?? "unknown";
 }
 
 function resolveSourcePathByKind(kind: EvidenceKind, name: string): string {
