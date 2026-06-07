@@ -42,6 +42,13 @@ import SnapshotList from "./SnapshotList.js";
 import ErrorPage from "./ErrorPage.js";
 import TimelineView from "./TimelineView.js";
 import { clampTimelineIndex } from "./TimelineViewModel.js";
+import {
+  INITIAL_NAV_ITEM_ID,
+  buildTuiNavigationModel,
+  navItemIdForSelection,
+  selectTuiNavItem,
+  type TuiScreenId
+} from "./TuiNavigationModel.js";
 
 // ── State types ──────────────────────────────────────────────
 
@@ -145,6 +152,10 @@ export default function Dashboard({ options }: DashboardProps) {
         const { readDaemonStatus } = await import("../../daemon.js");
         const daemonStatus = await readDaemonStatus(options);
         const timeline = await loadTimelineForAgent(firstAgent);
+        const navModel = buildTuiNavigationModel({
+          evidence: scan.evidence,
+          selectedItemId: INITIAL_NAV_ITEM_ID
+        });
 
         setState((s) => ({
           ...s,
@@ -152,6 +163,7 @@ export default function Dashboard({ options }: DashboardProps) {
           scan,
           findings,
           selectedAgent: firstAgent,
+          sidebarCursor: navModel.cursor,
           snapshots: [],
           timelineEntries: timeline.entries,
           timelineCorruptEvents: timeline.corruptEvents,
@@ -191,6 +203,15 @@ export default function Dashboard({ options }: DashboardProps) {
       const stillExists = currentAgent === null || agents.some((a) => a.id === currentAgent);
       const newAgent = stillExists ? currentAgent : null;
       const timeline = await loadTimelineForAgent(newAgent);
+      const navModel = buildTuiNavigationModel({
+        evidence: scan.evidence,
+        selectedItemId: navItemIdForSelection({
+          screen: screenFromTab(state.activeTab, newAgent),
+          selectedAgent: newAgent,
+          selectedProfile: "default"
+        }),
+        cursor: state.sidebarCursor
+      });
 
       let snapshots: string[] = [];
       if (newAgent) {
@@ -211,6 +232,7 @@ export default function Dashboard({ options }: DashboardProps) {
         diffState: { type: "idle" },
         error: null,
         daemonStatus,
+        sidebarCursor: navModel.cursor,
       }));
     } catch {
       // silent
@@ -234,7 +256,7 @@ export default function Dashboard({ options }: DashboardProps) {
         ...s,
         selectedAgent: agent,
         snapshots,
-        activeTab: s.activeTab === "timeline" ? "timeline" : "snapshots",
+        activeTab: s.activeTab,
         timelineEntries: timeline.entries,
         timelineCorruptEvents: timeline.corruptEvents,
         timelineCursor: clampTimelineIndex(s.timelineCursor, timeline.entries),
@@ -417,10 +439,17 @@ export default function Dashboard({ options }: DashboardProps) {
     (input: string, key: { upArrow?: boolean; downArrow?: boolean; leftArrow?: boolean; rightArrow?: boolean; return?: boolean; escape?: boolean; tab?: boolean; shiftTab?: boolean }) => {
       if (state.status !== "ready") return;
 
-      const agents = state.scan
-        ? buildAgentFilterEntries(state.scan.evidence)
-        : [];
-      const maxCursor = Math.max(0, agents.length - 1);
+      const navModel = buildTuiNavigationModel({
+        evidence: state.scan?.evidence ?? [],
+        selectedItemId: navItemIdForSelection({
+          screen: screenFromTab(state.activeTab, state.selectedAgent),
+          selectedAgent: state.selectedAgent,
+          selectedProfile: "default"
+        }),
+        cursor: state.sidebarCursor
+      });
+      const navItems = navModel.flatItems;
+      const maxCursor = Math.max(0, navItems.length - 1);
       const scanEvidenceCount = state.scan
         ? state.selectedAgent
           ? state.scan.evidence.filter((e) => e.agent === state.selectedAgent).length
@@ -581,8 +610,38 @@ export default function Dashboard({ options }: DashboardProps) {
 
       // --- Enter = select agent ---
       if (key.return) {
-        const agent = buildAgentFilterEntries(state.scan?.evidence ?? [])[state.sidebarCursor]?.id ?? null;
-        switchAgent(agent);
+        const item = navItems[state.sidebarCursor];
+        if (!item) return;
+        const selection = selectTuiNavItem({
+          item,
+          currentScreen: screenFromTab(state.activeTab, state.selectedAgent),
+          currentAgent: state.selectedAgent,
+          currentProfile: "default"
+        });
+
+        if (selection.screen === "timeline") {
+          setState((s) => ({ ...s, activeTab: "timeline" }));
+          switchAgent(selection.selectedAgent);
+        } else if (selection.screen === "snapshots") {
+          setState((s) => ({
+            ...s,
+            activeTab: "snapshots",
+            selectedAgent: null,
+            snapshots: [],
+            diffState: { type: "idle" }
+          }));
+        } else if (selection.screen === "agent-detail" && selection.selectedAgent) {
+          setState((s) => ({ ...s, activeTab: "scan" }));
+          switchAgent(selection.selectedAgent);
+        } else {
+          setState((s) => ({
+            ...s,
+            activeTab: "timeline",
+            selectedAgent: null,
+            timelineUndoState: { type: "idle" },
+            diffState: { type: "idle" }
+          }));
+        }
         return;
       }
     },
@@ -620,6 +679,16 @@ export default function Dashboard({ options }: DashboardProps) {
 
   // ── Render: dashboard ─────────────────────────
   const agents = state.scan ? buildAgentFilterEntries(state.scan.evidence) : [];
+  const selectedNavItemId = navItemIdForSelection({
+    screen: screenFromTab(state.activeTab, state.selectedAgent),
+    selectedAgent: state.selectedAgent,
+    selectedProfile: "default"
+  });
+  const navModel = buildTuiNavigationModel({
+    evidence: state.scan?.evidence ?? [],
+    selectedItemId: selectedNavItemId,
+    cursor: state.sidebarCursor
+  });
 
   return (
     <Box flexDirection="row" width="100%">
@@ -628,6 +697,8 @@ export default function Dashboard({ options }: DashboardProps) {
         agents={agents}
         selectedAgent={state.selectedAgent}
         cursor={state.sidebarCursor}
+        navSections={navModel.sections}
+        selectedItemId={navModel.selectedItemId}
       />
 
       {/* ── Main panel ── */}
@@ -835,6 +906,13 @@ export function DaemonTrustHeader({ status }: { status: DaemonStatusReadResult |
       )}
     </Box>
   );
+}
+
+function screenFromTab(activeTab: TabId, selectedAgent: AgentId | null): TuiScreenId {
+  if (activeTab === "timeline") return "timeline";
+  if (activeTab === "snapshots") return "snapshots";
+  if (selectedAgent) return "agent-detail";
+  return "timeline";
 }
 
 export function daemonTrustHeaderModel(status: DaemonStatusReadResult | null): {

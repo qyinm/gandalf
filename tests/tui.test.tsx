@@ -3,12 +3,16 @@ import { describe, it } from "node:test";
 
 import { daemonTrustHeaderModel } from "../src/tui/components/Dashboard.js";
 import { buildAgentFilterEntries } from "../src/tui/components/Sidebar.js";
-import { TABS } from "../src/tui/components/TabBar.js";
 import {
   buildTimelineViewModel,
   timelineDetailModel,
   timelineUndoPreviewModel
 } from "../src/tui/components/TimelineViewModel.js";
+import {
+  INITIAL_NAV_ITEM_ID,
+  buildTuiNavigationModel,
+  selectTuiNavItem
+} from "../src/tui/components/TuiNavigationModel.js";
 import type { TimelineUndoPlan } from "../src/timeline-undo.js";
 import type { DaemonStatusReadResult, TimelineEntry } from "../src/types.js";
 
@@ -267,9 +271,57 @@ describe("TUI timeline model", () => {
     assert.equal(model.rows.length, 1);
   });
 
-  it("puts Timeline first in the tab model", () => {
-    assert.equal(TABS[0].id, "timeline");
-    assert.deepEqual(TABS.map((tab) => tab.id), ["timeline", "snapshots", "scan", "audit", "diff"]);
+  it("builds the design navigation sections with Timeline selected first", () => {
+    const model = buildTuiNavigationModel({
+      evidence: [
+        { agent: "claude-code" },
+        { agent: "codex" },
+        { agent: "claude-code" }
+      ]
+    });
+
+    assert.deepEqual(model.sections.map((section) => section.label), ["Profiles", "Agents", "History"]);
+    assert.equal(model.sections[0].items[0].label, "default");
+    assert.deepEqual(model.sections[1].items.map((item) => item.label), ["Claude Code", "Codex"]);
+    assert.deepEqual(model.sections[2].items.map((item) => item.label), ["All changes", "Snapshots"]);
+    assert.equal(model.selectedItemId, INITIAL_NAV_ITEM_ID);
+    assert.equal(model.flatItems[model.cursor]?.id, INITIAL_NAV_ITEM_ID);
+  });
+
+  it("keeps agent selection on Timeline as a filter", () => {
+    const model = buildTuiNavigationModel({
+      evidence: [{ agent: "claude-code" }]
+    });
+    const agentItem = model.flatItems.find((item) => item.id === "agent:claude-code");
+    assert.ok(agentItem);
+
+    const selection = selectTuiNavItem({
+      item: agentItem,
+      currentScreen: "timeline",
+      currentAgent: null,
+      currentProfile: "default"
+    });
+
+    assert.equal(selection.screen, "timeline");
+    assert.equal(selection.selectedAgent, "claude-code");
+  });
+
+  it("opens agent detail when selecting an agent outside Timeline", () => {
+    const model = buildTuiNavigationModel({
+      evidence: [{ agent: "claude-code" }]
+    });
+    const agentItem = model.flatItems.find((item) => item.id === "agent:claude-code");
+    assert.ok(agentItem);
+
+    const selection = selectTuiNavItem({
+      item: agentItem,
+      currentScreen: "snapshots",
+      currentAgent: null,
+      currentProfile: "default"
+    });
+
+    assert.equal(selection.screen, "agent-detail");
+    assert.equal(selection.selectedAgent, "claude-code");
   });
 
   it("adds All agents as the first timeline filter", () => {
