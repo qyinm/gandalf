@@ -42,6 +42,7 @@ import SnapshotList from "./SnapshotList.js";
 import ErrorPage from "./ErrorPage.js";
 import TimelineView from "./TimelineView.js";
 import { clampTimelineIndex } from "./TimelineViewModel.js";
+import AgentDetailView from "./AgentDetailView.js";
 import {
   INITIAL_NAV_ITEM_ID,
   buildTuiNavigationModel,
@@ -793,23 +794,12 @@ export default function Dashboard({ options }: DashboardProps) {
       );
     }
 
-    // Filter for selected agent
-    const agentEvidence = state.scan.evidence.filter(
-      (e) => e.agent === state.selectedAgent
-    );
-    const agentGraph = buildGraph(agentEvidence);
-    const agentFindings = auditEvidence(agentEvidence, agentGraph);
-
     return (
-      <Box flexDirection="column">
-        <ScanView
-          evidence={agentEvidence}
-          auditFindings={agentFindings}
-          blindSpots={state.scan.blindSpots}
-          readOnly={state.scan.trust.readOnly}
-          scrollOffset={state.scanScrollOffset}
-        />
-      </Box>
+      <AgentDetailView
+        agent={state.selectedAgent}
+        evidence={state.scan.evidence}
+        timelineEntries={state.timelineEntries}
+      />
     );
   }
 
