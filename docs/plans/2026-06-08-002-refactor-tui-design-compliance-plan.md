@@ -1,7 +1,7 @@
 ---
 title: "refactor: Align TUI with v0 design"
 type: refactor
-status: active
+status: completed
 date: 2026-06-08
 ---
 
