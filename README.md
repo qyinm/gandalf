@@ -15,6 +15,10 @@ hem snapshot create --name baseline --metadata-only --project .
 # See what changed after installing skills/MCPs
 hem diff baseline current --project .
 
+# Keep a local daemon timeline of setup changes
+hem daemon start --project . --json
+hem tui
+
 # Preview a restore before applying it
 hem restore --snapshot baseline --dry-run --project .
 ```
@@ -98,6 +102,28 @@ hem restore --snapshot baseline --apply --experimental --project .
 hem restore --snapshot baseline --apply --rollback --experimental --project .
 ```
 
+### Daemon Timeline
+
+```bash
+# Start local setup history capture
+hem daemon start --project . --json
+
+# Check daemon trust/status metadata
+hem daemon status --project . --json
+
+# Inspect captured setup changes
+hem timeline list --project .
+hem timeline show <id>
+
+# Preview undo for a timeline event without writing files
+hem timeline undo <id> --dry-run --json
+
+# Open the Timeline-first TUI
+hem tui --project .
+```
+
+Timeline undo is P0 dry-run preview only. It reports `writesFiles=false`, shows MCP changes that could be reversed, and keeps skills, hooks, permissions, env keys, and unsupported surfaces as observe-only.
+
 ### Bundle And Move Setups
 
 ```bash
@@ -159,7 +185,7 @@ Scanner plugin interface: add new agents by implementing `ScannerPlugin`.
 | Bundle export/import (`.hem` format) | ✅ v0.2 experimental |
 | Restore engine (dry-run, apply, rollback) | ✅ v0.2 experimental |
 | TUI dashboard | ✅ v0.3 draft |
-| Timeline-first TUI | 📋 next |
+| Daemon timeline and Timeline-first TUI | ✅ v0.3 preview |
 | Local profiles | 📋 next |
 | MCP/skills add-remove manager | 📋 future |
 | Cloud profiles and multi-machine sync | 📋 Pro |

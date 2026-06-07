@@ -16,28 +16,32 @@
  *  │  q quit       │                                            │
  *  └──────────────┴────────────────────────────────────────────┘
  */
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Text, Box, useInput } from "ink";
 import Spinner from "ink-spinner";
 
 import { scanProject } from "../../scan.js";
 import { buildGraph } from "../../graph.js";
 import { auditEvidence } from "../../audit.js";
-import { ensureStore, listSnapshots } from "../../store.js";
+import { ensureStore, listSnapshots, listTimelineEntries } from "../../store.js";
 import { diffGraphs } from "../../diff.js";
 import type { AuditFinding } from "../../types.js";
 import type { ScanResult } from "../../scan.js";
 import type { RuntimeOptions } from "../../cli-shared.js";
-import type { AgentId, DaemonStatusReadResult } from "../../types.js";
+import type { AgentId, DaemonStatusReadResult, TimelineEntry } from "../../types.js";
+import type { TimelineCorruptEvent } from "../../store.js";
+import type { TimelineUndoPlan } from "../../timeline-undo.js";
 
-import Sidebar, { buildAgentEntries, agentLabelStr } from "./Sidebar.js";
-import TabBar from "./TabBar.js";
+import Sidebar, { buildAgentEntries, buildAgentFilterEntries, agentLabelStr } from "./Sidebar.js";
+import TabBar, { TABS } from "./TabBar.js";
 import type { TabId } from "./TabBar.js";
 import ScanView, { DEFAULT_SCAN_WINDOW_SIZE } from "./ScanView.js";
 import AuditView from "./AuditView.js";
 import DiffView from "./DiffView.js";
 import SnapshotList from "./SnapshotList.js";
 import ErrorPage from "./ErrorPage.js";
+import TimelineView from "./TimelineView.js";
+import { clampTimelineIndex } from "./TimelineViewModel.js";
 
 // ── State types ──────────────────────────────────────────────
 
@@ -55,6 +59,13 @@ type DashboardState = {
   selectedAgent: AgentId | null;
   sidebarCursor: number;
   activeTab: TabId;
+  timelineEntries: TimelineEntry[];
+  timelineCorruptEvents: TimelineCorruptEvent[];
+  timelineCursor: number;
+  timelineUndoState:
+    | { type: "idle" }
+    | { type: "rendered"; plan: TimelineUndoPlan }
+    | { type: "error"; message: string };
   /** snapshots for the currently selected agent */
   snapshots: string[];
   /** diff-specific loading */
@@ -93,13 +104,34 @@ export default function Dashboard({ options }: DashboardProps) {
     findings: [],
     selectedAgent: null,
     sidebarCursor: 0,
-    activeTab: "snapshots",
+    activeTab: "timeline",
+    timelineEntries: [],
+    timelineCorruptEvents: [],
+    timelineCursor: 0,
+    timelineUndoState: { type: "idle" },
     snapshots: [],
     diffState: { type: "idle" },
     error: null,
     scanScrollOffset: 0,
     daemonStatus: null,
   });
+  const filterRequestRef = useRef(0);
+
+  const loadTimelineForAgent = useCallback(
+    async (agent: AgentId | null): Promise<{
+      entries: TimelineEntry[];
+      corruptEvents: TimelineCorruptEvent[];
+    }> => {
+      const corruptEvents: TimelineCorruptEvent[] = [];
+      const entries = await listTimelineEntries(options.storeDir, {
+        projectPath: options.projectPath,
+        ...(agent ? { agent } : {}),
+        onCorruptEntry: (event) => corruptEvents.push(event),
+      });
+      return { entries, corruptEvents };
+    },
+    [options.storeDir, options.projectPath]
+  );
 
   // ── Boot ───────────────────────────────────────────────────
   useEffect(() => {
@@ -109,15 +141,10 @@ export default function Dashboard({ options }: DashboardProps) {
         const scan = await scanProject(options);
         const graph = buildGraph(scan.evidence);
         const findings = auditEvidence(scan.evidence, graph);
-        const agents = buildAgentEntries(scan.evidence);
-        const firstAgent = agents.length > 0 ? agents[0].id : null;
+        const firstAgent = null;
         const { readDaemonStatus } = await import("../../daemon.js");
         const daemonStatus = await readDaemonStatus(options);
-
-        let snapshots: string[] = [];
-        if (firstAgent) {
-          snapshots = await listSnapshots(options.storeDir, firstAgent);
-        }
+        const timeline = await loadTimelineForAgent(firstAgent);
 
         setState((s) => ({
           ...s,
@@ -125,7 +152,11 @@ export default function Dashboard({ options }: DashboardProps) {
           scan,
           findings,
           selectedAgent: firstAgent,
-          snapshots,
+          snapshots: [],
+          timelineEntries: timeline.entries,
+          timelineCorruptEvents: timeline.corruptEvents,
+          timelineCursor: 0,
+          timelineUndoState: { type: "idle" },
           daemonStatus,
         }));
       } catch (err) {
@@ -141,7 +172,7 @@ export default function Dashboard({ options }: DashboardProps) {
         }));
       }
     })();
-  }, []);
+  }, [loadTimelineForAgent, options]);
 
   // ── Helpers ────────────────────────────────────────────────
 
@@ -157,8 +188,9 @@ export default function Dashboard({ options }: DashboardProps) {
 
       // Re-select current agent or first
       const currentAgent = state.selectedAgent;
-      const stillExists = agents.some((a) => a.id === currentAgent);
-      const newAgent = stillExists ? currentAgent : (agents[0]?.id ?? null);
+      const stillExists = currentAgent === null || agents.some((a) => a.id === currentAgent);
+      const newAgent = stillExists ? currentAgent : null;
+      const timeline = await loadTimelineForAgent(newAgent);
 
       let snapshots: string[] = [];
       if (newAgent) {
@@ -172,6 +204,10 @@ export default function Dashboard({ options }: DashboardProps) {
         findings,
         selectedAgent: newAgent,
         snapshots,
+        timelineEntries: timeline.entries,
+        timelineCorruptEvents: timeline.corruptEvents,
+        timelineCursor: clampTimelineIndex(s.timelineCursor, timeline.entries),
+        timelineUndoState: { type: "idle" },
         diffState: { type: "idle" },
         error: null,
         daemonStatus,
@@ -179,10 +215,11 @@ export default function Dashboard({ options }: DashboardProps) {
     } catch {
       // silent
     }
-  }, [options, state.selectedAgent]);
+  }, [options, state.selectedAgent, loadTimelineForAgent]);
 
   const switchAgent = useCallback(
     async (agent: AgentId | null) => {
+      const requestId = ++filterRequestRef.current;
       let snapshots: string[] = [];
       if (agent) {
         try {
@@ -191,22 +228,28 @@ export default function Dashboard({ options }: DashboardProps) {
           // silent
         }
       }
+      const timeline = await loadTimelineForAgent(agent);
+      if (filterRequestRef.current !== requestId) return;
       setState((s) => ({
         ...s,
         selectedAgent: agent,
         snapshots,
-        activeTab: "snapshots",
+        activeTab: s.activeTab === "timeline" ? "timeline" : "snapshots",
+        timelineEntries: timeline.entries,
+        timelineCorruptEvents: timeline.corruptEvents,
+        timelineCursor: clampTimelineIndex(s.timelineCursor, timeline.entries),
+        timelineUndoState: { type: "idle" },
         diffState: { type: "idle" },
         scanScrollOffset: 0,
         sidebarCursor: Math.max(
           0,
-          s.sidebarCursor < (agent ? buildAgentEntries(s.scan!.evidence).length : 0)
+          s.sidebarCursor < (s.scan ? buildAgentFilterEntries(s.scan.evidence).length : 0)
             ? s.sidebarCursor
             : 0
         ),
       }));
     },
-    [options]
+    [options.storeDir, loadTimelineForAgent]
   );
 
   const runAction = useCallback(
@@ -375,7 +418,7 @@ export default function Dashboard({ options }: DashboardProps) {
       if (state.status !== "ready") return;
 
       const agents = state.scan
-        ? buildAgentEntries(state.scan.evidence)
+        ? buildAgentFilterEntries(state.scan.evidence)
         : [];
       const maxCursor = Math.max(0, agents.length - 1);
       const scanEvidenceCount = state.scan
@@ -415,8 +458,55 @@ export default function Dashboard({ options }: DashboardProps) {
         return;
       }
 
-      // --- Tab navigation: ← → or 1-4 ---
-      const TAB_ORDER: TabId[] = ["snapshots", "scan", "audit", "diff"];
+      // f = cycle Timeline agent filter without leaving the Timeline tab
+      if (input === "f" && state.activeTab === "timeline") {
+        const nextCursor = agents.length === 0
+          ? 0
+          : state.sidebarCursor < agents.length - 1 ? state.sidebarCursor + 1 : 0;
+        const nextAgent = agents[nextCursor]?.id ?? null;
+        setState((s) => ({ ...s, sidebarCursor: nextCursor }));
+        switchAgent(nextAgent);
+        return;
+      }
+
+      // u = preview timeline undo (dry-run only)
+      if (input === "u" && state.activeTab === "timeline") {
+        const selected = state.timelineEntries[state.timelineCursor];
+        if (!selected) {
+          setState((s) => ({
+            ...s,
+            timelineUndoState: { type: "error", message: "No timeline entry selected." },
+          }));
+          return;
+        }
+        (async () => {
+          try {
+            const { buildTimelineUndoPlan } = await import("../../timeline-undo.js");
+            const corruptEvents: TimelineCorruptEvent[] = [];
+            const plan = await buildTimelineUndoPlan(options.storeDir, selected.id, {
+              onCorruptEntry: (event) => corruptEvents.push(event),
+            });
+            setState((s) => ({
+              ...s,
+              ...(s.timelineEntries[s.timelineCursor]?.id === selected.id
+                ? {
+                    timelineCorruptEvents: corruptEvents.length > 0 ? corruptEvents : s.timelineCorruptEvents,
+                    timelineUndoState: { type: "rendered", plan },
+                  }
+                : {}),
+            }));
+          } catch (err) {
+            setState((s) => ({
+              ...s,
+              timelineUndoState: { type: "error", message: err instanceof Error ? err.message : String(err) },
+            }));
+          }
+        })();
+        return;
+      }
+
+      // --- Tab navigation: ← → or 1-5 ---
+      const TAB_ORDER: TabId[] = TABS.map((tab) => tab.id);
       if (key.leftArrow || input === "h") {
         const idx = TAB_ORDER.indexOf(state.activeTab);
         if (idx > 0) {
@@ -431,11 +521,17 @@ export default function Dashboard({ options }: DashboardProps) {
         }
         return;
       }
-      // 1-4 direct tab switch
-      if (input === "1") { setState((s) => ({ ...s, activeTab: "snapshots" })); return; }
-      if (input === "2") { setState((s) => ({ ...s, activeTab: "scan", scanScrollOffset: 0 })); return; }
-      if (input === "3") { setState((s) => ({ ...s, activeTab: "audit" })); return; }
-      if (input === "4") { setState((s) => ({ ...s, activeTab: "diff" })); return; }
+      // 1-5 direct tab switch
+      const numericTab = Number(input);
+      if (Number.isInteger(numericTab) && numericTab >= 1 && numericTab <= TAB_ORDER.length) {
+        const activeTab = TAB_ORDER[numericTab - 1];
+        setState((s) => ({
+          ...s,
+          activeTab,
+          scanScrollOffset: activeTab === "scan" ? 0 : s.scanScrollOffset,
+        }));
+        return;
+      }
 
       // --- ↑↓/jk: scroll scan tab OR navigate sidebar ---
       if (key.upArrow || input === "k") {
@@ -443,6 +539,14 @@ export default function Dashboard({ options }: DashboardProps) {
           setState((s) => ({
             ...s,
             scanScrollOffset: Math.max(0, s.scanScrollOffset - 1),
+          }));
+        } else if (state.activeTab === "timeline") {
+          setState((s) => ({
+            ...s,
+            timelineCursor: s.timelineEntries.length === 0
+              ? 0
+              : s.timelineCursor > 0 ? s.timelineCursor - 1 : s.timelineEntries.length - 1,
+            timelineUndoState: { type: "idle" },
           }));
         } else {
           setState((s) => ({
@@ -458,6 +562,14 @@ export default function Dashboard({ options }: DashboardProps) {
             ...s,
             scanScrollOffset: Math.min(maxScanScrollOffset, s.scanScrollOffset + 1),
           }));
+        } else if (state.activeTab === "timeline") {
+          setState((s) => ({
+            ...s,
+            timelineCursor: s.timelineEntries.length === 0
+              ? 0
+              : s.timelineCursor < s.timelineEntries.length - 1 ? s.timelineCursor + 1 : 0,
+            timelineUndoState: { type: "idle" },
+          }));
         } else {
           setState((s) => ({
             ...s,
@@ -469,8 +581,8 @@ export default function Dashboard({ options }: DashboardProps) {
 
       // --- Enter = select agent ---
       if (key.return) {
-        const agent = agents[state.sidebarCursor]?.id ?? null;
-        if (agent) switchAgent(agent);
+        const agent = buildAgentFilterEntries(state.scan?.evidence ?? [])[state.sidebarCursor]?.id ?? null;
+        switchAgent(agent);
         return;
       }
     },
@@ -507,7 +619,7 @@ export default function Dashboard({ options }: DashboardProps) {
   }
 
   // ── Render: dashboard ─────────────────────────
-  const agents = state.scan ? buildAgentEntries(state.scan.evidence) : [];
+  const agents = state.scan ? buildAgentFilterEntries(state.scan.evidence) : [];
 
   return (
     <Box flexDirection="row" width="100%">
@@ -541,9 +653,10 @@ export default function Dashboard({ options }: DashboardProps) {
             </Box>
           )}
 
-          {(state.activeTab === "snapshots" || !state.selectedAgent) && renderSnapshots()}
-          {state.activeTab === "scan" && state.selectedAgent && renderScan()}
-          {state.activeTab === "audit" && state.selectedAgent && renderAudit()}
+          {state.activeTab === "timeline" && renderTimeline()}
+          {state.activeTab === "snapshots" && renderSnapshots()}
+          {state.activeTab === "scan" && renderScan()}
+          {state.activeTab === "audit" && renderAudit()}
           {state.activeTab === "diff" && state.selectedAgent && renderDiff()}
         </Box>
 
@@ -551,8 +664,10 @@ export default function Dashboard({ options }: DashboardProps) {
         <Box marginTop={1}>
           <Text dimColor>
             {state.activeTab === "scan"
-              ? "↑↓ scroll  ←→ tab  1-4 jump  s=save  d=diff  a=audit  r=rescan  q=quit"
-              : "↑↓ agent  ←→ tab  1-4 jump  s=save  d=diff  a=audit  r=rescan  q=quit"}
+              ? "↑↓ scroll  ←→ tab  1-5 jump  s=save  d=diff  a=audit  r=rescan  q=quit"
+              : state.activeTab === "timeline"
+                ? "↑↓ timeline  f=filter  u=preview undo  ←→ tab  1-5 jump  r=rescan  q=quit"
+                : "↑↓ agent  ←→ tab  1-5 jump  s=save  d=diff  a=audit  r=rescan  q=quit"}
           </Text>
         </Box>
       </Box>
@@ -560,6 +675,19 @@ export default function Dashboard({ options }: DashboardProps) {
   );
 
   // ── Render helpers ────────────────────────────
+
+  function renderTimeline() {
+    return (
+      <TimelineView
+        entries={state.timelineEntries}
+        selectedIndex={state.timelineCursor}
+        agentFilter={state.selectedAgent}
+        corruptEvents={state.timelineCorruptEvents}
+        undoPlan={state.timelineUndoState.type === "rendered" ? state.timelineUndoState.plan : null}
+        undoError={state.timelineUndoState.type === "error" ? state.timelineUndoState.message : null}
+      />
+    );
+  }
 
   function renderSnapshots() {
     if (!state.selectedAgent) {

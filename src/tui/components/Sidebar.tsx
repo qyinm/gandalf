@@ -9,7 +9,7 @@ import { Text, Box } from "ink";
 import type { AgentId } from "../../types.js";
 
 interface AgentEntry {
-  id: AgentId;
+  id: AgentId | null;
   label: string;
   evidenceCount: number;
 }
@@ -52,6 +52,17 @@ export function buildAgentEntries(
   }));
 }
 
+export function buildAgentFilterEntries(evidence: { agent: AgentId }[]): AgentEntry[] {
+  return [
+    {
+      id: null,
+      label: "All agents",
+      evidenceCount: evidence.length,
+    },
+    ...buildAgentEntries(evidence),
+  ];
+}
+
 export function agentLabelStr(id: AgentId): string {
   return agentLabel(id);
 }
@@ -85,7 +96,7 @@ export default function Sidebar({
         {agents.map((agent, i) => {
           const isActive = agent.id === selectedAgent;
           return (
-            <Box key={agent.id}>
+            <Box key={agent.id ?? "all"}>
               <Text
                 bold={cursor === i}
                 color={cursor === i ? "cyan" : isActive ? "white" : "dim"}
