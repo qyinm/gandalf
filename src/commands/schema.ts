@@ -100,6 +100,10 @@ const SCHEMA = {
           type: "string",
           enum: [
             "MCP_ADDED", "MCP_REMOVED", "MCP_CHANGED",
+            "SKILL_ADDED", "SKILL_REMOVED",
+            "HOOK_ADDED", "HOOK_REMOVED", "HOOK_CHANGED",
+            "PERMISSION_CHANGED",
+            "INSTRUCTION_CHANGED",
             "PERMISSION_WILDCARD_ADDED",
             "SKILL_EXECUTABLE_APPEARED",
             "ENV_KEY_ADDED", "ENV_KEY_REMOVED",

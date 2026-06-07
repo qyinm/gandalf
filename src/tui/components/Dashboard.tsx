@@ -1,11 +1,10 @@
 /**
- * Dashboard — sidebar + tab layout for hem TUI.
+ * Dashboard — sidebar-driven workspace layout for hem TUI.
  *
  *  ┌──────────────┬────────────────────────────────────────────┐
  *  │  Agents       │  Daemon: running/stopped/stale/error      │
- *  │               │  [Snapshots] [Scan] [Audit] [Diff]        │
  *  │  ──────────   │  ────────────────────────────────────────  │
- *  │  ▸ Claude Cd  │  (content based on active tab)             │
+ *  │  ▸ Claude Cd  │  (content based on sidebar selection)      │
  *  │    Codex      │                                            │
  *  │    Cursor     │                                            │
  *  │    Project    │                                            │
@@ -34,7 +33,6 @@ import type { TimelineUndoPlan } from "../../timeline-undo.js";
 import type { GraphDiff } from "../../diff.js";
 
 import Sidebar, { buildAgentEntries, buildAgentFilterEntries, agentLabelStr } from "./Sidebar.js";
-import TabBar, { TABS } from "./TabBar.js";
 import type { TabId } from "./TabBar.js";
 import ScanView, { DEFAULT_SCAN_WINDOW_SIZE } from "./ScanView.js";
 import AuditView from "./AuditView.js";
@@ -316,6 +314,58 @@ export default function Dashboard({ options }: DashboardProps) {
     [options.storeDir, loadTimelineForAgent]
   );
 
+  const openProfile = useCallback(async () => {
+    const requestId = ++filterRequestRef.current;
+    let snapshots: string[] = [];
+    try {
+      snapshots = await listSnapshots(options.storeDir);
+    } catch {
+      // silent
+    }
+    const timeline = await loadTimelineForAgent(null);
+    if (filterRequestRef.current !== requestId) return;
+    setState((s) => ({
+      ...s,
+      activeTab: "timeline",
+      selectedAgent: null,
+      profileScreenOpen: true,
+      previousView: captureDashboardView(s),
+      notice: null,
+      snapshots,
+      timelineEntries: timeline.entries,
+      timelineCorruptEvents: timeline.corruptEvents,
+      timelineCursor: clampTimelineIndex(s.timelineCursor, timeline.entries),
+      timelineUndoState: { type: "idle" },
+      diffState: { type: "idle" }
+    }));
+  }, [options.storeDir, loadTimelineForAgent]);
+
+  const openSnapshots = useCallback(async () => {
+    const requestId = ++filterRequestRef.current;
+    let snapshots: string[] = [];
+    try {
+      snapshots = await listSnapshots(options.storeDir);
+    } catch {
+      // silent
+    }
+    const timeline = await loadTimelineForAgent(null);
+    if (filterRequestRef.current !== requestId) return;
+    setState((s) => ({
+      ...s,
+      activeTab: "snapshots",
+      profileScreenOpen: false,
+      selectedAgent: null,
+      previousView: null,
+      notice: null,
+      snapshots,
+      timelineEntries: timeline.entries,
+      timelineCorruptEvents: timeline.corruptEvents,
+      timelineCursor: clampTimelineIndex(s.timelineCursor, timeline.entries),
+      timelineUndoState: { type: "idle" },
+      diffState: { type: "idle" }
+    }));
+  }, [options.storeDir, loadTimelineForAgent]);
+
   const runAction = useCallback(
     async (action: AgentAction) => {
       const agent = state.selectedAgent;
@@ -334,15 +384,18 @@ export default function Dashboard({ options }: DashboardProps) {
           const { captureCurrentState } = await import("../../current-state.js");
           const { readSnapshot } = await import("../../store.js");
           const current = await captureCurrentState(options);
-          const latestSnapshotName = state.snapshots[state.snapshots.length - 1];
+          const snapshotNames = await listSnapshots(options.storeDir);
+          const savedSnapshots = await Promise.all(
+            snapshotNames.map((name) => readSnapshot(options.storeDir, name))
+          );
+          const latest = latestSnapshotByCreatedAt(savedSnapshots);
           let diff: GraphDiff | undefined;
-          if (latestSnapshotName) {
-            const latest = await readSnapshot(options.storeDir, latestSnapshotName);
+          if (latest) {
             diff = diffGraphs(latest.graph, current.snapshot.graph);
           }
           const model = buildSaveSetupViewModel({
             diff,
-            hasPreviousSnapshot: Boolean(latestSnapshotName)
+            hasPreviousSnapshot: Boolean(latest)
           });
           const snapshot: Snapshot = {
             ...current.snapshot,
@@ -361,7 +414,7 @@ export default function Dashboard({ options }: DashboardProps) {
               type: "preview",
               snapshot,
               diff,
-              hasPreviousSnapshot: Boolean(latestSnapshotName),
+              hasPreviousSnapshot: Boolean(latest),
               title: model.title
             }
           }));
@@ -392,8 +445,9 @@ export default function Dashboard({ options }: DashboardProps) {
         try {
           const { captureCurrentState } = await import("../../current-state.js");
           const { readSnapshot } = await import("../../store.js");
+          const snapshotNames = await listSnapshots(options.storeDir);
           const savedSnapshots = await Promise.all(
-            state.snapshots.map((name) => readSnapshot(options.storeDir, name))
+            snapshotNames.map((name) => readSnapshot(options.storeDir, name))
           );
           const before = latestSnapshotByCreatedAt(savedSnapshots);
           if (!before) {
@@ -632,14 +686,7 @@ export default function Dashboard({ options }: DashboardProps) {
       }
 
       if (input === "p") {
-        setState((s) => ({
-          ...s,
-          activeTab: "timeline",
-          selectedAgent: null,
-          profileScreenOpen: true,
-          previousView: captureDashboardView(s),
-          notice: null
-        }));
+        openProfile();
         return;
       }
 
@@ -706,34 +753,6 @@ export default function Dashboard({ options }: DashboardProps) {
         return;
       }
 
-      // --- Tab navigation: ← → or 1-5 ---
-      const TAB_ORDER: TabId[] = TABS.map((tab) => tab.id);
-      if (key.leftArrow || input === "h") {
-        const idx = TAB_ORDER.indexOf(state.activeTab);
-        if (idx > 0) {
-          setState((s) => ({ ...s, activeTab: TAB_ORDER[idx - 1] }));
-        }
-        return;
-      }
-      if (key.rightArrow || input === "l") {
-        const idx = TAB_ORDER.indexOf(state.activeTab);
-        if (idx < TAB_ORDER.length - 1) {
-          setState((s) => ({ ...s, activeTab: TAB_ORDER[idx + 1] }));
-        }
-        return;
-      }
-      // 1-5 direct tab switch
-      const numericTab = Number(input);
-      if (Number.isInteger(numericTab) && numericTab >= 1 && numericTab <= TAB_ORDER.length) {
-        const activeTab = TAB_ORDER[numericTab - 1];
-        setState((s) => ({
-          ...s,
-          activeTab,
-          scanScrollOffset: activeTab === "scan" ? 0 : s.scanScrollOffset,
-        }));
-        return;
-      }
-
       // --- ↑↓/jk: scroll scan tab OR navigate sidebar ---
       if (key.upArrow || input === "k") {
         if (state.activeTab === "scan") {
@@ -795,20 +814,15 @@ export default function Dashboard({ options }: DashboardProps) {
           setState((s) => ({ ...s, activeTab: "timeline", profileScreenOpen: false, previousView: null, notice: null }));
           switchAgent(selection.selectedAgent);
         } else if (selection.screen === "snapshots") {
-          setState((s) => ({
-            ...s,
-            activeTab: "snapshots",
-            profileScreenOpen: false,
-            selectedAgent: null,
-            snapshots: [],
-            previousView: null,
-            notice: null,
-            diffState: { type: "idle" }
-          }));
+          openSnapshots();
         } else if (selection.screen === "agent-detail" && selection.selectedAgent) {
           setState((s) => ({ ...s, activeTab: "scan", profileScreenOpen: false, previousView: null, notice: null }));
           switchAgent(selection.selectedAgent);
         } else {
+          if (selection.screen === "profile") {
+            openProfile();
+            return;
+          }
           setState((s) => ({
             ...s,
             activeTab: "timeline",
@@ -823,7 +837,7 @@ export default function Dashboard({ options }: DashboardProps) {
         return;
       }
     },
-    [state, reScan, switchAgent, runAction, confirmSaveSetup]
+    [state, reScan, switchAgent, openProfile, openSnapshots, runAction, confirmSaveSetup]
   );
 
   useInput(handleInput);
@@ -883,12 +897,6 @@ export default function Dashboard({ options }: DashboardProps) {
       <Box flexDirection="column" paddingX={1} flexGrow={1}>
         <DaemonTrustHeader status={state.daemonStatus} />
 
-        {/* Tab bar */}
-        <TabBar
-          activeTab={state.activeTab}
-          onTabChange={(tab) => setState((s) => ({ ...s, activeTab: tab }))}
-        />
-
         {/* Content area */}
         <Box flexDirection="column" flexGrow={1}>
           {state.error && (
@@ -920,7 +928,7 @@ export default function Dashboard({ options }: DashboardProps) {
         <Box marginTop={1}>
           <Text dimColor>
             {state.activeTab === "scan"
-              ? "↑↓ scroll  ←→ tab  1-5 jump  s=save  c=compare  a=audit  r=rescan  q=quit"
+              ? "↑↓ scroll  s=save  c=compare  a=audit  r=rescan  q=quit"
               : state.activeTab === "timeline"
                 ? "↑↓ timeline  u=preview undo  c=compare  r=rescan  q=quit"
                 : "↑↓ move  Enter open  s=save  c=compare  r=rescan  q=quit"}
