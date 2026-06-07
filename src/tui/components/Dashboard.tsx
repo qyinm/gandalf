@@ -71,6 +71,8 @@ type DashboardState = {
   findings: AuditFinding[];
   selectedAgent: AgentId | null;
   profileScreenOpen: boolean;
+  previousView: DashboardView | null;
+  notice: string | null;
   sidebarCursor: number;
   activeTab: TabId;
   timelineEntries: TimelineEntry[];
@@ -113,6 +115,12 @@ type DashboardState = {
   daemonStatus: DaemonStatusReadResult | null;
 };
 
+type DashboardView = {
+  activeTab: TabId;
+  selectedAgent: AgentId | null;
+  profileScreenOpen: boolean;
+};
+
 // ── Constants ────────────────────────────────────────────────
 
 type AgentAction =
@@ -137,6 +145,8 @@ export default function Dashboard({ options }: DashboardProps) {
     findings: [],
     selectedAgent: null,
     profileScreenOpen: false,
+    previousView: null,
+    notice: null,
     sidebarCursor: 0,
     activeTab: "timeline",
     timelineEntries: [],
@@ -193,6 +203,8 @@ export default function Dashboard({ options }: DashboardProps) {
           findings,
           selectedAgent: firstAgent,
           profileScreenOpen: false,
+          previousView: null,
+          notice: null,
           sidebarCursor: navModel.cursor,
           snapshots,
           saveSetupState: { type: "idle" },
@@ -252,6 +264,7 @@ export default function Dashboard({ options }: DashboardProps) {
         findings,
         selectedAgent: newAgent,
         profileScreenOpen: false,
+        previousView: null,
         snapshots,
         saveSetupState: { type: "idle" },
         timelineEntries: timeline.entries,
@@ -283,6 +296,7 @@ export default function Dashboard({ options }: DashboardProps) {
         ...s,
         selectedAgent: agent,
         profileScreenOpen: false,
+        previousView: null,
         snapshots,
         activeTab: s.activeTab,
         timelineEntries: timeline.entries,
@@ -308,7 +322,14 @@ export default function Dashboard({ options }: DashboardProps) {
       if (!state.scan) return;
 
       if (action === "save-snapshot") {
-        setState((s) => ({ ...s, activeTab: "snapshots", profileScreenOpen: false, saveSetupState: { type: "loading" } }));
+        setState((s) => ({
+          ...s,
+          activeTab: "snapshots",
+          profileScreenOpen: false,
+          previousView: captureDashboardView(s),
+          notice: null,
+          saveSetupState: { type: "loading" }
+        }));
         try {
           const { captureCurrentState } = await import("../../current-state.js");
           const { readSnapshot } = await import("../../store.js");
@@ -335,6 +356,7 @@ export default function Dashboard({ options }: DashboardProps) {
             ...s,
             activeTab: "snapshots",
             profileScreenOpen: false,
+            notice: null,
             saveSetupState: {
               type: "preview",
               snapshot,
@@ -348,6 +370,7 @@ export default function Dashboard({ options }: DashboardProps) {
             ...s,
             activeTab: "snapshots",
             profileScreenOpen: false,
+            notice: null,
             saveSetupState: {
               type: "error",
               message: err instanceof Error ? err.message : String(err)
@@ -358,7 +381,14 @@ export default function Dashboard({ options }: DashboardProps) {
       }
 
       if (action === "diff") {
-        setState((s) => ({ ...s, diffState: { type: "loading" }, activeTab: "diff" }));
+        setState((s) => ({
+          ...s,
+          diffState: { type: "loading" },
+          activeTab: "diff",
+          profileScreenOpen: false,
+          previousView: captureDashboardView(s),
+          notice: null
+        }));
         try {
           const { captureCurrentState } = await import("../../current-state.js");
           const { readSnapshot } = await import("../../store.js");
@@ -563,15 +593,58 @@ export default function Dashboard({ options }: DashboardProps) {
         : 0;
       const maxScanScrollOffset = Math.max(0, scanEvidenceCount - DEFAULT_SCAN_WINDOW_SIZE);
 
+      if (key.escape) {
+        if (state.previousView) {
+          setState((s) => ({
+            ...s,
+            activeTab: s.previousView!.activeTab,
+            selectedAgent: s.previousView!.selectedAgent,
+            profileScreenOpen: s.previousView!.profileScreenOpen,
+            previousView: null,
+            saveSetupState: { type: "idle" },
+            diffState: { type: "idle" },
+            notice: null
+          }));
+          return;
+        }
+        setState((s) => ({
+          ...s,
+          saveSetupState: { type: "idle" },
+          diffState: s.activeTab === "diff" ? { type: "idle" } : s.diffState,
+          activeTab: s.activeTab === "diff" ? "timeline" : s.activeTab,
+          profileScreenOpen: false,
+          notice: null
+        }));
+        return;
+      }
+
       // q = quit
-      if (input === "q" || key.escape) {
+      if (input === "q") {
         process.exit(0);
         return;
       }
 
       // r = re-scan
       if (input === "r") {
+        setState((s) => ({ ...s, notice: null }));
         reScan();
+        return;
+      }
+
+      if (input === "p") {
+        setState((s) => ({
+          ...s,
+          activeTab: "timeline",
+          selectedAgent: null,
+          profileScreenOpen: true,
+          previousView: captureDashboardView(s),
+          notice: null
+        }));
+        return;
+      }
+
+      if (input === "/") {
+        setState((s) => ({ ...s, notice: "Search is reserved for a future TUI search model." }));
         return;
       }
 
@@ -594,17 +667,6 @@ export default function Dashboard({ options }: DashboardProps) {
       // a = audit (only if agent selected)
       if (input === "a" && state.selectedAgent) {
         runAction("audit");
-        return;
-      }
-
-      // f = cycle Timeline agent filter without leaving the Timeline tab
-      if (input === "f" && state.activeTab === "timeline") {
-        const nextCursor = agents.length === 0
-          ? 0
-          : state.sidebarCursor < agents.length - 1 ? state.sidebarCursor + 1 : 0;
-        const nextAgent = agents[nextCursor]?.id ?? null;
-        setState((s) => ({ ...s, sidebarCursor: nextCursor }));
-        switchAgent(nextAgent);
         return;
       }
 
@@ -730,7 +792,7 @@ export default function Dashboard({ options }: DashboardProps) {
         });
 
         if (selection.screen === "timeline") {
-          setState((s) => ({ ...s, activeTab: "timeline", profileScreenOpen: false }));
+          setState((s) => ({ ...s, activeTab: "timeline", profileScreenOpen: false, previousView: null, notice: null }));
           switchAgent(selection.selectedAgent);
         } else if (selection.screen === "snapshots") {
           setState((s) => ({
@@ -739,10 +801,12 @@ export default function Dashboard({ options }: DashboardProps) {
             profileScreenOpen: false,
             selectedAgent: null,
             snapshots: [],
+            previousView: null,
+            notice: null,
             diffState: { type: "idle" }
           }));
         } else if (selection.screen === "agent-detail" && selection.selectedAgent) {
-          setState((s) => ({ ...s, activeTab: "scan", profileScreenOpen: false }));
+          setState((s) => ({ ...s, activeTab: "scan", profileScreenOpen: false, previousView: null, notice: null }));
           switchAgent(selection.selectedAgent);
         } else {
           setState((s) => ({
@@ -750,8 +814,10 @@ export default function Dashboard({ options }: DashboardProps) {
             activeTab: "timeline",
             selectedAgent: null,
             profileScreenOpen: selection.screen === "profile",
+            previousView: selection.screen === "profile" ? captureDashboardView(s) : null,
             timelineUndoState: { type: "idle" },
-            diffState: { type: "idle" }
+            diffState: { type: "idle" },
+            notice: null
           }));
         }
         return;
@@ -833,6 +899,12 @@ export default function Dashboard({ options }: DashboardProps) {
                 cause={state.error.cause}
                 fix={state.error.fix}
               />
+            </Box>
+          )}
+
+          {state.notice && (
+            <Box marginTop={1}>
+              <Text color="yellow">{state.notice}</Text>
             </Box>
           )}
 
@@ -1056,6 +1128,14 @@ function screenFromTab(activeTab: TabId, selectedAgent: AgentId | null): TuiScre
   if (activeTab === "snapshots") return "snapshots";
   if (selectedAgent) return "agent-detail";
   return "timeline";
+}
+
+function captureDashboardView(state: DashboardState): DashboardView {
+  return {
+    activeTab: state.activeTab,
+    selectedAgent: state.selectedAgent,
+    profileScreenOpen: state.profileScreenOpen
+  };
 }
 
 export function daemonTrustHeaderModel(status: DaemonStatusReadResult | null): {
