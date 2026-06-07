@@ -13,13 +13,14 @@ import {
   buildTuiNavigationModel,
   selectTuiNavItem
 } from "../src/tui/components/TuiNavigationModel.js";
+import { buildAgentDetailViewModel } from "../src/tui/components/AgentDetailViewModel.js";
 import {
   formatAgentLabel,
   formatTimelineTimestamp,
   truncateText
 } from "../src/tui/components/TuiFormatters.js";
 import type { TimelineUndoPlan } from "../src/timeline-undo.js";
-import type { DaemonStatusReadResult, TimelineEntry } from "../src/types.js";
+import type { DaemonStatusReadResult, DiscoveredItem, TimelineEntry } from "../src/types.js";
 
 function statusResult(overrides: Partial<DaemonStatusReadResult["status"]> = {}): DaemonStatusReadResult {
   return {
@@ -108,6 +109,21 @@ function timelineEntry(overrides: Partial<TimelineEntry> & Pick<TimelineEntry, "
       highlights: ["MCP_CHANGED: github", "SKILL_ADDED: review"]
     },
     ...rest
+  };
+}
+
+function discoveredItem(overrides: Partial<DiscoveredItem> & Pick<DiscoveredItem, "id" | "agent" | "kind">): DiscoveredItem {
+  return {
+    sourcePath: "/project/AGENTS.md",
+    scope: "project",
+    precedence: 0,
+    parser: "json",
+    sensitivity: "none",
+    contentPolicy: "metadata-only",
+    restorePolicy: "not_supported",
+    captureStatus: "captured",
+    confidence: "high",
+    ...overrides
   };
 }
 
@@ -357,5 +373,62 @@ describe("TUI timeline model", () => {
     assert.equal(filters[0].label, "All agents");
     assert.equal(filters[0].evidenceCount, 3);
     assert.deepEqual(filters.slice(1).map((filter) => filter.id), ["claude-code", "codex"]);
+  });
+});
+
+describe("TUI agent detail model", () => {
+  it("builds current setup inventory and filtered history for an agent", () => {
+    const model = buildAgentDetailViewModel({
+      agent: "claude-code",
+      evidence: [
+        discoveredItem({ id: "skill:review", agent: "claude-code", kind: "skill", name: "review" }),
+        discoveredItem({ id: "mcp:github", agent: "claude-code", kind: "mcp_server", name: "github", value: { disabled: true } }),
+        discoveredItem({ id: "permission:bash", agent: "claude-code", kind: "permission", name: "bash" }),
+        discoveredItem({ id: "hook:pre", agent: "claude-code", kind: "hook", name: "pre-run" }),
+        discoveredItem({ id: "instructions", agent: "claude-code", kind: "agent_instruction", sourcePath: "/project/AGENTS.md" }),
+        discoveredItem({ id: "skill:codex", agent: "codex", kind: "skill", name: "codex-skill" })
+      ],
+      timelineEntries: [
+        timelineEntry({
+          id: "claude-change",
+          observedAt: "2026-06-08T14:22:00.000",
+          afterSnapshotName: "after"
+        }),
+        timelineEntry({
+          id: "codex-change",
+          agent: "codex",
+          agents: ["codex"],
+          observedAt: "2026-06-08T14:30:00.000",
+          afterSnapshotName: "after-codex"
+        })
+      ],
+      now: new Date("2026-06-08T15:00:00.000")
+    });
+
+    assert.equal(model.title, "Claude Code");
+    assert.deepEqual(model.counts, {
+      skills: 1,
+      mcpServers: 1,
+      hooks: 1,
+      permissions: 1,
+      instructions: 1
+    });
+    assert.equal(model.skills[0].name, "review");
+    assert.equal(model.mcpServers[0].name, "github");
+    assert.equal(model.mcpServers[0].status, "disabled");
+    assert.equal(model.instructions[0].path, "/project/AGENTS.md");
+    assert.equal(model.history.length, 1);
+    assert.equal(model.history[0].id, "claude-c");
+    assert.equal(model.history[0].observedAt, "Today 14:22");
+  });
+
+  it("shows an empty message for agents without captured evidence", () => {
+    const model = buildAgentDetailViewModel({
+      agent: "cursor",
+      evidence: [],
+      timelineEntries: []
+    });
+
+    assert.equal(model.emptyMessage, "No supported agent setup found.");
   });
 });
