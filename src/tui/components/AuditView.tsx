@@ -1,5 +1,5 @@
 /**
- * Ink component for snaptailor audit report.
+ * Ink component for hem audit report.
  *
  * Renders audit findings grouped by severity with color coding.
  * Uses ink-markdown for section rendering.
@@ -40,7 +40,7 @@ export default function AuditView({ findings }: AuditViewProps) {
   if (findings.length === 0) {
     return (
       <Box flexDirection="column">
-        <Text bold color="green">snaptailor audit</Text>
+        <Text bold color="green">hem audit</Text>
         <Text>No findings — everything looks clean.</Text>
       </Box>
     );
@@ -59,7 +59,7 @@ export default function AuditView({ findings }: AuditViewProps) {
     <Box flexDirection="column">
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold>snaptailor audit — {sorted.length} findings</Text>
+        <Text bold>hem audit — {sorted.length} findings</Text>
       </Box>
 
       {/* Summary badges */}

@@ -43,7 +43,7 @@ export function runtimeOptions(args: string[]): RuntimeOptions {
   return {
     projectPath: path.resolve(valueAfter(args, "--project") ?? process.cwd()),
     homeDir,
-    storeDir: process.env.SNAPTAILOR_STORE ?? defaultStoreDir(homeDir),
+    storeDir: process.env.HEM_STORE ?? defaultStoreDir(homeDir),
     agent
   };
 }

@@ -1,5 +1,5 @@
 /**
- * Ink component for snaptailor provenance output.
+ * Ink component for hem provenance output.
  *
  * Renders graph node → source path trace in a tree-like view.
  */
@@ -21,7 +21,7 @@ export default function ProvenanceView({ entries }: ProvenanceViewProps) {
   if (entries.length === 0) {
     return (
       <Box flexDirection="column">
-        <Text bold>snaptailor provenance</Text>
+        <Text bold>hem provenance</Text>
         <Text dimColor>No provenance data available.</Text>
       </Box>
     );
@@ -31,7 +31,7 @@ export default function ProvenanceView({ entries }: ProvenanceViewProps) {
     <Box flexDirection="column">
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold>snaptailor provenance ({entries.length} entries)</Text>
+        <Text bold>hem provenance ({entries.length} entries)</Text>
       </Box>
 
       {/* Entries */}

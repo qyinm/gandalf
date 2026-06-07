@@ -1,6 +1,6 @@
-# snaptailor TUI TODO ✅ COMPLETE
+# hem TUI TODO ✅ COMPLETE
 
-> Ink (React) + Clack interactive prompts for snaptailor CLI
+> Ink (React) + Clack interactive prompts for hem CLI
 
 ---
 
@@ -18,16 +18,16 @@
 
 ```bash
 # Launch interactive TUI dashboard
-snaptailor tui
+hem tui
 
 # Or use --tui flag on any command for rich output
-snaptailor scan --project . --tui
-snaptailor diff baseline current --project . --tui
-snaptailor audit --tui
-snaptailor bundle export --tui
-snaptailor restore --tui
+hem scan --project . --tui
+hem diff baseline current --project . --tui
+hem audit --tui
+hem bundle export --tui
+hem restore --tui
 
 # Standard CLI still works exactly as before
-snaptailor scan --project .
-snaptailor scan --project . --json
+hem scan --project .
+hem scan --project . --json
 ```

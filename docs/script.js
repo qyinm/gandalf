@@ -1,5 +1,5 @@
 /**
- * snaptailor — Landing Page Interactions
+ * Hem — Landing Page Interactions
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   console.log(
-    '%c✂ snaptailor %cYour AI Agent, Perfectly Tailored',
+    '%cHem %cTime Machine for your AI agent setup',
     'color:#c49a3c; font-size:1.2rem; font-weight:bold',
     'color:#8a8075; font-size:0.9rem'
   );

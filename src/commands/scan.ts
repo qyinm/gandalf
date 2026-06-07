@@ -70,7 +70,7 @@ function displayAgent(agent: string): string {
 
 function renderScanText(state: CurrentState): string {
   const lines = [
-    "snaptailor scan",
+    "hem scan",
     "",
     `Read-only: ${state.scan.trust.readOnly ? "yes" : "no"}`,
     `Network: ${state.scan.trust.network}`,
@@ -105,7 +105,7 @@ function renderScanText(state: CurrentState): string {
     lines.push(`  ${blindSpot}`);
   }
 
-  lines.push("", "Next", "  snaptailor snapshot create --name baseline --metadata-only --project .");
+  lines.push("", "Next", "  hem snapshot create --name baseline --metadata-only --project .");
   return `${lines.join("\n")}\n`;
 }
 

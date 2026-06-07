@@ -1,5 +1,5 @@
 /**
- * Fixed sidebar for snaptailor TUI dashboard.
+ * Fixed sidebar for hem TUI dashboard.
  *
  * Always visible on the left. Shows detected agents with evidence counts.
  * User navigates with ↑↓/jk and selects with Enter.

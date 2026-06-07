@@ -5,19 +5,19 @@ Date: 2026-05-12
 Command shape:
 
 ```bash
-SNAPTAILOR_STORE=/tmp/snaptailor-dogfood/store node dist/src/cli.js scan --project <project> --json
-SNAPTAILOR_STORE=/tmp/snaptailor-dogfood/store node dist/src/cli.js report current --project <project> --out /tmp/snaptailor-dogfood/reports/<name>-report.md
+HEM_STORE=/tmp/hem-dogfood/store node dist/src/cli.js scan --project <project> --json
+HEM_STORE=/tmp/hem-dogfood/store node dist/src/cli.js report current --project <project> --out /tmp/hem-dogfood/reports/<name>-report.md
 ```
 
-The store was redirected to `/tmp/snaptailor-dogfood/store` so dogfood did not write to the user's real `~/.snaptailor` store.
+The store was redirected to `/tmp/hem-dogfood/store` so dogfood did not write to the user's real `~/.hem` store.
 
 ## Results
 
 | Project | Scan JSON | Markdown report | Evidence | Findings | Blind spots |
 |---|---|---|---:|---:|---:|
-| snaptailor | `/tmp/snaptailor-dogfood/snaptailor-scan.json` | `/tmp/snaptailor-dogfood/reports/snaptailor-report.md` | 243 | 108 | 3 |
-| MirrorNote | `/tmp/snaptailor-dogfood/mirrornote-scan.json` | `/tmp/snaptailor-dogfood/reports/mirrornote-report.md` | 247 | 111 | 3 |
-| DuckDocs | `/tmp/snaptailor-dogfood/duckdocs-scan.json` | `/tmp/snaptailor-dogfood/reports/duckdocs-report.md` | 245 | 108 | 3 |
+| Hem | `/tmp/hem-dogfood/hem-scan.json` | `/tmp/hem-dogfood/reports/hem-report.md` | 243 | 108 | 3 |
+| MirrorNote | `/tmp/hem-dogfood/mirrornote-scan.json` | `/tmp/hem-dogfood/reports/mirrornote-report.md` | 247 | 111 | 3 |
+| DuckDocs | `/tmp/hem-dogfood/duckdocs-scan.json` | `/tmp/hem-dogfood/reports/duckdocs-report.md` | 245 | 108 | 3 |
 
 ## Observations
 

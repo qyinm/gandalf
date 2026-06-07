@@ -1,4 +1,4 @@
-# 📦 snaptailor — Sample Drift Fixtures
+# 📦 hem — Sample Drift Fixtures
 
 ## 구조
 
@@ -23,18 +23,18 @@ fixtures/
 
 ```bash
 # 1. baseline 스냅샷 생성
-snaptailor snapshot create --name demo-baseline \
+hem snapshot create --name demo-baseline \
   --metadata-only --project fixtures/baseline
 
 # 2. scan + explain
-snaptailor scan --project fixtures/drifted
+hem scan --project fixtures/drifted
 
 # 3. diff
-snaptailor diff demo-baseline current --project fixtures/drifted
+hem diff demo-baseline current --project fixtures/drifted
 
 # audit
-snaptailor audit current --project fixtures/drifted
+hem audit current --project fixtures/drifted
 
 # 5. report
-snaptailor report current --project fixtures/drifted --out drift-report.md
+hem report current --project fixtures/drifted --out drift-report.md
 ```

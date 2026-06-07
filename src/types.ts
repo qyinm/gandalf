@@ -379,7 +379,7 @@ export interface ApplyWithRollbackResult {
 // ── Bundle types (v0.2+) ────────────────────────────────────────
 
 /**
- * Bundle manifest stored in .stailor/manifest.json inside every .stailor archive.
+ * Bundle manifest stored in .hem/manifest.json inside every .hem archive.
  */
 export interface BundleManifest {
   formatVersion: 1;
@@ -411,8 +411,8 @@ export interface SourceMachine {
 }
 
 /**
- * Checksums for every tar entry inside a .stailor bundle.
- * Stored in .stailor/checksums.json.
+ * Checksums for every tar entry inside a .hem bundle.
+ * Stored in .hem/checksums.json.
  */
 export interface BundleChecksums {
   algorithm: "SHA-256";
@@ -429,7 +429,7 @@ export interface BundleExportOptions {
   projectPath: string;
   homeDir: string;
   includeContent?: boolean;
-  /** Optional HMAC key. Defaults to SNAPTAILOR_BUNDLE_KEY when present. */
+  /** Optional HMAC key. Defaults to HEM_BUNDLE_KEY when present. */
   signatureKey?: string;
   /** Optional agent scope for snapshot lookup. */
   agent?: AgentId;
@@ -448,7 +448,7 @@ export interface BundleImportOptions {
   /** Stage content under the snapshot store instead of applying it to target paths. */
   quarantine?: boolean;
   trust?: boolean;
-  /** Optional HMAC key. Defaults to SNAPTAILOR_BUNDLE_KEY when present. */
+  /** Optional HMAC key. Defaults to HEM_BUNDLE_KEY when present. */
   signatureKey?: string;
   /** Optional agent scope for snapshot storage on import. */
   agent?: AgentId;
@@ -537,7 +537,7 @@ export interface BundleInspectResult {
 
 export interface BundleVerifyOptions {
   bundlePath: string;
-  /** Optional HMAC key. Defaults to SNAPTAILOR_BUNDLE_KEY when present. */
+  /** Optional HMAC key. Defaults to HEM_BUNDLE_KEY when present. */
   signatureKey?: string;
 }
 
