@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 
 import type { TimelineUndoPlan } from "../../timeline-undo.js";
-import type { AgentId, TimelineChangedSurface, TimelineEntry } from "../../types.js";
+import type { AgentId, DiscoveredItem, TimelineChangedSurface, TimelineEntry } from "../../types.js";
 import type { TimelineCorruptEvent } from "../../store.js";
 import { buildTimelineViewModel } from "./TimelineViewModel.js";
 import { padDisplay } from "./TuiFormatters.js";
@@ -12,6 +12,7 @@ interface TimelineViewProps {
   entries: TimelineEntry[];
   selectedIndex: number;
   agentFilter: AgentId | null;
+  evidence?: DiscoveredItem[];
   corruptEvents?: TimelineCorruptEvent[];
   undoPlan?: TimelineUndoPlan | null;
   undoError?: string | null;
@@ -21,6 +22,7 @@ export default function TimelineView({
   entries,
   selectedIndex,
   agentFilter,
+  evidence = [],
   corruptEvents = [],
   undoPlan,
   undoError
@@ -29,6 +31,7 @@ export default function TimelineView({
     entries,
     selectedIndex,
     agentFilter,
+    evidence,
     corruptEvents,
     undoPlan
   });
@@ -38,6 +41,18 @@ export default function TimelineView({
       <Box marginBottom={1}>
         <Text bold>Timeline</Text>
         <Text dimColor>  Filter: {model.filterLabel}</Text>
+      </Box>
+
+      <Box flexDirection="column" marginBottom={1}>
+        <Text bold>Current Setup</Text>
+        <Text dimColor>  Scope: {model.currentSetup.scopeLabel}</Text>
+        <Text>
+          {"  "}Agents {model.currentSetup.agents}  Skills {model.currentSetup.skills}  MCP Servers {model.currentSetup.mcpServers}  Hooks {model.currentSetup.hooks}  Permissions {model.currentSetup.permissions}
+        </Text>
+        <Text>  Skills       {model.currentSetup.skillNames}</Text>
+        <Text>  MCP Servers  {model.currentSetup.mcpServerNames}</Text>
+        <Text>  Hooks        {model.currentSetup.hookNames}</Text>
+        <Text>  Instructions  {model.currentSetup.instructions}</Text>
       </Box>
 
       {model.corruptWarning && (
