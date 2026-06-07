@@ -7,64 +7,17 @@
  *   snapshot show <name>  show <name> [--json]
  */
 
-import { auditEvidence } from "../audit.js";
 import { formatSnapError } from "../errors.js";
-import { buildGraph } from "../graph.js";
-import { buildProvenance } from "../provenance.js";
-import { scanProject } from "../scan.js";
+import { captureCurrentState } from "../current-state.js";
 import {
-  ensureStore,
   listSnapshots,
   readSnapshot,
-  writeSnapshot
+  writeSnapshot,
 } from "../store.js";
-import type { AuditFinding, Snapshot, SnapshotManifest } from "../types.js";
-import type { ScanResult } from "../scan.js";
 import React from "react";
-import { hasFlag, json, runtimeOptions, valueAfter } from "../cli-shared.js";
-import { isClackMode, detectTuiMode, isInkMode, renderComponent } from "../tui/index.js";
+import { hasFlag, json, valueAfter } from "../cli-shared.js";
+import { detectTuiMode, isInkMode, renderComponent } from "../tui/index.js";
 import type { Command, CommandContext } from "./index.js";
-
-/* ------------------------------------------------------------------ */
-/*  CurrentState helper (in-memory pseudo-snapshot)                    */
-/* ------------------------------------------------------------------ */
-
-interface CurrentState {
-  scan: ScanResult;
-  snapshot: Snapshot;
-  storeFindings: AuditFinding[];
-}
-
-async function currentState(args: string[], name = "current"): Promise<CurrentState> {
-  const options = runtimeOptions(args);
-  const storeFindings = await ensureStore(options.storeDir);
-  const scan = await scanProject(options);
-  const graph = buildGraph(scan.evidence);
-  const auditFindings = [...storeFindings, ...auditEvidence(scan.evidence, graph)];
-  const provenance = buildProvenance(graph, scan.evidence);
-  const manifest: SnapshotManifest = {
-    schemaVersion: "0.1",
-    name,
-    createdAt: new Date().toISOString(),
-    projectPath: options.projectPath,
-    security: {
-      rawSecretsIncluded: false,
-      redactionPolicy: "metadata-only"
-    }
-  };
-
-  return {
-    scan,
-    storeFindings,
-    snapshot: {
-      manifest,
-      evidence: scan.evidence,
-      graph,
-      auditFindings,
-      provenance
-    }
-  };
-}
 
 /* ------------------------------------------------------------------ */
 /*  Command definition                                                 */
@@ -110,7 +63,7 @@ export const snapshotCommand: Command = {
         return 1;
       }
 
-      const state = await currentState(args, name);
+      const state = await captureCurrentState(options, name);
       await writeSnapshot(options.storeDir, state.snapshot, options.agent);
       process.stdout.write(`Created metadata-only snapshot: ${name}`);
       if (options.agent) process.stdout.write(` (agent: ${options.agent})`);

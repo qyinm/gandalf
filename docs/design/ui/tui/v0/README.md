@@ -335,7 +335,13 @@ Current setup will be saved first as
 [Restore] [Cancel]
 ```
 
-MVP restore should restore the full setup. Agent-only restore is a future advanced action.
+Original TUI v0 restore targets full setup restore. Daemon P0 deliberately narrows this:
+
+- daemon timeline restore is MCP-only dry-run undo
+- skills, hooks, and permissions appear as observe-only surfaces
+- full setup restore remains post-P0 until restore handlers are audited and covered by tests
+
+Agent-only restore is still a future advanced action.
 
 ### Add / Remove MCP or Skill
 

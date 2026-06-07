@@ -11,6 +11,8 @@ import { bundleCommand } from "./commands/bundle.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { schemaCommand } from "./commands/schema.js";
 import { tuiCommand } from "./commands/tui.js";
+import { timelineCommand } from "./commands/timeline.js";
+import { daemonCommand } from "./commands/daemon.js";
 import { hasFlag, runtimeOptions } from "./cli-shared.js";
 
 const HELP = [
@@ -20,6 +22,14 @@ const HELP = [
   "",
   "TUI command:",
   "  hem tui                              launch interactive TUI dashboard",
+  "",
+  "Local timeline commands:",
+  '  hem daemon start --project . --json',
+  '  hem daemon status --project . --json',
+  '  hem daemon stop --project . --json',
+  '  hem timeline list --project .',
+  '  hem timeline show <id>',
+  '  hem timeline undo <id> --dry-run --json',
   "",
   "Diagnosis commands:",
   '  hem scan --project .',
@@ -65,6 +75,8 @@ const registry = new Map<string, import("./commands/index.js").Command>([
   ["doctor", doctorCommand],
   ["schema", schemaCommand],
   ["tui", tuiCommand],
+  ["timeline", timelineCommand],
+  ["daemon", daemonCommand],
 ]);
 
 // ── CLI Entry Point ────────────────────────────────────────────
