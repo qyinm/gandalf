@@ -8,6 +8,7 @@ import { diffCommand, auditCommand, provenanceCommand } from "./commands/diff.js
 import { reportCommand } from "./commands/report.js";
 import { restoreCommand } from "./commands/restore.js";
 import { bundleCommand } from "./commands/bundle.js";
+import { doctorCommand } from "./commands/doctor.js";
 import { schemaCommand } from "./commands/schema.js";
 import { tuiCommand } from "./commands/tui.js";
 import { hasFlag, runtimeOptions } from "./cli-shared.js";
@@ -32,6 +33,7 @@ const HELP = [
   '  snaptailor audit current --project .',
   '  snaptailor provenance current --project . --json',
   '  snaptailor report current --project . --out snaptailor-report.md',
+  '  snaptailor doctor --project .',
   "",
   "Restore commands:",
   '  snaptailor restore --snapshot <name> --dry-run --project .          generate a non-mutating restore plan as JSON',
@@ -60,6 +62,7 @@ const registry = new Map<string, import("./commands/index.js").Command>([
   ["report", reportCommand],
   ["restore", restoreCommand],
   ["bundle", bundleCommand],
+  ["doctor", doctorCommand],
   ["schema", schemaCommand],
   ["tui", tuiCommand],
 ]);

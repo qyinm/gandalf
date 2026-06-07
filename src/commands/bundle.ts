@@ -13,6 +13,7 @@ import path from "node:path";
 import { bundleExport, bundleImport, bundleInspect, bundleVerify } from "../bundle.js";
 import { hasFlag, json, runtimeOptions, valueAfter } from "../cli-shared.js";
 import { formatSnapError } from "../errors.js";
+import { formatReadinessSummaryLines } from "../readiness.js";
 import { ensureStore } from "../store.js";
 import { detectTuiMode } from "../tui/index.js";
 import type { Command, CommandContext } from "./index.js";
@@ -172,6 +173,7 @@ export const bundleCommand: Command = {
             process.stdout.write(`Warning: Cross-OS restore (${md.sourcePlatform} → ${md.targetPlatform})\n`);
           }
         }
+        process.stdout.write(`${formatReadinessSummaryLines(result.readiness, { includeFixes: true }).join("\n")}\n`);
         if (!isDryRun) {
           process.stdout.write(`\nImported snapshot: ${result.snapshotName}\n`);
           process.stdout.write(`Evidence items: ${result.evidenceCount}\n`);

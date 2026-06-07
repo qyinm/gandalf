@@ -671,6 +671,25 @@ describe("bundle import -- dry-run", () => {
           ...sampleSnapshot("mcp-binaries").evidence[0],
           id: "mcp-local",
           value: { command: "/Users/alice/.local/bin/private-mcp" }
+        },
+        {
+          ...sampleSnapshot("mcp-binaries").evidence[0],
+          id: "mcp-remote",
+          value: { url: "https://mcp.example.test" }
+        },
+        {
+          ...sampleSnapshot("mcp-binaries").evidence[0],
+          id: "env-openai",
+          agent: "project",
+          kind: "env_key",
+          sourcePath: ".env",
+          parser: "dotenv",
+          sensitivity: "env_key_inventory",
+          contentPolicy: "key_inventory_only",
+          restorePolicy: "key_inventory_only",
+          captureStatus: "redacted",
+          name: "OPENAI_API_KEY",
+          value: { key: "OPENAI_API_KEY" }
         }
       ]) + "\n", "utf-8"),
       mode: 0o644,
@@ -695,6 +714,13 @@ describe("bundle import -- dry-run", () => {
     assert.equal(localReport?.binaryKind, "source_local_path");
     assert.equal(localReport?.availableOnTarget, false);
     assert.match(localReport?.warning ?? "", /source machine local binary path/);
+    assert.equal(result.readiness.summary.needs_manual_action >= 2, true);
+    assert.equal(result.readiness.summary.unverified, 1);
+    assert.equal(
+      result.readiness.items.some((item) => item.code === "SNAPTAILOR_ENV_VALUE_REQUIRED" && item.problem.includes("OPENAI_API_KEY")),
+      true
+    );
+    assert.equal(JSON.stringify(result.readiness).includes("sk-real-secret"), false);
   });
 
   it("checks MCP command availability without invoking a shell", async () => {
@@ -729,5 +755,73 @@ describe("bundle import -- dry-run", () => {
     const report = result.machineDiff?.mcpBinaryReport.find((item) => item.evidenceId === "mcp-malicious");
     assert.equal(report?.availableOnTarget, false);
     await assert.rejects(readFile(markerPath, "utf-8"), /ENOENT/);
+  });
+
+  it("blocks content apply outside macOS before writing content", async () => {
+    const box = await makeSandbox();
+    const entries = makeMinimalBundle(box, "mac-apply-only", [
+      {
+        path: "content/config/tool.json",
+        content: Buffer.from("unsafe write", "utf-8"),
+        mode: 0o644,
+        mtime: 1000000,
+        type: "file"
+      }
+    ]);
+    const bundleFilePath = bundlePath(box, "mac-apply-only");
+    await writeTar(entries, bundleFilePath);
+
+    await assert.rejects(
+      bundleImport({
+        bundlePath: bundleFilePath,
+        storeDir: box.storeDir,
+        projectPath: box.projectPath,
+        homeDir: box.homeDir,
+        applyContent: true,
+        targetPlatform: "linux"
+      }),
+      /SNAPTAILOR_MACOS_APPLY_ONLY/
+    );
+    await assert.rejects(readFile(path.join(box.projectPath, "config", "tool.json"), "utf-8"), /ENOENT/);
+  });
+
+  it("returns non-macOS apply blockers during dry-run instead of throwing", async () => {
+    const box = await makeSandbox();
+    const entries = makeMinimalBundle(box, "mac-dry-run-blocker", []);
+    const bundleFilePath = bundlePath(box, "mac-dry-run-blocker");
+    await writeTar(entries, bundleFilePath);
+
+    const result = await bundleImport({
+      bundlePath: bundleFilePath,
+      storeDir: box.storeDir,
+      projectPath: box.projectPath,
+      homeDir: box.homeDir,
+      applyContent: true,
+      dryRun: true,
+      targetPlatform: "linux"
+    });
+
+    assert.equal(result.readiness.summary.blocked, 1);
+    assert.equal(result.readiness.items[0]?.code, "SNAPTAILOR_MACOS_APPLY_ONLY");
+    await assert.rejects(readSnapshot(box.storeDir, "mac-dry-run-blocker"), /ENOENT/);
+  });
+
+  it("reports non-macOS apply limitations during ordinary dry-run", async () => {
+    const box = await makeSandbox();
+    const entries = makeMinimalBundle(box, "mac-dry-run-limitation", []);
+    const bundleFilePath = bundlePath(box, "mac-dry-run-limitation");
+    await writeTar(entries, bundleFilePath);
+
+    const result = await bundleImport({
+      bundlePath: bundleFilePath,
+      storeDir: box.storeDir,
+      projectPath: box.projectPath,
+      homeDir: box.homeDir,
+      dryRun: true,
+      targetPlatform: "linux"
+    });
+
+    assert.equal(result.readiness.summary.unsupported, 1);
+    assert.equal(result.readiness.items[0]?.code, "SNAPTAILOR_MACOS_APPLY_ONLY");
   });
 });
