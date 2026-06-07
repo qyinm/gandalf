@@ -38,11 +38,6 @@ export default function TimelineView({
 
   return (
     <Box flexDirection="column">
-      <Box marginBottom={1}>
-        <Text bold>Timeline</Text>
-        <Text dimColor>  Filter: {model.filterLabel}</Text>
-      </Box>
-
       <Box flexDirection="column" marginBottom={1}>
         <Text bold>Current Setup</Text>
         <Text dimColor>  Scope: {model.currentSetup.scopeLabel}</Text>
@@ -53,6 +48,11 @@ export default function TimelineView({
         <Text>  MCP Servers  {model.currentSetup.mcpServerNames}</Text>
         <Text>  Hooks        {model.currentSetup.hookNames}</Text>
         <Text>  Instructions  {model.currentSetup.instructions}</Text>
+      </Box>
+
+      <Box marginBottom={1}>
+        <Text bold>Timeline</Text>
+        <Text dimColor>  Filter: {model.filterLabel}</Text>
       </Box>
 
       {model.corruptWarning && (
