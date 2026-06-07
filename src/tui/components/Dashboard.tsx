@@ -47,6 +47,7 @@ import ErrorPage from "./ErrorPage.js";
 import TimelineView from "./TimelineView.js";
 import { clampTimelineIndex } from "./TimelineViewModel.js";
 import AgentDetailView from "./AgentDetailView.js";
+import ProfileView from "./ProfileView.js";
 import {
   INITIAL_NAV_ITEM_ID,
   buildTuiNavigationModel,
@@ -69,6 +70,7 @@ type DashboardState = {
   scan: ScanResult | null;
   findings: AuditFinding[];
   selectedAgent: AgentId | null;
+  profileScreenOpen: boolean;
   sidebarCursor: number;
   activeTab: TabId;
   timelineEntries: TimelineEntry[];
@@ -134,6 +136,7 @@ export default function Dashboard({ options }: DashboardProps) {
     scan: null,
     findings: [],
     selectedAgent: null,
+    profileScreenOpen: false,
     sidebarCursor: 0,
     activeTab: "timeline",
     timelineEntries: [],
@@ -189,6 +192,7 @@ export default function Dashboard({ options }: DashboardProps) {
           scan,
           findings,
           selectedAgent: firstAgent,
+          profileScreenOpen: false,
           sidebarCursor: navModel.cursor,
           snapshots,
           saveSetupState: { type: "idle" },
@@ -234,7 +238,7 @@ export default function Dashboard({ options }: DashboardProps) {
       const navModel = buildTuiNavigationModel({
         evidence: scan.evidence,
         selectedItemId: navItemIdForSelection({
-          screen: screenFromTab(state.activeTab, newAgent),
+          screen: state.profileScreenOpen ? "profile" : screenFromTab(state.activeTab, newAgent),
           selectedAgent: newAgent,
           selectedProfile: "default"
         }),
@@ -247,6 +251,7 @@ export default function Dashboard({ options }: DashboardProps) {
         scan,
         findings,
         selectedAgent: newAgent,
+        profileScreenOpen: false,
         snapshots,
         saveSetupState: { type: "idle" },
         timelineEntries: timeline.entries,
@@ -261,7 +266,7 @@ export default function Dashboard({ options }: DashboardProps) {
     } catch {
       // silent
     }
-  }, [options, state.selectedAgent, loadTimelineForAgent]);
+  }, [options, state.activeTab, state.profileScreenOpen, state.selectedAgent, state.sidebarCursor, loadTimelineForAgent]);
 
   const switchAgent = useCallback(
     async (agent: AgentId | null) => {
@@ -277,6 +282,7 @@ export default function Dashboard({ options }: DashboardProps) {
       setState((s) => ({
         ...s,
         selectedAgent: agent,
+        profileScreenOpen: false,
         snapshots,
         activeTab: s.activeTab,
         timelineEntries: timeline.entries,
@@ -302,7 +308,7 @@ export default function Dashboard({ options }: DashboardProps) {
       if (!state.scan) return;
 
       if (action === "save-snapshot") {
-        setState((s) => ({ ...s, activeTab: "snapshots", saveSetupState: { type: "loading" } }));
+        setState((s) => ({ ...s, activeTab: "snapshots", profileScreenOpen: false, saveSetupState: { type: "loading" } }));
         try {
           const { captureCurrentState } = await import("../../current-state.js");
           const { readSnapshot } = await import("../../store.js");
@@ -328,6 +334,7 @@ export default function Dashboard({ options }: DashboardProps) {
           setState((s) => ({
             ...s,
             activeTab: "snapshots",
+            profileScreenOpen: false,
             saveSetupState: {
               type: "preview",
               snapshot,
@@ -340,6 +347,7 @@ export default function Dashboard({ options }: DashboardProps) {
           setState((s) => ({
             ...s,
             activeTab: "snapshots",
+            profileScreenOpen: false,
             saveSetupState: {
               type: "error",
               message: err instanceof Error ? err.message : String(err)
@@ -540,7 +548,7 @@ export default function Dashboard({ options }: DashboardProps) {
       const navModel = buildTuiNavigationModel({
         evidence: state.scan?.evidence ?? [],
         selectedItemId: navItemIdForSelection({
-          screen: screenFromTab(state.activeTab, state.selectedAgent),
+          screen: state.profileScreenOpen ? "profile" : screenFromTab(state.activeTab, state.selectedAgent),
           selectedAgent: state.selectedAgent,
           selectedProfile: "default"
         }),
@@ -722,24 +730,26 @@ export default function Dashboard({ options }: DashboardProps) {
         });
 
         if (selection.screen === "timeline") {
-          setState((s) => ({ ...s, activeTab: "timeline" }));
+          setState((s) => ({ ...s, activeTab: "timeline", profileScreenOpen: false }));
           switchAgent(selection.selectedAgent);
         } else if (selection.screen === "snapshots") {
           setState((s) => ({
             ...s,
             activeTab: "snapshots",
+            profileScreenOpen: false,
             selectedAgent: null,
             snapshots: [],
             diffState: { type: "idle" }
           }));
         } else if (selection.screen === "agent-detail" && selection.selectedAgent) {
-          setState((s) => ({ ...s, activeTab: "scan" }));
+          setState((s) => ({ ...s, activeTab: "scan", profileScreenOpen: false }));
           switchAgent(selection.selectedAgent);
         } else {
           setState((s) => ({
             ...s,
             activeTab: "timeline",
             selectedAgent: null,
+            profileScreenOpen: selection.screen === "profile",
             timelineUndoState: { type: "idle" },
             diffState: { type: "idle" }
           }));
@@ -782,7 +792,7 @@ export default function Dashboard({ options }: DashboardProps) {
   // ── Render: dashboard ─────────────────────────
   const agents = state.scan ? buildAgentFilterEntries(state.scan.evidence) : [];
   const selectedNavItemId = navItemIdForSelection({
-    screen: screenFromTab(state.activeTab, state.selectedAgent),
+    screen: state.profileScreenOpen ? "profile" : screenFromTab(state.activeTab, state.selectedAgent),
     selectedAgent: state.selectedAgent,
     selectedProfile: "default"
   });
@@ -826,11 +836,12 @@ export default function Dashboard({ options }: DashboardProps) {
             </Box>
           )}
 
-          {state.activeTab === "timeline" && renderTimeline()}
-          {state.activeTab === "snapshots" && renderSnapshots()}
-          {state.activeTab === "scan" && renderScan()}
-          {state.activeTab === "audit" && renderAudit()}
-          {state.activeTab === "diff" && renderDiff()}
+          {state.profileScreenOpen && renderProfile()}
+          {!state.profileScreenOpen && state.activeTab === "timeline" && renderTimeline()}
+          {!state.profileScreenOpen && state.activeTab === "snapshots" && renderSnapshots()}
+          {!state.profileScreenOpen && state.activeTab === "scan" && renderScan()}
+          {!state.profileScreenOpen && state.activeTab === "audit" && renderAudit()}
+          {!state.profileScreenOpen && state.activeTab === "diff" && renderDiff()}
         </Box>
 
         {/* Footer hint */}
@@ -858,6 +869,18 @@ export default function Dashboard({ options }: DashboardProps) {
         corruptEvents={state.timelineCorruptEvents}
         undoPlan={state.timelineUndoState.type === "rendered" ? state.timelineUndoState.plan : null}
         undoError={state.timelineUndoState.type === "error" ? state.timelineUndoState.message : null}
+      />
+    );
+  }
+
+  function renderProfile() {
+    if (!state.scan) return <Text dimColor>No scan data.</Text>;
+
+    return (
+      <ProfileView
+        evidence={state.scan.evidence}
+        snapshotNames={state.snapshots}
+        timelineEntries={state.timelineEntries}
       />
     );
   }
