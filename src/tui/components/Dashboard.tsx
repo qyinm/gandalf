@@ -753,8 +753,24 @@ export default function Dashboard({ options }: DashboardProps) {
         return;
       }
 
-      // --- ↑↓/jk: scroll scan tab OR navigate sidebar ---
+      // --- ↑↓/jk: move the persistent left navigation selection ---
       if (key.upArrow || input === "k") {
+        setState((s) => ({
+          ...s,
+          sidebarCursor: s.sidebarCursor > 0 ? s.sidebarCursor - 1 : maxCursor,
+        }));
+        return;
+      }
+      if (key.downArrow || input === "j") {
+        setState((s) => ({
+          ...s,
+          sidebarCursor: s.sidebarCursor < maxCursor ? s.sidebarCursor + 1 : 0,
+        }));
+        return;
+      }
+
+      // --- ←→/hl: move within the current content panel when it has local selection ---
+      if (key.leftArrow || input === "h") {
         if (state.activeTab === "scan") {
           setState((s) => ({
             ...s,
@@ -768,15 +784,10 @@ export default function Dashboard({ options }: DashboardProps) {
               : s.timelineCursor > 0 ? s.timelineCursor - 1 : s.timelineEntries.length - 1,
             timelineUndoState: { type: "idle" },
           }));
-        } else {
-          setState((s) => ({
-            ...s,
-            sidebarCursor: s.sidebarCursor > 0 ? s.sidebarCursor - 1 : maxCursor,
-          }));
         }
         return;
       }
-      if (key.downArrow || input === "j") {
+      if (key.rightArrow || input === "l") {
         if (state.activeTab === "scan") {
           setState((s) => ({
             ...s,
@@ -789,11 +800,6 @@ export default function Dashboard({ options }: DashboardProps) {
               ? 0
               : s.timelineCursor < s.timelineEntries.length - 1 ? s.timelineCursor + 1 : 0,
             timelineUndoState: { type: "idle" },
-          }));
-        } else {
-          setState((s) => ({
-            ...s,
-            sidebarCursor: s.sidebarCursor < maxCursor ? s.sidebarCursor + 1 : 0,
           }));
         }
         return;
@@ -928,9 +934,9 @@ export default function Dashboard({ options }: DashboardProps) {
         <Box marginTop={1}>
           <Text dimColor>
             {state.activeTab === "scan"
-              ? "↑↓ scroll  s=save  c=compare  a=audit  r=rescan  q=quit"
+              ? "↑↓ move  Enter open  ←→ scroll  s=save  c=compare  a=audit  r=rescan  q=quit"
               : state.activeTab === "timeline"
-                ? "↑↓ timeline  u=preview undo  c=compare  r=rescan  q=quit"
+                ? "↑↓ move  Enter open  ←→ timeline  u=preview undo  c=compare  r=rescan  q=quit"
                 : "↑↓ move  Enter open  s=save  c=compare  r=rescan  q=quit"}
           </Text>
         </Box>
