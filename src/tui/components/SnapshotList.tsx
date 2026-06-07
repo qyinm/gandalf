@@ -7,6 +7,7 @@
 import React, { useState } from "react";
 import { Text, Box } from "ink";
 import SimpleTable from "./SimpleTable.js";
+import { buildSnapshotListViewModel } from "./SnapshotListViewModel.js";
 
 import type { Snapshot } from "../../types.js";
 
@@ -26,14 +27,16 @@ export default function SnapshotList({
   pageSize = 20,
 }: SnapshotListProps) {
   const [page, setPage] = useState(0);
+  const model = buildSnapshotListViewModel({ names });
   const totalPages = Math.ceil(names.length / pageSize);
   const pageNames = names.slice(page * pageSize, (page + 1) * pageSize);
 
   if (names.length === 0) {
     return (
       <Box flexDirection="column">
-        <Text bold>hem snapshot list</Text>
-        <Text dimColor>No snapshots found.</Text>
+        <Text bold>{model.title}</Text>
+        <Text dimColor>{model.emptyMessage}</Text>
+        <Text color="cyan">{model.emptyAction}</Text>
       </Box>
     );
   }
@@ -63,7 +66,7 @@ export default function SnapshotList({
     <Box flexDirection="column">
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold>hem snapshot list ({names.length} total)</Text>
+        <Text bold>{model.title}</Text>
       </Box>
 
       {/* Table */}

@@ -4,6 +4,13 @@ export type SemanticChangeCode =
   | "MCP_ADDED"
   | "MCP_REMOVED"
   | "MCP_CHANGED"
+  | "SKILL_ADDED"
+  | "SKILL_REMOVED"
+  | "HOOK_ADDED"
+  | "HOOK_REMOVED"
+  | "HOOK_CHANGED"
+  | "PERMISSION_CHANGED"
+  | "INSTRUCTION_CHANGED"
   | "PERMISSION_WILDCARD_ADDED"
   | "SKILL_EXECUTABLE_APPEARED"
   | "ENV_KEY_ADDED"
@@ -139,6 +146,46 @@ export function diffGraphs(baselineGraph: GraphNode[], currentGraph: GraphNode[]
           details: { changedFields: [], sourcePath: after.sourcePath }
         });
       }
+      if (after.entityKind === "skill") {
+        semanticChanges.push({
+          code: "SKILL_ADDED",
+          entityKind: after.entityKind,
+          entityName: after.entityName,
+          severity: "low",
+          after: after.effectiveValue,
+          details: { changedFields: [], sourcePath: after.sourcePath }
+        });
+      }
+      if (after.entityKind === "hook") {
+        semanticChanges.push({
+          code: "HOOK_ADDED",
+          entityKind: after.entityKind,
+          entityName: after.entityName,
+          severity: "medium",
+          after: after.effectiveValue,
+          details: { changedFields: [], sourcePath: after.sourcePath }
+        });
+      }
+      if (after.entityKind === "permission") {
+        semanticChanges.push({
+          code: "PERMISSION_CHANGED",
+          entityKind: after.entityKind,
+          entityName: after.entityName,
+          severity: "medium",
+          after: after.effectiveValue,
+          details: { changedFields: [], sourcePath: after.sourcePath }
+        });
+      }
+      if (after.entityKind === "agent_instruction") {
+        semanticChanges.push({
+          code: "INSTRUCTION_CHANGED",
+          entityKind: after.entityKind,
+          entityName: after.entityName,
+          severity: "medium",
+          after: after.effectiveValue,
+          details: { changedFields: [], sourcePath: after.sourcePath }
+        });
+      }
       if (isWildcardPermission(after)) {
         semanticChanges.push({
           code: "PERMISSION_WILDCARD_ADDED",
@@ -171,6 +218,42 @@ export function diffGraphs(baselineGraph: GraphNode[], currentGraph: GraphNode[]
         before: before.effectiveValue,
         after: after.effectiveValue,
         details: { changedFields: mcpChangedFields(before, after), sourcePath: after.sourcePath }
+      });
+    }
+
+    if (after.entityKind === "hook" && stable(before.effectiveValue) !== stable(after.effectiveValue)) {
+      semanticChanges.push({
+        code: "HOOK_CHANGED",
+        entityKind: after.entityKind,
+        entityName: after.entityName,
+        severity: "medium",
+        before: before.effectiveValue,
+        after: after.effectiveValue,
+        details: { changedFields: [], sourcePath: after.sourcePath }
+      });
+    }
+
+    if (after.entityKind === "permission" && stable(before.effectiveValue) !== stable(after.effectiveValue)) {
+      semanticChanges.push({
+        code: "PERMISSION_CHANGED",
+        entityKind: after.entityKind,
+        entityName: after.entityName,
+        severity: "medium",
+        before: before.effectiveValue,
+        after: after.effectiveValue,
+        details: { changedFields: [], sourcePath: after.sourcePath }
+      });
+    }
+
+    if (after.entityKind === "agent_instruction" && stable(before.effectiveValue) !== stable(after.effectiveValue)) {
+      semanticChanges.push({
+        code: "INSTRUCTION_CHANGED",
+        entityKind: after.entityKind,
+        entityName: after.entityName,
+        severity: "medium",
+        before: before.effectiveValue,
+        after: after.effectiveValue,
+        details: { changedFields: [], sourcePath: after.sourcePath }
       });
     }
 
@@ -229,6 +312,26 @@ export function diffGraphs(baselineGraph: GraphNode[], currentGraph: GraphNode[]
     if (before.entityKind === "env_key") {
       semanticChanges.push({
         code: "ENV_KEY_REMOVED",
+        entityKind: before.entityKind,
+        entityName: before.entityName,
+        severity: "medium",
+        before: before.effectiveValue,
+        details: { changedFields: [], sourcePath: before.sourcePath }
+      });
+    }
+    if (before.entityKind === "skill") {
+      semanticChanges.push({
+        code: "SKILL_REMOVED",
+        entityKind: before.entityKind,
+        entityName: before.entityName,
+        severity: "low",
+        before: before.effectiveValue,
+        details: { changedFields: [], sourcePath: before.sourcePath }
+      });
+    }
+    if (before.entityKind === "hook") {
+      semanticChanges.push({
+        code: "HOOK_REMOVED",
         entityKind: before.entityKind,
         entityName: before.entityName,
         severity: "medium",
