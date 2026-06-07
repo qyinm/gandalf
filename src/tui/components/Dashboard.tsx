@@ -952,6 +952,7 @@ export default function Dashboard({ options }: DashboardProps) {
         entries={state.timelineEntries}
         selectedIndex={state.timelineCursor}
         agentFilter={state.selectedAgent}
+        evidence={state.scan?.evidence ?? []}
         corruptEvents={state.timelineCorruptEvents}
         undoPlan={state.timelineUndoState.type === "rendered" ? state.timelineUndoState.plan : null}
         undoError={state.timelineUndoState.type === "error" ? state.timelineUndoState.message : null}

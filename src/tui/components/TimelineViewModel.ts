@@ -1,5 +1,5 @@
 import type { TimelineUndoPlan } from "../../timeline-undo.js";
-import type { AgentId, TimelineChangedSurface, TimelineEntry, TimelineRestoreReadiness } from "../../types.js";
+import type { AgentId, DiscoveredItem, TimelineChangedSurface, TimelineEntry, TimelineRestoreReadiness } from "../../types.js";
 import type { TimelineCorruptEvent } from "../../store.js";
 import { formatAgentLabel, formatAgentScope, formatTimelineTimestamp } from "./TuiFormatters.js";
 
@@ -43,6 +43,7 @@ export interface TimelineUndoPreviewModel {
 
 export interface TimelineViewModel {
   filterLabel: string;
+  currentSetup: CurrentSetupSummaryModel;
   emptyMessage?: string;
   emptyCommand?: string;
   corruptWarning?: string;
@@ -51,10 +52,24 @@ export interface TimelineViewModel {
   undoPreview?: TimelineUndoPreviewModel;
 }
 
+export interface CurrentSetupSummaryModel {
+  scopeLabel: string;
+  agents: number;
+  skills: number;
+  mcpServers: number;
+  hooks: number;
+  permissions: number;
+  skillNames: string;
+  mcpServerNames: string;
+  hookNames: string;
+  instructions: string;
+}
+
 export function buildTimelineViewModel(input: {
   entries: TimelineEntry[];
   selectedIndex: number;
   agentFilter: AgentId | null;
+  evidence?: Pick<DiscoveredItem, "agent" | "id" | "kind" | "name" | "sourcePath">[];
   corruptEvents?: TimelineCorruptEvent[];
   undoPlan?: TimelineUndoPlan | null;
   now?: Date;
@@ -65,6 +80,10 @@ export function buildTimelineViewModel(input: {
 
   return {
     filterLabel: input.agentFilter ? formatAgentLabel(input.agentFilter) : "All agents",
+    currentSetup: buildCurrentSetupSummaryModel({
+      evidence: input.evidence ?? [],
+      agentFilter: input.agentFilter
+    }),
     emptyMessage: input.entries.length === 0 ? "No timeline entries yet." : undefined,
     emptyCommand: input.entries.length === 0 ? "hem daemon start --project ." : undefined,
     corruptWarning: corruptCount > 0
@@ -73,6 +92,33 @@ export function buildTimelineViewModel(input: {
     rows: input.entries.map((entry, index) => timelineRowModel(entry, index === selectedIndex, input.now)),
     selectedEntry: selected ? timelineDetailModel(selected) : undefined,
     undoPreview: input.undoPlan ? timelineUndoPreviewModel(input.undoPlan) : undefined
+  };
+}
+
+export function buildCurrentSetupSummaryModel(input: {
+  evidence: Pick<DiscoveredItem, "agent" | "id" | "kind" | "name" | "sourcePath">[];
+  agentFilter: AgentId | null;
+}): CurrentSetupSummaryModel {
+  const evidence = input.agentFilter
+    ? input.evidence.filter((item) => item.agent === input.agentFilter)
+    : input.evidence;
+  const instructionPaths = [...new Set(
+    evidence
+      .filter((item) => item.kind === "agent_instruction")
+      .map((item) => item.sourcePath)
+  )].sort();
+
+  return {
+    scopeLabel: input.agentFilter ? formatAgentLabel(input.agentFilter) : "All agents",
+    agents: new Set(evidence.map((item) => item.agent)).size,
+    skills: countKind(evidence, "skill"),
+    mcpServers: countKind(evidence, "mcp_server"),
+    hooks: countKind(evidence, "hook"),
+    permissions: countKind(evidence, "permission"),
+    skillNames: namesForKind(evidence, "skill"),
+    mcpServerNames: namesForKind(evidence, "mcp_server"),
+    hookNames: namesForKind(evidence, "hook"),
+    instructions: instructionPaths.length > 0 ? instructionPaths.slice(0, 3).join(", ") : "none"
   };
 }
 
@@ -87,6 +133,22 @@ export function timelineRowModel(entry: TimelineEntry, selected: boolean, now?: 
     title: entry.title,
     selected
   };
+}
+
+function countKind(evidence: Pick<DiscoveredItem, "kind">[], kind: DiscoveredItem["kind"]): number {
+  return evidence.filter((item) => item.kind === kind).length;
+}
+
+function namesForKind(
+  evidence: Pick<DiscoveredItem, "id" | "kind" | "name">[],
+  kind: DiscoveredItem["kind"]
+): string {
+  const names = [...new Set(
+    evidence
+      .filter((item) => item.kind === kind)
+      .map((item) => item.name ?? item.id)
+  )].sort();
+  return names.length > 0 ? names.slice(0, 6).join(", ") : "none";
 }
 
 export function timelineDetailModel(entry: TimelineEntry): TimelineDetailModel {
