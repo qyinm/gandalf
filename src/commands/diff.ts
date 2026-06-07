@@ -8,59 +8,19 @@
 
 import React from "react";
 import { diffGraphs, type GraphDiff } from "../diff.js";
-import { valueAfter, hasFlag, json, runtimeOptions } from "../cli-shared.js";
+import { hasFlag, json, runtimeOptions } from "../cli-shared.js";
 import { isInkMode, renderComponent } from "../tui/index.js";
-import { ensureStore, readSnapshot } from "../store.js";
-import { scanProject, type ScanResult } from "../scan.js";
-import { buildGraph } from "../graph.js";
-import { auditEvidence } from "../audit.js";
-import { buildProvenance } from "../provenance.js";
+import { readSnapshot } from "../store.js";
+import { captureCurrentState } from "../current-state.js";
 import { formatSnapError } from "../errors.js";
-import type { Snapshot, SnapshotManifest, AuditFinding } from "../types.js";
+import type { AuditFinding, Snapshot } from "../types.js";
 import type { Command, CommandContext } from "./index.js";
 
 // ── Internal helpers ───────────────────────────────────────────
 
-interface CurrentState {
-  scan: ScanResult;
-  snapshot: Snapshot;
-  storeFindings: AuditFinding[];
-}
-
-async function currentState(args: string[], name = "current"): Promise<CurrentState> {
-  const options = runtimeOptions(args);
-  const storeFindings = await ensureStore(options.storeDir);
-  const scan = await scanProject(options);
-  const graph = buildGraph(scan.evidence);
-  const auditFindings = [...storeFindings, ...auditEvidence(scan.evidence, graph)];
-  const provenance = buildProvenance(graph, scan.evidence);
-  const manifest: SnapshotManifest = {
-    schemaVersion: "0.1",
-    name,
-    createdAt: new Date().toISOString(),
-    projectPath: options.projectPath,
-    security: {
-      rawSecretsIncluded: false,
-      redactionPolicy: "metadata-only"
-    }
-  };
-
-  return {
-    scan,
-    storeFindings,
-    snapshot: {
-      manifest,
-      evidence: scan.evidence,
-      graph,
-      auditFindings,
-      provenance
-    }
-  };
-}
-
 async function snapshotByRef(ref: string, args: string[]): Promise<Snapshot> {
   if (ref === "current") {
-    return (await currentState(args)).snapshot;
+    return (await captureCurrentState(runtimeOptions(args))).snapshot;
   }
   const opts = runtimeOptions(args);
   return await readSnapshot(opts.storeDir, ref, opts.agent);

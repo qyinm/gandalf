@@ -6,7 +6,9 @@
 
 import React from "react";
 import { Text, Box } from "ink";
-import Markdown from "ink-markdown";
+import MarkdownModule from "ink-markdown";
+
+const Markdown = MarkdownModule as unknown as React.ComponentType<{ children: string }>;
 
 // ── Props ────────────────────────────────────────────────────
 

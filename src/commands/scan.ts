@@ -6,57 +6,12 @@
  */
 
 import React from "react";
-import type { AuditFinding, Snapshot, SnapshotManifest } from "../types.js";
+import type { AuditFinding } from "../types.js";
 import type { ScanResult } from "../scan.js";
-import { hasFlag, json, runtimeOptions } from "../cli-shared.js";
+import { hasFlag, json } from "../cli-shared.js";
 import type { CommandContext, Command } from "./index.js";
-import { scanProject } from "../scan.js";
-import { buildGraph } from "../graph.js";
-import { auditEvidence } from "../audit.js";
-import { buildProvenance } from "../provenance.js";
-import { ensureStore } from "../store.js";
+import { captureCurrentState, type CurrentState } from "../current-state.js";
 import { isInkMode, renderComponent } from "../tui/index.js";
-
-// ── Internal types ─────────────────────────────────────────────
-
-interface CurrentState {
-  scan: ScanResult;
-  snapshot: Snapshot;
-  storeFindings: AuditFinding[];
-}
-
-// ── State builder ──────────────────────────────────────────────
-
-async function currentState(args: string[], name = "current"): Promise<CurrentState> {
-  const options = runtimeOptions(args);
-  const storeFindings = await ensureStore(options.storeDir);
-  const scan = await scanProject(options);
-  const graph = buildGraph(scan.evidence);
-  const auditFindings = [...storeFindings, ...auditEvidence(scan.evidence, graph)];
-  const provenance = buildProvenance(graph, scan.evidence);
-  const manifest: SnapshotManifest = {
-    schemaVersion: "0.1",
-    name,
-    createdAt: new Date().toISOString(),
-    projectPath: options.projectPath,
-    security: {
-      rawSecretsIncluded: false,
-      redactionPolicy: "metadata-only"
-    }
-  };
-
-  return {
-    scan,
-    storeFindings,
-    snapshot: {
-      manifest,
-      evidence: scan.evidence,
-      graph,
-      auditFindings,
-      provenance
-    }
-  };
-}
 
 // ── Renderers ─────────────────────────────────────────────────
 
@@ -134,7 +89,7 @@ export const scanCommand: Command = {
   name: "scan",
   description: "Scan project for agent configuration and emit evidence inventory",
   async execute(ctx: CommandContext): Promise<number> {
-    const state = await currentState(ctx.args);
+    const state = await captureCurrentState(ctx.options);
 
     // --json: always wins
     if (hasFlag(ctx.args, "--json")) {

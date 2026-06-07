@@ -10,59 +10,18 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { auditEvidence } from "../audit.js";
+import { captureCurrentState } from "../current-state.js";
 import { diffGraphs, type GraphDiff } from "../diff.js";
-import { formatSnapError } from "../errors.js";
-import { buildGraph } from "../graph.js";
-import { buildProvenance } from "../provenance.js";
 import { renderMarkdownReport } from "../report.js";
 import { scanProject, type ScanResult } from "../scan.js";
-import { ensureStore, readSnapshot } from "../store.js";
-import type { AuditFinding, Snapshot, SnapshotManifest } from "../types.js";
+import { readSnapshot } from "../store.js";
+import type { Snapshot } from "../types.js";
 import { hasFlag, json, runtimeOptions, valueAfter, type RuntimeOptions } from "../cli-shared.js";
 import type { Command, CommandContext } from "./index.js";
 
-// ── Local helpers (mirrored from cli.ts until all commands are migrated) ─────
-
-interface CurrentState {
-  scan: ScanResult;
-  snapshot: Snapshot;
-  storeFindings: AuditFinding[];
-}
-
-async function currentState(args: string[], name = "current"): Promise<CurrentState> {
-  const options = runtimeOptions(args);
-  const storeFindings = await ensureStore(options.storeDir);
-  const scan = await scanProject(options);
-  const graph = buildGraph(scan.evidence);
-  const auditFindings = [...storeFindings, ...auditEvidence(scan.evidence, graph)];
-  const provenance = buildProvenance(graph, scan.evidence);
-  const manifest: SnapshotManifest = {
-    schemaVersion: "0.1",
-    name,
-    createdAt: new Date().toISOString(),
-    projectPath: options.projectPath,
-    security: {
-      rawSecretsIncluded: false,
-      redactionPolicy: "metadata-only"
-    }
-  };
-  return {
-    scan,
-    storeFindings,
-    snapshot: {
-      manifest,
-      evidence: scan.evidence,
-      graph,
-      auditFindings,
-      provenance
-    }
-  };
-}
-
 async function snapshotByRef(ref: string, args: string[]): Promise<Snapshot> {
   if (ref === "current") {
-    return (await currentState(args)).snapshot;
+    return (await captureCurrentState(runtimeOptions(args))).snapshot;
   }
   const opts = runtimeOptions(args);
   return await readSnapshot(opts.storeDir, ref, opts.agent);
@@ -96,12 +55,12 @@ export const reportCommand: Command = {
     const diff: GraphDiff | undefined =
       ref === "current"
         ? undefined
-        : diffGraphs(snapshot.graph, (await currentState(args)).snapshot.graph);
+        : diffGraphs(snapshot.graph, (await captureCurrentState(options)).snapshot.graph);
 
     // Scan is needed for trust info and blind spots
     const scan: ScanResult =
       ref === "current"
-        ? (await currentState(args)).scan
+        ? (await captureCurrentState(options)).scan
         : await scanProject(options);
 
     const markdown = renderMarkdownReport({

@@ -2,7 +2,8 @@
  * Dashboard — sidebar + tab layout for hem TUI.
  *
  *  ┌──────────────┬────────────────────────────────────────────┐
- *  │  Agents       │  [Snapshots] [Scan] [Audit] [Diff]        │
+ *  │  Agents       │  Daemon: running/stopped/stale/error      │
+ *  │               │  [Snapshots] [Scan] [Audit] [Diff]        │
  *  │  ──────────   │  ────────────────────────────────────────  │
  *  │  ▸ Claude Cd  │  (content based on active tab)             │
  *  │    Codex      │                                            │
@@ -27,7 +28,7 @@ import { diffGraphs } from "../../diff.js";
 import type { AuditFinding } from "../../types.js";
 import type { ScanResult } from "../../scan.js";
 import type { RuntimeOptions } from "../../cli-shared.js";
-import type { AgentId } from "../../types.js";
+import type { AgentId, DaemonStatusReadResult } from "../../types.js";
 
 import Sidebar, { buildAgentEntries, agentLabelStr } from "./Sidebar.js";
 import TabBar from "./TabBar.js";
@@ -65,6 +66,7 @@ type DashboardState = {
   error: AppError | null;
   /** Scroll offset for scan tab evidence/findings */
   scanScrollOffset: number;
+  daemonStatus: DaemonStatusReadResult | null;
 };
 
 // ── Constants ────────────────────────────────────────────────
@@ -96,6 +98,7 @@ export default function Dashboard({ options }: DashboardProps) {
     diffState: { type: "idle" },
     error: null,
     scanScrollOffset: 0,
+    daemonStatus: null,
   });
 
   // ── Boot ───────────────────────────────────────────────────
@@ -108,6 +111,8 @@ export default function Dashboard({ options }: DashboardProps) {
         const findings = auditEvidence(scan.evidence, graph);
         const agents = buildAgentEntries(scan.evidence);
         const firstAgent = agents.length > 0 ? agents[0].id : null;
+        const { readDaemonStatus } = await import("../../daemon.js");
+        const daemonStatus = await readDaemonStatus(options);
 
         let snapshots: string[] = [];
         if (firstAgent) {
@@ -121,6 +126,7 @@ export default function Dashboard({ options }: DashboardProps) {
           findings,
           selectedAgent: firstAgent,
           snapshots,
+          daemonStatus,
         }));
       } catch (err) {
         setState((s) => ({
@@ -146,6 +152,8 @@ export default function Dashboard({ options }: DashboardProps) {
       const graph = buildGraph(scan.evidence);
       const findings = auditEvidence(scan.evidence, graph);
       const agents = buildAgentEntries(scan.evidence);
+      const { readDaemonStatus } = await import("../../daemon.js");
+      const daemonStatus = await readDaemonStatus(options);
 
       // Re-select current agent or first
       const currentAgent = state.selectedAgent;
@@ -166,6 +174,7 @@ export default function Dashboard({ options }: DashboardProps) {
         snapshots,
         diffState: { type: "idle" },
         error: null,
+        daemonStatus,
       }));
     } catch {
       // silent
@@ -234,33 +243,11 @@ export default function Dashboard({ options }: DashboardProps) {
       } else if (action === "save-snapshot") {
         try {
           const agentOpts = { ...options, agent };
-          const scan = await scanProject(agentOpts);
-          const graph = buildGraph(scan.evidence);
-          const findings = auditEvidence(scan.evidence, graph);
-          const { buildProvenance } = await import("../../provenance.js");
-          const provenance = buildProvenance(graph, scan.evidence);
-          const { writeSnapshot } = await import("../../store.js");
           const snapshotName = `${agent}-${Date.now()}`;
-          await writeSnapshot(
-            options.storeDir,
-            {
-              manifest: {
-                schemaVersion: "0.1",
-                name: snapshotName,
-                createdAt: new Date().toISOString(),
-                projectPath: options.projectPath,
-                security: {
-                  rawSecretsIncluded: false,
-                  redactionPolicy: "metadata-only",
-                },
-              },
-              evidence: scan.evidence,
-              graph,
-              auditFindings: findings,
-              provenance,
-            },
-            agent
-          );
+          const { captureCurrentState } = await import("../../current-state.js");
+          const { writeSnapshot } = await import("../../store.js");
+          const current = await captureCurrentState(agentOpts, snapshotName);
+          await writeSnapshot(options.storeDir, current.snapshot, agent);
           const snapshots = await listSnapshots(options.storeDir, agent);
           setState((s) => ({
             ...s,
@@ -533,6 +520,8 @@ export default function Dashboard({ options }: DashboardProps) {
 
       {/* ── Main panel ── */}
       <Box flexDirection="column" paddingX={1} flexGrow={1}>
+        <DaemonTrustHeader status={state.daemonStatus} />
+
         {/* Tab bar */}
         <TabBar
           activeTab={state.activeTab}
@@ -686,4 +675,76 @@ export default function Dashboard({ options }: DashboardProps) {
       </Box>
     );
   }
+}
+
+export function DaemonTrustHeader({ status }: { status: DaemonStatusReadResult | null }) {
+  const model = daemonTrustHeaderModel(status);
+  if (!status) {
+    return (
+      <Box marginBottom={1}>
+        <Text dimColor>{model.title}</Text>
+      </Box>
+    );
+  }
+
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Text color={model.color}>
+        {model.title}
+        <Text dimColor>
+          {"  "}last event: {model.lastEvent}
+          {"  "}watched: {model.watchedCount}
+          {"  "}store: {model.storeDir}
+        </Text>
+      </Text>
+      {model.error && (
+        <Text color="red">
+          {model.error}
+        </Text>
+      )}
+      {model.stale && (
+        <Text color="yellow">events may be stale</Text>
+      )}
+    </Box>
+  );
+}
+
+export function daemonTrustHeaderModel(status: DaemonStatusReadResult | null): {
+  title: string;
+  color: "green" | "yellow" | "red";
+  lastEvent: string;
+  watchedCount: number;
+  storeDir: string;
+  stale: boolean;
+  error?: string;
+} {
+  if (!status) {
+    return {
+      title: "Daemon: checking...",
+      color: "yellow",
+      lastEvent: "-",
+      watchedCount: 0,
+      storeDir: "-",
+      stale: false
+    };
+  }
+
+  const daemon = status.status;
+  const label = !status.ok
+    ? "error"
+    : daemon.running
+      ? daemon.stale ? "stale" : "running"
+      : daemon.stale ? "stale" : "stopped";
+
+  return {
+    title: `Daemon: ${label}`,
+    color: label === "running" ? "green" : label === "stopped" ? "yellow" : "red",
+    lastEvent: daemon.lastEventAt ?? "-",
+    watchedCount: daemon.watchedPaths.length,
+    storeDir: daemon.storeDir,
+    stale: daemon.stale,
+    ...((!status.ok || daemon.errors.length > 0)
+      ? { error: status.ok ? daemon.errors[0] : status.error }
+      : {})
+  };
 }

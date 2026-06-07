@@ -68,6 +68,86 @@ export interface Snapshot {
   provenance: ProvenanceEntry[];
 }
 
+export type TimelineEntrySource = "daemon";
+export type TimelineEntryEventKind = "baseline" | "setup_changed" | "unchanged";
+export type TimelineRestoreReadiness = "full" | "partial" | "observe-only";
+export type TimelineConfidence = "low" | "medium" | "high";
+export type TimelineSurfaceKind = "mcp_server" | "skill" | "permission" | "hook" | "env_key" | "unsupported" | "other";
+
+export interface TimelineChangeSummary {
+  previousEntryId?: string;
+  previousSnapshotName?: string;
+  hasChanges: boolean;
+  semanticChangeCount: number;
+  rawSourceChangeCount: number;
+  highlights: string[];
+}
+
+export interface TimelineChangedSurface {
+  kind: TimelineSurfaceKind;
+  changeType: string;
+  path: string;
+  entityName?: string;
+  restorable: boolean;
+  observeOnly: boolean;
+  before?: unknown;
+  after?: unknown;
+}
+
+export interface TimelineEntry {
+  schemaVersion: "0.1";
+  id: string;
+  source: TimelineEntrySource;
+  eventKind: TimelineEntryEventKind;
+  title: string;
+  projectPath: string;
+  agent?: AgentId;
+  agents: AgentId[];
+  beforeSnapshotName?: string;
+  afterSnapshotName: string;
+  daemonRunId: string;
+  createdAt: string;
+  observedAt: string;
+  changedSurfaces: TimelineChangedSurface[];
+  restoreReadiness: TimelineRestoreReadiness;
+  confidence: TimelineConfidence;
+  confidenceReason: string;
+  evidenceCount: number;
+  graphNodeCount: number;
+  auditFindingCount: number;
+  changes: TimelineChangeSummary;
+}
+
+export interface TimelineCaptureResult {
+  written: boolean;
+  entry?: TimelineEntry;
+  snapshot: Snapshot;
+  reason?: "unchanged";
+}
+
+export interface DaemonStatus {
+  running: boolean;
+  pid?: number;
+  pidAlive?: boolean;
+  identityHash?: string;
+  identityVerified: boolean;
+  identityError?: string;
+  startedAt?: string;
+  lastHeartbeatAt?: string;
+  lastEventAt?: string;
+  runId?: string;
+  projectPath: string;
+  storeDir: string;
+  watchedPaths: string[];
+  stale: boolean;
+  staleReason?: string;
+  errors: string[];
+}
+
+export type DaemonStatusReadResult =
+  | { ok: true; status: DaemonStatus }
+  | { ok: false; error: string; status: DaemonStatus };
+
 export interface GraphNode {
   id: string;
   agent: AgentId;
@@ -144,7 +224,7 @@ export interface ScanOptions {
 
 // ── Restore dry-run types (v0.2) ──────────────────────────────
 
-export type RestoreAction = "create" | "update" | "skip" | "conflict" | "unsupported";
+export type RestoreAction = "create" | "update" | "delete" | "skip" | "conflict" | "unsupported";
 
 export interface ItemDiff {
   changes: string[];
@@ -244,6 +324,9 @@ export interface RestoreItem {
   /** Destination path where the restore is applied */
   dest: string;
 
+  /** Restore operation to execute. */
+  action?: RestoreAction;
+
   /** Current execution status */
   status: RestoreItemStatus;
 
@@ -264,6 +347,9 @@ export interface RestoreItem {
 
   /** Whether this item supports rollback */
   canRollback: boolean;
+
+  /** Structured planner metadata needed by per-type handlers. */
+  metadata?: Record<string, unknown>;
 
   /** ISO timestamp when the item was applied */
   applyAt?: string;
