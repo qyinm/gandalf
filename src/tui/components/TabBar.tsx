@@ -1,5 +1,5 @@
 /**
- * Tab bar for hem TUI dashboard main panel.
+ * Legacy tab bar for command-oriented TUI panes.
  *
  * Horizontal navigation: ← → or 1-5 keys.
  */

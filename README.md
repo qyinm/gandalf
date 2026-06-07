@@ -124,6 +124,8 @@ hem tui --project .
 
 Timeline undo is P0 dry-run preview only. It reports `writesFiles=false`, shows MCP changes that could be reversed, and keeps skills, hooks, permissions, env keys, and unsupported surfaces as observe-only.
 
+`hem tui` opens a local setup-history workspace with persistent `Profiles`, `Agents`, and `History` navigation. The first screen is `History > All changes` with an `All agents` timeline filter. Agent screens show current setup inventory, snapshots are full setup save points, Save Setup previews deterministic titles before writing, and Compare shows explicit From / To / Scope before side-by-side setup changes.
+
 ### Bundle And Move Setups
 
 ```bash
@@ -184,9 +186,9 @@ Scanner plugin interface: add new agents by implementing `ScannerPlugin`.
 | Read-only scan, diff, audit, provenance, report | ✅ v0.1 |
 | Bundle export/import (`.hem` format) | ✅ v0.2 experimental |
 | Restore engine (dry-run, apply, rollback) | ✅ v0.2 experimental |
-| TUI dashboard | ✅ v0.3 draft |
+| TUI setup-history workspace | ✅ v0.3 preview |
 | Daemon timeline and Timeline-first TUI | ✅ v0.3 preview |
-| Local profiles | 📋 next |
+| Local multi-profile persistence | 📋 next |
 | MCP/skills add-remove manager | 📋 future |
 | Cloud profiles and multi-machine sync | 📋 Pro |
 
