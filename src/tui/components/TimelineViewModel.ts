@@ -1,6 +1,7 @@
 import type { TimelineUndoPlan } from "../../timeline-undo.js";
 import type { AgentId, TimelineChangedSurface, TimelineEntry, TimelineRestoreReadiness } from "../../types.js";
 import type { TimelineCorruptEvent } from "../../store.js";
+import { formatAgentLabel, formatAgentScope, formatTimelineTimestamp } from "./TuiFormatters.js";
 
 export interface TimelineRowModel {
   id: string;
@@ -56,29 +57,30 @@ export function buildTimelineViewModel(input: {
   agentFilter: AgentId | null;
   corruptEvents?: TimelineCorruptEvent[];
   undoPlan?: TimelineUndoPlan | null;
+  now?: Date;
 }): TimelineViewModel {
   const selectedIndex = clampIndex(input.selectedIndex, input.entries.length);
   const selected = input.entries[selectedIndex];
   const corruptCount = input.corruptEvents?.length ?? 0;
 
   return {
-    filterLabel: input.agentFilter ?? "All agents",
+    filterLabel: input.agentFilter ? formatAgentLabel(input.agentFilter) : "All agents",
     emptyMessage: input.entries.length === 0 ? "No timeline entries yet." : undefined,
     emptyCommand: input.entries.length === 0 ? "hem daemon start --project ." : undefined,
     corruptWarning: corruptCount > 0
       ? `${corruptCount} corrupt timeline event${corruptCount === 1 ? "" : "s"} skipped`
       : undefined,
-    rows: input.entries.map((entry, index) => timelineRowModel(entry, index === selectedIndex)),
+    rows: input.entries.map((entry, index) => timelineRowModel(entry, index === selectedIndex, input.now)),
     selectedEntry: selected ? timelineDetailModel(selected) : undefined,
     undoPreview: input.undoPlan ? timelineUndoPreviewModel(input.undoPlan) : undefined
   };
 }
 
-export function timelineRowModel(entry: TimelineEntry, selected: boolean): TimelineRowModel {
+export function timelineRowModel(entry: TimelineEntry, selected: boolean, now?: Date): TimelineRowModel {
   return {
     id: entry.id,
     shortId: entry.id.slice(0, 8),
-    observedAt: entry.observedAt,
+    observedAt: formatTimelineTimestamp(entry.observedAt, now),
     eventKind: entry.eventKind,
     readiness: entry.restoreReadiness,
     agentScope: timelineAgentScope(entry),
@@ -124,9 +126,7 @@ export function timelineUndoPreviewModel(plan: TimelineUndoPlan): TimelineUndoPr
 }
 
 export function timelineAgentScope(entry: TimelineEntry): string {
-  if (entry.agent) return entry.agent;
-  if (entry.agents.length === 0) return "all";
-  return entry.agents.join(",");
+  return formatAgentScope(entry.agent, entry.agents);
 }
 
 export function clampTimelineIndex(index: number, entries: TimelineEntry[]): number {

@@ -7,6 +7,7 @@
 import React from "react";
 import { Text, Box } from "ink";
 import type { AgentId } from "../../types.js";
+import { formatAgentLabel } from "./TuiFormatters.js";
 import type { TuiNavSection } from "./TuiNavigationModel.js";
 
 interface AgentEntry {
@@ -33,15 +34,7 @@ const VISIBLE_AGENTS: AgentId[] = [
 ];
 
 function agentLabel(id: AgentId): string {
-  const map: Record<string, string> = {
-    "claude-code": "Claude Code",
-    codex: "Codex",
-    cursor: "Cursor",
-    opencode: "OpenCode",
-    "pi-agent": "Pi Agent",
-    project: "Project",
-  };
-  return map[id] ?? id;
+  return formatAgentLabel(id);
 }
 
 export function buildAgentEntries(

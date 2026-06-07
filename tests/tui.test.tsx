@@ -13,6 +13,11 @@ import {
   buildTuiNavigationModel,
   selectTuiNavItem
 } from "../src/tui/components/TuiNavigationModel.js";
+import {
+  formatAgentLabel,
+  formatTimelineTimestamp,
+  truncateText
+} from "../src/tui/components/TuiFormatters.js";
 import type { TimelineUndoPlan } from "../src/timeline-undo.js";
 import type { DaemonStatusReadResult, TimelineEntry } from "../src/types.js";
 
@@ -156,6 +161,21 @@ describe("TUI daemon trust header", () => {
 });
 
 describe("TUI timeline model", () => {
+  it("formats shared display labels and widths", () => {
+    assert.equal(formatAgentLabel("claude-code"), "Claude Code");
+    assert.equal(formatAgentLabel("opencode"), "OpenCode");
+    assert.equal(formatAgentLabel("pi-agent"), "Pi Agent");
+    assert.equal(
+      formatTimelineTimestamp("2026-06-08T14:22:00.000", new Date("2026-06-08T15:00:00.000")),
+      "Today 14:22"
+    );
+    assert.equal(
+      formatTimelineTimestamp("2026-06-07T14:22:00.000", new Date("2026-06-08T15:00:00.000")),
+      "Yesterday 14:22"
+    );
+    assert.equal(truncateText("abcdefghijkl", 8), "abcde...");
+  });
+
   it("renders an empty state with daemon start guidance", () => {
     const model = buildTimelineViewModel({
       entries: [],
@@ -175,7 +195,7 @@ describe("TUI timeline model", () => {
       id: "baseline-entry",
       eventKind: "baseline",
       title: "baseline captured",
-      observedAt: "2026-06-08T00:00:00.000Z",
+      observedAt: "2026-06-08T00:00:00.000",
       afterSnapshotName: "baseline-snapshot",
       restoreReadiness: "observe-only",
       beforeSnapshotName: undefined,
@@ -183,21 +203,23 @@ describe("TUI timeline model", () => {
     });
     const changed = timelineEntry({
       id: "changed-entry",
-      observedAt: "2026-06-08T00:01:00.000Z",
+      observedAt: "2026-06-08T00:01:00.000",
       afterSnapshotName: "changed-snapshot"
     });
 
     const model = buildTimelineViewModel({
       entries: [changed, baseline],
       selectedIndex: 0,
-      agentFilter: "claude-code"
+      agentFilter: "claude-code",
+      now: new Date("2026-06-08T00:02:00.000")
     });
 
-    assert.equal(model.filterLabel, "claude-code");
+    assert.equal(model.filterLabel, "Claude Code");
     assert.equal(model.rows[0].shortId, "changed-");
+    assert.equal(model.rows[0].observedAt, "Today 00:01");
     assert.equal(model.rows[0].eventKind, "setup_changed");
     assert.equal(model.rows[0].readiness, "partial");
-    assert.equal(model.rows[0].agentScope, "claude-code");
+    assert.equal(model.rows[0].agentScope, "Claude Code");
     assert.equal(model.rows[0].selected, true);
     assert.equal(model.selectedEntry?.beforeSnapshotName, "before");
     assert.equal(model.selectedEntry?.afterSnapshotName, "changed-snapshot");
