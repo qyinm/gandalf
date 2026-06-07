@@ -7,5 +7,5 @@ instructions: |
 
 # Project Context
 
-This is a sample project for snaptailor drift detection.
+This is a sample project for hem drift detection.
 Use standard coding conventions.

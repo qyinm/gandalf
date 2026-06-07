@@ -47,10 +47,10 @@ export const restoreCommand: Command = {
     if (!snapshotName) {
       process.stderr.write(
         formatSnapError({
-          code: "SNAPTAILOR_RESTORE_SNAPSHOT_REQUIRED",
+          code: "HEM_RESTORE_SNAPSHOT_REQUIRED",
           problem: "Snapshot name is required for restore.",
           cause: "`restore` was called without `--snapshot`.",
-          fix: "Run `snaptailor restore --snapshot <name> --dry-run --project .`."
+          fix: "Run `hem restore --snapshot <name> --dry-run --project .`."
         })
       );
       return 1;
@@ -63,7 +63,7 @@ export const restoreCommand: Command = {
     if (!isDryRun && !isApply) {
       process.stderr.write(
         formatSnapError({
-          code: "SNAPTAILOR_RESTORE_MODE_REQUIRED",
+          code: "HEM_RESTORE_MODE_REQUIRED",
           problem: "Either --dry-run or --apply is required for restore.",
           cause: "`restore` was called without `--dry-run` or `--apply`.",
           fix: "Add `--dry-run` to generate a non-mutating restore plan, or `--apply` to execute restore items."
@@ -75,7 +75,7 @@ export const restoreCommand: Command = {
     if (isDryRun && isApply) {
       process.stderr.write(
         formatSnapError({
-          code: "SNAPTAILOR_RESTORE_MODE_CONFLICT",
+          code: "HEM_RESTORE_MODE_CONFLICT",
           problem: "--dry-run and --apply are mutually exclusive.",
           cause: "Both `--dry-run` and `--apply` were passed.",
           fix: "Use `--dry-run` to preview changes, or `--apply` to execute them."
@@ -91,10 +91,10 @@ export const restoreCommand: Command = {
     if (!exists) {
       process.stderr.write(
         formatSnapError({
-          code: "SNAPTAILOR_SNAPSHOT_NOT_FOUND",
+          code: "HEM_SNAPSHOT_NOT_FOUND",
           problem: `Snapshot "${snapshotName}" not found.`,
           cause: "The named snapshot does not exist in the store.",
-          fix: "Run `snaptailor snapshot list` to see available snapshots."
+          fix: "Run `hem snapshot list` to see available snapshots."
         })
       );
       return 1;
@@ -116,13 +116,13 @@ export const restoreCommand: Command = {
     }
 
     // ── Apply mode: --experimental gate ─────────────────────
-    if (!process.env.SNAPTAILOR_EXPERIMENTAL && !hasFlag(args, "--experimental")) {
+    if (!process.env.HEM_EXPERIMENTAL && !hasFlag(args, "--experimental")) {
       process.stderr.write(
         formatSnapError({
-          code: "SNAPTAILOR_EXPERIMENTAL_REQUIRED",
+          code: "HEM_EXPERIMENTAL_REQUIRED",
           problem: "Restore --apply requires --experimental.",
-          cause: "--apply was used without SNAPTAILOR_EXPERIMENTAL=1 or --experimental.",
-          fix: "Set SNAPTAILOR_EXPERIMENTAL=1 or pass --experimental to enable experimental features."
+          cause: "--apply was used without HEM_EXPERIMENTAL=1 or --experimental.",
+          fix: "Set HEM_EXPERIMENTAL=1 or pass --experimental to enable experimental features."
         })
       );
       return 1;
@@ -144,7 +144,7 @@ export const restoreCommand: Command = {
     if (parsed.errors.length > 0) {
       process.stderr.write(
         formatSnapError({
-          code: "SNAPTAILOR_RESTORE_PARSE_ERROR",
+          code: "HEM_RESTORE_PARSE_ERROR",
           problem: "Failed to parse restore plan for execution.",
           cause: parsed.errors[0]?.message ?? "Unknown parse error",
           fix: "This is an internal error. Verify the snapshot is valid and try again."

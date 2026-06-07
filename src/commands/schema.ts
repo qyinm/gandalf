@@ -1,7 +1,7 @@
 /**
  * Command-pattern implementation of the `schema` CLI command.
  *
- * Exports JSON Schema definitions for snaptailor's core data types.
+ * Exports JSON Schema definitions for hem's core data types.
  * Useful for CI pipelines, editor autocompletion, and external tooling.
  */
 
@@ -10,8 +10,8 @@ import type { CommandContext, Command } from "./index.js";
 
 const SCHEMA = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
-  title: "snaptailor",
-  description: "JSON Schema for snaptailor data types",
+  title: "hem",
+  description: "JSON Schema for hem data types",
   definitions: {
     agentId: {
       type: "string",
@@ -141,7 +141,7 @@ const SCHEMA = {
 
 export const schemaCommand: Command = {
   name: "schema",
-  description: "Export JSON Schema for snaptailor data types",
+  description: "Export JSON Schema for hem data types",
   async execute(ctx: CommandContext): Promise<number> {
     if (hasFlag(ctx.args, "--json") || !hasFlag(ctx.args, "--markdown")) {
       process.stdout.write(json(SCHEMA));

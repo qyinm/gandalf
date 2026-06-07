@@ -1,5 +1,5 @@
 /**
- * Clack wizard for `snaptailor snapshot create`.
+ * Clack wizard for `hem snapshot create`.
  *
  * Walks the user through:
  *   1. Entering a snapshot name
@@ -26,7 +26,7 @@ import { formatSnapError } from "../../errors.js";
 export async function snapshotCreateWizard(
   options: RuntimeOptions
 ): Promise<number> {
-  clack.intro("snaptailor snapshot create");
+  clack.intro("hem snapshot create");
 
   await ensureStore(options.storeDir);
 
@@ -138,7 +138,7 @@ export async function snapshotCreateWizard(
     spinner.stop("Snapshot creation failed");
     process.stderr.write(
       formatSnapError({
-        code: "SNAPTAILOR_SNAPSHOT_CREATE_FAILED",
+        code: "HEM_SNAPSHOT_CREATE_FAILED",
         problem: `Snapshot creation failed: ${err instanceof Error ? err.message : String(err)}`,
         cause: "An error occurred during scanning or snapshot write.",
         fix: "Check the project path and permissions, then try again.",

@@ -67,7 +67,7 @@ async function snapshotByRef(ref: string, args: string[]): Promise<Snapshot> {
 }
 
 function renderDiffText(diff: GraphDiff): string {
-  const lines = ["snaptailor diff", "", "Semantic changes"];
+  const lines = ["hem diff", "", "Semantic changes"];
   if (diff.semanticChanges.length === 0) {
     lines.push("  none");
   } else {
@@ -119,10 +119,10 @@ export const diffCommand: Command = {
     if (!baseline || !target) {
       process.stderr.write(
         formatSnapError({
-          code: "SNAPTAILOR_DIFF_REFS_REQUIRED",
+          code: "HEM_DIFF_REFS_REQUIRED",
           problem: "Two snapshot references are required.",
           cause: "`diff` was called without baseline and target references.",
-          fix: "Run `snaptailor diff baseline current --project .`."
+          fix: "Run `hem diff baseline current --project .`."
         })
       );
       return 1;

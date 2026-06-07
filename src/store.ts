@@ -32,7 +32,7 @@ type StoreSnapshot = Snapshot & {
 };
 
 export function defaultStoreDir(homeDir: string): string {
-  return path.join(homeDir, ".snaptailor");
+  return path.join(homeDir, ".hem");
 }
 
 /**
@@ -67,7 +67,7 @@ export async function ensureStore(storeDir: string): Promise<AuditFinding[]> {
     {
       code: "WORLD_WRITABLE_STORE",
       severity: "high",
-      problem: "The local snaptailor snapshot store is writable by group or world.",
+      problem: "The local hem snapshot store is writable by group or world.",
       cause: `Store permissions are ${mode.toString(8)}.`,
       fix: "Restrict the store directory to the current user with chmod 700.",
       path: storeDir

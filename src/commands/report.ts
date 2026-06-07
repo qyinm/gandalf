@@ -1,7 +1,7 @@
 /**
  * Command-pattern implementation of the `report` CLI command.
  *
- * snaptailor report [ref] [--out <path>] [--json] --project .
+ * hem report [ref] [--out <path>] [--json] --project .
  *
  * Outputs a markdown report (to stdout or --out file).
  * Shows diff when comparing against a stored snapshot.
@@ -82,7 +82,7 @@ export const reportCommand: Command = {
   name: "report",
   description:
     "Generate a markdown report of agent state, findings, and (optionally) diff. " +
-    "Usage: snaptailor report [ref] [--out <path>] [--json] --project .",
+    "Usage: hem report [ref] [--out <path>] [--json] --project .",
 
   async execute(ctx: CommandContext): Promise<number> {
     const { args } = ctx;

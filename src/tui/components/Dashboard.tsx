@@ -1,5 +1,5 @@
 /**
- * Dashboard — sidebar + tab layout for snaptailor TUI.
+ * Dashboard — sidebar + tab layout for hem TUI.
  *
  *  ┌──────────────┬────────────────────────────────────────────┐
  *  │  Agents       │  [Snapshots] [Scan] [Audit] [Diff]        │
@@ -127,7 +127,7 @@ export default function Dashboard({ options }: DashboardProps) {
           ...s,
           status: "error",
           error: {
-            code: "SNAPTAILOR_INIT_FAILED",
+            code: "HEM_INIT_FAILED",
             problem: `Initial scan failed: ${err instanceof Error ? err.message : String(err)}`,
             cause: "Could not detect agents in this project.",
             fix: "Verify the project path and try again.",
@@ -224,7 +224,7 @@ export default function Dashboard({ options }: DashboardProps) {
           setState((s) => ({
             ...s,
             error: {
-              code: "SNAPTAILOR_SCAN_FAILED",
+              code: "HEM_SCAN_FAILED",
               problem: `Scan failed: ${err instanceof Error ? err.message : String(err)}`,
               cause: `Could not scan ${agentLabelStr(agent)} configuration.`,
               fix: "Check agent config paths and permissions.",
@@ -271,7 +271,7 @@ export default function Dashboard({ options }: DashboardProps) {
           setState((s) => ({
             ...s,
             error: {
-              code: "SNAPTAILOR_SNAPSHOT_FAILED",
+              code: "HEM_SNAPSHOT_FAILED",
               problem: `Snapshot failed: ${err instanceof Error ? err.message : String(err)}`,
               cause: "Could not save snapshot.",
               fix: "Check store permissions.",
@@ -293,7 +293,7 @@ export default function Dashboard({ options }: DashboardProps) {
           setState((s) => ({
             ...s,
             error: {
-              code: "SNAPTAILOR_AUDIT_FAILED",
+              code: "HEM_AUDIT_FAILED",
               problem: `Audit failed: ${err instanceof Error ? err.message : String(err)}`,
               cause: `Could not audit ${agentLabelStr(agent)}.`,
               fix: "Check agent config paths.",
@@ -355,7 +355,7 @@ export default function Dashboard({ options }: DashboardProps) {
             setState((s) => ({
               ...s,
               error: {
-                code: "SNAPTAILOR_OP_FAILED",
+                code: "HEM_OP_FAILED",
                 problem: `${action} did not complete.`,
                 cause: "Cancelled or error.",
                 fix: "Try again.",
@@ -369,7 +369,7 @@ export default function Dashboard({ options }: DashboardProps) {
           setState((s) => ({
             ...s,
             error: {
-              code: "SNAPTAILOR_OP_ERROR",
+              code: "HEM_OP_ERROR",
               problem: `${action} error: ${err instanceof Error ? err.message : String(err)}`,
               cause: "Unexpected error.",
               fix: "Check logs and retry.",

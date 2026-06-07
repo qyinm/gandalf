@@ -1,5 +1,5 @@
 /**
- * Clack wizard for `snaptailor restore`.
+ * Clack wizard for `hem restore`.
  *
  * Walks the user through:
  *   1. Selecting a snapshot
@@ -32,14 +32,14 @@ import { formatSnapError } from "../../errors.js";
 export async function restoreWizard(
   options: RuntimeOptions
 ): Promise<number> {
-  clack.intro("snaptailor restore");
+  clack.intro("hem restore");
 
   await ensureStore(options.storeDir);
   const snapshots = await listSnapshots(options.storeDir, options.agent);
 
   if (snapshots.length === 0) {
     clack.log.error(
-      "No snapshots found. Create one first with `snaptailor snapshot create`."
+      "No snapshots found. Create one first with `hem snapshot create`."
     );
     clack.outro("Restore cancelled.");
     return 1;
@@ -75,7 +75,7 @@ export async function restoreWizard(
     drySpinner.stop("Plan generation failed");
     process.stderr.write(
       formatSnapError({
-        code: "SNAPTAILOR_RESTORE_PLAN_FAILED",
+        code: "HEM_RESTORE_PLAN_FAILED",
         problem: `Failed to build restore plan: ${err instanceof Error ? err.message : String(err)}`,
         cause: "The snapshot could not be compared with the current state.",
         fix: "Verify the snapshot exists and is compatible with this project.",
@@ -190,7 +190,7 @@ export async function restoreWizard(
     execSpinner.stop("Restore failed");
     process.stderr.write(
       formatSnapError({
-        code: "SNAPTAILOR_RESTORE_EXECUTION_FAILED",
+        code: "HEM_RESTORE_EXECUTION_FAILED",
         problem: `Restore execution failed: ${err instanceof Error ? err.message : String(err)}`,
         cause: "An error occurred during restore.",
         fix: "Check the logs and try again. Use --dry-run to preview before applying.",

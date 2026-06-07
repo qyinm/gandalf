@@ -48,7 +48,7 @@ function envItem(key: string): DiscoveredItem {
 
 describe("readiness analyzer", () => {
   it("classifies MCP command states without executing shell strings", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "snaptailor-doctor-"));
+    const root = await mkdtemp(path.join(tmpdir(), "hem-doctor-"));
     const markerPath = path.join(root, "shell-marker");
     const maliciousCommand = `missing\" ; touch \"${markerPath}\" ; \"`;
     const report = buildReadinessReport([
@@ -83,7 +83,7 @@ describe("readiness analyzer", () => {
   });
 
   it("does not execute a PATH-hijacked which helper during command lookup", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "snaptailor-path-hijack-"));
+    const root = await mkdtemp(path.join(tmpdir(), "hem-path-hijack-"));
     const markerPath = path.join(root, "which-marker");
     const fakeWhich = path.join(root, "which");
     await writeFile(fakeWhich, `#!/bin/sh\ntouch "${markerPath}"\nexit 0\n`, "utf8");
@@ -91,8 +91,8 @@ describe("readiness analyzer", () => {
     const previousPath = process.env.PATH;
     process.env.PATH = `${root}${path.delimiter}${previousPath ?? ""}`;
     try {
-      const report = buildReadinessReport([mcpItem("mcp-missing", { command: "definitely-missing-snaptailor-tool" })]);
-      assert.equal(report.items.some((item) => item.code === "SNAPTAILOR_MCP_COMMAND_MISSING"), true);
+      const report = buildReadinessReport([mcpItem("mcp-missing", { command: "definitely-missing-hem-tool" })]);
+      assert.equal(report.items.some((item) => item.code === "HEM_MCP_COMMAND_MISSING"), true);
       await assert.rejects(import("node:fs/promises").then(({ readFile }) => readFile(markerPath, "utf8")), /ENOENT/);
     } finally {
       process.env.PATH = previousPath;
@@ -108,7 +108,7 @@ describe("readiness analyzer", () => {
       processEnv: {}
     });
 
-    const envItems = report.items.filter((entry) => entry.code === "SNAPTAILOR_ENV_VALUE_REQUIRED");
+    const envItems = report.items.filter((entry) => entry.code === "HEM_ENV_VALUE_REQUIRED");
     assert.equal(envItems.length, 2);
     assert.equal(envItems.some((entry) => entry.problem.includes("OPENAI_API_KEY")), true);
     assert.equal(envItems.some((entry) => entry.problem.includes("GITHUB_TOKEN")), true);
@@ -121,12 +121,12 @@ describe("readiness analyzer", () => {
       processEnv: { GITHUB_TOKEN: "present-but-never-rendered" }
     });
 
-    assert.equal(report.items.some((entry) => entry.code === "SNAPTAILOR_ENV_VALUE_REQUIRED"), false);
+    assert.equal(report.items.some((entry) => entry.code === "HEM_ENV_VALUE_REQUIRED"), false);
     assert.equal(JSON.stringify(report).includes("present-but-never-rendered"), false);
   });
 
   it("scans current project env keys for doctor input", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "snaptailor-doctor-scan-"));
+    const root = await mkdtemp(path.join(tmpdir(), "hem-doctor-scan-"));
     const projectPath = path.join(root, "project");
     const homeDir = path.join(root, "home");
     const storeDir = path.join(root, "store");
@@ -140,6 +140,6 @@ describe("readiness analyzer", () => {
       processEnv: {}
     });
 
-    assert.equal(report.items.some((entry) => entry.code === "SNAPTAILOR_ENV_VALUE_REQUIRED"), false);
+    assert.equal(report.items.some((entry) => entry.code === "HEM_ENV_VALUE_REQUIRED"), false);
   });
 });

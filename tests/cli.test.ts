@@ -8,7 +8,7 @@ import { writeTar } from "../src/tar.js";
 import type { TarEntry } from "../src/types.js";
 
 async function makeTempRoot(): Promise<string> {
-  return await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(tmpdir(), "snaptailor-cli-")));
+  return await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(tmpdir(), "hem-cli-")));
 }
 
 function runCli(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}) {
@@ -20,12 +20,12 @@ function runCli(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}) {
 }
 
 async function writeCliBundle(root: string, snapshotName: string): Promise<string> {
-  const bundlePath = join(root, `${snapshotName}.stailor`);
+  const bundlePath = join(root, `${snapshotName}.hem`);
   const entries: TarEntry[] = [
-    { path: ".stailor/", content: Buffer.alloc(0), mode: 0o755, mtime: 1000000, type: "directory" },
-    { path: ".stailor/format-version", content: Buffer.from("1\n", "utf8"), mode: 0o644, mtime: 1000000, type: "file" },
+    { path: ".hem/", content: Buffer.alloc(0), mode: 0o755, mtime: 1000000, type: "directory" },
+    { path: ".hem/format-version", content: Buffer.from("1\n", "utf8"), mode: 0o644, mtime: 1000000, type: "file" },
     {
-      path: ".stailor/manifest.json",
+      path: ".hem/manifest.json",
       content: Buffer.from(JSON.stringify({
         formatVersion: 1,
         snapshotName,
@@ -58,7 +58,7 @@ async function writeCliBundle(root: string, snapshotName: string): Promise<strin
           captureStatus: "captured",
           confidence: "high",
           name: "missing",
-          value: { command: "snaptailor-missing-mcp-binary" }
+          value: { command: "hem-missing-mcp-binary" }
         },
         {
           id: "env-openai",
@@ -86,20 +86,20 @@ async function writeCliBundle(root: string, snapshotName: string): Promise<strin
   return bundlePath;
 }
 
-describe("snaptailor CLI scaffold", () => {
+describe("hem CLI scaffold", () => {
   it("prints help with current diagnosis, restore, and bundle safety commands", () => {
     const result = runCli(["--help"], process.cwd());
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Diagnosis commands:/);
-    assert.match(result.stdout, /snaptailor scan --project/);
+    assert.match(result.stdout, /hem scan --project/);
     assert.match(result.stdout, /snapshot create --name baseline --metadata-only/);
     assert.match(result.stdout, /diff baseline current --project/);
     assert.match(result.stdout, /audit current --project/);
     assert.match(result.stdout, /provenance current --project/);
     assert.match(result.stdout, /report current --project/);
-    assert.match(result.stdout, /snaptailor doctor --project/);
-    assert.match(result.stdout, /snaptailor bundle verify <file\.stailor>/);
+    assert.match(result.stdout, /hem doctor --project/);
+    assert.match(result.stdout, /hem bundle verify <file\.hem>/);
     assert.match(result.stdout, /--apply-content --quarantine --experimental/);
     assert.doesNotMatch(result.stdout, /v0\.1|dry-run only/);
   });
@@ -114,7 +114,7 @@ describe("snaptailor CLI scaffold", () => {
 
     const result = runCli(["snapshot", "create", "--name", "baseline", "--project", project], project, {
       HOME: home,
-      SNAPTAILOR_STORE: store
+      HEM_STORE: store
     });
 
     assert.equal(result.status, 1);
@@ -136,7 +136,7 @@ describe("snaptailor CLI scaffold", () => {
       }
     }));
 
-    const env = { HOME: home, SNAPTAILOR_STORE: store };
+    const env = { HOME: home, HEM_STORE: store };
 
     const scan = runCli(["scan", "--project", project], project, env);
     assert.equal(scan.status, 0, scan.stderr);
@@ -178,10 +178,10 @@ describe("snaptailor CLI scaffold", () => {
     assert.equal(provenance.status, 0, provenance.stderr);
     assert.ok(Array.isArray(JSON.parse(provenance.stdout)));
 
-    const reportPath = join(root, "snaptailor-report.md");
+    const reportPath = join(root, "hem-report.md");
     const report = runCli(["report", "current", "--project", project, "--out", reportPath], project, env);
     assert.equal(report.status, 0, report.stderr);
-    assert.match(await readFile(reportPath, "utf8"), /# snaptailor report: current/);
+    assert.match(await readFile(reportPath, "utf8"), /# hem report: current/);
 
     const reportJson = runCli(["report", "current", "--project", project, "--json"], project, env);
     assert.equal(reportJson.status, 0, reportJson.stderr);
@@ -197,19 +197,19 @@ describe("snaptailor CLI scaffold", () => {
     await mkdir(home, { recursive: true });
     await writeFile(join(project, ".mcp.json"), JSON.stringify({
       mcpServers: {
-        missingTool: { command: "snaptailor-missing-mcp-binary" }
+        missingTool: { command: "hem-missing-mcp-binary" }
       }
     }));
 
     const result = runCli(["doctor", "--project", project, "--json"], project, {
       HOME: home,
-      SNAPTAILOR_STORE: store
+      HEM_STORE: store
     });
 
     assert.equal(result.status, 0, result.stderr);
     const report = JSON.parse(result.stdout);
     assert.equal(report.summary.needs_manual_action >= 1, true);
-    assert.equal(report.items.some((item: { code: string }) => item.code === "SNAPTAILOR_MCP_COMMAND_MISSING"), true);
+    assert.equal(report.items.some((item: { code: string }) => item.code === "HEM_MCP_COMMAND_MISSING"), true);
   });
 
   it("runs doctor with human-readable readiness output", async () => {
@@ -221,19 +221,19 @@ describe("snaptailor CLI scaffold", () => {
     await mkdir(home, { recursive: true });
     await writeFile(join(project, ".mcp.json"), JSON.stringify({
       mcpServers: {
-        missingTool: { command: "snaptailor-missing-mcp-binary" }
+        missingTool: { command: "hem-missing-mcp-binary" }
       }
     }));
 
     const result = runCli(["doctor", "--project", project], project, {
       HOME: home,
-      SNAPTAILOR_STORE: store
+      HEM_STORE: store
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /snaptailor doctor/);
+    assert.match(result.stdout, /hem doctor/);
     assert.match(result.stdout, /Readiness:/);
-    assert.match(result.stdout, /MCP command snaptailor-missing-mcp-binary is missing/);
+    assert.match(result.stdout, /MCP command hem-missing-mcp-binary is missing/);
     assert.match(result.stdout, /fix:/);
   });
 
@@ -248,13 +248,13 @@ describe("snaptailor CLI scaffold", () => {
 
     const result = runCli(["bundle", "import", bundlePath, "--dry-run", "--project", project], project, {
       HOME: home,
-      SNAPTAILOR_STORE: store
+      HEM_STORE: store
     });
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Readiness:/);
     assert.match(result.stdout, /needs manual action:/);
-    assert.match(result.stdout, /MCP command snaptailor-missing-mcp-binary is missing/);
+    assert.match(result.stdout, /MCP command hem-missing-mcp-binary is missing/);
     assert.match(result.stdout, /Environment key OPENAI_API_KEY needs a value/);
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Tab bar for snaptailor TUI dashboard main panel.
+ * Tab bar for hem TUI dashboard main panel.
  *
  * Horizontal navigation: ← → or 1-4 keys.
  */

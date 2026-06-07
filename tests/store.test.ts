@@ -15,7 +15,7 @@ import {
 import type { Snapshot } from "../src/types.js";
 
 async function tempStore(): Promise<string> {
-  return mkdtemp(path.join(tmpdir(), "snaptailor-store-test-"));
+  return mkdtemp(path.join(tmpdir(), "hem-store-test-"));
 }
 
 function snapshot(name: string): Snapshot {

@@ -1,5 +1,5 @@
 /**
- * Minimal POSIX ustar tar writer/reader for .stailor bundles.
+ * Minimal POSIX ustar tar writer/reader for .hem bundles.
  *
  * No external dependencies. Uses only Node.js core Buffer and crypto.
  *

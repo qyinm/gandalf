@@ -64,7 +64,7 @@ function captureStatusCounts(evidence: DiscoveredItem[]): Map<string, number> {
 export function renderMarkdownReport(input: ReportInput): string {
   const snapshotName = input.snapshotName ?? input.current ?? "current";
   const lines: string[] = [
-    `# snaptailor report: ${snapshotName}`,
+    `# hem report: ${snapshotName}`,
     "",
     "## Trust",
     `- Read-only: ${input.trust.readOnly ? "yes" : "no"}`,
@@ -147,7 +147,7 @@ export function renderMarkdownReport(input: ReportInput): string {
   lines.push(
     "",
     "## Next",
-    "- `snaptailor snapshot create --name baseline --metadata-only --project .`"
+    "- `hem snapshot create --name baseline --metadata-only --project .`"
   );
 
   return `${lines.join("\n")}\n`;

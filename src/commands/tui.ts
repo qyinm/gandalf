@@ -2,10 +2,10 @@
  * Command-pattern implementation of the `tui` CLI command.
  *
  * Launches the full interactive TUI dashboard when run as:
- *   snaptailor tui
+ *   hem tui
  *
  * The dashboard provides keyboard-navigable menu access to all
- * snaptailor commands without needing to remember CLI flags.
+ * hem commands without needing to remember CLI flags.
  */
 
 import React from "react";

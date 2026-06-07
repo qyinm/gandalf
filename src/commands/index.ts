@@ -1,5 +1,5 @@
 /**
- * Command pattern interface for snaptailor CLI.
+ * Command pattern interface for hem CLI.
  *
  * Each CLI command implements the Command interface and is registered
  * in a Map by name. The top-level dispatcher in cli.ts looks up the

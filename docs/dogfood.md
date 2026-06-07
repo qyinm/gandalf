@@ -5,19 +5,19 @@ Date: 2026-05-12 (initial), 2026-05-15 (re-run after symlink noise fix and TOML 
 Command shape:
 
 ```bash
-SNAPTAILOR_STORE=/tmp/snaptailor-dogfood/store node dist/src/cli.js scan --project <project> --json
-SNAPTAILOR_STORE=/tmp/snaptailor-dogfood/store node dist/src/cli.js report current --project <project> --out /tmp/snaptailor-dogfood/reports/<name>-report.md
+HEM_STORE=/tmp/hem-dogfood/store node dist/src/cli.js scan --project <project> --json
+HEM_STORE=/tmp/hem-dogfood/store node dist/src/cli.js report current --project <project> --out /tmp/hem-dogfood/reports/<name>-report.md
 ```
 
-The store was redirected to `/tmp/snaptailor-dogfood/store` so dogfood did not write to the user's real `~/.snaptailor` store.
+The store was redirected to `/tmp/hem-dogfood/store` so dogfood did not write to the user's real `~/.hem` store.
 
 ## Results (2026-05-15, post-fix)
 
 | Project | Scan JSON | Markdown report | Evidence | Findings | Blind spots |
 |---|---|---|---:|---:|---:|
-| snaptailor | `/tmp/snaptailor-dogfood/snaptailor-scan.json` | `/tmp/snaptailor-dogfood/reports/snaptailor-report.md` | 283 | 1 | 3 |
-| DuckDocs | `/tmp/snaptailor-dogfood/duckdocs-scan.json` | `/tmp/snaptailor-dogfood/reports/DuckDocs-report.md` | 283 | 1 | 3 |
-| HyprDuck (replaced MirrorNote — workspace no longer present) | `/tmp/snaptailor-dogfood/hyprduck-scan.json` | `/tmp/snaptailor-dogfood/reports/HyprDuck-report.md` | 283 | 1 | 3 |
+| Hem | `/tmp/hem-dogfood/hem-scan.json` | `/tmp/hem-dogfood/reports/hem-report.md` | 283 | 1 | 3 |
+| DuckDocs | `/tmp/hem-dogfood/duckdocs-scan.json` | `/tmp/hem-dogfood/reports/DuckDocs-report.md` | 283 | 1 | 3 |
+| HyprDuck (replaced MirrorNote — workspace no longer present) | `/tmp/hem-dogfood/hyprduck-scan.json` | `/tmp/hem-dogfood/reports/HyprDuck-report.md` | 283 | 1 | 3 |
 
 All three projects share the same user-level agent configuration and lack project-level agent config files, so they produce identical evidence.
 
@@ -46,7 +46,7 @@ Command:
 npm run dogfood:cross-machine
 ```
 
-This builds a disposable macOS-side snapshot/bundle, then runs `bundle import --dry-run --json` inside a Linux `node:22-bookworm` Docker container with separate `/home/snaptailor`, `/linux/project`, and `/linux/store` paths.
+This builds a disposable macOS-side snapshot/bundle, then runs `bundle import --dry-run --json` inside a Linux `node:22-bookworm` Docker container with separate `/home/hem`, `/linux/project`, and `/linux/store` paths.
 
 Validation checks:
 

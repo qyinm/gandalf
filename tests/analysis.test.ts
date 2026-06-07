@@ -214,19 +214,19 @@ describe("analysis modules", () => {
       blindSpots: ["Remote MCP server behavior cannot be captured", "Raw env values are omitted by policy"]
     });
 
-    assert.match(markdown, /^# snaptailor report: current/m);
+    assert.match(markdown, /^# hem report: current/m);
     assert.match(markdown, /## Detected agents/);
     assert.match(markdown, /Codex\s+project state found/);
     assert.match(markdown, /## High-signal findings/);
     assert.match(markdown, /UNSUPPORTED_AGENT_STATE/);
-    assert.doesNotMatch(markdown, /snaptailor v0\.1/);
-    assert.match(markdown, /cannot yet be interpreted by snaptailor/);
+    assert.doesNotMatch(markdown, /hem v0\.1/);
+    assert.match(markdown, /cannot yet be interpreted by hem/);
     assert.match(markdown, /## Blind spots/);
     assert.match(markdown, /Remote MCP server behavior cannot be captured/);
     assert.match(markdown, /## Reproducibility gaps/);
     assert.match(markdown, /unsupported: 1/);
     assert.match(markdown, /## Provenance/);
     assert.match(markdown, /unsupported-codex/);
-    assert.match(markdown, /snaptailor snapshot create --name baseline --metadata-only --project \./);
+    assert.match(markdown, /hem snapshot create --name baseline --metadata-only --project \./);
   });
 });

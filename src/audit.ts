@@ -178,7 +178,7 @@ export function auditEvidence(evidence: DiscoveredItem[], graph: GraphNode[]): A
       findings.push(finding(
         "UNSUPPORTED_AGENT_STATE",
         "medium",
-        "Agent state was detected but cannot yet be interpreted by snaptailor.",
+        "Agent state was detected but cannot yet be interpreted by hem.",
         `${item.sourcePath} is present, but its semantics are unsupported.`,
         "Treat this as a blind spot and inspect the source manually before relying on the snapshot.",
         item
@@ -189,7 +189,7 @@ export function auditEvidence(evidence: DiscoveredItem[], graph: GraphNode[]): A
       findings.push(finding(
         "WORLD_WRITABLE_STORE",
         "critical",
-        "The snaptailor store is marked world-writable.",
+        "The hem store is marked world-writable.",
         `${item.sourcePath} metadata reports unsafe store permissions.`,
         "Change the store permissions to 0700 before trusting stored snapshots.",
         item

@@ -14,41 +14,41 @@ import { tuiCommand } from "./commands/tui.js";
 import { hasFlag, runtimeOptions } from "./cli-shared.js";
 
 const HELP = [
-  "snaptailor",
+  "hem",
   "",
-  "Portable diagnostics and experimental restore tooling for AI coding agent setups.",
+  "Save, compare, and restore AI coding agent setups.",
   "",
   "TUI command:",
-  "  snaptailor tui                              launch interactive TUI dashboard",
+  "  hem tui                              launch interactive TUI dashboard",
   "",
   "Diagnosis commands:",
-  '  snaptailor scan --project .',
-  '  snaptailor scan --project . --explain',
-  '  snaptailor snapshot create --name baseline --metadata-only --project .',
-  '  snaptailor snapshot create --name baseline --metadata-only --project . --agent claude-code',
-  '  snaptailor snapshot list',
-  '  snaptailor snapshot list --agent codex',
-  '  snaptailor snapshot show baseline --json',
-  '  snaptailor diff baseline current --project .',
-  '  snaptailor audit current --project .',
-  '  snaptailor provenance current --project . --json',
-  '  snaptailor report current --project . --out snaptailor-report.md',
-  '  snaptailor doctor --project .',
+  '  hem scan --project .',
+  '  hem scan --project . --explain',
+  '  hem snapshot create --name baseline --metadata-only --project .',
+  '  hem snapshot create --name baseline --metadata-only --project . --agent claude-code',
+  '  hem snapshot list',
+  '  hem snapshot list --agent codex',
+  '  hem snapshot show baseline --json',
+  '  hem diff baseline current --project .',
+  '  hem audit current --project .',
+  '  hem provenance current --project . --json',
+  '  hem report current --project . --out hem-report.md',
+  '  hem doctor --project .',
   "",
   "Restore commands:",
-  '  snaptailor restore --snapshot <name> --dry-run --project .          generate a non-mutating restore plan as JSON',
-  '  snaptailor restore --snapshot <name> --apply --project .            apply restore items sequentially (experimental)',
-  '  snaptailor restore --snapshot <name> --apply --fail-fast --project . stop on first failure during apply',
-  '  snaptailor restore --snapshot <name> --apply --rollback --project . apply then automatically rollback',
+  '  hem restore --snapshot <name> --dry-run --project .          generate a non-mutating restore plan as JSON',
+  '  hem restore --snapshot <name> --apply --project .            apply restore items sequentially (experimental)',
+  '  hem restore --snapshot <name> --apply --fail-fast --project . stop on first failure during apply',
+  '  hem restore --snapshot <name> --apply --rollback --project . apply then automatically rollback',
   "",
   "Bundle commands:",
-  '  snaptailor bundle export --name <snapshot> --out <file.stailor> --project . export snapshot to .stailor bundle (content included by default)',
-  '  snaptailor bundle export --name <snapshot> --out <file.stailor> --metadata-only --project . export metadata-only bundle',
-  '  snaptailor bundle verify <file.stailor>                             verify format, checksums, and signature metadata',
-  '  snaptailor bundle inspect <file.stailor>                            inspect bundle metadata',
-  '  snaptailor bundle import <file.stailor> --dry-run --project .       validate bundle without importing',
-  '  snaptailor bundle import <file.stailor> --apply-content --quarantine --experimental --project . inspect content without writing targets',
-  '  snaptailor bundle import <file.stailor> --apply-content --experimental --project . apply project-relative content (experimental)',
+  '  hem bundle export --name <snapshot> --out <file.hem> --project . export snapshot to .hem bundle (content included by default)',
+  '  hem bundle export --name <snapshot> --out <file.hem> --metadata-only --project . export metadata-only bundle',
+  '  hem bundle verify <file.hem>                             verify format, checksums, and signature metadata',
+  '  hem bundle inspect <file.hem>                            inspect bundle metadata',
+  '  hem bundle import <file.hem> --dry-run --project .       validate bundle without importing',
+  '  hem bundle import <file.hem> --apply-content --quarantine --experimental --project . inspect content without writing targets',
+  '  hem bundle import <file.hem> --apply-content --experimental --project . apply project-relative content (experimental)',
 ].join("\n");
 
 // ── Command Registry ───────────────────────────────────────────
@@ -82,10 +82,10 @@ async function run(args: string[]): Promise<number> {
 
   if (!command) {
     process.stderr.write(formatSnapError({
-      code: "SNAPTAILOR_UNKNOWN_COMMAND",
+      code: "HEM_UNKNOWN_COMMAND",
       problem: "Unknown command.",
-      cause: `snaptailor does not recognize "${args.join(" ")}".`,
-      fix: "Run `snaptailor --help` to see supported commands."
+      cause: `hem does not recognize "${args.join(" ")}".`,
+      fix: "Run `hem --help` to see supported commands."
     }));
     return 1;
   }
@@ -104,7 +104,7 @@ run(process.argv.slice(2))
   })
   .catch((error: unknown) => {
     process.stderr.write(formatSnapError({
-      code: "SNAPTAILOR_UNHANDLED_ERROR",
+      code: "HEM_UNHANDLED_ERROR",
       problem: "Command failed.",
       cause: error instanceof Error ? error.message : "Unknown error.",
       fix: "Rerun with `--help` to confirm command syntax, then inspect the reported path if present."

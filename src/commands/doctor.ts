@@ -6,7 +6,7 @@ import type { ReadinessReport } from "../types.js";
 
 function renderReadinessText(report: ReadinessReport): string {
   const lines = [
-    "snaptailor doctor",
+    "hem doctor",
     "",
     `Target platform: ${report.targetPlatform}`,
     ""

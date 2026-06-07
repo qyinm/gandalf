@@ -6,7 +6,7 @@ These incidents are memory-derived from real work on this workstation. They are 
 
 ## Incident Set
 
-| # | Incident | Agent/tooling surface | Suspected changed state | snaptailor classification | Source |
+| # | Incident | Agent/tooling surface | Suspected changed state | Hem classification | Source |
 |---:|---|---|---|---|---|
 | 1 | GitHub publishing commands failed even though repo state was correct. | GitHub CLI used by coding agents | `gh` auth or sandbox/network transport state diverged from expected repo state | unsupported | `MEMORY.md:109-114` |
 | 2 | Standup automation memory write failed because `$CODEX_HOME` was empty and path construction targeted `/automations`. | Codex automation / environment | Runtime env var missing despite default Codex path existing | unsupported | `MEMORY.md:297-304` |
@@ -25,7 +25,7 @@ These incidents are memory-derived from real work on this workstation. They are 
 |---|---:|---|
 | captured | 2 | v0.1 scanner can see skill roots / path collisions as metadata evidence. |
 | redacted | 0 | No memory-derived incident depended mainly on raw secret value drift. |
-| remote | 0 | Network/auth failures are recorded as unsupported in v0.1 because snaptailor does not perform live auth/network probes. |
+| remote | 0 | Network/auth failures are recorded as unsupported in v0.1 because Hem does not perform live auth/network probes. |
 | unsupported | 6 | These expose known v0.1 reproducibility gaps: env vars, sandbox permissions, build cache, linked repo boundaries, and gstack slug resolution. |
 | unknown | 2 | These require higher-level behavior/provenance analysis beyond current scanner semantics. |
 

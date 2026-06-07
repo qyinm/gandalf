@@ -1,11 +1,11 @@
-# `.stailor` Bundle Format Design
+# `.hem` Bundle Format Design
 
 Status: **Current format notes** — updated 2026-06-07
 
 ## 1. Motivation
 
-snaptailor stores snapshots locally in `~/.snaptailor/<name>/` as a directory of JSON files.
-A `.stailor` bundle is a single portable file that packages a snapshot for:
+Hem stores snapshots locally in `~/.hem/<name>/` as a directory of JSON files.
+A `.hem` bundle is a single portable file that packages a snapshot for:
 
 - **Export**: send a snapshot to a teammate or another machine
 - **Import**: apply a received snapshot to a local store (optional: with file contents)
@@ -19,20 +19,20 @@ Use **POSIX ustar tar** (no gzip/zstd) as the container format.
 Rationale:
 - Tar is the standard for Unix archives; `node:tar` is in core, no extra dependency in v0.1.
 - No compression makes `inspect` fast (no decode needed for metadata).
-- Future: add `.stailor.gz` or `.stailor.zst` as opt-in variants.
+- Future: add `.hem.gz` or `.hem.zst` as opt-in variants.
 - Tar's sequential format prevents cheap file listing without reading the full archive (acceptable for v0.1).
 
 ### Name collision note
 
-`.stailor` is an invented extension, not associated with any existing format.
-Picking `.tar` would cause collisions with generic tarballs; `.stailor` is uniquely
-identifiable as a snaptailor bundle.
+`.hem` is an invented extension, not associated with any existing format.
+Picking `.tar` would cause collisions with generic tarballs; `.hem` is uniquely
+identifiable as a Hem bundle.
 
 ## 3. Tar Archive Layout
 
 ```
-bundle.stailor
-├── .stailor/                           # bundle metadata directory
+bundle.hem
+├── .hem/                           # bundle metadata directory
 │   ├── format-version                  # "1" (plain text)
 │   ├── manifest.json                   # SnapshotManifest (same schema as store)
 │   ├── checksums.json                  # ChecksumRecord (same schema, covers all entries)
@@ -43,7 +43,7 @@ bundle.stailor
 │   ├── evidence.json                   # DiscoveredItem[]
 │   ├── graph.json                      # GraphNode[]
 │   ├── audit-findings.json             # AuditFinding[]
-│   ├── checksums.json                  # (redundant with .stailor/checksums.json)
+│   ├── checksums.json                  # (redundant with .hem/checksums.json)
 │   └── redactions.json                 # redaction log
 │
 └── content/                            # supported raw file contents unless metadata-only
@@ -66,7 +66,7 @@ bundle.stailor
 ### Entry naming rules
 
 - All paths inside the tar are **relative**, never absolute, never containing `..`.
-- The `.stailor/` directory is always present and contains only bundle-level metadata.
+- The `.hem/` directory is always present and contains only bundle-level metadata.
 - The `snapshot/` directory is always present and mirrors the store snapshot file set.
 - The `content/` directory is present when supported content is included. Current export includes content by default; use `--metadata-only` to opt out.
 - Content paths use the **filesystem source path** from `DiscoveredItem.sourcePath`, with `~` expanded to home-relative. Examples:
@@ -88,7 +88,7 @@ Standard tar blocks of 512 bytes. No padding extension.
 
 ### Entry order
 
-All entries are added in a single pass in **alphabetical order** (`.stailor/` first,
+All entries are added in a single pass in **alphabetical order** (`.hem/` first,
 then `snapshot/`, then optional `content/`). This ensures deterministic bundle
 generation for checksumming.
 
@@ -100,16 +100,16 @@ are stored as-is with no encoding.
 ## 5. Bundle Export Flow
 
 ```
-snaptailor bundle export --name baseline --out baseline.stailor --project .
+hem bundle export --name baseline --out baseline.hem --project .
 ```
 
 Steps:
 1. Read snapshot `baseline` from store.
 2. Validate no secret/redacted content would be leaked (fail if `unsafe_to_export` items exist).
 3. Create tar writer.
-4. Write `.stailor/format-version` — plain text, `"1\n"`.
-5. Write `.stailor/manifest.json` — snapshot manifest.
-6. Write `.stailor/checksums.json` — checksums for all tar entries (SHA-256).
+4. Write `.hem/format-version` — plain text, `"1\n"`.
+5. Write `.hem/manifest.json` — snapshot manifest.
+6. Write `.hem/checksums.json` — checksums for all tar entries (SHA-256).
 7. Write `snapshot/evidence.json`, `graph.json`, `audit-findings.json`, `checksums.json`, `redactions.json`.
 8. Unless `--metadata-only`: write `content/` entries for captured evidence items.
 9. Finalize tar.
@@ -119,7 +119,7 @@ Steps:
 | Flag | Description |
 |---|---|
 | `--name` | Snapshot name in local store (required) |
-| `--out` | Output `.stailor` path (required) |
+| `--out` | Output `.hem` path (required) |
 | `--metadata-only` | Export snapshot metadata without supported file contents |
 | `--project` | Project path for resolving source paths |
 | `--json` | Output JSON summary of the export |
@@ -136,22 +136,22 @@ Before writing the tar, export validates:
 ## 6. Bundle Import Flow
 
 ```
-snaptailor bundle import baseline.stailor --project .
+hem bundle import baseline.hem --project .
 ```
 
 Steps:
 1. Read bundle file.
-2. **Quarantine phase**: extract to a temp directory (`/tmp/.stailor-quarantine-<uuid>/`).
+2. **Quarantine phase**: extract to a temp directory (`/tmp/.hem-quarantine-<uuid>/`).
 3. **Validation phase**:
    - Verify format version is supported.
    - Verify all tar entry paths are safe (no `..`, no absolute paths, no path traversal).
    - Verify `manifest.json` matches `snapshot/` contents.
-   - If `--verify-signature`: verify the signature in `.stailor/signature`.
+   - If `--verify-signature`: verify the signature in `.hem/signature`.
    - Check content size caps.
 4. **Readiness phase**: build the Mac readiness report for missing local tools, MCP commands, unverified remote MCP URLs, env key gaps, and apply blockers.
-5. **Apply phase**: copy validated snapshot to `~/.snaptailor/<name>/`.
+5. **Apply phase**: copy validated snapshot to `~/.hem/<name>/`.
 6. If `--apply-content`:
-   - Requires `--experimental` or `SNAPTAILOR_EXPERIMENTAL=1`.
+   - Requires `--experimental` or `HEM_EXPERIMENTAL=1`.
    - Fails before writes when Mac-only apply blockers are present.
    - Copies content files to their resolved source paths, or stages them under quarantine when `--quarantine` is passed.
 7. Clean up temporary state.
@@ -160,7 +160,7 @@ Steps:
 
 | Flag | Description |
 |---|---|
-| `--out` | Output directory (default: `~/.snaptailor/`) |
+| `--out` | Output directory (default: `~/.hem/`) |
 | `--apply-content` | Apply raw file contents from bundle to their resolved paths; requires experimental opt-in |
 | `--quarantine` | Stage content for inspection without writing target files |
 | `--trust` | Trust a signed bundle source after manual verification |
@@ -171,7 +171,7 @@ Steps:
 
 1. **Path traversal**: each tar entry path is resolved and verified to be within the extraction root.
    - Reject entries with `..`, null bytes, or absolute paths outside the quarantine root.
-2. **Bundle size**: reject bundles over 500MB (configurable via env var `SNAPTAILOR_MAX_BUNDLE_BYTES`).
+2. **Bundle size**: reject bundles over 500MB (configurable via env var `HEM_MAX_BUNDLE_BYTES`).
 3. **Malformed entries**: reject entries with unexpected formats, truncation, or parsing errors.
 4. **Quarantine directory**: created with `0700` permissions, cleaned up on success or failure.
 
@@ -179,19 +179,19 @@ Steps:
 
 When `--dry-run` or `--apply-content` is used, import returns a structured readiness report. The report uses stable categories: `ready`, `needs_manual_action`, `warning`, `unverified`, `unsupported`, and `blocked`.
 
-snaptailor reports manual actions for missing tools and env key values, but it does not install packages, contact registries, execute MCP commands, or write placeholder secret values.
+Hem reports manual actions for missing tools and env key values, but it does not install packages, contact registries, execute MCP commands, or write placeholder secret values.
 
 ## 7. Bundle Inspection
 
 ```
-snaptailor bundle inspect baseline.stailor
+hem bundle inspect baseline.hem
 ```
 
-Reads only `.stailor/manifest.json` and `.stailor/checksums.json` (first entries in tar)
+Reads only `.hem/manifest.json` and `.hem/checksums.json` (first entries in tar)
 to show bundle metadata without unpacking the full archive.
 
 ```text
-Bundle: baseline.stailor
+Bundle: baseline.hem
   Format: 1
   Snapshot: baseline
   Created: 2026-05-15T10:00:00Z
@@ -208,51 +208,51 @@ Bundle: baseline.stailor
 ### Key types
 
 - Ed25519 (preferred) or ECDSA P-256.
-- Key stored in `~/.snaptailor/keys/` directory or provided via env var.
+- Key stored in `~/.hem/keys/` directory or provided via env var.
 
 ### Signing
 
 ```bash
-snaptailor bundle export --name baseline --out baseline.stailor --sign
+hem bundle export --name baseline --out baseline.hem --sign
 ```
 
 1. Export produces a checksum of the tar (SHA-256 of the entire archive).
 2. Sign the checksum with the user's private key.
-3. Store signature in `.stailor/signature`.
+3. Store signature in `.hem/signature`.
 
 ### Verification
 
 ```bash
-snaptailor bundle import baseline.stailor --verify-signature
+hem bundle import baseline.hem --verify-signature
 ```
 
 1. Recompute tar checksum.
-2. Verify against `.stailor/signature` using the public key.
+2. Verify against `.hem/signature` using the public key.
 3. If verification fails, reject the import unless `--trust` is set.
 
 ### Key management (future)
 
 ```bash
-snaptailor key generate --type ed25519
-snaptailor key list
-snaptailor key export --name default --out pubkey.pem
-snaptailor key import --name team-key pubkey.pem
+hem key generate --type ed25519
+hem key list
+hem key export --name default --out pubkey.pem
+hem key import --name team-key pubkey.pem
 ```
 
 ## 9. Bundle CLI Integration
 
 ```text
-snaptailor bundle export --name baseline --out baseline.stailor --project .
-snaptailor bundle import baseline.stailor --project .
-snaptailor bundle inspect baseline.stailor
-snaptailor bundle import baseline.stailor --dry-run --project .
-snaptailor bundle import baseline.stailor --apply-content --project .
+hem bundle export --name baseline --out baseline.hem --project .
+hem bundle import baseline.hem --project .
+hem bundle inspect baseline.hem
+hem bundle import baseline.hem --dry-run --project .
+hem bundle import baseline.hem --apply-content --project .
 
 Future:
-snaptailor bundle export --name baseline --out baseline.stailor --sign
-snaptailor bundle import baseline.stailor --verify-signature
-snaptailor key generate --type ed25519
-snaptailor key list
+hem bundle export --name baseline --out baseline.hem --sign
+hem bundle import baseline.hem --verify-signature
+hem key generate --type ed25519
+hem key list
 ```
 
 ## 10. Data Model (Types)
@@ -291,10 +291,10 @@ a minimal tar reader/writer is ~200 lines.
 
 ### Migration path from snapshot store
 
-Existing `~/.snaptailor/<name>/` directories can be converted to bundles:
+Existing `~/.hem/<name>/` directories can be converted to bundles:
 
 ```bash
-snaptailor bundle export --name baseline --out baseline.stailor
+hem bundle export --name baseline --out baseline.hem
 ```
 
 No migration needed; bundles and store snapshots coexist. The store remains the
@@ -315,6 +315,6 @@ Bundle import is atomic per snapshot directory. If import fails mid-write:
 |---|---|
 | Should bundles default to including `content/`? | No. `--include-content` must be explicit until v0.2+ maturity. |
 | Should import overwrite existing snapshots? | No, unless `--overwrite` is set. Default: fail if name exists. |
-| Should `.stailor` be gzip-compressed? | Not in v0.1. Add `.stailor.gz` variant later. |
+| Should `.hem` be gzip-compressed? | Not in v0.1. Add `.hem.gz` variant later. |
 | How to handle cross-OS path differences? | Store all paths as POSIX inside tar. On import, resolve OS-specific home dir. |
-| What about `.stailor` files from unknown/older schema versions? | Reject import. Display supported version range. |
+| What about `.hem` files from unknown/older schema versions? | Reject import. Display supported version range. |

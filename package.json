@@ -1,10 +1,10 @@
 {
-  "name": "@qxinm/snaptailor",
+  "name": "@qxinm/hem",
   "version": "0.2.2",
-  "description": "Read-only drift diagnosis and security audit for AI coding agent setups.",
+  "description": "Time Machine for AI coding agent setups.",
   "type": "module",
   "bin": {
-    "snaptailor": "dist/src/cli.js"
+    "hem": "dist/src/cli.js"
   },
   "files": [
     "dist/src",
@@ -33,12 +33,12 @@
   "author": "qyinm",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/qyinm/snaptailor.git"
+    "url": "git+https://github.com/qyinm/hem.git"
   },
   "bugs": {
-    "url": "https://github.com/qyinm/snaptailor/issues"
+    "url": "https://github.com/qyinm/hem/issues"
   },
-  "homepage": "https://github.com/qyinm/snaptailor#readme",
+  "homepage": "https://github.com/qyinm/hem#readme",
   "engines": {
     "node": ">=22"
   },

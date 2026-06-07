@@ -1,5 +1,5 @@
 /**
- * Ink component for snaptailor snapshot list.
+ * Ink component for hem snapshot list.
  *
  * Paginated table of snapshots with name, date, and metadata.
  */
@@ -32,7 +32,7 @@ export default function SnapshotList({
   if (names.length === 0) {
     return (
       <Box flexDirection="column">
-        <Text bold>snaptailor snapshot list</Text>
+        <Text bold>hem snapshot list</Text>
         <Text dimColor>No snapshots found.</Text>
       </Box>
     );
@@ -63,7 +63,7 @@ export default function SnapshotList({
     <Box flexDirection="column">
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold>snaptailor snapshot list ({names.length} total)</Text>
+        <Text bold>hem snapshot list ({names.length} total)</Text>
       </Box>
 
       {/* Table */}

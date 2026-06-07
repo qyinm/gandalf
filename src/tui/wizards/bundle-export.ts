@@ -1,5 +1,5 @@
 /**
- * Clack wizard for `snaptailor bundle export`.
+ * Clack wizard for `hem bundle export`.
  *
  * Walks the user through:
  *   1. Picking a snapshot (or typing a new name)
@@ -23,7 +23,7 @@ import { formatSnapError } from "../../errors.js";
 export async function bundleExportWizard(
   options: RuntimeOptions
 ): Promise<number> {
-  clack.intro("snaptailor bundle export");
+  clack.intro("hem bundle export");
 
   await ensureStore(options.storeDir);
   const snapshots = await listSnapshots(options.storeDir, options.agent);
@@ -73,15 +73,15 @@ export async function bundleExportWizard(
   }
 
   // ── Step 2: Output path ──────────────────────────────────
-  const defaultOut = `${snapshotName}.stailor`;
+  const defaultOut = `${snapshotName}.hem`;
 
   const outputPath = await clack.text({
-    message: "Output .stailor path:",
+    message: "Output .hem path:",
     placeholder: defaultOut,
     initialValue: defaultOut,
     validate: (val) => {
       if (!val || val.trim().length === 0) return "Path is required";
-      if (!val.endsWith(".stailor")) return "Path should end with .stailor";
+      if (!val.endsWith(".hem")) return "Path should end with .hem";
       return;
     },
   });
@@ -142,7 +142,7 @@ export async function bundleExportWizard(
     spinner.stop("Export failed");
     process.stderr.write(
       formatSnapError({
-        code: "SNAPTAILOR_BUNDLE_EXPORT_FAILED",
+        code: "HEM_BUNDLE_EXPORT_FAILED",
         problem: `Bundle export failed: ${err instanceof Error ? err.message : String(err)}`,
         cause: "An error occurred during bundle export.",
         fix: "Check the snapshot name and output path, then try again.",
