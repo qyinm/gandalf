@@ -1,6 +1,6 @@
 # `.stailor` Bundle Format Design
 
-Status: **Design Draft** — 2026-05-15
+Status: **Current format notes** — updated 2026-06-07
 
 ## 1. Motivation
 
@@ -46,7 +46,7 @@ bundle.stailor
 │   ├── checksums.json                  # (redundant with .stailor/checksums.json)
 │   └── redactions.json                 # redaction log
 │
-└── content/                            # optional raw file contents (user opt-in)
+└── content/                            # supported raw file contents unless metadata-only
     ├── CLAUDE.md                       # file from snapshot sourcePath
     ├── .mcp.json
     ├── .claude/
@@ -68,7 +68,7 @@ bundle.stailor
 - All paths inside the tar are **relative**, never absolute, never containing `..`.
 - The `.stailor/` directory is always present and contains only bundle-level metadata.
 - The `snapshot/` directory is always present and mirrors the store snapshot file set.
-- The `content/` directory is present **only** when the export was created with `--include-content`.
+- The `content/` directory is present when supported content is included. Current export includes content by default; use `--metadata-only` to opt out.
 - Content paths use the **filesystem source path** from `DiscoveredItem.sourcePath`, with `~` expanded to home-relative. Examples:
   - `sourcePath: "~/.claude/settings.json"` → `content/~/.claude/settings.json`
   - `sourcePath: ".mcp.json"` → `content/.mcp.json`
@@ -111,7 +111,7 @@ Steps:
 5. Write `.stailor/manifest.json` — snapshot manifest.
 6. Write `.stailor/checksums.json` — checksums for all tar entries (SHA-256).
 7. Write `snapshot/evidence.json`, `graph.json`, `audit-findings.json`, `checksums.json`, `redactions.json`.
-8. If `--include-content`: write `content/` entries for captured evidence items.
+8. Unless `--metadata-only`: write `content/` entries for captured evidence items.
 9. Finalize tar.
 
 ### Flags
@@ -120,9 +120,8 @@ Steps:
 |---|---|
 | `--name` | Snapshot name in local store (required) |
 | `--out` | Output `.stailor` path (required) |
-| `--include-content` | Include raw file contents in `content/` (v0.2+, opt-in) |
+| `--metadata-only` | Export snapshot metadata without supported file contents |
 | `--project` | Project path for resolving source paths |
-| `--sign` | Sign the bundle with a provided key (future) |
 | `--json` | Output JSON summary of the export |
 
 ### Export validation (pre-flight)
@@ -149,20 +148,22 @@ Steps:
    - Verify `manifest.json` matches `snapshot/` contents.
    - If `--verify-signature`: verify the signature in `.stailor/signature`.
    - Check content size caps.
-4. **Apply phase**: copy validated snapshot to `~/.snaptailor/<name>/`.
-5. If `--apply-content`:
-   - Copy content files to their original source paths (prompting for confirmation per path).
-   - Scrub content directory after successful apply.
-6. Clean up quarantine temp directory.
+4. **Readiness phase**: build the Mac readiness report for missing local tools, MCP commands, unverified remote MCP URLs, env key gaps, and apply blockers.
+5. **Apply phase**: copy validated snapshot to `~/.snaptailor/<name>/`.
+6. If `--apply-content`:
+   - Requires `--experimental` or `SNAPTAILOR_EXPERIMENTAL=1`.
+   - Fails before writes when Mac-only apply blockers are present.
+   - Copies content files to their resolved source paths, or stages them under quarantine when `--quarantine` is passed.
+7. Clean up temporary state.
 
 ### Flags
 
 | Flag | Description |
 |---|---|
 | `--out` | Output directory (default: `~/.snaptailor/`) |
-| `--apply-content` | Apply raw file contents from bundle to their original paths (v0.2+, requires confirmation) |
-| `--verify-signature` | Verify detached signature before importing (future) |
-| `--trust` | Bypass confirmation prompts (HEADLESS mode) |
+| `--apply-content` | Apply raw file contents from bundle to their resolved paths; requires experimental opt-in |
+| `--quarantine` | Stage content for inspection without writing target files |
+| `--trust` | Trust a signed bundle source after manual verification |
 | `--dry-run` | Validate bundle without writing anything |
 | `--json` | Output JSON summary of what would be imported |
 
@@ -174,19 +175,11 @@ Steps:
 3. **Malformed entries**: reject entries with unexpected formats, truncation, or parsing errors.
 4. **Quarantine directory**: created with `0700` permissions, cleaned up on success or failure.
 
-### Content apply confirmation
+### Content apply and readiness
 
-When `--apply-content` is used, each content file is applied to its original source path:
+When `--dry-run` or `--apply-content` is used, import returns a structured readiness report. The report uses stable categories: `ready`, `needs_manual_action`, `warning`, `unverified`, `unsupported`, and `blocked`.
 
-```text
-Content file to apply: ~/.claude/settings.json
-  From bundle: baseline.stailor (created 2026-05-15T10:00:00Z)
-  Current size: 2048 bytes
-  Bundle size: 2120 bytes
-  Apply? [y/N]
-```
-
-For headless environments, `--trust` bypasses prompts (but still logs applied paths).
+snaptailor reports manual actions for missing tools and env key values, but it does not install packages, contact registries, execute MCP commands, or write placeholder secret values.
 
 ## 7. Bundle Inspection
 

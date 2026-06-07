@@ -140,7 +140,7 @@
         <pre class="terminal__body"><code><span class="terminal__prompt">$</span> npm install -g @qxinm/snaptailor
 <span class="terminal__prompt">$</span> snaptailor scan --project .</code></pre>
       </div>
-      <p class="install__note">Requires Node.js 18 or later</p>
+      <p class="install__note">Requires Node.js 22 or later</p>
     </div>
   </section>
 
@@ -175,7 +175,7 @@
           </div>
           <div class="guide__step-content">
             <h3>Cut</h3>
-            <p>Create a baseline snapshot. v0.1 snapshots are metadata-only (<code>--metadata-only</code> required).</p>
+            <p>Create a baseline snapshot. Snapshots are metadata-only; bundles include supported content by default.</p>
             <div class="guide__code">
               <pre><code>snaptailor snapshot create --name baseline --metadata-only --project .</code></pre>
               <button class="copy-btn" data-copy="snaptailor snapshot create --name baseline --metadata-only --project ." aria-label="Copy command">
@@ -211,7 +211,7 @@ snaptailor provenance current --project .</code></pre>
           </div>
           <div class="guide__step-content">
             <h3>Restore</h3>
-            <p>Generate a dry-run plan, then apply with per-type file executors. Apply mode requires <code>--experimental</code> in v0.1.</p>
+            <p>Generate a dry-run plan, then apply with per-type file executors. Apply mode requires <code>--experimental</code>.</p>
             <div class="guide__code">
               <pre><code>snaptailor restore --snapshot baseline --dry-run --project .
 snaptailor restore --snapshot baseline --apply --experimental --project .</code></pre>
@@ -229,11 +229,12 @@ snaptailor restore --snapshot baseline --apply --experimental --project .</code>
           </div>
           <div class="guide__step-content">
             <h3>Bundle</h3>
-            <p>Export snapshots to portable <code>.stailor</code> bundles. Import on any machine, inspect without unpacking.</p>
+            <p>Export snapshots to portable <code>.stailor</code> bundles. Preview Mac readiness before applying content.</p>
             <div class="guide__code">
               <pre><code>snaptailor bundle export --name baseline --out backup.stailor --project .
 snaptailor bundle inspect backup.stailor
-snaptailor bundle import backup.stailor --project .</code></pre>
+snaptailor doctor --project .
+snaptailor bundle import backup.stailor --dry-run --project .</code></pre>
               <button class="copy-btn" data-copy="snaptailor bundle export --name baseline --out backup.stailor --project ." aria-label="Copy command">
                 <i data-lucide="copy" size="16"></i>
               </button>

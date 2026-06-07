@@ -16,11 +16,12 @@
  */
 
 import { createHash, createHmac } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import { readFile, stat, writeFile, mkdir } from "node:fs/promises";
 import { homedir, platform, hostname } from "node:os";
 import path from "node:path";
 import { restorePolicyFor } from "./policy.js";
+import { buildReadinessReport, checkMcpBinaryAvailability, extractMcpBinaries } from "./readiness.js";
+import { scanProject } from "./scan.js";
 import { readSnapshot } from "./store.js";
 import { readTar, writeTar } from "./tar.js";
 import type {
@@ -206,95 +207,6 @@ function resolveSnapshotPathsForImport<T extends { sourcePath: string }>(items: 
     ...item,
     sourcePath: resolveSnapshotPathForImport(item.sourcePath, homeDir)
   }));
-}
-
-// ── MCP binary detection ─────────────────────────────────────────
-
-function classifyMcpBinary(command: string, homeDir?: string): McpBinaryInfo["binaryKind"] {
-  if (command === "npx" || command === "uvx") return "package_runner";
-  if (path.isAbsolute(command)) {
-    if (homeDir && isStrictlyUnder(command, homeDir)) return "source_local_path";
-    return "path_binary";
-  }
-  return "command";
-}
-
-/**
- * Extract MCP binary information from evidence items.
- * Looks for items with kind "mcp_server" and extracts command/url from their value.
- */
-function extractMcpBinaries(evidence: DiscoveredItem[], sourceHomeDir?: string): McpBinaryInfo[] {
-  const binaries: McpBinaryInfo[] = [];
-  for (const item of evidence) {
-    if (item.kind !== "mcp_server") continue;
-    const value = item.value as Record<string, unknown> | undefined;
-    if (!value || typeof value !== "object") continue;
-
-    const command = typeof value.command === "string" ? value.command : undefined;
-    const url = typeof value.url === "string" ? value.url : undefined;
-
-    if (command || url) {
-      const args = Array.isArray(value.args) ? value.args.filter((a): a is string => typeof a === "string") : undefined;
-      binaries.push({
-        evidenceId: item.id,
-        command: command ?? url ?? "unknown",
-        args,
-        url,
-        binaryKind: url ? "remote_url" : classifyMcpBinary(command ?? "", sourceHomeDir)
-      });
-    }
-  }
-  return binaries;
-}
-
-/**
- * Check which MCP binaries are available on the current machine.
- */
-function checkMcpBinaryAvailability(sourceBinaries: McpBinaryInfo[]): McpBinaryReport[] {
-  const reports: McpBinaryReport[] = [];
-
-  for (const bin of sourceBinaries) {
-    // URLs are not "binaries" — they're remote endpoints
-    if (bin.url) {
-      reports.push({
-        evidenceId: bin.evidenceId,
-        command: bin.url,
-        availableOnTarget: true, // URLs can't be checked — assume reachable
-        binaryKind: "remote_url",
-        warning: "Remote URL — availability cannot be verified locally"
-      });
-      continue;
-    }
-
-    if (bin.binaryKind === "source_local_path") {
-      reports.push({
-        evidenceId: bin.evidenceId,
-        command: bin.command,
-        availableOnTarget: false,
-        binaryKind: bin.binaryKind,
-        warning: `MCP command points to a source machine local binary path (${bin.command}); install or remap it on this machine.`
-      });
-      continue;
-    }
-
-    // "npx" and "uvx" are package runners — check if they exist without invoking a shell.
-    const which = spawnSync("which", [bin.command], { encoding: "utf-8", timeout: 2000 });
-    const resolved = which.status === 0 ? (which.stdout ?? "").trim() : "";
-    reports.push({
-      evidenceId: bin.evidenceId,
-      command: bin.command,
-      availableOnTarget: resolved.length > 0,
-      binaryKind: bin.binaryKind,
-      resolvedPath: resolved || undefined,
-      warning: bin.binaryKind === "package_runner"
-        ? (resolved.length > 0
-          ? `Package runner ${bin.command} is available at ${resolved}; package arguments may still differ on this machine.`
-          : `Package runner ${bin.command} not found on this machine; MCP package cannot be launched.`)
-        : (resolved.length === 0 ? `Binary "${bin.command}" not found on this machine` : undefined)
-    });
-  }
-
-  return reports;
 }
 
 // ── Machine info ─────────────────────────────────────────────────
@@ -700,8 +612,8 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
   // ── Cross-machine compatibility assessment ──────────────────
 
   const sourceMachine = manifest.sourceMachine;
-  const targetHome = homedir();
-  const targetPlatform = platform();
+  const targetHome = homeDir;
+  const targetPlatform = options.targetPlatform ?? platform();
   const targetHostname = hostname();
 
   // Build remapped paths list
@@ -791,6 +703,26 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     );
   }
 
+  const sourceEvidence = evidenceEntry
+    ? JSON.parse(evidenceEntry.content.toString("utf-8")) as DiscoveredItem[]
+    : [];
+  const targetEvidence = await scanProject({
+    projectPath,
+    homeDir,
+    storeDir
+  }).then((scan) => scan.evidence).catch(() => []);
+  const readiness = buildReadinessReport(sourceEvidence, {
+    sourceHomeDir: sourceHome,
+    targetPlatform,
+    applyContent,
+    targetEvidence
+  });
+
+  const blockedItems = readiness.items.filter((item) => item.category === "blocked");
+  if (applyContent && !dryRun && blockedItems.length > 0) {
+    throw new Error(`${blockedItems[0].code}: ${blockedItems[0].problem}`);
+  }
+
   if (dryRun) {
     return {
       snapshotName: manifest.snapshotName,
@@ -798,7 +730,8 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
       includesContent: manifest.includesContent,
       contentApplied: false,
       warnings,
-      machineDiff
+      machineDiff,
+      readiness
     };
   }
 
@@ -877,7 +810,8 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     contentApplied,
     quarantinedContentDir,
     warnings,
-    machineDiff
+    machineDiff,
+    readiness
   };
 }
 

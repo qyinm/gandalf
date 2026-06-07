@@ -91,6 +91,40 @@ export interface AuditFinding {
   evidenceId?: string;
 }
 
+export type ReadinessCategory =
+  | "ready"
+  | "needs_manual_action"
+  | "warning"
+  | "unverified"
+  | "unsupported"
+  | "blocked";
+
+export interface ReadinessAction {
+  label: string;
+  command?: string;
+  url?: string;
+}
+
+export interface ReadinessItem {
+  id: string;
+  category: ReadinessCategory;
+  severity: Severity;
+  code: string;
+  problem: string;
+  cause: string;
+  fix: string;
+  path?: string;
+  evidenceId?: string;
+  command?: string;
+  actions?: ReadinessAction[];
+}
+
+export interface ReadinessReport {
+  targetPlatform: NodeJS.Platform;
+  summary: Record<ReadinessCategory, number>;
+  items: ReadinessItem[];
+}
+
 export interface ProvenanceEntry {
   nodeId: string;
   evidenceId: string;
@@ -418,6 +452,8 @@ export interface BundleImportOptions {
   signatureKey?: string;
   /** Optional agent scope for snapshot storage on import. */
   agent?: AgentId;
+  /** Test-only override for target platform. Defaults to os.platform(). */
+  targetPlatform?: NodeJS.Platform;
 }
 
 /**
@@ -433,6 +469,8 @@ export interface BundleImportResult {
   warnings: string[];
   /** Machine compatibility report (always present, even on dry-run). */
   machineDiff?: MachineDiff;
+  /** Structured readiness preview shared by CLI, JSON, and TUI. */
+  readiness: ReadinessReport;
 }
 
 /**
