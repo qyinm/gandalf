@@ -6,15 +6,15 @@ Source: [PRODUCT.md](PRODUCT.md)
 
 ## Final Direction
 
-snaptailor is a **reproducible AI coding agent environment** tool — like a Docker image for your MCP servers, skills, permissions, hooks, and agent configurations.
+snaptailor is a **Mac-first reproducible AI coding agent environment** tool — like a Docker image for your MCP servers, skills, permissions, hooks, and agent configurations.
 
 The product wedge is:
 
-> Export your entire agent setup as a `.stailor` bundle. Import it on any machine. Get the exact same environment — instantly.
+> Export your agent setup as a `.stailor` bundle. Preview readiness on another Mac. Restore the supported configuration safely.
 
 This is a deliberate pivot from the original v0.1 "read-only diagnosis" framing. The read-only scan/diff/audit pipeline remains as the diagnostic layer that gives users confidence in what's being captured and restored. But the product is not a diagnostic tool — it's a **reproducibility engine**.
 
-Read-only diagnosis was the right first step to build trust and prove the evidence model. Now the goal is full environment portability.
+Read-only diagnosis was the right first step to build trust and prove the evidence model. The current goal is Mac-to-Mac portability with clear readiness checks before apply.
 
 ## Target User
 
@@ -28,9 +28,7 @@ Concrete moments:
 
 > I messed up my agent settings yesterday. I want to roll back to last week's snapshot.
 
-> I'm switching between macOS and Linux. My agent environment should follow me.
-
-> We ship agent configuration as part of the repo. CI should verify it's safe and reproducible.
+> I want to know what is ready, what needs manual install, and what needs secret input before I apply a bundle.
 
 ## Adjacent Landscape
 
@@ -47,18 +45,19 @@ Concrete moments:
 
 - Scan and capture agent configurations from 6 agents (Claude Code, Codex, Cursor, OpenCode, Pi Agent, Project).
 - Bundle entire or partial agent environments into `.stailor` archives.
-- Restore bundles on other machines with per-type apply handlers and rollback safety.
+- Restore bundles on Macs with per-type apply handlers, rollback safety, and readiness preview.
 - Read-only audit and diff between snapshots for change detection.
-- Metadata-only by default; full content with explicit `--include-content`.
+- Content included by default; metadata-only export is available with `--metadata-only`.
+- Doctor/preflight reports missing local tools, MCP command availability, unverified remote MCP URLs, and env key gaps without installing packages or restoring secrets.
 - Never execute hooks, MCP commands, scripts, plugins, or agent tools during scan.
 - Never use network by default.
 - Local store: `~/.snaptailor` with `0700` permissions.
 
 ### v0.3+ Target
 
-- **Full environment reproducibility**: export → import produces identical agent behavior.
-- **Cross-machine path remapping**: `~/.claude/` on macOS → `~/.claude/` on Linux, MCP binary paths resolved per-platform.
-- **Content bundles as default**: `--include-content` becomes the standard; metadata-only becomes an opt-in `--metadata-only` flag.
+- **Fuller environment reproducibility**: export → dry-run → doctor → import makes supported agent setup portable across Macs.
+- **Cross-machine path remapping**: source Mac home paths resolve to target Mac home paths.
+- **Content bundles as default**: supported content is included by default; metadata-only is an opt-in `--metadata-only` flag.
 - **Signed bundles**: verify bundle integrity and provenance before import.
 - **Partial restore**: choose which agents/skills/MCPs to restore from a bundle.
 - **Env value handling**: safe, encrypted-at-rest env value storage in bundles (with explicit user opt-in).
@@ -92,12 +91,13 @@ snaptailor report current --project . --out snaptailor-report.md
 
 ```bash
 # Export current environment to a portable bundle
-snaptailor bundle export --name <snapshot> --out <file.stailor> --include-content --project .
+snaptailor bundle export --name <snapshot> --out <file.stailor> --project .
 
 # Import and restore on another machine
 snaptailor bundle import <file.stailor> --apply-content --project .
 
 # Safe preview before importing
+snaptailor doctor --project .
 snaptailor bundle import <file.stailor> --dry-run --project .
 snaptailor bundle inspect <file.stailor>
 
@@ -117,10 +117,12 @@ The first useful moment must sell the reproducibility promise immediately.
 npm install -g @qxinm/snaptailor
 
 # Export your current setup
-snaptailor bundle export --name my-setup --out my-setup.stailor --include-content --project ~/my-project
+snaptailor bundle export --name my-setup --out my-setup.stailor --project ~/my-project
 
-# On another machine — or after breaking something — restore it
-snaptailor bundle import my-setup.stailor --apply-content --project ~/my-project
+# On another Mac — or after breaking something — preview then restore it
+snaptailor doctor --project ~/my-project
+snaptailor bundle import my-setup.stailor --dry-run --project ~/my-project
+snaptailor bundle import my-setup.stailor --apply-content --quarantine --experimental --project ~/my-project
 ```
 
 Expected first-run output:
@@ -145,7 +147,8 @@ Content included: yes
 Signed: no (v0.3+)
 
 Next on another machine:
-  snaptailor bundle import my-setup.stailor --apply-content --project .
+  snaptailor doctor --project .
+  snaptailor bundle import my-setup.stailor --dry-run --project .
 ```
 
 Target time to first bundle: under 10 seconds.

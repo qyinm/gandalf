@@ -16,6 +16,7 @@ import { bundleImport, bundleInspect } from "../../bundle.js";
 import { ensureStore } from "../../store.js";
 import type { RuntimeOptions } from "../../cli-shared.js";
 import { formatSnapError } from "../../errors.js";
+import { formatReadinessSummaryLines } from "../../readiness.js";
 
 /**
  * Run the bundle import wizard interactively.
@@ -149,6 +150,7 @@ export async function bundleImportWizard(
         );
         diffLines.push(`MCP binaries: ${missing.length} missing`);
       }
+      diffLines.push(...formatReadinessSummaryLines(dryResult.readiness, { maxItems: 3 }));
       clack.note(diffLines.join("\n"), "Cross-Machine Check");
     }
 
