@@ -197,6 +197,46 @@ describe("analysis modules", () => {
         name: "AGENTS.md",
         value: { checksum: "old" },
         checksum: "old"
+      }),
+      item({
+        id: "skill-old",
+        kind: "skill",
+        sourcePath: ".claude/skills/legacy-review/SKILL.md",
+        scope: "project",
+        precedence: 40,
+        name: "legacy-review",
+        value: { installed: true },
+        checksum: "legacy"
+      }),
+      item({
+        id: "hook-old",
+        kind: "hook",
+        sourcePath: ".claude/settings.json",
+        scope: "project",
+        precedence: 40,
+        name: "pre-tool-use",
+        value: { command: "old-hook" },
+        checksum: "hook-old"
+      }),
+      item({
+        id: "permission-old",
+        kind: "permission",
+        sourcePath: ".claude/settings.json",
+        scope: "project",
+        precedence: 40,
+        name: "Bash(git status)",
+        value: { action: "allow", rule: "Bash(git status)" },
+        checksum: "permission-old"
+      }),
+      item({
+        id: "permission-removed",
+        kind: "permission",
+        sourcePath: ".claude/settings.json",
+        scope: "project",
+        precedence: 40,
+        name: "Bash(npm test)",
+        value: { action: "allow", rule: "Bash(npm test)" },
+        checksum: "permission-removed"
       })
     ]);
     const currentGraph = buildGraph([
@@ -219,6 +259,46 @@ describe("analysis modules", () => {
         name: "react-review",
         value: { installed: true },
         checksum: "skill"
+      }),
+      item({
+        id: "hook-new",
+        kind: "hook",
+        sourcePath: ".claude/settings.json",
+        scope: "project",
+        precedence: 40,
+        name: "pre-tool-use",
+        value: { command: "new-hook" },
+        checksum: "hook-new"
+      }),
+      item({
+        id: "hook-added",
+        kind: "hook",
+        sourcePath: ".claude/settings.json",
+        scope: "project",
+        precedence: 40,
+        name: "post-tool-use",
+        value: { command: "notify" },
+        checksum: "hook-added"
+      }),
+      item({
+        id: "permission-new",
+        kind: "permission",
+        sourcePath: ".claude/settings.json",
+        scope: "project",
+        precedence: 40,
+        name: "Bash(git status)",
+        value: { action: "deny", rule: "Bash(git status)" },
+        checksum: "permission-new"
+      }),
+      item({
+        id: "permission-added",
+        kind: "permission",
+        sourcePath: ".claude/settings.json",
+        scope: "project",
+        precedence: 40,
+        name: "Bash(npm run build)",
+        value: { action: "allow", rule: "Bash(npm run build)" },
+        checksum: "permission-added"
       })
     ]);
 
@@ -226,7 +306,20 @@ describe("analysis modules", () => {
 
     assert.deepEqual(
       diff.semanticChanges.map((change) => change.code).sort(),
-      ["INSTRUCTION_CHANGED", "SKILL_ADDED"]
+      [
+        "HOOK_ADDED",
+        "HOOK_CHANGED",
+        "INSTRUCTION_CHANGED",
+        "PERMISSION_CHANGED",
+        "PERMISSION_CHANGED",
+        "PERMISSION_CHANGED",
+        "SKILL_ADDED",
+        "SKILL_REMOVED"
+      ]
+    );
+    assert.equal(
+      diff.semanticChanges.some((change) => change.code === "PERMISSION_CHANGED" && change.details.removed === true),
+      true
     );
   });
 

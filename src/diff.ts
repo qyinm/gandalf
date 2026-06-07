@@ -339,6 +339,16 @@ export function diffGraphs(baselineGraph: GraphNode[], currentGraph: GraphNode[]
         details: { changedFields: [], sourcePath: before.sourcePath }
       });
     }
+    if (before.entityKind === "permission") {
+      semanticChanges.push({
+        code: "PERMISSION_CHANGED",
+        entityKind: before.entityKind,
+        entityName: before.entityName,
+        severity: "medium",
+        before: before.effectiveValue,
+        details: { changedFields: [], removed: true, sourcePath: before.sourcePath }
+      });
+    }
   }
 
   const beforeBySource = new Map(baselineGraph.map((node) => [sourceIdentity(node), node]));

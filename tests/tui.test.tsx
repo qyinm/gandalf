@@ -416,7 +416,10 @@ describe("TUI agent detail model", () => {
       agent: "claude-code",
       evidence: [
         discoveredItem({ id: "skill:review", agent: "claude-code", kind: "skill", name: "review" }),
+        discoveredItem({ id: "skill:broken", agent: "claude-code", kind: "skill", name: "broken", captureStatus: "parse_failed" }),
+        discoveredItem({ id: "mcp:docs", agent: "claude-code", kind: "mcp_server", name: "docs" }),
         discoveredItem({ id: "mcp:github", agent: "claude-code", kind: "mcp_server", name: "github", value: { disabled: true } }),
+        discoveredItem({ id: "mcp:linear", agent: "claude-code", kind: "mcp_server", name: "linear", value: { enabled: false } }),
         discoveredItem({ id: "permission:bash", agent: "claude-code", kind: "permission", name: "bash" }),
         discoveredItem({ id: "hook:pre", agent: "claude-code", kind: "hook", name: "pre-run" }),
         discoveredItem({ id: "instructions", agent: "claude-code", kind: "agent_instruction", sourcePath: "/project/AGENTS.md" }),
@@ -441,15 +444,17 @@ describe("TUI agent detail model", () => {
 
     assert.equal(model.title, "Claude Code");
     assert.deepEqual(model.counts, {
-      skills: 1,
-      mcpServers: 1,
+      skills: 2,
+      mcpServers: 3,
       hooks: 1,
       permissions: 1,
       instructions: 1
     });
-    assert.equal(model.skills[0].name, "review");
-    assert.equal(model.mcpServers[0].name, "github");
-    assert.equal(model.mcpServers[0].status, "disabled");
+    assert.equal(model.skills.find((row) => row.name === "broken")?.status, "parse_failed");
+    assert.equal(model.skills.find((row) => row.name === "review")?.status, undefined);
+    assert.equal(model.mcpServers.find((row) => row.name === "docs")?.status, "enabled");
+    assert.equal(model.mcpServers.find((row) => row.name === "github")?.status, "disabled");
+    assert.equal(model.mcpServers.find((row) => row.name === "linear")?.status, "disabled");
     assert.equal(model.instructions[0].path, "/project/AGENTS.md");
     assert.equal(model.history.length, 1);
     assert.equal(model.history[0].id, "claude-c");
@@ -533,7 +538,14 @@ describe("TUI compare model", () => {
         agent: "claude-code",
         entityKind: "mcp_server",
         entityName: "linear",
-        effectiveValue: { command: "linear" }
+        effectiveValue: { command: "linear-old" }
+      }),
+      graphNode({
+        id: "hook-pre-before",
+        agent: "claude-code",
+        entityKind: "hook",
+        entityName: "pre-tool-use",
+        effectiveValue: { command: "notify" }
       })
     ]);
     const after = snapshotForTui("current", "2026-06-08T00:00:00.000Z", [
@@ -542,7 +554,7 @@ describe("TUI compare model", () => {
         agent: "claude-code",
         entityKind: "mcp_server",
         entityName: "linear",
-        effectiveValue: { command: "linear" }
+        effectiveValue: { command: "linear-new" }
       }),
       graphNode({
         id: "skill-review-after",
@@ -577,6 +589,11 @@ describe("TUI compare model", () => {
     assert.deepEqual(model.summary, ["+ Skill: react-review"]);
     assert.equal(model.sections[0].title, "Claude Code");
     assert.equal(model.sections[0].rows.some((row) => row.marker === "+" && row.after === "skill: react-review"), true);
+    assert.equal(model.sections[0].rows.some((row) => row.marker === "-" && row.before === "hook: pre-tool-use"), true);
+    assert.equal(
+      model.sections[0].rows.some((row) => row.marker === "~" && row.before === "mcp_server: linear" && row.after === "mcp_server: linear"),
+      true
+    );
   });
 });
 
