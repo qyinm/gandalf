@@ -216,8 +216,11 @@ export async function stopDaemon(options: RuntimeOptions): Promise<DaemonStopRes
   }
 
   if (!result.status.pid || !result.status.pidAlive || !result.status.identityVerified) {
-    const stopped = { ...result.status, running: false };
-    if (!result.status.pidAlive && await statusMatchesLock(options.storeDir, result.status)) {
+    const ownedDeadDaemon = !result.status.pidAlive && await statusMatchesLock(options.storeDir, result.status);
+    const stopped = ownedDeadDaemon
+      ? cleanStoppedStatus(result.status)
+      : { ...result.status, running: false };
+    if (ownedDeadDaemon) {
       await cleanupDaemon(options.storeDir, stopped, { removeLock: "owner" });
     }
     return { stopped: false, status: stopped };
@@ -231,13 +234,9 @@ export async function stopDaemon(options: RuntimeOptions): Promise<DaemonStopRes
     }
   }
 
-  const stopped = {
-    ...result.status,
-    running: false,
-    stale: false,
-    staleReason: undefined,
+  const stopped = cleanStoppedStatus(result.status, {
     lastHeartbeatAt: new Date().toISOString()
-  };
+  });
   await cleanupDaemon(options.storeDir, stopped, { removeLock: "owner" });
   return { stopped: true, status: stopped };
 }
@@ -401,7 +400,7 @@ export async function runDaemonWorker(options: RuntimeOptions, runId: string, wo
       storeDir: options.storeDir,
       watchedPaths,
       stale: false,
-      errors
+      errors: []
     }, { removeLock: "owner" });
   }
 
@@ -441,6 +440,17 @@ function stoppedStatus(options: RuntimeOptions, stale: boolean, errors: string[]
     stale,
     ...(staleReason ? { staleReason } : {}),
     errors
+  };
+}
+
+function cleanStoppedStatus(status: DaemonStatus, overrides: Partial<DaemonStatus> = {}): DaemonStatus {
+  return {
+    ...status,
+    ...overrides,
+    running: false,
+    stale: false,
+    staleReason: undefined,
+    errors: []
   };
 }
 
