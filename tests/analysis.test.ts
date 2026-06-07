@@ -186,6 +186,50 @@ describe("analysis modules", () => {
     assert.deepEqual(diff.semanticChanges[0].details.changedFields.sort(), ["command", "transport", "urlHost"]);
   });
 
+  it("diffs setup inventory changes used for deterministic save titles", () => {
+    const baselineGraph = buildGraph([
+      item({
+        id: "instructions-old",
+        kind: "agent_instruction",
+        sourcePath: "AGENTS.md",
+        scope: "project",
+        precedence: 40,
+        name: "AGENTS.md",
+        value: { checksum: "old" },
+        checksum: "old"
+      })
+    ]);
+    const currentGraph = buildGraph([
+      item({
+        id: "instructions-new",
+        kind: "agent_instruction",
+        sourcePath: "AGENTS.md",
+        scope: "project",
+        precedence: 40,
+        name: "AGENTS.md",
+        value: { checksum: "new" },
+        checksum: "new"
+      }),
+      item({
+        id: "skill-new",
+        kind: "skill",
+        sourcePath: ".claude/skills/react-review/SKILL.md",
+        scope: "project",
+        precedence: 40,
+        name: "react-review",
+        value: { installed: true },
+        checksum: "skill"
+      })
+    ]);
+
+    const diff = diffGraphs(baselineGraph, currentGraph);
+
+    assert.deepEqual(
+      diff.semanticChanges.map((change) => change.code).sort(),
+      ["INSTRUCTION_CHANGED", "SKILL_ADDED"]
+    );
+  });
+
   it("renders markdown reports with detected agents, blind spots, findings, provenance, and next command", () => {
     const evidence = [
       item({
