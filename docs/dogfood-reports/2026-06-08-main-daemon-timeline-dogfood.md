@@ -7,7 +7,7 @@
 
 - Recent daemon/timeline scope was centered on commit `f835d1c` (`fix: harden hem daemon and timeline contracts`).
 - That work added `hem daemon start/status/stop`, timeline event capture, `hem timeline list/show/undo`, TUI daemon trust status, and related tests.
-- Follow-up Timeline-first work adds a first tab for timeline history and a TUI `u=preview undo` action that stays dry-run only.
+- Follow-up Timeline-first work opens on `History > All changes` in the left navigation and keeps the TUI `u=preview undo` action dry-run only.
 - Dogfood used an isolated temporary `HOME`, `HEM_STORE`, and project so no real user setup or repo setup was mutated.
 - Dogfood found one user-facing status hygiene issue: stopped TUI/status could retain a raw watcher error after safe shutdown.
 - Fix committed as `b8ddd82` (`fix: clear stopped daemon runtime errors`).
@@ -80,7 +80,7 @@ flowchart TD
 | 8 | Daemon restart | Stop and restart keeps exactly one baseline entry. | Pass | - | - | - |
 | 9 | Corrupt timeline resilience | A corrupt timeline event is reported on stderr while stdout remains parseable JSON with valid entries. | Pass | - | - | - |
 | 10 | TUI daemon header | TUI stopped header renders cleanly after daemon shutdown. | Fixed | Raw `EMFILE: too many open files, watch` could remain in stopped status after fallback capture worked. | Clear runtime watcher errors when a daemon is safely stopped or an owned dead daemon is cleaned up; add regression test. | `b8ddd82` |
-| 11 | TUI timeline | Timeline is the first tab and starts in `All agents` project-wide history mode. | Pass | - | Add Timeline tab/view model, tab ordering tests, and PTY smoke. | - |
+| 11 | TUI timeline | Timeline is the first screen and starts in `All agents` project-wide history mode. | Pass | - | Add left navigation, Timeline view model, navigation tests, and PTY smoke. | - |
 | 12 | TUI undo preview | Selected timeline events render `writes files: no`, MCP preview items, and observe-only surfaces. | Pass | - | Add TUI preview model tests and keep CLI dry-run contract. | - |
 
 ## What Was Fixed
@@ -122,9 +122,9 @@ None.
 
 Follow-up Timeline-first verification adds:
 
-- `node --test dist/tests/tui.test.js` - Timeline model, tab order, corrupt warning, and undo preview coverage
+- `node --test dist/tests/tui.test.js` - Timeline model, left navigation, profile/agent detail, compare, save setup, corrupt warning, and undo preview coverage
 - `node --test dist/tests/cli.test.js --test-name-pattern timeline` - CLI timeline dry-run and corrupt-event contract
-- PTY TUI smoke - Timeline first tab, `All agents`, daemon header, empty timeline command, and preview footer rendered
+- PTY TUI smoke - Timeline first screen, `All agents`, daemon header, empty timeline command, and preview footer rendered
 
 ## Final Status
 
