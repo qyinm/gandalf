@@ -38,10 +38,11 @@ import TabBar, { TABS } from "./TabBar.js";
 import type { TabId } from "./TabBar.js";
 import ScanView, { DEFAULT_SCAN_WINDOW_SIZE } from "./ScanView.js";
 import AuditView from "./AuditView.js";
-import DiffView from "./DiffView.js";
 import SnapshotList from "./SnapshotList.js";
 import SaveSetupView from "./SaveSetupView.js";
 import { buildSaveSetupViewModel } from "./SaveSetupViewModel.js";
+import CompareView from "./CompareView.js";
+import { latestSnapshotByCreatedAt } from "./CompareViewModel.js";
 import ErrorPage from "./ErrorPage.js";
 import TimelineView from "./TimelineView.js";
 import { clampTimelineIndex } from "./TimelineViewModel.js";
@@ -102,7 +103,7 @@ type DashboardState = {
   diffState:
     | { type: "idle" }
     | { type: "loading" }
-    | { type: "rendered"; baseline: string; target: string; diff: any }
+    | { type: "rendered"; baseline: string; target: string; before: Snapshot; after: Snapshot; diff: GraphDiff }
     | { type: "error"; message: string };
   error: AppError | null;
   /** Scroll offset for scan tab evidence/findings */
@@ -348,6 +349,51 @@ export default function Dashboard({ options }: DashboardProps) {
         return;
       }
 
+      if (action === "diff") {
+        setState((s) => ({ ...s, diffState: { type: "loading" }, activeTab: "diff" }));
+        try {
+          const { captureCurrentState } = await import("../../current-state.js");
+          const { readSnapshot } = await import("../../store.js");
+          const savedSnapshots = await Promise.all(
+            state.snapshots.map((name) => readSnapshot(options.storeDir, name))
+          );
+          const before = latestSnapshotByCreatedAt(savedSnapshots);
+          if (!before) {
+            setState((s) => ({
+              ...s,
+              diffState: {
+                type: "error",
+                message: "No saved setups yet."
+              }
+            }));
+            return;
+          }
+
+          const current = await captureCurrentState(options);
+          const diff = diffGraphs(before.graph, current.snapshot.graph);
+          setState((s) => ({
+            ...s,
+            diffState: {
+              type: "rendered",
+              baseline: before.manifest.name,
+              target: "Current",
+              before,
+              after: current.snapshot,
+              diff
+            }
+          }));
+        } catch (err) {
+          setState((s) => ({
+            ...s,
+            diffState: {
+              type: "error",
+              message: err instanceof Error ? err.message : String(err),
+            },
+          }));
+        }
+        return;
+      }
+
       if (!agent) return;
 
       if (action === "scan") {
@@ -395,39 +441,6 @@ export default function Dashboard({ options }: DashboardProps) {
               problem: `Audit failed: ${err instanceof Error ? err.message : String(err)}`,
               cause: `Could not audit ${agentLabelStr(agent)}.`,
               fix: "Check agent config paths.",
-            },
-          }));
-        }
-      } else if (action === "diff") {
-        setState((s) => ({ ...s, diffState: { type: "loading" }, activeTab: "diff" }));
-        try {
-          const snapshots = await listSnapshots(options.storeDir, agent);
-          if (snapshots.length < 2) {
-            setState((s) => ({
-              ...s,
-              diffState: {
-                type: "error",
-                message: `Need at least 2 snapshots for ${agentLabelStr(agent)}.`,
-              },
-            }));
-            return;
-          }
-          const baseline = snapshots[snapshots.length - 2];
-          const target = snapshots[snapshots.length - 1];
-          const { readSnapshot } = await import("../../store.js");
-          const before = await readSnapshot(options.storeDir, baseline, agent);
-          const after = await readSnapshot(options.storeDir, target, agent);
-          const diff = diffGraphs(before.graph, after.graph);
-          setState((s) => ({
-            ...s,
-            diffState: { type: "rendered", baseline, target, diff },
-          }));
-        } catch (err) {
-          setState((s) => ({
-            ...s,
-            diffState: {
-              type: "error",
-              message: err instanceof Error ? err.message : String(err),
             },
           }));
         }
@@ -564,8 +577,8 @@ export default function Dashboard({ options }: DashboardProps) {
         return;
       }
 
-      // d = diff (only if agent selected)
-      if (input === "d" && state.selectedAgent) {
+      // c = compare latest saved full setup with current setup
+      if (input === "c") {
         runAction("diff");
         return;
       }
@@ -817,17 +830,17 @@ export default function Dashboard({ options }: DashboardProps) {
           {state.activeTab === "snapshots" && renderSnapshots()}
           {state.activeTab === "scan" && renderScan()}
           {state.activeTab === "audit" && renderAudit()}
-          {state.activeTab === "diff" && state.selectedAgent && renderDiff()}
+          {state.activeTab === "diff" && renderDiff()}
         </Box>
 
         {/* Footer hint */}
         <Box marginTop={1}>
           <Text dimColor>
             {state.activeTab === "scan"
-              ? "↑↓ scroll  ←→ tab  1-5 jump  s=save  d=diff  a=audit  r=rescan  q=quit"
+              ? "↑↓ scroll  ←→ tab  1-5 jump  s=save  c=compare  a=audit  r=rescan  q=quit"
               : state.activeTab === "timeline"
-                ? "↑↓ timeline  f=filter  u=preview undo  ←→ tab  1-5 jump  r=rescan  q=quit"
-                : "↑↓ agent  ←→ tab  1-5 jump  s=save  d=diff  a=audit  r=rescan  q=quit"}
+                ? "↑↓ timeline  u=preview undo  c=compare  r=rescan  q=quit"
+                : "↑↓ move  Enter open  s=save  c=compare  r=rescan  q=quit"}
           </Text>
         </Box>
       </Box>
@@ -892,8 +905,8 @@ export default function Dashboard({ options }: DashboardProps) {
       <Box flexDirection="column">
         <SnapshotList names={state.snapshots} pageSize={15} />
         <Box marginTop={1} flexDirection="row" gap={2}>
-          <Text color="cyan">[s] Save Snapshot</Text>
-          <Text color="cyan">[d] Diff (last 2)</Text>
+          <Text color="cyan">[s] Save Setup</Text>
+          <Text color="cyan">[c] Compare</Text>
           <Text color="cyan">[a] Audit</Text>
         </Box>
       </Box>
@@ -936,19 +949,17 @@ export default function Dashboard({ options }: DashboardProps) {
     const ds = state.diffState;
 
     if (ds.type === "idle") {
-      // Auto-trigger diff when tab is entered (on next render)
-      // But we need to handle this via effect or button
       return (
         <Box flexDirection="column">
-          <Text dimColor>Press [d] to diff the two most recent snapshots.</Text>
-          {state.snapshots.length >= 2 && (
+          <Text dimColor>Press [c] to compare the latest saved setup with current setup.</Text>
+          {state.snapshots.length >= 1 && (
             <Box marginTop={1} flexDirection="column">
-              <Text dimColor>Baseline: {state.snapshots[state.snapshots.length - 2]}</Text>
-              <Text dimColor>Target:   {state.snapshots[state.snapshots.length - 1]}</Text>
+              <Text dimColor>From: {state.snapshots[state.snapshots.length - 1]}</Text>
+              <Text dimColor>To:   Current</Text>
             </Box>
           )}
           <Box marginTop={1}>
-            <Text color="cyan">[d] Run Diff</Text>
+            <Text color="cyan">[c] Compare</Text>
           </Box>
         </Box>
       );
@@ -969,21 +980,18 @@ export default function Dashboard({ options }: DashboardProps) {
           code="DIFF_ERROR"
           problem={ds.message}
           cause="Could not load snapshots."
-          fix="Save at least 2 snapshots first."
+          fix="Save your current setup first."
         />
       );
     }
 
     return (
-      <Box flexDirection="column">
-        <Text dimColor>
-          {agentLabelStr(state.selectedAgent!)}: {ds.baseline} → {ds.target}
-        </Text>
-        <DiffView
-          semanticChanges={ds.diff.semanticChanges}
-          rawSourceChanges={ds.diff.rawSourceChanges}
-        />
-      </Box>
+      <CompareView
+        fromSnapshot={ds.before}
+        toSnapshot={ds.after}
+        diff={ds.diff}
+        toLabel="Current  unsaved changes"
+      />
     );
   }
 }
