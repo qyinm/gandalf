@@ -4,7 +4,7 @@ import { Box, Text } from "ink";
 import type { TimelineUndoPlan } from "../../timeline-undo.js";
 import type { AgentId, DiscoveredItem, TimelineChangedSurface, TimelineEntry } from "../../types.js";
 import type { TimelineCorruptEvent } from "../../store.js";
-import { buildTimelineViewModel } from "./TimelineViewModel.js";
+import { buildTimelineViewModel, currentSetupEmptyText } from "./TimelineViewModel.js";
 import { padDisplay } from "./TuiFormatters.js";
 import { NoTimelineEventsEmptyState } from "./TuiEmptyStates.js";
 
@@ -44,9 +44,9 @@ export default function TimelineView({
         <Text>
           {"  "}Agents {model.currentSetup.agents}  Skills {model.currentSetup.skills}  MCP Servers {model.currentSetup.mcpServers}  Hooks {model.currentSetup.hooks}  Permissions {model.currentSetup.permissions}
         </Text>
-        <Text>  Skills       {model.currentSetup.skillNames}</Text>
-        <Text>  MCP Servers  {model.currentSetup.mcpServerNames}</Text>
-        <Text>  Hooks        {model.currentSetup.hookNames}</Text>
+        <CurrentSetupRows title="Skills" rows={model.currentSetup.skillRows} kind="skill" />
+        <CurrentSetupRows title="MCP Servers" rows={model.currentSetup.mcpServerRows} kind="mcp_server" />
+        <CurrentSetupRows title="Hooks" rows={model.currentSetup.hookRows} kind="hook" />
         <Text>  Instructions  {model.currentSetup.instructions}</Text>
       </Box>
 
@@ -128,6 +128,29 @@ export default function TimelineView({
           ))}
           <SurfaceList title="Observe-only in preview" surfaces={model.undoPreview.observeOnlySurfaces} />
         </Box>
+      )}
+    </Box>
+  );
+}
+
+function CurrentSetupRows({
+  title,
+  rows,
+  kind
+}: {
+  title: string;
+  rows: string[];
+  kind: DiscoveredItem["kind"];
+}) {
+  return (
+    <Box flexDirection="column">
+      <Text>  {title}</Text>
+      {rows.length === 0 ? (
+        <Text dimColor>    {currentSetupEmptyText(kind)}</Text>
+      ) : (
+        rows.map((row) => (
+          <Text key={`${title}:${row}`}>    {row}</Text>
+        ))
       )}
     </Box>
   );
