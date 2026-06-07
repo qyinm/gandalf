@@ -112,6 +112,30 @@ describe("daemon status identity", () => {
     assert.equal(JSON.parse(await readFile(daemonPaths(options.storeDir).lock, "utf8")).runId, "foreign-run");
   });
 
+  it("clears runtime watcher errors when cleaning up an owned dead daemon", async () => {
+    const options = await makeRuntime();
+    const deadPid = 2_147_483_647;
+    await writeDaemonStatus(options.storeDir, runningStatus(options, {
+      pid: deadPid,
+      errors: ["EMFILE: too many open files, watch"]
+    }));
+    await writeFile(daemonPaths(options.storeDir).lock, JSON.stringify({
+      runId: "run-status",
+      identityHash: "sha256:status",
+      pid: deadPid,
+      createdAt: new Date().toISOString()
+    }, null, 2));
+
+    const stopped = await stopDaemon(options);
+    assert.equal(stopped.stopped, false);
+    assert.equal(stopped.status.running, false);
+    assert.deepEqual(stopped.status.errors, []);
+
+    const status = await readDaemonStatus(options);
+    assert.equal(status.ok, true);
+    assert.deepEqual(status.status.errors, []);
+  });
+
   it("fails start and cleans its own lock when first-run baseline capture fails", async () => {
     const options = await makeRuntime();
     await mkdir(path.join(options.storeDir, "timeline"), { recursive: true });
