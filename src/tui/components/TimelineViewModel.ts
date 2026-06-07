@@ -69,7 +69,7 @@ export function buildTimelineViewModel(input: {
   entries: TimelineEntry[];
   selectedIndex: number;
   agentFilter: AgentId | null;
-  evidence?: Pick<DiscoveredItem, "agent" | "id" | "kind" | "name" | "sourcePath">[];
+  evidence?: Pick<DiscoveredItem, "agent" | "id" | "kind" | "metadata" | "name" | "scope" | "sourcePath">[];
   corruptEvents?: TimelineCorruptEvent[];
   undoPlan?: TimelineUndoPlan | null;
   now?: Date;
@@ -96,7 +96,7 @@ export function buildTimelineViewModel(input: {
 }
 
 export function buildCurrentSetupSummaryModel(input: {
-  evidence: Pick<DiscoveredItem, "agent" | "id" | "kind" | "name" | "sourcePath">[];
+  evidence: Pick<DiscoveredItem, "agent" | "id" | "kind" | "metadata" | "name" | "scope" | "sourcePath">[];
   agentFilter: AgentId | null;
 }): CurrentSetupSummaryModel {
   const evidence = input.agentFilter
@@ -140,7 +140,7 @@ function countKind(evidence: Pick<DiscoveredItem, "kind">[], kind: DiscoveredIte
 }
 
 function rowsForKind(
-  evidence: Pick<DiscoveredItem, "agent" | "id" | "kind" | "name" | "sourcePath">[],
+  evidence: Pick<DiscoveredItem, "agent" | "id" | "kind" | "metadata" | "name" | "scope" | "sourcePath">[],
   kind: DiscoveredItem["kind"],
   agentFilter: AgentId | null
 ): string[] {
@@ -154,15 +154,16 @@ function rowsForKind(
 }
 
 function displayNameForItem(
-  item: Pick<DiscoveredItem, "id" | "kind" | "name" | "sourcePath">
+  item: Pick<DiscoveredItem, "id" | "kind" | "metadata" | "name" | "scope" | "sourcePath">
 ): string {
-  if (item.name) return item.name;
+  const suffix = item.scope === "managed" || item.metadata?.builtIn === true ? " (built-in)" : "";
+  if (item.name) return `${item.name}${suffix}`;
   const parts = item.sourcePath.split("/").filter(Boolean);
   const last = parts.at(-1);
-  if (last && last !== "SKILL.md") return last;
+  if (last && last !== "SKILL.md") return `${last}${suffix}`;
   const parent = parts.at(-2);
-  if (parent) return parent;
-  return item.id;
+  if (parent) return `${parent}${suffix}`;
+  return `${item.id}${suffix}`;
 }
 
 export function currentSetupEmptyText(

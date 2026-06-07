@@ -24,7 +24,7 @@ interface SidebarProps {
   selectedItemId?: string;
 }
 
-const VISIBLE_AGENTS: AgentId[] = [
+export const VISIBLE_AGENTS: AgentId[] = [
   "claude-code",
   "codex",
   "cursor",
@@ -42,6 +42,14 @@ export function buildAgentEntries(
 ): AgentEntry[] {
   const found = new Set(evidence.map((e) => e.agent));
   return VISIBLE_AGENTS.filter((a) => found.has(a)).map((id) => ({
+    id,
+    label: agentLabel(id),
+    evidenceCount: evidence.filter((e) => e.agent === id).length,
+  }));
+}
+
+export function buildSupportedAgentEntries(evidence: { agent: AgentId }[]): AgentEntry[] {
+  return VISIBLE_AGENTS.map((id) => ({
     id,
     label: agentLabel(id),
     evidenceCount: evidence.filter((e) => e.agent === id).length,

@@ -323,6 +323,28 @@ describe("TUI timeline model", () => {
     assert.deepEqual(model.hookRows, []);
   });
 
+  it("does not leak another agent MCP into the OpenCode current setup", () => {
+    const model = buildCurrentSetupSummaryModel({
+      agentFilter: "opencode",
+      evidence: [
+        discoveredItem({ id: "mcp:github", agent: "claude-code", kind: "mcp_server", name: "github" }),
+        discoveredItem({
+          id: "skill:opencode",
+          agent: "opencode",
+          kind: "skill",
+          name: "customize-opencode",
+          scope: "managed",
+          metadata: { builtIn: true }
+        })
+      ]
+    });
+
+    assert.equal(model.scopeLabel, "OpenCode");
+    assert.equal(model.mcpServers, 0);
+    assert.deepEqual(model.mcpServerRows, []);
+    assert.deepEqual(model.skillRows, ["customize-opencode (built-in)"]);
+  });
+
   it("separates writable and observe-only changed surfaces", () => {
     const detail = timelineDetailModel(timelineEntry({
       id: "changed-entry",
@@ -401,7 +423,15 @@ describe("TUI timeline model", () => {
 
     assert.deepEqual(model.sections.map((section) => section.label), ["Profiles", "Agents", "History"]);
     assert.equal(model.sections[0].items[0].label, "default");
-    assert.deepEqual(model.sections[1].items.map((item) => item.label), ["Claude Code", "Codex"]);
+    assert.deepEqual(model.sections[1].items.map((item) => item.label), [
+      "Claude Code",
+      "Codex",
+      "Cursor",
+      "OpenCode",
+      "Pi Agent",
+      "Project"
+    ]);
+    assert.deepEqual(model.sections[1].items.map((item) => item.evidenceCount), [2, 1, 0, 0, 0, 0]);
     assert.deepEqual(model.sections[2].items.map((item) => item.label), ["All changes", "Snapshots"]);
     assert.equal(model.selectedItemId, INITIAL_NAV_ITEM_ID);
     assert.equal(model.flatItems[model.cursor]?.id, INITIAL_NAV_ITEM_ID);

@@ -1,5 +1,5 @@
 import type { AgentId, DiscoveredItem } from "../../types.js";
-import { buildAgentEntries } from "./Sidebar.js";
+import { buildSupportedAgentEntries } from "./Sidebar.js";
 import { formatAgentLabel } from "./TuiFormatters.js";
 
 export type TuiNavSectionId = "profiles" | "agents" | "history";
@@ -61,7 +61,7 @@ export function buildTuiNavigationModel(input: {
 }
 
 export function buildTuiNavSections(evidence: Pick<DiscoveredItem, "agent">[]): TuiNavSection[] {
-  const agentItems = buildAgentEntries(evidence).flatMap<TuiNavItem>((agent) => {
+  const agentItems = buildSupportedAgentEntries(evidence).flatMap<TuiNavItem>((agent) => {
     if (!agent.id) return [];
 
     return [{
