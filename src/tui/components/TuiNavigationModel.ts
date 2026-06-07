@@ -1,5 +1,6 @@
 import type { AgentId, DiscoveredItem } from "../../types.js";
-import { agentLabelStr, buildAgentEntries } from "./Sidebar.js";
+import { buildAgentEntries } from "./Sidebar.js";
+import { formatAgentLabel } from "./TuiFormatters.js";
 
 export type TuiNavSectionId = "profiles" | "agents" | "history";
 export type TuiNavItemKind = "profile" | "agent" | "history";
@@ -66,7 +67,7 @@ export function buildTuiNavSections(evidence: Pick<DiscoveredItem, "agent">[]): 
     return [{
       id: `agent:${agent.id}`,
       kind: "agent",
-      label: agentLabelStr(agent.id),
+      label: formatAgentLabel(agent.id),
       screen: "agent-detail",
       agent: agent.id,
       evidenceCount: agent.evidenceCount
