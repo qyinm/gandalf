@@ -8,6 +8,7 @@ import React, { useState } from "react";
 import { Text, Box } from "ink";
 import SimpleTable from "./SimpleTable.js";
 import { buildSnapshotListViewModel } from "./SnapshotListViewModel.js";
+import { NoSnapshotsEmptyState } from "./TuiEmptyStates.js";
 
 import type { Snapshot } from "../../types.js";
 
@@ -32,13 +33,7 @@ export default function SnapshotList({
   const pageNames = names.slice(page * pageSize, (page + 1) * pageSize);
 
   if (names.length === 0) {
-    return (
-      <Box flexDirection="column">
-        <Text bold>{model.title}</Text>
-        <Text dimColor>{model.emptyMessage}</Text>
-        <Text color="cyan">{model.emptyAction}</Text>
-      </Box>
-    );
+    return <NoSnapshotsEmptyState />;
   }
 
   // ── Table data ────────────────────────────────────────────

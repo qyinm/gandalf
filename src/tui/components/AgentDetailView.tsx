@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 
 import type { AgentId, DiscoveredItem, TimelineEntry } from "../../types.js";
 import { buildAgentDetailViewModel, type AgentInventoryRow } from "./AgentDetailViewModel.js";
+import { NoDetectedAgentsEmptyState } from "./TuiEmptyStates.js";
 
 interface AgentDetailViewProps {
   agent: AgentId;
@@ -25,10 +26,7 @@ export default function AgentDetailView({
     return (
       <Box flexDirection="column">
         <Text bold>{model.title}</Text>
-        <Text dimColor>{model.emptyMessage}</Text>
-        <Text dimColor>
-          Hem looks for Claude Code, Codex, Cursor, OpenCode, Pi Agent, and project instruction files.
-        </Text>
+        <NoDetectedAgentsEmptyState />
       </Box>
     );
   }
