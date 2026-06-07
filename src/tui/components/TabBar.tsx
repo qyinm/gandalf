@@ -1,12 +1,12 @@
 /**
  * Tab bar for hem TUI dashboard main panel.
  *
- * Horizontal navigation: ← → or 1-4 keys.
+ * Horizontal navigation: ← → or 1-5 keys.
  */
 import React from "react";
 import { Text, Box } from "ink";
 
-export type TabId = "snapshots" | "scan" | "audit" | "diff";
+export type TabId = "timeline" | "snapshots" | "scan" | "audit" | "diff";
 
 interface TabItem {
   id: TabId;
@@ -14,6 +14,7 @@ interface TabItem {
 }
 
 const TABS: TabItem[] = [
+  { id: "timeline", label: "Timeline" },
   { id: "snapshots", label: "Snapshots" },
   { id: "scan", label: "Scan" },
   { id: "audit", label: "Audit" },
