@@ -54,3 +54,33 @@ Validation checks:
 - machine diff reports `darwin → linux`
 - `crossOS=true`
 - source-local MCP binary paths are reported unavailable on the Linux target
+
+## Daemon timeline / TUI dogfood
+
+Command shape:
+
+```bash
+HOME=/tmp/hem-dogfood/home \
+HEM_STORE=/tmp/hem-dogfood/store \
+node dist/src/cli.js daemon start --project /tmp/hem-dogfood/project --json
+
+HOME=/tmp/hem-dogfood/home \
+HEM_STORE=/tmp/hem-dogfood/store \
+node dist/src/cli.js timeline list --project /tmp/hem-dogfood/project --json
+
+HOME=/tmp/hem-dogfood/home \
+HEM_STORE=/tmp/hem-dogfood/store \
+node dist/src/cli.js timeline undo <id> --project /tmp/hem-dogfood/project --dry-run --json
+```
+
+Validation checks:
+
+- daemon writes a first-run baseline timeline event
+- later setup changes produce `setup_changed` events
+- timeline undo remains non-mutating with `writesFiles=false`
+- MCP surfaces appear as writable preview items
+- skills, hooks, permissions, env keys, and unsupported surfaces remain observe-only
+- corrupt timeline files do not hide valid timeline history
+- TUI shows the Timeline tab first, daemon status in the header, and `u=preview undo` without writing files
+
+See `docs/dogfood-reports/2026-06-08-main-daemon-timeline-dogfood.md` for the first daemon/timeline matrix.

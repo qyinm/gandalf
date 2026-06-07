@@ -6,10 +6,10 @@ Hem v0 is a local Time Machine for AI coding agent setups.
 
 The TUI should help a power user answer four questions quickly:
 
-1. What is installed in each agent right now?
-2. What changed since the last saved setup?
+1. What changed in my local agent setup timeline?
+2. What is installed in each agent right now?
 3. What does this setup look like compared with another saved point?
-4. Can I restore a previous setup without guessing which files changed?
+4. Can I preview what is safe to undo without guessing which files changed?
 
 The app is not primarily a marketplace, security dashboard, or brand page. It is a local environment manager with Git-like history using setup-focused language.
 
@@ -20,6 +20,7 @@ The app is not primarily a marketplace, security dashboard, or brand page. It is
 | Current local agent files | working tree | Current setup |
 | Named environment line | branch | Profile |
 | Saved state in a profile | commit | Snapshot / saved setup |
+| Daemon-observed setup event | log entry | Timeline event / change |
 | Change list between states | diff | Compare |
 | Revert to saved state | checkout/reset | Restore |
 | Portable bundle | archive | `.hem` file |
@@ -176,30 +177,32 @@ History
 
 Agent detail is inventory-first. History is attached below the current setup. Add/remove actions are available from section context, not from the global first screen.
 
-### All Changes
+### All Changes / Timeline
 
-Shown when `History > All changes` is selected.
+Shown first in the shipped TUI. The initial view is project-wide (`All agents`), and selecting an agent filters the list instead of leaving the Timeline screen.
 
 ```text
-All Changes
-Profile: default
+Timeline
+Filter: All agents
 
-* 9f2a  Today 14:22  add github mcp to Claude Code
-* 61b8  Today 13:50  install react-review skill
-* b102  Yesterday    capture baseline
-* 8aa1  May 28       import work mac profile
+event     observed                 kind           readiness     agent        title
+9f2a      Today 14:22              setup_changed  partial       Claude Code  add github mcp
+61b8      Today 13:50              setup_changed  observe-only  Claude Code  install react-review skill
+b102      Yesterday                baseline       observe-only  all          capture baseline
 
 Selected: 9f2a
 
 Changed
-  + Claude Code MCP: github
-  ~ ~/.claude/settings.json
+  + Claude Code MCP: github          writable preview
+  + Claude Code Skill: react-review  observe-only
 
 Actions
-  c compare   r restore
+  u preview undo
 ```
 
 This should feel like `git log`, but without using `commit`, `branch`, `checkout`, or `reset` as user-facing labels.
+
+Timeline preview is non-mutating in P0: it calls the same dry-run planner as `hem timeline undo <id> --dry-run`, renders `writes files: no`, and separates MCP preview items from observe-only surfaces.
 
 ### Profiles
 
@@ -392,7 +395,8 @@ Enter    open/select
 Esc      back
 s        save setup
 c        compare
-r        restore
+u        preview timeline undo
+r        rescan / refresh
 p        switch profile
 /        search
 q        quit
@@ -403,7 +407,7 @@ Section-specific actions can appear in the footer when focused:
 ```text
 Skills focused:    a add skill     d remove
 MCP focused:       a add mcp       e enable/disable   d remove
-History focused:   c compare       r restore
+History focused:   u preview undo  c compare
 ```
 
 ## Empty States
@@ -416,6 +420,14 @@ No saved setups yet.
 Save your current setup to create a restore point.
 
 s save setup
+```
+
+### No Timeline Events
+
+```text
+No timeline entries yet.
+
+hem daemon start --project .
 ```
 
 ### No Detected Agents
@@ -442,18 +454,20 @@ Latest
 
 Build now:
 
-- Left nav with profiles, agents, history
+- Left nav with agents and an `All agents` timeline filter
+- Timeline-first main screen
 - Agent detail inventory
 - Full setup snapshots
 - Deterministic snapshot titles
 - Git-log-style history
 - Compare with explicit From/To
 - Structured side-by-side compare
-- Full setup restore
+- MCP-only dry-run timeline undo preview
 - Save Setup with local history and optional `.hem` export
 
 Defer:
 
+- Full setup restore from timeline events
 - Cloud profiles
 - Team dashboard
 - Marketplace
