@@ -16,13 +16,14 @@ import {
 import { buildAgentDetailViewModel } from "../src/tui/components/AgentDetailViewModel.js";
 import { buildSaveSetupViewModel } from "../src/tui/components/SaveSetupViewModel.js";
 import { buildSnapshotListViewModel } from "../src/tui/components/SnapshotListViewModel.js";
+import { buildCompareViewModel, latestSnapshotByCreatedAt } from "../src/tui/components/CompareViewModel.js";
 import {
   formatAgentLabel,
   formatTimelineTimestamp,
   truncateText
 } from "../src/tui/components/TuiFormatters.js";
 import type { TimelineUndoPlan } from "../src/timeline-undo.js";
-import type { DaemonStatusReadResult, DiscoveredItem, TimelineEntry } from "../src/types.js";
+import type { DaemonStatusReadResult, DiscoveredItem, GraphNode, Snapshot, TimelineEntry } from "../src/types.js";
 
 function statusResult(overrides: Partial<DaemonStatusReadResult["status"]> = {}): DaemonStatusReadResult {
   return {
@@ -126,6 +127,36 @@ function discoveredItem(overrides: Partial<DiscoveredItem> & Pick<DiscoveredItem
     captureStatus: "captured",
     confidence: "high",
     ...overrides
+  };
+}
+
+function graphNode(overrides: Partial<GraphNode> & Pick<GraphNode, "id" | "agent" | "entityKind" | "entityName">): GraphNode {
+  return {
+    scope: "project",
+    sourcePath: "/project/.mcp.json",
+    effectiveValue: {},
+    confidence: "high",
+    evidenceId: `${overrides.id}:evidence`,
+    ...overrides
+  };
+}
+
+function snapshotForTui(name: string, createdAt: string, graph: GraphNode[]): Snapshot {
+  return {
+    manifest: {
+      schemaVersion: "0.1",
+      name,
+      createdAt,
+      projectPath: "/project",
+      security: {
+        rawSecretsIncluded: false,
+        redactionPolicy: "metadata-only"
+      }
+    },
+    evidence: [],
+    graph,
+    auditFindings: [],
+    provenance: []
   };
 }
 
@@ -483,5 +514,67 @@ describe("TUI save setup model", () => {
 
     assert.equal(model.emptyMessage, "No saved setups yet.");
     assert.equal(model.emptyAction, "s save setup");
+  });
+});
+
+describe("TUI compare model", () => {
+  it("selects the latest snapshot by manifest creation time", () => {
+    const older = snapshotForTui("z-name", "2026-06-07T00:00:00.000Z", []);
+    const newer = snapshotForTui("a-name", "2026-06-08T00:00:00.000Z", []);
+
+    assert.equal(latestSnapshotByCreatedAt([older, newer])?.manifest.name, "a-name");
+  });
+
+  it("builds explicit compare labels and side-by-side rows", () => {
+    const before = snapshotForTui("baseline", "2026-06-07T00:00:00.000Z", [
+      graphNode({
+        id: "mcp-linear-before",
+        agent: "claude-code",
+        entityKind: "mcp_server",
+        entityName: "linear",
+        effectiveValue: { command: "linear" }
+      })
+    ]);
+    const after = snapshotForTui("current", "2026-06-08T00:00:00.000Z", [
+      graphNode({
+        id: "mcp-linear-after",
+        agent: "claude-code",
+        entityKind: "mcp_server",
+        entityName: "linear",
+        effectiveValue: { command: "linear" }
+      }),
+      graphNode({
+        id: "skill-review-after",
+        agent: "claude-code",
+        entityKind: "skill",
+        entityName: "react-review",
+        effectiveValue: { installed: true }
+      })
+    ]);
+
+    const model = buildCompareViewModel({
+      fromSnapshot: before,
+      toSnapshot: after,
+      toLabel: "Current  unsaved changes",
+      diff: {
+        semanticChanges: [
+          {
+            code: "SKILL_ADDED",
+            entityKind: "skill",
+            entityName: "react-review",
+            severity: "low",
+            details: { changedFields: [], sourcePath: "/skills/react-review/SKILL.md" }
+          }
+        ],
+        rawSourceChanges: []
+      }
+    });
+
+    assert.match(model.fromLabel, /^baseline/);
+    assert.equal(model.toLabel, "Current  unsaved changes");
+    assert.equal(model.scopeLabel, "Full setup");
+    assert.deepEqual(model.summary, ["+ Skill: react-review"]);
+    assert.equal(model.sections[0].title, "Claude Code");
+    assert.equal(model.sections[0].rows.some((row) => row.marker === "+" && row.after === "skill: react-review"), true);
   });
 });
