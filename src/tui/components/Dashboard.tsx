@@ -1205,6 +1205,7 @@ const CURRENT_SETUP_FOCUS_ORDER: Array<CurrentSetupInventorySection | "timeline"
   "skill",
   "mcp_server",
   "hook",
+  "env_key",
   "timeline",
 ];
 
@@ -1222,6 +1223,7 @@ function emptyCurrentSetupOffsets(): Record<CurrentSetupInventorySection, number
     skill: 0,
     mcp_server: 0,
     hook: 0,
+    env_key: 0,
   };
 }
 
@@ -1234,6 +1236,7 @@ function clampCurrentSetupOffsets(
     skill: Math.min(offsets.skill, maxCurrentSetupOffset(evidence, agent, "skill")),
     mcp_server: Math.min(offsets.mcp_server, maxCurrentSetupOffset(evidence, agent, "mcp_server")),
     hook: Math.min(offsets.hook, maxCurrentSetupOffset(evidence, agent, "hook")),
+    env_key: Math.min(offsets.env_key, maxCurrentSetupOffset(evidence, agent, "env_key")),
   };
 }
 
@@ -1253,7 +1256,8 @@ function currentSetupRowsForSection(
   const model = buildCurrentSetupSummaryModel({ evidence, agentFilter: agent });
   if (section === "skill") return model.skillRows;
   if (section === "mcp_server") return model.mcpServerRows;
-  return model.hookRows;
+  if (section === "hook") return model.hookRows;
+  return model.envKeyRows;
 }
 
 export function daemonTrustHeaderModel(status: DaemonStatusReadResult | null): {

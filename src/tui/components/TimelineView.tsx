@@ -45,6 +45,9 @@ export default function TimelineView({
     corruptEvents,
     undoPlan
   });
+  const setupSection = currentSetupFocus === "timeline" ? "skill" : currentSetupFocus;
+  const setupRows = rowsForSetupSection(model.currentSetup, setupSection);
+  const setupOffset = currentSetupOffsets[setupSection] ?? 0;
 
   return (
     <Box flexDirection="column">
@@ -52,28 +55,17 @@ export default function TimelineView({
         <Text bold>Current Setup</Text>
         <Text dimColor>  Scope: {model.currentSetup.scopeLabel}</Text>
         <Text>
-          {"  "}Agents {model.currentSetup.agents}  Skills {model.currentSetup.skills}  MCP Servers {model.currentSetup.mcpServers}  Hooks {model.currentSetup.hooks}  Permissions {model.currentSetup.permissions}
+          {"  "}Agents {model.currentSetup.agents}  Skills {model.currentSetup.skills}  MCP Servers {model.currentSetup.mcpServers}  Hooks {model.currentSetup.hooks}  Permissions {model.currentSetup.permissions}  Env Keys {model.currentSetup.envKeys}
         </Text>
-        <CurrentSetupRows
-          title="Skills"
-          rows={model.currentSetup.skillRows}
-          kind="skill"
-          active={currentSetupFocus === "skill"}
-          offset={currentSetupOffsets.skill ?? 0}
+        <CurrentSetupTabs
+          activeSection={setupSection}
+          focused={currentSetupFocus !== "timeline"}
+          model={model.currentSetup}
         />
         <CurrentSetupRows
-          title="MCP Servers"
-          rows={model.currentSetup.mcpServerRows}
-          kind="mcp_server"
-          active={currentSetupFocus === "mcp_server"}
-          offset={currentSetupOffsets.mcp_server ?? 0}
-        />
-        <CurrentSetupRows
-          title="Hooks"
-          rows={model.currentSetup.hookRows}
-          kind="hook"
-          active={currentSetupFocus === "hook"}
-          offset={currentSetupOffsets.hook ?? 0}
+          rows={setupRows}
+          kind={setupSection}
+          offset={setupOffset}
         />
         <Text>  Instructions  {model.currentSetup.instructions}</Text>
       </Box>
@@ -162,40 +154,79 @@ export default function TimelineView({
 }
 
 function CurrentSetupRows({
-  title,
   rows,
   kind,
-  active,
   offset
 }: {
-  title: string;
   rows: string[];
   kind: DiscoveredItem["kind"];
-  active: boolean;
   offset: number;
 }) {
   const safeOffset = clampOffset(offset, rows.length, DEFAULT_CURRENT_SETUP_WINDOW_SIZE);
   const visibleRows = rows.slice(safeOffset, safeOffset + DEFAULT_CURRENT_SETUP_WINDOW_SIZE);
   const hasOverflow = rows.length > DEFAULT_CURRENT_SETUP_WINDOW_SIZE;
-  const titlePrefix = active ? "▸" : " ";
 
   return (
-    <Box flexDirection="column">
-      <Text color={active ? "cyan" : undefined}> {titlePrefix} {title}</Text>
+    <Box flexDirection="column" marginTop={1}>
       {rows.length === 0 ? (
-        <Text dimColor>    {currentSetupEmptyText(kind)}</Text>
+        <Text dimColor>  {currentSetupEmptyText(kind)}</Text>
       ) : (
         visibleRows.map((row) => (
-          <Text key={`${title}:${row}`}>    {row}</Text>
+          <Text key={`${kind}:${row}`}>  {row}</Text>
         ))
       )}
       {hasOverflow && (
         <Text dimColor>
-          {"    "}showing {safeOffset + 1}-{Math.min(rows.length, safeOffset + DEFAULT_CURRENT_SETUP_WINDOW_SIZE)} of {rows.length}
+          {"  "}showing {safeOffset + 1}-{Math.min(rows.length, safeOffset + DEFAULT_CURRENT_SETUP_WINDOW_SIZE)} of {rows.length}
         </Text>
       )}
     </Box>
   );
+}
+
+function CurrentSetupTabs({
+  activeSection,
+  focused,
+  model
+}: {
+  activeSection: CurrentSetupInventorySection;
+  focused: boolean;
+  model: ReturnType<typeof buildTimelineViewModel>["currentSetup"];
+}) {
+  const tabs: Array<{ section: CurrentSetupInventorySection; label: string; count: number }> = [
+    { section: "skill", label: "Skills", count: model.skills },
+    { section: "mcp_server", label: "MCP Servers", count: model.mcpServers },
+    { section: "hook", label: "Hooks", count: model.hooks },
+    { section: "env_key", label: "Project", count: model.envKeys },
+  ];
+
+  return (
+    <Box flexDirection="row" gap={1} marginTop={1}>
+      {tabs.map((tab) => {
+        const active = tab.section === activeSection;
+        return (
+          <Text
+            key={tab.section}
+            bold={active}
+            color={active ? "cyan" : "dim"}
+            inverse={active && focused}
+          >
+            {" "}{tab.label} {tab.count}{" "}
+          </Text>
+        );
+      })}
+    </Box>
+  );
+}
+
+function rowsForSetupSection(
+  model: ReturnType<typeof buildTimelineViewModel>["currentSetup"],
+  section: CurrentSetupInventorySection
+): string[] {
+  if (section === "skill") return model.skillRows;
+  if (section === "mcp_server") return model.mcpServerRows;
+  if (section === "hook") return model.hookRows;
+  return model.envKeyRows;
 }
 
 function clampOffset(offset: number, total: number, windowSize: number): number {

@@ -21,10 +21,12 @@ export interface AgentDetailViewModel {
     mcpServers: number;
     hooks: number;
     permissions: number;
+    envKeys: number;
     instructions: number;
   };
   skills: AgentInventoryRow[];
   mcpServers: AgentInventoryRow[];
+  envKeys: AgentInventoryRow[];
   instructions: AgentInventoryRow[];
   history: AgentHistoryRow[];
   emptyMessage?: string;
@@ -38,24 +40,27 @@ export function buildAgentDetailViewModel(input: {
   now?: Date;
 }): AgentDetailViewModel {
   const agentEvidence = input.evidence.filter((item) => item.agent === input.agent);
+  const setupEvidence = input.evidence.filter((item) => item.agent === input.agent || item.agent === "project");
   const timelineEntries = input.timelineEntries ?? [];
 
   return {
     title: formatAgentLabel(input.agent),
     profileLabel: input.profile ?? "default",
     counts: {
-      skills: countKind(agentEvidence, "skill"),
-      mcpServers: countKind(agentEvidence, "mcp_server"),
-      hooks: countKind(agentEvidence, "hook"),
-      permissions: countKind(agentEvidence, "permission"),
-      instructions: countKind(agentEvidence, "agent_instruction")
+      skills: countKind(setupEvidence, "skill"),
+      mcpServers: countKind(setupEvidence, "mcp_server"),
+      hooks: countKind(setupEvidence, "hook"),
+      permissions: countKind(setupEvidence, "permission"),
+      envKeys: countKind(setupEvidence, "env_key"),
+      instructions: countKind(setupEvidence, "agent_instruction")
     },
-    skills: rowsForKind(agentEvidence, "skill"),
-    mcpServers: rowsForKind(agentEvidence, "mcp_server").map((row) => ({
+    skills: rowsForKind(setupEvidence, "skill"),
+    mcpServers: rowsForKind(setupEvidence, "mcp_server").map((row) => ({
       ...row,
       status: row.status ?? "enabled"
     })),
-    instructions: rowsForKind(agentEvidence, "agent_instruction"),
+    envKeys: rowsForKind(setupEvidence, "env_key"),
+    instructions: rowsForKind(setupEvidence, "agent_instruction"),
     history: timelineEntries
       .filter((entry) => entry.agent === input.agent || entry.agents.includes(input.agent))
       .slice(0, 6)
@@ -78,7 +83,7 @@ function rowsForKind(evidence: DiscoveredItem[], kind: DiscoveredItem["kind"]): 
   return evidence
     .filter((item) => item.kind === kind)
     .map((item) => ({
-      name: item.name ?? item.id,
+      name: item.agent === "project" ? `${item.name ?? item.id} (project)` : item.name ?? item.id,
       path: item.sourcePath,
       status: statusForItem(item)
     }))

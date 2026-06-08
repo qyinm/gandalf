@@ -30,7 +30,6 @@ export const VISIBLE_AGENTS: AgentId[] = [
   "cursor",
   "opencode",
   "pi-agent",
-  "project",
 ];
 
 function agentLabel(id: AgentId): string {

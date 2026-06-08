@@ -59,13 +59,15 @@ export interface CurrentSetupSummaryModel {
   mcpServers: number;
   hooks: number;
   permissions: number;
+  envKeys: number;
   skillRows: string[];
   mcpServerRows: string[];
   hookRows: string[];
+  envKeyRows: string[];
   instructions: string;
 }
 
-export type CurrentSetupInventorySection = "skill" | "mcp_server" | "hook";
+export type CurrentSetupInventorySection = "skill" | "mcp_server" | "hook" | "env_key";
 
 export function buildTimelineViewModel(input: {
   entries: TimelineEntry[];
@@ -102,7 +104,7 @@ export function buildCurrentSetupSummaryModel(input: {
   agentFilter: AgentId | null;
 }): CurrentSetupSummaryModel {
   const evidence = input.agentFilter
-    ? input.evidence.filter((item) => item.agent === input.agentFilter)
+    ? input.evidence.filter((item) => item.agent === input.agentFilter || item.agent === "project")
     : input.evidence;
   const instructionPaths = [...new Set(
     evidence
@@ -112,14 +114,16 @@ export function buildCurrentSetupSummaryModel(input: {
 
   return {
     scopeLabel: input.agentFilter ? formatAgentLabel(input.agentFilter) : "All agents",
-    agents: new Set(evidence.map((item) => item.agent)).size,
+    agents: new Set(evidence.filter((item) => item.agent !== "project").map((item) => item.agent)).size,
     skills: countKind(evidence, "skill"),
     mcpServers: countKind(evidence, "mcp_server"),
     hooks: countKind(evidence, "hook"),
     permissions: countKind(evidence, "permission"),
+    envKeys: countKind(evidence, "env_key"),
     skillRows: rowsForKind(evidence, "skill", input.agentFilter),
     mcpServerRows: rowsForKind(evidence, "mcp_server", input.agentFilter),
     hookRows: rowsForKind(evidence, "hook", input.agentFilter),
+    envKeyRows: rowsForKind(evidence, "env_key", input.agentFilter),
     instructions: instructionPaths.length > 0 ? instructionPaths.slice(0, 3).join(", ") : "none"
   };
 }
@@ -150,7 +154,10 @@ function rowsForKind(
     .filter((item) => item.kind === kind)
     .map((item) => {
       const name = displayNameForItem(item);
-      return agentFilter ? name : `${formatAgentLabel(item.agent)}: ${name}`;
+      if (agentFilter) {
+        return item.agent === "project" ? `${name} (project)` : name;
+      }
+      return `${formatAgentLabel(item.agent)}: ${name}`;
     });
   return [...new Set(rows)].sort();
 }
