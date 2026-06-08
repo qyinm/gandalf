@@ -496,11 +496,47 @@ describe("scanProject", () => {
     assert.match(JSON.stringify(cursorMcp), /\$\{env:FILESYSTEM_TOKEN\}/);
   });
 
+  it("discovers Cursor MCP servers registered through runtime extension caches", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    const projectCacheName = projectPath.replace(/^\/+/, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    const mcpRoot = join(homeDir, ".cursor", "projects", projectCacheName, "mcps");
+
+    const servers = [
+      ["cursor-ide-browser", "cursor-ide-browser", 2, 0],
+      ["plugin-ouroboros-ouroboros", "ouroboros", 3, 1],
+      ["user-eamodio.gitlens-extension-GitKraken", "extension-GitKraken", 4, 2],
+    ] as const;
+
+    for (const [identifier, name, toolCount, resourceCount] of servers) {
+      const serverDir = join(mcpRoot, identifier);
+      await mkdir(join(serverDir, "tools"), { recursive: true });
+      await mkdir(join(serverDir, "resources"), { recursive: true });
+      await writeFile(join(serverDir, "SERVER_METADATA.json"), JSON.stringify({ serverIdentifier: identifier, serverName: name }), "utf8");
+      for (let index = 0; index < toolCount; index++) {
+        await writeFile(join(serverDir, "tools", `tool-${index}.json`), "{}", "utf8");
+      }
+      for (let index = 0; index < resourceCount; index++) {
+        await writeFile(join(serverDir, "resources", `resource-${index}.json`), "{}", "utf8");
+      }
+    }
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const cursorMcp = scan.evidence.filter((item) => item.agent === "cursor" && item.kind === "mcp_server");
+
+    assert.deepEqual(cursorMcp.map((item) => item.name).sort(), ["cursor-ide-browser", "extension-GitKraken", "ouroboros"]);
+    const gitkraken = cursorMcp.find((item) => item.name === "extension-GitKraken");
+    assert.equal(gitkraken?.metadata?.["source"], "runtime_cache");
+    assert.equal(gitkraken?.metadata?.["transport"], "extension-api");
+    assert.equal(gitkraken?.metadata?.["toolCount"], 4);
+    assert.equal(gitkraken?.metadata?.["resourceCount"], 2);
+  });
+
   it("discovers Cursor skills from documented roots and nested project roots", async () => {
     const { projectPath, homeDir, storeDir } = await makeSandbox();
     const skillPaths = [
       join(projectPath, ".cursor", "skills", "project-cursor", "SKILL.md"),
       join(homeDir, ".cursor", "skills", "global-cursor", "SKILL.md"),
+      join(homeDir, ".cursor", "skills-cursor", "builtin-cursor", "SKILL.md"),
       join(projectPath, ".agents", "skills", "project-agent", "SKILL.md"),
       join(homeDir, ".agents", "skills", "global-agent", "SKILL.md"),
       join(projectPath, ".claude", "skills", "project-claude", "SKILL.md"),
@@ -539,18 +575,38 @@ describe("scanProject", () => {
       "utf8"
     );
 
+    const pluginRoot = join(homeDir, ".cursor", "plugins", "cache", "cursor-public", "superpowers", "abc123");
+    await mkdir(join(pluginRoot, ".cursor-plugin"), { recursive: true });
+    await mkdir(join(pluginRoot, "skills", "plugin-skill"), { recursive: true });
+    await writeFile(join(pluginRoot, ".cursor-plugin", "plugin.json"), JSON.stringify({ skills: "./skills/" }), "utf8");
+    await writeFile(join(pluginRoot, "skills", "plugin-skill", "SKILL.md"), [
+      "---",
+      "name: plugin-skill",
+      "description: Cursor plugin skill",
+      "---",
+    ].join("\n"), "utf8");
+
+    const symlinkTarget = join(homeDir, "external-skills", "linked-cursor", "SKILL.md");
+    await mkdir(join(symlinkTarget, ".."), { recursive: true });
+    await writeFile(symlinkTarget, "---\nname: linked-cursor\ndescription: Cursor follows skill entrypoint symlinks\n---\n", "utf8");
+    await mkdir(join(homeDir, ".claude", "skills", "linked-cursor"), { recursive: true });
+    await symlink(symlinkTarget, join(homeDir, ".claude", "skills", "linked-cursor", "SKILL.md"));
+
     const scan = await scanProject({ projectPath, homeDir, storeDir });
     const cursorSkills = scan.evidence.filter((item) => item.agent === "cursor" && item.kind === "skill");
     const sources = cursorSkills.map((item) => item.sourcePath);
 
     assert.ok(sources.includes(".cursor/skills/project-cursor"));
     assert.ok(sources.includes("~/.cursor/skills/global-cursor"));
+    assert.ok(sources.includes("~/.cursor/skills-cursor/builtin-cursor"));
     assert.ok(sources.includes(".agents/skills/project-agent"));
     assert.ok(sources.includes("~/.agents/skills/global-agent"));
     assert.ok(sources.includes(".claude/skills/project-claude"));
     assert.ok(sources.includes(".codex/skills/project-codex"));
     assert.ok(sources.includes("apps/web/.cursor/skills/deploy-web"));
     assert.ok(sources.includes("packages/api/.agents/skills/deploy-api"));
+    assert.ok(sources.includes("~/.cursor/plugins/cache/cursor-public/superpowers/abc123/skills/plugin-skill"));
+    assert.ok(sources.includes("~/.claude/skills/linked-cursor"));
     assert.equal(cursorSkills.some((item) => item.name === "missing-description"), false);
     assert.equal(cursorSkills.some((item) => item.name === "different-name"), false);
     assert.ok(
