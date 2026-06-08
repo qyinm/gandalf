@@ -90,7 +90,6 @@ export default function TimelineView({
           kind={setupSection}
           offset={setupOffset}
         />
-        <Text>  Instructions  {model.currentSetup.instructions}</Text>
       </Box>
 
       <Box
