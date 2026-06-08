@@ -54,7 +54,7 @@ export default function TimelineView({
   const setupSection = currentSetupFocus === "timeline" ? "skill" : currentSetupFocus;
   const setupRows = rowsForSetupSection(model.currentSetup, setupSection);
   const setupOffset = currentSetupOffsets[setupSection] ?? 0;
-  const setupPanelHeight = height ? Math.min(14, Math.max(10, Math.floor(height * 0.46))) : undefined;
+  const setupPanelHeight = height ? Math.min(16, Math.max(12, height - 8)) : undefined;
   const timelinePanelHeight = height && setupPanelHeight
     ? Math.max(6, height - setupPanelHeight - 1)
     : undefined;
