@@ -1,6 +1,6 @@
 {
   "name": "@qxinm/hem",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Time Machine for AI coding agent setups.",
   "type": "module",
   "bin": {
