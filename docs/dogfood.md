@@ -81,6 +81,6 @@ Validation checks:
 - MCP surfaces appear as writable preview items
 - skills, hooks, permissions, env keys, and unsupported surfaces remain observe-only
 - corrupt timeline files do not hide valid timeline history
-- TUI shows the Timeline tab first, daemon status in the header, and `u=preview undo` without writing files
+- TUI opens on `History > All changes`, shows daemon status in the Current Setup frame, keeps Current Setup above Timeline, and exposes `u=preview undo` without writing files
 
 See `docs/dogfood-reports/2026-06-08-main-daemon-timeline-dogfood.md` for the first daemon/timeline matrix.

@@ -11,6 +11,8 @@ date: 2026-06-08
 
 Refactor the current Hem TUI from a tab-driven agent dashboard into the v0 design described in `docs/design/ui/tui/v0/README.md`: persistent Profiles / Agents / History navigation, Timeline-first launch, inventory-first Agent Detail, full-setup snapshots, explicit Compare, and non-mutating MCP undo preview.
 
+Post-implementation alignment note: the shipped Timeline screen now includes a Current Setup panel above Timeline with `Skills`, `MCP Servers`, `Hooks`, and `Project` section tabs. The left `Agents` nav should list detected agents only; `Project` is a setup surface, not an agent nav item.
+
 ## Problem Frame
 
 The current TUI only partially follows the v0 design. It now opens on Timeline, but it still uses an agent-filter sidebar plus top tabs for Timeline / Snapshots / Scan / Audit / Diff. The design document describes a different product shape: Hem is a local Time Machine for agent setups, with profile context first, current setup inventory second, and setup history/compare/save flows using Git-like concepts without Git terminology.
@@ -19,17 +21,18 @@ This plan treats `docs/design/ui/tui/v0/README.md` as the source of truth. The w
 
 ## Requirements
 
-- R1. The TUI uses persistent left navigation with `Profiles`, `Agents`, and `History` sections, with `default` shown as the MVP profile.
+- R1. The TUI uses persistent left navigation with `Profiles`, detected `Agents`, and `History` sections, with `default` shown as the MVP profile.
 - R2. The first shipped screen is `History > All changes`, labeled `Timeline`, with `Filter: All agents`.
-- R3. Selecting an agent outside the Timeline opens an inventory-first Agent Detail screen showing Current Setup counts, Skills, MCP Servers, Instructions, and filtered History.
-- R4. Selecting an agent while Timeline is active filters Timeline instead of leaving the Timeline screen.
-- R5. TUI snapshot save/list/compare flows operate on full setup snapshots by default; agent-scoped snapshots remain an implementation/backcompat capability, not the primary v0 UI model.
-- R6. Save Setup opens a confirmation view with detected changes, deterministic generated title, and destinations for Local history and optional `.hem` export.
-- R7. Compare always shows explicit From, To, and Scope, and renders a structured side-by-side comparison before any raw diff-oriented view.
-- R8. Timeline undo preview remains non-mutating in P0, renders `writes files: no`, and separates writable MCP preview items from observe-only skill, hook, permission, env, and unsupported surfaces.
-- R9. Keyboard behavior matches the design: `↑↓`, `Enter`, `Esc back`, `s save`, `c compare`, `u preview undo`, `r refresh`, `p profile`, `/ search`, and `q quit`.
-- R10. Empty states match the design for no snapshots, no timeline events, no detected agents, and no changes since last save.
-- R11. The TUI avoids large brand/dashboard framing and global Scan/Audit/Diff tabs; those capabilities may remain available through CLI or contextual/secondary surfaces.
+- R3. The Timeline screen shows Current Setup above Timeline, with setup section tabs for Skills, MCP Servers, Hooks, and Project.
+- R4. Selecting an agent outside the Timeline opens an inventory-first Agent Detail screen showing Current Setup counts, Skills, MCP Servers, Instructions, and filtered History.
+- R5. Selecting an agent while Timeline is active filters Current Setup and Timeline instead of leaving the Timeline screen.
+- R6. TUI snapshot save/list/compare flows operate on full setup snapshots by default; agent-scoped snapshots remain an implementation/backcompat capability, not the primary v0 UI model.
+- R7. Save Setup opens a confirmation view with detected changes, deterministic generated title, and destinations for Local history and optional `.hem` export.
+- R8. Compare always shows explicit From, To, and Scope, and renders a structured side-by-side comparison before any raw diff-oriented view.
+- R9. Timeline undo preview remains non-mutating in P0, renders `writes files: no`, and separates writable MCP preview items from observe-only skill, hook, permission, env, and unsupported surfaces.
+- R10. Keyboard behavior matches the design: `↑↓`, `Enter`, `Esc back`, `s save`, `c compare`, `u preview undo`, `r refresh`, `p profile`, `/ search`, and `q quit`.
+- R11. Empty states match the design for no snapshots, no timeline events, no detected agents, and no changes since last save.
+- R12. The TUI avoids large brand/dashboard framing and global Scan/Audit/Diff tabs; those capabilities may remain available through CLI or contextual/secondary surfaces.
 
 ## Key Technical Decisions
 

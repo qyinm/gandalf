@@ -124,7 +124,7 @@ hem tui --project .
 
 Timeline undo is P0 dry-run preview only. It reports `writesFiles=false`, shows MCP changes that could be reversed, and keeps skills, hooks, permissions, env keys, and unsupported surfaces as observe-only.
 
-`hem tui` opens a local setup-history workspace with persistent `Profiles`, `Agents`, and `History` navigation. The first screen is `History > All changes` with an `All agents` timeline filter. Agent screens show current setup inventory, snapshots are full setup save points, Save Setup previews deterministic titles before writing, and Compare shows explicit From / To / Scope before side-by-side setup changes.
+`hem tui` opens a local setup-history workspace with persistent `Profiles`, `Agents`, and `History` navigation. The first screen is `History > All changes` with Current Setup above Timeline and an `All agents` filter. The `Agents` nav lists detected agents only. Project-scoped evidence appears in Current Setup as `Project` or `(project)`, not as an agent. Agent screens show current setup inventory, snapshots are full setup save points, Save Setup previews deterministic titles before writing, and Compare shows explicit From / To / Scope before side-by-side setup changes.
 
 ### Bundle And Move Setups
 
@@ -164,9 +164,9 @@ Every command supports `--json` where structured output is useful.
 
 ---
 
-## Supported Agents
+## Supported Setup Surfaces
 
-| Agent | Config surface |
+| Surface | Config surface |
 |---|---|
 | Claude Code | settings.json, .mcp.json, CLAUDE.md, skills, hooks, agents |
 | Codex | .codex/config.toml, AGENTS.md, MCP config |
@@ -175,7 +175,7 @@ Every command supports `--json` where structured output is useful.
 | Pi Agent | settings, extensions, skills, themes, prompts, agents, models |
 | Project | AGENTS.md, CLAUDE.md, CODE.md, .mcp.json, .env keys |
 
-Scanner plugin interface: add new agents by implementing `ScannerPlugin`.
+Scanner plugin interface: add new agents by implementing `ScannerPlugin`. `Project` is a shared setup surface, not an agent in the TUI navigation.
 
 ---
 

@@ -82,53 +82,44 @@ Examples:
 
 ## Layout
 
-The TUI uses a persistent left nav and a main detail pane.
+The TUI uses a persistent left nav and a main workspace. The Timeline screen is the first screen. On Timeline, the main workspace is split into two framed panels: Current Setup on top and Timeline below it. The daemon status lives inside the top workspace frame so all three visible areas line up vertically.
 
 ```text
 ┌──────────────────────┬────────────────────────────────────────────────────────┐
-│ Profiles             │ Claude Code                                            │
-│ ● default            │ Profile: default                                       │
-│   frontend           │                                                        │
-│   clean-baseline     │ Current Setup                                          │
-│                      │   Skills        8                                      │
-│ Agents               │   MCP Servers   3                                      │
-│ ● Claude Code        │   Hooks         2                                      │
-│   Codex              │   Permissions   4                                      │
-│   Cursor             │   Instructions  CLAUDE.md, AGENTS.md                  │
-│   OpenCode           │                                                        │
-│   Pi Agent           │ Skills                                                 │
-│                      │   react-review                         installed       │
-│ History              │   debugging                            installed       │
-│   All changes        │   product-review                        installed       │
-│   Snapshots          │                                                        │
-│                      │ MCP Servers                                            │
-│                      │   github                               enabled         │
-│                      │   linear                               enabled         │
-│                      │   playwright                           disabled        │
+│ Profiles             │ Daemon: stopped  last event: -  watched: 4             │
+│   default            │                                                        │
+│                      │ Current Setup                                          │
+│ Agents               │   Scope: All agents                                    │
+│   Claude Code   71   │   Agents 4  Skills 570  MCP Servers 3  Hooks 13       │
+│ ● Codex         377  │                                                        │
+│   OpenCode      126  │   Skills 570  MCP Servers 3  Hooks 13  Project 0      │
+│   Pi Agent      27   │   Claude Code: autoplan                                │
+│                      │   Claude Code: benchmark                               │
+│ History              │   Claude Code: benchmark-models                        │
+│ ▸ All changes        │   Claude Code: better-auth-best-practices              │
+│   Snapshots          │   showing 1-4 of 553                                   │
 │                      │                                                        │
-│                      │ History                                                │
-│                      │ * 9f2a  Today 14:22  add github mcp to Claude Code     │
-│                      │ * 61b8  Today 13:50  install react-review skill        │
-│                      │ * b102  Yesterday    capture baseline                  │
+│                      │ Timeline  Filter: All agents                           │
+│                      │ No timeline entries yet.                               │
+│                      │ hem daemon start --project .                           │
 ├──────────────────────┴────────────────────────────────────────────────────────┤
-│ ↑↓ move  Enter open  s save  c compare  r restore  p profile  q quit         │
+│ ↑↓ move  Enter open  Tab setup  ←→ scroll  u=preview undo  c=compare  q=quit │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
 Do not show a large `Hem` brand header. The selected profile, selected agent, and current setup are the primary context.
+
+The nav frame, Current Setup frame, and Timeline frame should share the same overall height. The Timeline screen should not look like a loose stack of unrelated blocks.
 
 ## Left Navigation
 
 ```text
 Profiles
   default
-  frontend
-  clean-baseline
 
 Agents
   Claude Code
   Codex
-  Cursor
   OpenCode
   Pi Agent
 
@@ -137,9 +128,41 @@ History
   Snapshots
 ```
 
-Profiles appear first because they define the active environment line. Agents are shown inside the selected profile. History can be viewed globally.
+Profiles appear first because they define the active environment line. MVP shows only the `default` profile.
+
+Agents are shown only when detected in the current scan. Do not list supported-but-absent agents with zero counts. Project evidence is not an agent nav item; project-scoped setup appears in the Current Setup `Project` tab and in rows as `(project)`.
+
+History can be viewed globally. `All changes` opens the Timeline screen with `Filter: All agents`; selecting an agent while Timeline is open keeps the Timeline screen and changes the filter.
 
 ## Main Screens
+
+### Current Setup Panel
+
+Shown above Timeline. It summarizes the currently scanned setup for `All agents` or the selected agent filter.
+
+```text
+Current Setup
+  Scope: Codex
+  Agents 1  Skills 368  MCP Servers 3  Hooks 5  Permissions 0  Env Keys 0
+
+  Skills 368  MCP Servers 3  Hooks 5  Project 0
+  Spreadsheets
+  ads-explorer
+  agent-browser
+  agent-browser-verify
+  showing 1-4 of 351
+```
+
+The section tabs are:
+
+- `Skills`
+- `MCP Servers`
+- `Hooks`
+- `Project`
+
+`Tab` / `Shift+Tab` changes the focused setup section. `←→` scrolls the selected section. The `showing n-m of total` footer must reflect the actual visible item rows, excluding the footer itself.
+
+Do not render `Instructions none`. Missing instructions should simply be absent from the Timeline Current Setup panel. Agent Detail can still show instruction counts and paths when they exist.
 
 ### Agent Detail
 
@@ -179,9 +202,22 @@ Agent detail is inventory-first. History is attached below the current setup. Ad
 
 ### All Changes / Timeline
 
-Shown first in the shipped TUI. The initial view is project-wide (`All agents`), and selecting an agent filters the list instead of leaving the Timeline screen.
+Shown first in the shipped TUI. The initial view is project-wide (`All agents`), and selecting an agent filters both Current Setup and Timeline instead of leaving the Timeline screen.
+
+The Timeline screen includes Current Setup above the timeline list. Timeline is below setup, not a separate top-level tab above it.
 
 ```text
+Current Setup
+  Scope: All agents
+  Agents 4  Skills 570  MCP Servers 3  Hooks 13  Permissions 1  Env Keys 0
+
+  Skills 570  MCP Servers 3  Hooks 13  Project 0
+  Claude Code: autoplan
+  Claude Code: benchmark
+  Claude Code: benchmark-models
+  Claude Code: better-auth-best-practices
+  showing 1-4 of 553
+
 Timeline
 Filter: All agents
 
@@ -454,8 +490,9 @@ Latest
 
 Build now:
 
-- Left nav with agents and an `All agents` timeline filter
+- Left nav with detected agents and an `All agents` timeline filter
 - Timeline-first main screen
+- Current Setup panel above Timeline with Skills, MCP Servers, Hooks, and Project tabs
 - Agent detail inventory
 - Full setup snapshots
 - Deterministic snapshot titles
