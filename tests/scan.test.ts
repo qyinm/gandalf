@@ -48,6 +48,75 @@ describe("scanProject", () => {
     assert.doesNotMatch(JSON.stringify(scan.evidence), /secret|GITHUB_TOKEN:[^"}]+/i);
   });
 
+  it("discovers Codex MCP servers from config.toml sections", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    await mkdir(join(homeDir, ".codex"), { recursive: true });
+    await writeFile(
+      join(homeDir, ".codex", "config.toml"),
+      [
+        "[mcp_servers.context7] # docs server",
+        "command = \"npx\"",
+        "args = [",
+        "  \"-y\",",
+        "  \"@upstash/context7-mcp\",",
+        "]",
+        "",
+        "[mcp_servers.node_repl]",
+        "command = \"node\"",
+        "enabled = false",
+        "",
+        "[mcp_servers.node_repl.env]",
+        "OPENAI_API_KEY = \"secret\"",
+      ].join("\n"),
+      "utf8"
+    );
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const codexMcpServers = scan.evidence.filter((item) => item.agent === "codex" && item.kind === "mcp_server");
+    const context7Value = codexMcpServers.find((item) => item.name === "context7")?.value as Record<string, unknown> | undefined;
+    const nodeReplValue = codexMcpServers.find((item) => item.name === "node_repl")?.value as Record<string, unknown> | undefined;
+
+    assert.deepEqual(codexMcpServers.map((item) => item.name).sort(), ["context7", "node_repl"]);
+    assert.deepEqual(context7Value?.["args"], ["-y", "@upstash/context7-mcp"]);
+    assert.equal(nodeReplValue?.["enabled"], false);
+    assert.deepEqual(nodeReplValue?.["envKeys"], ["OPENAI_API_KEY"]);
+    assert.doesNotMatch(JSON.stringify(codexMcpServers), /secret/);
+  });
+
+  it("discovers Codex skills from user and plugin cache roots", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    const userSkill = join(homeDir, ".codex", "skills", "review", "SKILL.md");
+    const pluginSkill = join(
+      homeDir,
+      ".codex",
+      "plugins",
+      "cache",
+      "openai-curated",
+      "build-web-apps",
+      "1.0.0",
+      "skills",
+      "react-best-practices",
+      "SKILL.md"
+    );
+
+    await mkdir(join(userSkill, ".."), { recursive: true });
+    await mkdir(join(pluginSkill, ".."), { recursive: true });
+    await writeFile(userSkill, "---\nname: review\ndescription: Review code\n---\n", "utf8");
+    await writeFile(pluginSkill, "---\nname: react-best-practices\ndescription: React guidance\n---\n", "utf8");
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const codexSkills = scan.evidence.filter((item) => item.agent === "codex" && item.kind === "skill");
+
+    assert.ok(codexSkills.some((item) => item.name === "review" && item.sourcePath === "~/.codex/skills/review"));
+    assert.ok(
+      codexSkills.some(
+        (item) =>
+          item.name === "react-best-practices" &&
+          item.sourcePath === "~/.codex/plugins/cache/openai-curated/build-web-apps/1.0.0/skills/react-best-practices"
+      )
+    );
+  });
+
   it("emits parse_failed evidence for malformed JSON instead of throwing", async () => {
     const { projectPath, homeDir, storeDir } = await makeSandbox();
     await mkdir(join(projectPath, ".claude"), { recursive: true });
