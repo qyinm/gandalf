@@ -109,6 +109,8 @@ Supported built-in scanner modules currently cover:
 
 The plugin contract lives in `src/scanners/scanner-plugin.ts`. New agent support should generally enter through this interface instead of adding special cases to the core scan pipeline.
 
+Cursor, Codex, OpenCode, and Pi Agent use custom scanners when their runtime needs more than a fixed file list. Cursor's scanner reads `.cursor/mcp.json`, Cursor-recognized skill roots, nested project skill roots, and Cursor hook configuration, then emits standard `mcp_server`, `skill`, `hook`, and `unsupported` evidence without executing any referenced commands or scripts.
+
 ## Policy Layer
 
 `src/policy.ts` is the safety map for capture and restore behavior.

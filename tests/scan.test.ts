@@ -237,9 +237,10 @@ describe("scanProject", () => {
     await writeFile(join(projectPath, ".env"), "OPENAI_API_KEY=sk-real-secret\nHEM_MODE=local\n", "utf8");
 
     const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const envEvidence = scan.evidence.filter((item) => item.kind === "env_key");
 
     assert.ok(
-      scan.evidence.some(
+      envEvidence.some(
         (item) =>
           item.kind === "env_key" &&
           item.name === "OPENAI_API_KEY" &&
@@ -248,7 +249,7 @@ describe("scanProject", () => {
       )
     );
     assert.ok(
-      scan.evidence.some(
+      envEvidence.some(
         (item) =>
           item.kind === "env_key" &&
           item.name === "HEM_MODE" &&
@@ -256,7 +257,7 @@ describe("scanProject", () => {
           item.value === undefined
       )
     );
-    assert.doesNotMatch(JSON.stringify(scan.evidence), /sk-real-secret|local/);
+    assert.doesNotMatch(JSON.stringify(envEvidence), /sk-real-secret|local/);
   });
 
   it("ignores node_modules while discovering project files", async () => {
@@ -270,6 +271,14 @@ describe("scanProject", () => {
     assert.ok(scan.evidence.some((item) => item.sourcePath === "AGENTS.md"));
     assert.equal(scan.evidence.some((item) => item.sourcePath.includes("node_modules")), false);
     assert.equal(scan.evidence.some((item) => item.name === "ignored"), false);
+  });
+
+  it("does not report Cursor when no local Cursor setup is visible", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+
+    assert.equal(scan.evidence.some((item) => item.agent === "cursor"), false);
   });
 
   it("discovers OpenCode native and compatible skill roots", async () => {
@@ -432,6 +441,206 @@ describe("scanProject", () => {
 
     assert.equal(reviewItems.length, 1);
     assert.deepEqual(reviewItems[0]?.metadata?.["duplicateSources"], ["~/.agents/skills/review"]);
+  });
+
+  it("discovers Cursor MCP transports and redacts auth material", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    await mkdir(join(projectPath, ".cursor"), { recursive: true });
+    await mkdir(join(homeDir, ".cursor"), { recursive: true });
+
+    await writeFile(join(projectPath, ".cursor", "mcp.json"), JSON.stringify({
+      mcpServers: {
+        filesystem: {
+          type: "stdio",
+          command: "node",
+          args: ["server.js", "--token", "${env:FILESYSTEM_TOKEN}"],
+          env: { API_KEY: "project-secret" },
+          envFile: ".env",
+        },
+        linear: {
+          type: "sse",
+          url: "https://mcp.example.test/sse?token=remote-secret",
+          headers: { Authorization: "Bearer header-secret" },
+          auth: {
+            CLIENT_ID: "${env:LINEAR_CLIENT_ID}",
+            CLIENT_SECRET: "oauth-secret",
+            scopes: ["read"],
+          },
+        },
+      },
+    }), "utf8");
+    await writeFile(join(homeDir, ".cursor", "mcp.json"), JSON.stringify({
+      mcpServers: {
+        docs: {
+          type: "streamable-http",
+          url: "https://docs.example.test/mcp",
+        },
+      },
+    }), "utf8");
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const cursorMcp = scan.evidence.filter((item) => item.agent === "cursor" && item.kind === "mcp_server");
+    const filesystem = cursorMcp.find((item) => item.name === "filesystem");
+    const linear = cursorMcp.find((item) => item.name === "linear");
+    const docs = cursorMcp.find((item) => item.name === "docs");
+
+    assert.equal(filesystem?.sourcePath, ".cursor/mcp.json");
+    assert.equal(filesystem?.metadata?.["transport"], "stdio");
+    assert.equal(filesystem?.metadata?.["remote"], false);
+    assert.equal(linear?.metadata?.["transport"], "sse");
+    assert.equal(linear?.metadata?.["remote"], true);
+    assert.equal(docs?.sourcePath, "~/.cursor/mcp.json");
+    assert.equal(docs?.metadata?.["transport"], "streamable-http");
+    assert.equal(docs?.metadata?.["remote"], true);
+    assert.doesNotMatch(JSON.stringify(cursorMcp), /project-secret|remote-secret|header-secret|oauth-secret/);
+    assert.match(JSON.stringify(cursorMcp), /\$\{env:FILESYSTEM_TOKEN\}/);
+  });
+
+  it("discovers Cursor skills from documented roots and nested project roots", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    const skillPaths = [
+      join(projectPath, ".cursor", "skills", "project-cursor", "SKILL.md"),
+      join(homeDir, ".cursor", "skills", "global-cursor", "SKILL.md"),
+      join(projectPath, ".agents", "skills", "project-agent", "SKILL.md"),
+      join(homeDir, ".agents", "skills", "global-agent", "SKILL.md"),
+      join(projectPath, ".claude", "skills", "project-claude", "SKILL.md"),
+      join(projectPath, ".codex", "skills", "project-codex", "SKILL.md"),
+      join(projectPath, "apps", "web", ".cursor", "skills", "deploy-web", "SKILL.md"),
+      join(projectPath, "packages", "api", ".agents", "skills", "deploy-api", "SKILL.md"),
+    ];
+
+    for (const skillPath of skillPaths) {
+      const skillName = skillPath.split("/").at(-2)!;
+      await mkdir(join(skillPath, ".."), { recursive: true });
+      await writeFile(skillPath, [
+        "---",
+        `name: ${skillName}`,
+        `description: ${skillName} skill`,
+        "paths:",
+        "  - src/**",
+        "disable-model-invocation: true",
+        "metadata:",
+        "  team: platform",
+        "---",
+        "",
+      ].join("\n"), "utf8");
+    }
+
+    await mkdir(join(projectPath, ".cursor", "skills", "missing-description"), { recursive: true });
+    await writeFile(
+      join(projectPath, ".cursor", "skills", "missing-description", "SKILL.md"),
+      "---\nname: missing-description\n---\n",
+      "utf8"
+    );
+    await mkdir(join(projectPath, ".cursor", "skills", "wrong-folder"), { recursive: true });
+    await writeFile(
+      join(projectPath, ".cursor", "skills", "wrong-folder", "SKILL.md"),
+      "---\nname: different-name\ndescription: Should be rejected\n---\n",
+      "utf8"
+    );
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const cursorSkills = scan.evidence.filter((item) => item.agent === "cursor" && item.kind === "skill");
+    const sources = cursorSkills.map((item) => item.sourcePath);
+
+    assert.ok(sources.includes(".cursor/skills/project-cursor"));
+    assert.ok(sources.includes("~/.cursor/skills/global-cursor"));
+    assert.ok(sources.includes(".agents/skills/project-agent"));
+    assert.ok(sources.includes("~/.agents/skills/global-agent"));
+    assert.ok(sources.includes(".claude/skills/project-claude"));
+    assert.ok(sources.includes(".codex/skills/project-codex"));
+    assert.ok(sources.includes("apps/web/.cursor/skills/deploy-web"));
+    assert.ok(sources.includes("packages/api/.agents/skills/deploy-api"));
+    assert.equal(cursorSkills.some((item) => item.name === "missing-description"), false);
+    assert.equal(cursorSkills.some((item) => item.name === "different-name"), false);
+    assert.ok(
+      cursorSkills.some(
+        (item) =>
+          item.name === "deploy-web" &&
+          item.metadata?.["scopeRoot"] === "apps/web" &&
+          item.metadata?.["disableModelInvocation"] === true
+      )
+    );
+  });
+
+  it("keeps higher-precedence Cursor skills when duplicates exist", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    const userSkill = join(homeDir, ".cursor", "skills", "deploy-web", "SKILL.md");
+    const nestedProjectSkill = join(projectPath, "apps", "web", ".cursor", "skills", "deploy-web", "SKILL.md");
+    await mkdir(join(userSkill, ".."), { recursive: true });
+    await mkdir(join(nestedProjectSkill, ".."), { recursive: true });
+    await writeFile(userSkill, "---\nname: deploy-web\ndescription: User deploy skill\n---\n", "utf8");
+    await writeFile(nestedProjectSkill, "---\nname: deploy-web\ndescription: Project deploy skill\n---\n", "utf8");
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const deploySkills = scan.evidence.filter(
+      (item) => item.agent === "cursor" && item.kind === "skill" && item.name === "deploy-web"
+    );
+
+    assert.equal(deploySkills.length, 1);
+    assert.equal(deploySkills[0]?.sourcePath, "apps/web/.cursor/skills/deploy-web");
+    assert.equal(deploySkills[0]?.precedence, 40);
+    assert.deepEqual(deploySkills[0]?.metadata?.["duplicateSources"], ["~/.cursor/skills/deploy-web"]);
+  });
+
+  it("discovers Cursor hooks with documented fields and blind spots", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    await mkdir(join(projectPath, ".cursor"), { recursive: true });
+    await mkdir(join(homeDir, ".cursor"), { recursive: true });
+    await writeFile(join(projectPath, ".cursor", "hooks.json"), JSON.stringify({
+      version: 1,
+      hooks: {
+        beforeShellExecution: [
+          {
+            command: ".cursor/hooks/approve-network.sh",
+            matcher: { pattern: "curl|wget" },
+            timeout: 5,
+            failClosed: true,
+          },
+        ],
+        stop: [
+          {
+            type: "prompt",
+            command: "Check whether the run finished safely: $ARGUMENTS",
+            loop_limit: null,
+          },
+        ],
+      },
+    }), "utf8");
+    await writeFile(join(homeDir, ".cursor", "hooks.json"), JSON.stringify({
+      version: 1,
+      hooks: {
+        workspaceOpen: [
+          { command: "./hooks/load-plugins.sh", type: "command" },
+        ],
+      },
+    }), "utf8");
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const cursorHooks = scan.evidence.filter((item) => item.agent === "cursor" && item.kind === "hook");
+    const beforeShell = cursorHooks.find((item) => item.name === "beforeShellExecution.0");
+    const stop = cursorHooks.find((item) => item.name === "stop.0");
+    const workspaceOpen = cursorHooks.find((item) => item.name === "workspaceOpen.0");
+
+    assert.equal(beforeShell?.sourcePath, ".cursor/hooks.json");
+    assert.equal(beforeShell?.metadata?.["eventName"], "beforeShellExecution");
+    assert.equal(beforeShell?.metadata?.["hookCategory"], "agent");
+    assert.equal(beforeShell?.metadata?.["sourcePriority"], 30);
+    assert.equal(beforeShell?.metadata?.["executable"], true);
+    assert.equal(beforeShell?.value && (beforeShell.value as Record<string, unknown>)["failClosed"], true);
+    assert.equal(stop?.value && (stop.value as Record<string, unknown>)["type"], "prompt");
+    assert.equal(stop?.metadata?.["policyEvaluated"], true);
+    assert.equal(workspaceOpen?.sourcePath, "~/.cursor/hooks.json");
+    assert.equal(workspaceOpen?.metadata?.["hookCategory"], "app_lifecycle");
+    assert.ok(
+      scan.evidence.some(
+        (item) =>
+          item.agent === "cursor" &&
+          item.kind === "unsupported" &&
+          item.sourcePath === "<cursor-team-hooks>" &&
+          item.metadata?.["reason"] === "cloud_distributed_hooks_not_locally_readable"
+      )
+    );
   });
 
   it("discovers Pi skills using Pi-specific roots and validation rules", async () => {
