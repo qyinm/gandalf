@@ -304,6 +304,25 @@ describe("TUI timeline model", () => {
     assert.equal(model.instructions, "/project/AGENTS.md");
   });
 
+  it("keeps all current setup inventory rows for scrollable rendering", () => {
+    const model = buildCurrentSetupSummaryModel({
+      agentFilter: "codex",
+      evidence: Array.from({ length: 8 }, (_, index) =>
+        discoveredItem({
+          id: `skill:${index}`,
+          agent: "codex",
+          kind: "skill",
+          name: `skill-${index}`
+        })
+      )
+    });
+
+    assert.equal(model.skills, 8);
+    assert.equal(model.skillRows.length, 8);
+    assert.deepEqual(model.skillRows.slice(0, 2), ["skill-0", "skill-1"]);
+    assert.deepEqual(model.skillRows.slice(-2), ["skill-6", "skill-7"]);
+  });
+
   it("summarizes the current setup for an agent-filtered Timeline", () => {
     const model = buildCurrentSetupSummaryModel({
       agentFilter: "claude-code",
