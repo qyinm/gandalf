@@ -5,6 +5,9 @@ import { scanTargets } from "./filesystem.js";
 import type { DiscoveredItem } from "../types.js";
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
+import { createScannerBase } from "./base.js";
+
+const base = createScannerBase({ agentId: "codex" });
 
 export const codexScanner: ScannerPlugin = {
   agentId: "codex",
@@ -175,19 +178,8 @@ async function scanCodexHooksFile(target: ScanTarget): Promise<DiscoveredItem[]>
     value = JSON.parse(text);
   } catch (error) {
     return [{
-      id: itemId(target, "parse-failed"),
-      agent: "codex",
-      kind: "hook",
-      sourcePath: target.sourcePath,
-      scope: target.scope,
-      precedence: target.precedence,
+      ...base.parseFailed(target, "hook", error instanceof Error ? error.message : "Invalid JSON"),
       parser: "json",
-      sensitivity: target.sensitivity,
-      contentPolicy: target.contentPolicy,
-      restorePolicy: "structured_fields_only",
-      captureStatus: "parse_failed",
-      confidence: "high",
-      metadata: { error: error instanceof Error ? error.message : "Invalid JSON" },
     }];
   }
 
@@ -219,7 +211,7 @@ function codexHookItemsFromValue(target: ScanTarget, value: unknown): Discovered
         const name = `${eventName}.${matcher}`;
 
         evidence.push({
-          id: itemId(target, `hook-${eventName}-${groupIndex}-${hookIndex}`),
+          id: base.itemId(target, `hook-${eventName}-${groupIndex}-${hookIndex}`),
           agent: "codex",
           kind: "hook",
           sourcePath: target.sourcePath,
@@ -263,20 +255,14 @@ async function scanCodexMcpServers(homeDir: string): Promise<DiscoveredItem[]> {
   }
 
   return [...codexMcpServersFromToml(text).entries()].map(([name, serverValue]) => ({
-    id: itemId(target, `mcp-${name}`),
-    agent: "codex",
-    kind: "mcp_server",
-    sourcePath: target.sourcePath,
-    scope: target.scope,
-    precedence: target.precedence,
-    parser: "toml",
-    sensitivity: "command_config",
-    contentPolicy: "structured_safe_fields_only",
-    restorePolicy: "structured_fields_only",
-    captureStatus: "captured",
-    confidence: "high",
+    ...base.captured({
+      ...target,
+      kind: "mcp_server",
+      sensitivity: "command_config",
+      contentPolicy: "structured_safe_fields_only",
+    }, "mcp_server", undefined, serverValue),
+    id: base.itemId(target, `mcp-${name}`),
     name,
-    value: serverValue,
   }));
 }
 
@@ -469,7 +455,7 @@ async function scanCodexSkillDirectory(target: ScanTarget): Promise<DiscoveredIt
     const entrypointStatus = await skillEntrypointStatus(target.absolutePath, skillFile);
 
     evidence.push({
-      id: itemId({ ...target, sourcePath }, "skill"),
+      id: base.itemId({ ...target, sourcePath }, "skill"),
       agent: "codex",
       kind: "skill",
       sourcePath,
@@ -617,12 +603,4 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asObject(value: unknown): Record<string, unknown> | null {
   return isRecord(value) ? value : null;
-}
-
-function itemId(target: ScanTarget, suffix: string): string {
-  return `${target.scope}.${target.agent}.${target.sourcePath}.${suffix}`
-    .replace(/^~\//, "home/")
-    .replace(/[^A-Za-z0-9_.-]+/g, ".")
-    .replace(/^\.+|\.+$/g, "")
-    .toLowerCase();
 }

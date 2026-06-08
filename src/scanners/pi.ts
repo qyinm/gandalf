@@ -7,6 +7,7 @@ import type { ScanTarget } from "./index.js";
 import { homeTarget, projectTarget } from "./index.js";
 import type { ScannerPlugin } from "./scanner-plugin.js";
 import { scanTargets } from "./filesystem.js";
+import { arrayOfStrings, metadataStringArray, scannerItemId } from "./base.js";
 
 interface PiSkillTarget {
   absolutePath: string;
@@ -379,7 +380,7 @@ async function scanPiExtensionTarget(target: PiExtensionTarget): Promise<Discove
     const isIndexEntrypoint = entrypoint === "index.ts" || entrypoint === "index.js";
 
     evidence.push({
-      id: itemId(target.scope, "pi-agent", sourcePath, "extension"),
+      id: scannerItemId(target.scope, "pi-agent", sourcePath, "extension"),
       agent: "pi-agent",
       kind: "extension",
       sourcePath,
@@ -536,7 +537,7 @@ async function scanPiSkillTarget(target: PiSkillTarget): Promise<DiscoveredItem[
     const entrypointStatus = await skillEntrypointStatus(target.absolutePath, skillFile.filePath);
 
     evidence.push({
-      id: itemId(target.scope, "pi-agent", sourcePath, "skill"),
+      id: scannerItemId(target.scope, "pi-agent", sourcePath, "skill"),
       agent: "pi-agent",
       kind: "skill",
       sourcePath,
@@ -802,25 +803,9 @@ function displayPath(absolutePath: string, homeDir: string, projectPath: string)
   return resolved;
 }
 
-function itemId(scope: EvidenceScope, agent: string, sourcePath: string, suffix: string): string {
-  return `${scope}.${agent}.${sourcePath}.${suffix}`
-    .replace(/^~\//, "home/")
-    .replace(/[^A-Za-z0-9_.-]+/g, ".")
-    .replace(/^\.+|\.+$/g, "")
-    .toLowerCase();
-}
-
 function dirnameBasename(filePath: string): string {
   const parts = filePath.split(sep).filter(Boolean);
   return parts.at(-1) ?? filePath;
-}
-
-function arrayOfStrings(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function metadataStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
 function isObject(value: unknown): boolean {
