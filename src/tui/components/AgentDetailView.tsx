@@ -42,11 +42,13 @@ export default function AgentDetailView({
         <Text>  MCP Servers   {model.counts.mcpServers}</Text>
         <Text>  Hooks         {model.counts.hooks}</Text>
         <Text>  Permissions   {model.counts.permissions}</Text>
+        <Text>  Env Keys      {model.counts.envKeys}</Text>
         <Text>  Instructions  {model.counts.instructions}</Text>
       </Box>
 
       <InventorySection title="Skills" rows={model.skills} />
       <InventorySection title="MCP Servers" rows={model.mcpServers} />
+      <InventorySection title="Env Keys" rows={model.envKeys} />
       <InventorySection title="Instructions" rows={model.instructions} showPath />
 
       <Box flexDirection="column" marginTop={1}>
