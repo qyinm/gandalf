@@ -936,6 +936,8 @@ export default function Dashboard({ options }: DashboardProps) {
     selectedItemId: selectedNavItemId,
     cursor: state.sidebarCursor
   });
+  const timelineScreenOpen = !state.profileScreenOpen && state.activeTab === "timeline";
+  const activeContentHeight = timelineScreenOpen ? dashboardHeight : contentHeight;
 
   return (
     <Box flexDirection="row" width="100%" height={dashboardHeight}>
@@ -950,10 +952,10 @@ export default function Dashboard({ options }: DashboardProps) {
 
       {/* ── Main panel ── */}
       <Box flexDirection="column" paddingX={1} flexGrow={1} height={dashboardHeight}>
-        <DaemonTrustHeader status={state.daemonStatus} />
+        {!timelineScreenOpen && <DaemonTrustHeader status={state.daemonStatus} />}
 
         {/* Content area */}
-        <Box flexDirection="column" height={contentHeight}>
+        <Box flexDirection="column" height={activeContentHeight}>
           {state.error && (
             <Box marginBottom={1}>
               <ErrorPage
@@ -979,16 +981,11 @@ export default function Dashboard({ options }: DashboardProps) {
           {!state.profileScreenOpen && state.activeTab === "diff" && renderDiff()}
         </Box>
 
-        {/* Footer hint */}
-        <Box marginTop={1}>
-          <Text dimColor>
-            {state.activeTab === "scan"
-              ? "↑↓ move  Enter open  ←→ scroll  s=save  c=compare  a=audit  r=rescan  q=quit"
-              : state.activeTab === "timeline"
-                ? "↑↓ move  Enter open  Tab setup  ←→ scroll  u=preview undo  c=compare  r=rescan  q=quit"
-                : "↑↓ move  Enter open  s=save  c=compare  r=rescan  q=quit"}
-          </Text>
-        </Box>
+        {!timelineScreenOpen && (
+          <Box marginTop={1}>
+            <Text dimColor>{footerHintForTab(state.activeTab)}</Text>
+          </Box>
+        )}
       </Box>
     </Box>
   );
@@ -1007,7 +1004,9 @@ export default function Dashboard({ options }: DashboardProps) {
         undoError={state.timelineUndoState.type === "error" ? state.timelineUndoState.message : null}
         currentSetupFocus={state.currentSetupFocus}
         currentSetupOffsets={state.currentSetupOffsets}
-        height={contentHeight}
+        height={dashboardHeight}
+        header={<DaemonTrustHeader status={state.daemonStatus} />}
+        footer={footerHintForTab("timeline")}
       />
     );
   }
@@ -1262,6 +1261,16 @@ function currentSetupRowsForSection(
   if (section === "mcp_server") return model.mcpServerRows;
   if (section === "hook") return model.hookRows;
   return model.envKeyRows;
+}
+
+function footerHintForTab(activeTab: TabId): string {
+  if (activeTab === "scan") {
+    return "↑↓ move  Enter open  ←→ scroll  s=save  c=compare  a=audit  r=rescan  q=quit";
+  }
+  if (activeTab === "timeline") {
+    return "↑↓ move  Enter open  Tab setup  ←→ scroll  u=preview undo  c=compare  r=rescan  q=quit";
+  }
+  return "↑↓ move  Enter open  s=save  c=compare  r=rescan  q=quit";
 }
 
 export function daemonTrustHeaderModel(status: DaemonStatusReadResult | null): {

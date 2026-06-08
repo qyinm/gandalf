@@ -23,6 +23,8 @@ interface TimelineViewProps {
   currentSetupFocus?: CurrentSetupInventorySection | "timeline";
   currentSetupOffsets?: Partial<Record<CurrentSetupInventorySection, number>>;
   height?: number;
+  header?: React.ReactNode;
+  footer?: string;
 }
 
 export const DEFAULT_CURRENT_SETUP_WINDOW_SIZE = 6;
@@ -37,7 +39,9 @@ export default function TimelineView({
   undoError,
   currentSetupFocus = "timeline",
   currentSetupOffsets = {},
-  height
+  height,
+  header,
+  footer
 }: TimelineViewProps) {
   const model = buildTimelineViewModel({
     entries,
@@ -66,6 +70,11 @@ export default function TimelineView({
         marginBottom={1}
         height={setupPanelHeight}
       >
+        {header && (
+          <Box marginBottom={1}>
+            {header}
+          </Box>
+        )}
         <Text bold>Current Setup</Text>
         <Text dimColor>  Scope: {model.currentSetup.scopeLabel}</Text>
         <Text>
@@ -170,6 +179,11 @@ export default function TimelineView({
               </Text>
             ))}
             <SurfaceList title="Observe-only in preview" surfaces={model.undoPreview.observeOnlySurfaces} />
+          </Box>
+        )}
+        {footer && (
+          <Box marginTop={1}>
+            <Text dimColor>{footer}</Text>
           </Box>
         )}
       </Box>
