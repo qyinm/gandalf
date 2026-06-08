@@ -117,7 +117,7 @@ describe("scanProject", () => {
     );
   });
 
-  it("discovers Codex hooks from user, project, and plugin hook files", async () => {
+  it("discovers Codex hooks from user and project hook files", async () => {
     const { projectPath, homeDir, storeDir } = await makeSandbox();
     const projectHooks = join(projectPath, ".codex", "hooks.json");
     const userHooks = join(homeDir, ".codex", "hooks.json");
@@ -157,19 +157,43 @@ describe("scanProject", () => {
     assert.deepEqual(codexHooks.map((item) => item.name).sort(), [
       "PreToolUse.Write",
       "SessionStart.*",
-      "Stop.*",
-      "UserPromptSubmit.*"
+      "Stop.*"
     ]);
     assert.ok(codexHooks.some((item) => item.sourcePath === ".codex/hooks.json" && item.name === "PreToolUse.Write"));
     assert.ok(codexHooks.some((item) => item.sourcePath === "~/.codex/hooks.json" && item.name === "SessionStart.*"));
-    assert.ok(
-      codexHooks.some(
-        (item) =>
-          item.scope === "managed" &&
-          item.sourcePath === "~/.codex/plugins/cache/openai-codex/codex/1.0.0/hooks/hooks.json" &&
-          item.name === "UserPromptSubmit.*"
-      )
-    );
+    assert.equal(codexHooks.some((item) => item.sourcePath.includes(".codex/plugins/cache")), false);
+  });
+
+  it("discovers Codex inline hooks from config.toml without counting hook state", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    await mkdir(join(homeDir, ".codex"), { recursive: true });
+    await writeFile(join(homeDir, ".codex", "config.toml"), [
+      "[features]",
+      "hooks = true",
+      "",
+      "[hooks.state.\"/tmp/hooks.json:pre_tool_use:0:0\"]",
+      "trusted = true",
+      "",
+      "[[hooks.PreToolUse]]",
+      "matcher = \"^Bash$\"",
+      "",
+      "[[hooks.PreToolUse.hooks]]",
+      "type = \"command\"",
+      "command = \"python3 ~/.codex/hooks/pre_tool_use.py\"",
+      "timeout = 30",
+      "",
+      "[[hooks.Stop]]",
+      "",
+      "[[hooks.Stop.hooks]]",
+      "type = \"command\"",
+      "command = \"python3 ~/.codex/hooks/stop.py\"",
+    ].join("\n"), "utf8");
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const codexHooks = scan.evidence.filter((item) => item.agent === "codex" && item.kind === "hook");
+
+    assert.deepEqual(codexHooks.map((item) => item.name).sort(), ["PreToolUse.^Bash$", "Stop.*"]);
+    assert.ok(codexHooks.every((item) => item.sourcePath === "~/.codex/config.toml"));
   });
 
   it("emits parse_failed evidence for malformed JSON instead of throwing", async () => {
