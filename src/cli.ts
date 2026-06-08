@@ -14,6 +14,7 @@ import { tuiCommand } from "./commands/tui.js";
 import { timelineCommand } from "./commands/timeline.js";
 import { daemonCommand } from "./commands/daemon.js";
 import { hasFlag, runtimeOptions } from "./cli-shared.js";
+import { maybePrintUpdateNotice } from "./update-check.js";
 
 const HELP = [
   "hem",
@@ -82,6 +83,12 @@ const registry = new Map<string, import("./commands/index.js").Command>([
 // ── CLI Entry Point ────────────────────────────────────────────
 
 async function run(args: string[]): Promise<number> {
+  await maybePrintUpdateNotice({
+    args,
+    homeDir: process.env.HOME ?? process.cwd(),
+    stderrIsTty: process.stderr.isTTY
+  });
+
   // --help or no args: print help
   if (args.length === 0 || hasFlag(args, "--help") || hasFlag(args, "-h")) {
     process.stdout.write(HELP + "\n");
