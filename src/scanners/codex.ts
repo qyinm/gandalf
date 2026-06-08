@@ -21,6 +21,7 @@ export const codexScanner: ScannerPlugin = {
   async scan({ projectPath, homeDir }): Promise<DiscoveredItem[]> {
     const configEvidence = await scanTargets(this.targets(projectPath, homeDir));
     const mcpEvidence = await scanCodexMcpServers(homeDir);
+    const hookEvidence = await scanCodexHooks(projectPath, homeDir);
     const skillEvidence: DiscoveredItem[] = [];
 
     for (const target of codexSkillTargets(homeDir)) {
@@ -30,6 +31,7 @@ export const codexScanner: ScannerPlugin = {
     return [
       ...configEvidence,
       ...mcpEvidence,
+      ...hookEvidence,
       ...dedupeSkillsBySource(skillEvidence),
     ];
   }
@@ -41,6 +43,138 @@ function codexSkillTargets(homeDir: string): ScanTarget[] {
     homeTarget(homeDir, ".codex/plugins/cache", "codex", "skill", "filesystem", { directory: true }),
     homeTarget(homeDir, ".codex/vendor_imports/skills", "codex", "skill", "filesystem", { directory: true }),
   ];
+}
+
+function codexHookTargets(projectPath: string, homeDir: string): ScanTarget[] {
+  return [
+    projectTarget(projectPath, ".codex/hooks.json", "codex", "hook", "json", {
+      sensitivity: "command_config",
+      contentPolicy: "structured_safe_fields_only",
+    }),
+    homeTarget(homeDir, ".codex/hooks.json", "codex", "hook", "json", {
+      sensitivity: "command_config",
+      contentPolicy: "structured_safe_fields_only",
+    }),
+  ];
+}
+
+async function scanCodexHooks(projectPath: string, homeDir: string): Promise<DiscoveredItem[]> {
+  const evidence: DiscoveredItem[] = [];
+
+  for (const target of codexHookTargets(projectPath, homeDir)) {
+    evidence.push(...await scanCodexHooksFile(target));
+  }
+
+  const pluginHooksRoot = homeTarget(homeDir, ".codex/plugins/cache", "codex", "hook", "filesystem", {
+    directory: true,
+    sensitivity: "command_config",
+    contentPolicy: "structured_safe_fields_only",
+  });
+
+  for (const hooksFile of await findHooksFiles(pluginHooksRoot.absolutePath)) {
+    const relativeHooksFile = path.relative(pluginHooksRoot.absolutePath, hooksFile).split(path.sep).join("/");
+    evidence.push(...await scanCodexHooksFile({
+      ...pluginHooksRoot,
+      absolutePath: hooksFile,
+      sourcePath: `${pluginHooksRoot.sourcePath}/${relativeHooksFile}`,
+      parser: "json",
+      scope: "managed",
+      precedence: 30,
+    }));
+  }
+
+  return evidence;
+}
+
+async function scanCodexHooksFile(target: ScanTarget): Promise<DiscoveredItem[]> {
+  let text;
+  try {
+    text = await readFile(target.absolutePath, "utf8");
+  } catch {
+    return [];
+  }
+
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch (error) {
+    return [{
+      id: itemId(target, "parse-failed"),
+      agent: "codex",
+      kind: "hook",
+      sourcePath: target.sourcePath,
+      scope: target.scope,
+      precedence: target.precedence,
+      parser: "json",
+      sensitivity: target.sensitivity,
+      contentPolicy: target.contentPolicy,
+      restorePolicy: "structured_fields_only",
+      captureStatus: "parse_failed",
+      confidence: "high",
+      metadata: { error: error instanceof Error ? error.message : "Invalid JSON" },
+    }];
+  }
+
+  return codexHookItemsFromValue(target, value);
+}
+
+function codexHookItemsFromValue(target: ScanTarget, value: unknown): DiscoveredItem[] {
+  const hooksValue = asObject(value)?.["hooks"];
+  if (!isRecord(hooksValue)) {
+    return [];
+  }
+
+  const evidence: DiscoveredItem[] = [];
+  for (const [eventName, eventHooks] of Object.entries(hooksValue)) {
+    if (!Array.isArray(eventHooks)) continue;
+    for (let groupIndex = 0; groupIndex < eventHooks.length; groupIndex++) {
+      const group = asObject(eventHooks[groupIndex]);
+      if (!group) continue;
+      const matcher = typeof group.matcher === "string" ? group.matcher : "*";
+      const nestedHooks = group["hooks"];
+      if (!Array.isArray(nestedHooks)) continue;
+
+      for (let hookIndex = 0; hookIndex < nestedHooks.length; hookIndex++) {
+        const hook = asObject(nestedHooks[hookIndex]);
+        if (!hook) continue;
+        const command = typeof hook.command === "string" ? hook.command : undefined;
+        const type = typeof hook.type === "string" ? hook.type : "command";
+        const timeout = typeof hook.timeout === "number" ? hook.timeout : undefined;
+        const name = `${eventName}.${matcher}`;
+
+        evidence.push({
+          id: itemId(target, `hook-${eventName}-${groupIndex}-${hookIndex}`),
+          agent: "codex",
+          kind: "hook",
+          sourcePath: target.sourcePath,
+          scope: target.scope,
+          precedence: target.precedence,
+          parser: "json",
+          sensitivity: "command_config",
+          contentPolicy: "structured_safe_fields_only",
+          restorePolicy: "structured_fields_only",
+          captureStatus: "captured",
+          confidence: "high",
+          name,
+          value: {
+            type,
+            ...(command ? { command } : {}),
+            ...(timeout !== undefined ? { timeout } : {}),
+          },
+          metadata: {
+            executable: type === "command" && Boolean(command),
+            eventName,
+            matcher,
+            hookIndex,
+            groupIndex,
+            source: target.scope === "managed" ? "plugin" : target.scope,
+          },
+        });
+      }
+    }
+  }
+
+  return evidence;
 }
 
 async function scanCodexMcpServers(homeDir: string): Promise<DiscoveredItem[]> {
@@ -294,6 +428,12 @@ async function findSkillFiles(root: string): Promise<string[]> {
   return files;
 }
 
+async function findHooksFiles(root: string): Promise<string[]> {
+  const files: string[] = [];
+  await walkNamedFiles(root, "hooks.json", files, 0, new Set());
+  return files;
+}
+
 async function walkSkillFiles(
   dir: string,
   files: string[],
@@ -337,6 +477,55 @@ async function walkSkillFiles(
     }
 
     if (stats.isFile() && entry.name.toLowerCase() === "skill.md") {
+      files.push(absolutePath);
+    }
+  }
+}
+
+async function walkNamedFiles(
+  dir: string,
+  fileName: string,
+  files: string[],
+  depth: number,
+  seen: Set<string>
+): Promise<void> {
+  if (depth > 8) {
+    return;
+  }
+
+  let resolved;
+  try {
+    resolved = await realpath(dir);
+  } catch {
+    return;
+  }
+  if (seen.has(resolved)) {
+    return;
+  }
+  seen.add(resolved);
+
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const absolutePath = path.join(dir, entry.name);
+    let stats;
+    try {
+      stats = await stat(absolutePath);
+    } catch {
+      continue;
+    }
+
+    if (stats.isDirectory()) {
+      await walkNamedFiles(absolutePath, fileName, files, depth + 1, seen);
+      continue;
+    }
+
+    if (stats.isFile() && entry.name === fileName) {
       files.push(absolutePath);
     }
   }
@@ -399,6 +588,14 @@ function dedupeSkillsBySource(evidence: DiscoveredItem[]): DiscoveredItem[] {
   }
 
   return result;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null;
 }
 
 function itemId(target: ScanTarget, suffix: string): string {

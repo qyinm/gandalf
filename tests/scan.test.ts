@@ -117,6 +117,61 @@ describe("scanProject", () => {
     );
   });
 
+  it("discovers Codex hooks from user, project, and plugin hook files", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    const projectHooks = join(projectPath, ".codex", "hooks.json");
+    const userHooks = join(homeDir, ".codex", "hooks.json");
+    const pluginHooks = join(homeDir, ".codex", "plugins", "cache", "openai-codex", "codex", "1.0.0", "hooks", "hooks.json");
+
+    await mkdir(join(projectHooks, ".."), { recursive: true });
+    await mkdir(join(userHooks, ".."), { recursive: true });
+    await mkdir(join(pluginHooks, ".."), { recursive: true });
+    await writeFile(projectHooks, JSON.stringify({
+      hooks: {
+        PreToolUse: [
+          { matcher: "Write", hooks: [{ type: "command", command: "project-hook", timeout: 5 }] }
+        ]
+      }
+    }), "utf8");
+    await writeFile(userHooks, JSON.stringify({
+      hooks: {
+        SessionStart: [
+          { hooks: [{ type: "command", command: "user-hook" }] }
+        ],
+        Stop: [
+          { hooks: [{ type: "command", command: "stop-hook" }] }
+        ]
+      }
+    }), "utf8");
+    await writeFile(pluginHooks, JSON.stringify({
+      hooks: {
+        UserPromptSubmit: [
+          { hooks: [{ type: "command", command: "plugin-hook" }] }
+        ]
+      }
+    }), "utf8");
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir });
+    const codexHooks = scan.evidence.filter((item) => item.agent === "codex" && item.kind === "hook");
+
+    assert.deepEqual(codexHooks.map((item) => item.name).sort(), [
+      "PreToolUse.Write",
+      "SessionStart.*",
+      "Stop.*",
+      "UserPromptSubmit.*"
+    ]);
+    assert.ok(codexHooks.some((item) => item.sourcePath === ".codex/hooks.json" && item.name === "PreToolUse.Write"));
+    assert.ok(codexHooks.some((item) => item.sourcePath === "~/.codex/hooks.json" && item.name === "SessionStart.*"));
+    assert.ok(
+      codexHooks.some(
+        (item) =>
+          item.scope === "managed" &&
+          item.sourcePath === "~/.codex/plugins/cache/openai-codex/codex/1.0.0/hooks/hooks.json" &&
+          item.name === "UserPromptSubmit.*"
+      )
+    );
+  });
+
   it("emits parse_failed evidence for malformed JSON instead of throwing", async () => {
     const { projectPath, homeDir, storeDir } = await makeSandbox();
     await mkdir(join(projectPath, ".claude"), { recursive: true });
