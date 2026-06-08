@@ -2,8 +2,7 @@
  * Scanner Plugin Interface.
  * Each AI coding agent implements this to declare which files to scan.
  */
-import type { AgentId } from "../types.js";
-import type { DiscoveredItem } from "../types.js";
+import type { AgentId, DiscoveredItem, DiscoveredItemConstruction } from "../types.js";
 import type { ScanTarget } from "./index.js";
 
 export interface ScannerContext {
@@ -18,5 +17,5 @@ export interface ScannerPlugin {
   readonly agentName: string;
   readonly description: string;
   targets(projectPath: string, homeDir: string): ScanTarget[];
-  scan?(context: ScannerContext): Promise<DiscoveredItem[]>;
+  scan?(context: ScannerContext): Promise<Array<DiscoveredItem | DiscoveredItemConstruction>>;
 }
