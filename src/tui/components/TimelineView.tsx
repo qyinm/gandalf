@@ -22,6 +22,7 @@ interface TimelineViewProps {
   undoError?: string | null;
   currentSetupFocus?: CurrentSetupInventorySection | "timeline";
   currentSetupOffsets?: Partial<Record<CurrentSetupInventorySection, number>>;
+  height?: number;
 }
 
 export const DEFAULT_CURRENT_SETUP_WINDOW_SIZE = 6;
@@ -35,7 +36,8 @@ export default function TimelineView({
   undoPlan,
   undoError,
   currentSetupFocus = "timeline",
-  currentSetupOffsets = {}
+  currentSetupOffsets = {},
+  height
 }: TimelineViewProps) {
   const model = buildTimelineViewModel({
     entries,
@@ -48,9 +50,13 @@ export default function TimelineView({
   const setupSection = currentSetupFocus === "timeline" ? "skill" : currentSetupFocus;
   const setupRows = rowsForSetupSection(model.currentSetup, setupSection);
   const setupOffset = currentSetupOffsets[setupSection] ?? 0;
+  const setupPanelHeight = height ? Math.min(14, Math.max(10, Math.floor(height * 0.46))) : undefined;
+  const timelinePanelHeight = height && setupPanelHeight
+    ? Math.max(6, height - setupPanelHeight - 1)
+    : undefined;
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" height={height}>
       <Box
         flexDirection="column"
         borderStyle="round"
@@ -58,6 +64,7 @@ export default function TimelineView({
         paddingX={1}
         paddingY={0}
         marginBottom={1}
+        height={setupPanelHeight}
       >
         <Text bold>Current Setup</Text>
         <Text dimColor>  Scope: {model.currentSetup.scopeLabel}</Text>
@@ -83,6 +90,8 @@ export default function TimelineView({
         borderColor="cyan"
         paddingX={1}
         paddingY={0}
+        height={timelinePanelHeight}
+        flexGrow={height ? 1 : undefined}
       >
         <Box marginBottom={1}>
           <Text bold>Timeline</Text>
