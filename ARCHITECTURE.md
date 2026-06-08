@@ -82,6 +82,8 @@ The central object is `DiscoveredItem` in `src/types.ts`. Scanner plugins emit d
 - `parser`, `sensitivity`, `contentPolicy`, `restorePolicy`, and `captureStatus` to preserve safety decisions alongside the evidence.
 - Optional structured `value`, `checksum`, and `metadata`.
 
+At the TypeScript boundary, `DiscoveredItem` is a `kind`-discriminated union so consumers that branch on `mcp_server`, `permission`, `hook`, `env_key`, and other evidence kinds can read known payload fields through typed optional properties. This is a compile-time contract only: serialized snapshot and bundle JSON still uses the same object shape, with `kind` as the existing discriminator and with absent `value` or `metadata` fields left absent.
+
 The rest of the system derives from that inventory:
 
 - `GraphNode[]` is built from evidence in `src/graph.ts`.

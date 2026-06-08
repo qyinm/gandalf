@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import type { DiscoveredItem } from "./types.js";
+import { unsafeDiscoveredItemFromScannerOutput } from "./scanners/base.js";
 import { defaultScannerPlugins } from "./scanners/index.js";
 import { scanTargets } from "./scanners/filesystem.js";
 
@@ -37,7 +38,7 @@ export async function scanProject(options: ScanProjectOptions): Promise<ScanResu
 
   for (const plugin of defaultScannerPlugins()) {
     if (plugin.scan) {
-      evidence.push(...await plugin.scan(context));
+      evidence.push(...(await plugin.scan(context)).map(unsafeDiscoveredItemFromScannerOutput));
       continue;
     }
 
