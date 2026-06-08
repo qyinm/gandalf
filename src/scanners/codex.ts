@@ -64,26 +64,102 @@ async function scanCodexHooks(projectPath: string, homeDir: string): Promise<Dis
   for (const target of codexHookTargets(projectPath, homeDir)) {
     evidence.push(...await scanCodexHooksFile(target));
   }
-
-  const pluginHooksRoot = homeTarget(homeDir, ".codex/plugins/cache", "codex", "hook", "filesystem", {
-    directory: true,
-    sensitivity: "command_config",
-    contentPolicy: "structured_safe_fields_only",
-  });
-
-  for (const hooksFile of await findHooksFiles(pluginHooksRoot.absolutePath)) {
-    const relativeHooksFile = path.relative(pluginHooksRoot.absolutePath, hooksFile).split(path.sep).join("/");
-    evidence.push(...await scanCodexHooksFile({
-      ...pluginHooksRoot,
-      absolutePath: hooksFile,
-      sourcePath: `${pluginHooksRoot.sourcePath}/${relativeHooksFile}`,
-      parser: "json",
-      scope: "managed",
-      precedence: 30,
-    }));
+  for (const target of codexInlineHookTargets(projectPath, homeDir)) {
+    evidence.push(...await scanCodexInlineHooksFile(target));
   }
 
   return evidence;
+}
+
+function codexInlineHookTargets(projectPath: string, homeDir: string): ScanTarget[] {
+  return [
+    projectTarget(projectPath, ".codex/config.toml", "codex", "hook", "toml", {
+      sensitivity: "command_config",
+      contentPolicy: "structured_safe_fields_only",
+    }),
+    homeTarget(homeDir, ".codex/config.toml", "codex", "hook", "toml", {
+      sensitivity: "command_config",
+      contentPolicy: "structured_safe_fields_only",
+    }),
+  ];
+}
+
+async function scanCodexInlineHooksFile(target: ScanTarget): Promise<DiscoveredItem[]> {
+  let text;
+  try {
+    text = await readFile(target.absolutePath, "utf8");
+  } catch {
+    return [];
+  }
+
+  return codexInlineHookItemsFromToml(target, text);
+}
+
+function codexInlineHookItemsFromToml(target: ScanTarget, text: string): DiscoveredItem[] {
+  const groups: Array<{
+    eventName: string;
+    matcher: string;
+    hooks: Array<Record<string, unknown>>;
+  }> = [];
+  let currentGroup: typeof groups[number] | null = null;
+  let currentHook: Record<string, unknown> | null = null;
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = stripTomlComment(rawLine).trim();
+    if (!line) continue;
+
+    const tableArray = /^\[\[([^\]]+)]]$/.exec(line);
+    if (tableArray) {
+      const sectionPath = splitTomlDottedName(tableArray[1]);
+      if (sectionPath.length === 2 && sectionPath[0] === "hooks") {
+        currentGroup = { eventName: sectionPath[1], matcher: "*", hooks: [] };
+        currentHook = null;
+        groups.push(currentGroup);
+      } else if (sectionPath.length === 3 && sectionPath[0] === "hooks" && sectionPath[2] === "hooks") {
+        if (!currentGroup || currentGroup.eventName !== sectionPath[1]) {
+          currentGroup = { eventName: sectionPath[1], matcher: "*", hooks: [] };
+          groups.push(currentGroup);
+        }
+        currentHook = {};
+        currentGroup.hooks.push(currentHook);
+      } else {
+        currentGroup = null;
+        currentHook = null;
+      }
+      continue;
+    }
+
+    const table = /^\[([^\]]+)]$/.exec(line);
+    if (table) {
+      currentGroup = null;
+      currentHook = null;
+      continue;
+    }
+
+    const match = /^([A-Za-z0-9_.-]+)\s*=\s*(.*)$/.exec(line);
+    if (!match || !currentGroup) {
+      continue;
+    }
+
+    const [, key, rawValue] = match;
+    const parsed = secretLikePath([key]) ? "[redacted]" : parseTomlScalar(rawValue);
+    if (currentHook) {
+      currentHook[key] = parsed;
+    } else if (key === "matcher" && typeof parsed === "string") {
+      currentGroup.matcher = parsed;
+    }
+  }
+
+  const hooks: Record<string, unknown[]> = {};
+  for (const group of groups) {
+    hooks[group.eventName] ??= [];
+    hooks[group.eventName].push({
+      matcher: group.matcher,
+      hooks: group.hooks,
+    });
+  }
+  const hookShape = { hooks };
+  return codexHookItemsFromValue(target, hookShape);
 }
 
 async function scanCodexHooksFile(target: ScanTarget): Promise<DiscoveredItem[]> {
@@ -428,12 +504,6 @@ async function findSkillFiles(root: string): Promise<string[]> {
   return files;
 }
 
-async function findHooksFiles(root: string): Promise<string[]> {
-  const files: string[] = [];
-  await walkNamedFiles(root, "hooks.json", files, 0, new Set());
-  return files;
-}
-
 async function walkSkillFiles(
   dir: string,
   files: string[],
@@ -477,55 +547,6 @@ async function walkSkillFiles(
     }
 
     if (stats.isFile() && entry.name.toLowerCase() === "skill.md") {
-      files.push(absolutePath);
-    }
-  }
-}
-
-async function walkNamedFiles(
-  dir: string,
-  fileName: string,
-  files: string[],
-  depth: number,
-  seen: Set<string>
-): Promise<void> {
-  if (depth > 8) {
-    return;
-  }
-
-  let resolved;
-  try {
-    resolved = await realpath(dir);
-  } catch {
-    return;
-  }
-  if (seen.has(resolved)) {
-    return;
-  }
-  seen.add(resolved);
-
-  let entries;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    const absolutePath = path.join(dir, entry.name);
-    let stats;
-    try {
-      stats = await stat(absolutePath);
-    } catch {
-      continue;
-    }
-
-    if (stats.isDirectory()) {
-      await walkNamedFiles(absolutePath, fileName, files, depth + 1, seen);
-      continue;
-    }
-
-    if (stats.isFile() && entry.name === fileName) {
       files.push(absolutePath);
     }
   }
