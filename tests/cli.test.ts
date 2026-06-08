@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { appendTimelineEntry } from "../src/store.js";
 import { writeTar } from "../src/tar.js";
 import { captureTimelineSnapshot } from "../src/timeline.js";
+import { EVIDENCE_KINDS } from "../src/types.js";
 import type { TarEntry, TimelineEntry } from "../src/types.js";
 
 async function makeTempRoot(): Promise<string> {
@@ -183,6 +184,14 @@ describe("hem CLI scaffold", () => {
     assert.match(result.stdout, /hem bundle verify <file\.hem>/);
     assert.match(result.stdout, /--apply-content --quarantine --experimental/);
     assert.doesNotMatch(result.stdout, /v0\.1|dry-run only/);
+  });
+
+  it("exports a schema that covers every evidence kind currently emitted by scanners", () => {
+    const result = runCli(["schema", "--json"], process.cwd());
+
+    assert.equal(result.status, 0, result.stderr);
+    const schema = JSON.parse(result.stdout);
+    assert.deepEqual(schema.definitions.evidenceKind.enum, [...EVIDENCE_KINDS]);
   });
 
   it("prints current snapshot metadata-only guidance without stale version labels", async () => {
