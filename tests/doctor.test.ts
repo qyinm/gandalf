@@ -6,9 +6,9 @@ import { describe, it } from "node:test";
 
 import { buildReadinessReport } from "../src/readiness.js";
 import { scanProject } from "../src/scan.js";
-import type { DiscoveredItem } from "../src/types.js";
+import type { DiscoveredItem, McpServerValue } from "../src/types.js";
 
-function mcpItem(id: string, value: unknown): DiscoveredItem {
+function mcpItem(id: string, value: McpServerValue): DiscoveredItem {
   return {
     id,
     agent: "claude-code",
@@ -80,6 +80,30 @@ describe("readiness analyzer", () => {
     assert.equal(output.includes("fragment-secret"), false);
     assert.equal(output.includes("api_key=%5Bredacted%5D"), true);
     assert.equal(output.includes("mode=read"), true);
+  });
+
+  it("ignores malformed legacy MCP payload fields instead of crashing readiness", () => {
+    const legacyEvidence = JSON.parse(JSON.stringify([
+      {
+        id: "legacy-bad-mcp",
+        agent: "claude-code",
+        kind: "mcp_server",
+        sourcePath: ".mcp.json",
+        scope: "project",
+        precedence: 40,
+        parser: "json",
+        sensitivity: "command_config",
+        contentPolicy: "structured_safe_fields_only",
+        restorePolicy: "structured_fields_only",
+        captureStatus: "captured",
+        confidence: "high",
+        value: { command: 123, url: true, args: ["--ok"] }
+      }
+    ])) as DiscoveredItem[];
+
+    const report = buildReadinessReport(legacyEvidence, { processEnv: {} });
+
+    assert.equal(report.items.some((item) => item.evidenceId === "legacy-bad-mcp"), false);
   });
 
   it("does not execute a PATH-hijacked which helper during command lookup", async () => {
