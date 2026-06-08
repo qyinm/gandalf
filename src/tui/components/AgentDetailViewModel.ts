@@ -1,5 +1,5 @@
 import type { AgentId, DiscoveredItem, TimelineEntry } from "../../types.js";
-import { formatAgentLabel, formatTimelineTimestamp } from "./TuiFormatters.js";
+import { formatAgentLabel, formatInventoryNameWithSource, formatTimelineTimestamp } from "./TuiFormatters.js";
 
 export interface AgentInventoryRow {
   name: string;
@@ -26,6 +26,7 @@ export interface AgentDetailViewModel {
   };
   skills: AgentInventoryRow[];
   mcpServers: AgentInventoryRow[];
+  hooks: AgentInventoryRow[];
   envKeys: AgentInventoryRow[];
   instructions: AgentInventoryRow[];
   history: AgentHistoryRow[];
@@ -59,6 +60,7 @@ export function buildAgentDetailViewModel(input: {
       ...row,
       status: row.status ?? "enabled"
     })),
+    hooks: rowsForKind(setupEvidence, "hook"),
     envKeys: rowsForKind(setupEvidence, "env_key"),
     instructions: rowsForKind(setupEvidence, "agent_instruction"),
     history: timelineEntries
@@ -83,11 +85,18 @@ function rowsForKind(evidence: DiscoveredItem[], kind: DiscoveredItem["kind"]): 
   return evidence
     .filter((item) => item.kind === kind)
     .map((item) => ({
-      name: item.agent === "project" ? `${item.name ?? item.id} (project)` : item.name ?? item.id,
+      name: displayNameForItem(item),
       path: item.sourcePath,
       status: statusForItem(item)
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function displayNameForItem(item: DiscoveredItem): string {
+  const name = item.name ?? item.id;
+  const sourceLabeledName = formatInventoryNameWithSource(name, item);
+  if (sourceLabeledName !== name) return sourceLabeledName;
+  return item.agent === "project" ? `${name} (project)` : name;
 }
 
 function statusForItem(item: DiscoveredItem): string | undefined {
