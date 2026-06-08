@@ -11,6 +11,8 @@ date: 2026-06-08
 
 Make daemon timeline history the first-class Hem TUI experience, document the daemon/timeline workflow in the public docs, and prepare the current main-ahead work for a clean release path. The plan keeps undo behavior conservative: P0 exposes MCP-only dry-run preview in TUI and CLI docs, while non-restorable surfaces remain observe-only.
 
+Historical note: this plan predates the later v0 design-compliance refactor. References below to a `Timeline tab` should be read as the current `History > All changes` Timeline screen with Current Setup above Timeline.
+
 ---
 
 ## Problem Frame
