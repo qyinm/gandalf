@@ -451,12 +451,9 @@ describe("TUI timeline model", () => {
     assert.equal(model.sections[0].items[0].label, "default");
     assert.deepEqual(model.sections[1].items.map((item) => item.label), [
       "Claude Code",
-      "Codex",
-      "Cursor",
-      "OpenCode",
-      "Pi Agent"
+      "Codex"
     ]);
-    assert.deepEqual(model.sections[1].items.map((item) => item.evidenceCount), [2, 1, 0, 0, 0]);
+    assert.deepEqual(model.sections[1].items.map((item) => item.evidenceCount), [2, 1]);
     assert.deepEqual(model.sections[2].items.map((item) => item.label), ["All changes", "Snapshots"]);
     assert.equal(model.selectedItemId, INITIAL_NAV_ITEM_ID);
     assert.equal(model.flatItems[model.cursor]?.id, INITIAL_NAV_ITEM_ID);
