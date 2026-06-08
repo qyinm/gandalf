@@ -27,7 +27,7 @@ interface TimelineViewProps {
   footer?: string;
 }
 
-export const DEFAULT_CURRENT_SETUP_WINDOW_SIZE = 6;
+export const DEFAULT_CURRENT_SETUP_WINDOW_SIZE = 5;
 
 export default function TimelineView({
   entries,
