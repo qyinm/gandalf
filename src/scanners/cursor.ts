@@ -53,6 +53,7 @@ async function scanCursorMcpServers(projectPath: string, homeDir: string): Promi
   for (const target of cursorMcpTargets(projectPath, homeDir)) {
     evidence.push(...await scanCursorMcpFile(target));
   }
+  evidence.push(...await scanCursorRuntimeMcpCache(projectPath, homeDir));
   return evidence;
 }
 
@@ -135,6 +136,85 @@ function interpolationFieldsForMcpServer(value: Record<string, unknown>): string
   return fields;
 }
 
+async function scanCursorRuntimeMcpCache(projectPath: string, homeDir: string): Promise<DiscoveredItem[]> {
+  const cacheRoot = path.join(homeDir, ".cursor", "projects", cursorProjectCacheName(projectPath), "mcps");
+  let entries;
+  try {
+    entries = await readdir(cacheRoot, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const evidence: DiscoveredItem[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const serverDir = path.join(cacheRoot, entry.name);
+    const target: ScanTarget = {
+      absolutePath: serverDir,
+      sourcePath: `~/.cursor/projects/${cursorProjectCacheName(projectPath)}/mcps/${entry.name}`,
+      scope: "user",
+      precedence: 25,
+      agent: "cursor",
+      kind: "mcp_server",
+      parser: "filesystem",
+      sensitivity: "metadata",
+      contentPolicy: "metadata_only",
+      directory: true,
+    };
+
+    const metadata = await readCursorRuntimeMcpMetadata(serverDir, entry.name);
+    evidence.push({
+      ...capturedItem(target, "mcp_server", {
+        transport: "extension-api",
+        remote: false,
+        source: "runtime_cache",
+        serverIdentifier: metadata.serverIdentifier,
+        toolCount: await countChildFiles(path.join(serverDir, "tools"), ".json"),
+        resourceCount: await countChildFiles(path.join(serverDir, "resources"), ".json"),
+      }),
+      id: itemId(target, `runtime-mcp-${entry.name}`),
+      name: metadata.serverName,
+    });
+  }
+
+  return evidence;
+}
+
+async function readCursorRuntimeMcpMetadata(
+  serverDir: string,
+  fallbackName: string
+): Promise<{ serverIdentifier: string; serverName: string }> {
+  try {
+    const parsed = parseJson(await readFile(path.join(serverDir, "SERVER_METADATA.json"), "utf8"));
+    if (parsed.ok) {
+      const record = asRecord(parsed.value);
+      const serverIdentifier = typeof record?.["serverIdentifier"] === "string" ? record["serverIdentifier"] : fallbackName;
+      const serverName = typeof record?.["serverName"] === "string" ? record["serverName"] : serverIdentifier;
+      return { serverIdentifier, serverName };
+    }
+  } catch {
+    // Runtime cache metadata is optional; the directory name is still useful.
+  }
+
+  return { serverIdentifier: fallbackName, serverName: fallbackName };
+}
+
+async function countChildFiles(dir: string, extension: string): Promise<number> {
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries.filter((entry) => entry.isFile() && entry.name.endsWith(extension)).length;
+  } catch {
+    return 0;
+  }
+}
+
+function cursorProjectCacheName(projectPath: string): string {
+  return path.resolve(projectPath).replace(/^\/+/, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
 function containsInterpolation(value: unknown): boolean {
   if (typeof value === "string") {
     return /\$\{(?:env:[^}]+|userHome|workspaceFolder|workspaceFolderBasename|pathSeparator|\/)}/.test(value);
@@ -167,17 +247,98 @@ async function cursorSkillTargets(projectPath: string, homeDir: string): Promise
     projectTarget(projectPath, ".claude/skills", "cursor", "skill", "filesystem", { directory: true }),
     projectTarget(projectPath, ".codex/skills", "cursor", "skill", "filesystem", { directory: true }),
     homeTarget(homeDir, ".cursor/skills", "cursor", "skill", "filesystem", { directory: true }),
+    homeTarget(homeDir, ".cursor/skills-cursor", "cursor", "skill", "filesystem", { directory: true }),
     homeTarget(homeDir, ".agents/skills", "cursor", "skill", "filesystem", { directory: true }),
     homeTarget(homeDir, ".claude/skills", "cursor", "skill", "filesystem", { directory: true }),
     homeTarget(homeDir, ".codex/skills", "cursor", "skill", "filesystem", { directory: true }),
   ];
 
   const nestedProjectTargets = await nestedCursorSkillTargets(projectPath);
+  const pluginTargets = await cursorPluginSkillTargets(homeDir);
   const targets = new Map<string, ScanTarget>();
-  for (const target of [...explicitTargets, ...nestedProjectTargets]) {
+  for (const target of [...explicitTargets, ...nestedProjectTargets, ...pluginTargets]) {
     targets.set(target.sourcePath, target);
   }
   return [...targets.values()];
+}
+
+async function cursorPluginSkillTargets(homeDir: string): Promise<ScanTarget[]> {
+  const targets: ScanTarget[] = [];
+  const pluginCacheRoot = path.join(homeDir, ".cursor", "plugins", "cache");
+  await walkCursorPluginSkillTargets(homeDir, pluginCacheRoot, targets, 0);
+  return targets;
+}
+
+async function walkCursorPluginSkillTargets(
+  homeDir: string,
+  absoluteDir: string,
+  targets: ScanTarget[],
+  depth: number
+): Promise<void> {
+  if (depth > 8) {
+    return;
+  }
+
+  let entries;
+  try {
+    entries = await readdir(absoluteDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  if (entries.some((entry) => entry.isDirectory() && entry.name === ".cursor-plugin")) {
+    const pluginJson = path.join(absoluteDir, ".cursor-plugin", "plugin.json");
+    const skillsPath = await cursorPluginSkillsPath(pluginJson, absoluteDir);
+    if (skillsPath) {
+      targets.push({
+        absolutePath: skillsPath,
+        sourcePath: `~/${path.relative(homeDir, skillsPath).split(path.sep).join("/")}`,
+        scope: "user",
+        precedence: 20,
+        agent: "cursor",
+        kind: "skill",
+        parser: "filesystem",
+        sensitivity: "metadata",
+        contentPolicy: "metadata_only",
+        directory: true,
+      });
+    }
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === ".git" || entry.name === "node_modules") {
+      continue;
+    }
+    await walkCursorPluginSkillTargets(homeDir, path.join(absoluteDir, entry.name), targets, depth + 1);
+  }
+}
+
+async function cursorPluginSkillsPath(pluginJson: string, pluginRoot: string): Promise<string | null> {
+  let parsed;
+  try {
+    parsed = parseJson(await readFile(pluginJson, "utf8"));
+  } catch {
+    return null;
+  }
+  if (!parsed.ok) {
+    return null;
+  }
+
+  const record = asRecord(parsed.value);
+  const skills = typeof record?.["skills"] === "string" ? record["skills"] : undefined;
+  if (!skills) {
+    return null;
+  }
+
+  const absolutePath = path.resolve(pluginRoot, skills);
+  try {
+    if ((await lstat(absolutePath)).isDirectory()) {
+      return absolutePath;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 async function nestedCursorSkillTargets(projectPath: string): Promise<ScanTarget[]> {
@@ -337,6 +498,9 @@ async function walkSkillFiles(dir: string, files: string[], depth: number, seen:
       continue;
     }
     if (entryStats.isSymbolicLink()) {
+      if (entry.name === "SKILL.md") {
+        files.push(absolutePath);
+      }
       continue;
     }
     if (entryStats.isDirectory() && !ignoredDirectory(entry.name)) {
