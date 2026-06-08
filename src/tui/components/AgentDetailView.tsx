@@ -48,6 +48,7 @@ export default function AgentDetailView({
 
       <InventorySection title="Skills" rows={model.skills} />
       <InventorySection title="MCP Servers" rows={model.mcpServers} />
+      <InventorySection title="Hooks" rows={model.hooks} />
       <InventorySection title="Env Keys" rows={model.envKeys} />
       <InventorySection title="Instructions" rows={model.instructions} showPath />
 
