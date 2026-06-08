@@ -1,12 +1,15 @@
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
-import { ignoredDirectory, restorePolicyFor } from "../policy.js";
+import { ignoredDirectory } from "../policy.js";
 import { parseJson } from "../parsers.js";
 import type { DiscoveredItem, EvidenceScope } from "../types.js";
 import type { ScanTarget } from "./index.js";
 import { homeTarget, projectTarget } from "./index.js";
 import type { ScannerPlugin } from "./scanner-plugin.js";
+import { asRecord, createScannerBase, metadataStringArray } from "./base.js";
+
+const base = createScannerBase({ agentId: "cursor" });
 
 export const cursorScanner: ScannerPlugin = {
   agentId: "cursor",
@@ -71,7 +74,7 @@ async function scanCursorMcpFile(target: ScanTarget): Promise<DiscoveredItem[]> 
 
   const servers = asRecord(asRecord(parsed.value)?.["mcpServers"]);
   if (!servers) {
-    return [capturedItem(target, "agent_config", undefined, parsed.value)];
+    return [base.captured(target, "agent_config", undefined, parsed.value)];
   }
 
   return Object.entries(servers).map(([name, value]) => {
@@ -79,7 +82,7 @@ async function scanCursorMcpFile(target: ScanTarget): Promise<DiscoveredItem[]> 
     const transport = transportForMcpServer(serverValue);
     const remote = transport !== "stdio" && Boolean(serverValue["url"]);
     return {
-      ...capturedItem(
+      ...base.captured(
         {
           ...target,
           kind: "mcp_server",
@@ -97,7 +100,7 @@ async function scanCursorMcpFile(target: ScanTarget): Promise<DiscoveredItem[]> 
         },
         serverValue
       ),
-      id: itemId(target, `mcp-${name}`),
+      id: base.itemId(target, `mcp-${name}`),
       name,
     };
   });
@@ -265,7 +268,7 @@ async function scanCursorSkillDirectory(target: ScanTarget): Promise<DiscoveredI
     const relativeSkillDir = path.relative(target.absolutePath, skillDir).split(path.sep).join("/");
     const sourcePath = relativeSkillDir ? `${target.sourcePath}/${relativeSkillDir}` : target.sourcePath;
     evidence.push({
-      id: itemId({ ...target, sourcePath }, "skill"),
+      id: base.itemId({ ...target, sourcePath }, "skill"),
       agent: "cursor",
       kind: "skill",
       sourcePath,
@@ -496,7 +499,7 @@ async function scanCursorHookFile(target: ScanTarget): Promise<DiscoveredItem[]>
       const hookValue = cursorHookValue(definition, type, command);
 
       evidence.push({
-        ...capturedItem(
+        ...base.captured(
           {
             ...target,
             kind: "hook",
@@ -515,7 +518,7 @@ async function scanCursorHookFile(target: ScanTarget): Promise<DiscoveredItem[]>
           },
           hookValue
         ),
-        id: itemId(target, `hook-${eventName}-${hookIndex}`),
+        id: base.itemId(target, `hook-${eventName}-${hookIndex}`),
         name: `${eventName}.${hookIndex}`,
       });
     }
@@ -580,52 +583,12 @@ function cursorTeamHooksBlindSpot(): DiscoveredItem {
   };
 }
 
-function capturedItem(
-  target: ScanTarget,
-  kind: DiscoveredItem["kind"],
-  metadata?: Record<string, unknown>,
-  value?: unknown
-): DiscoveredItem {
-  return {
-    id: itemId(target, kind),
-    agent: target.agent,
-    kind,
-    sourcePath: target.sourcePath,
-    scope: target.scope,
-    precedence: target.precedence,
-    parser: target.parser,
-    sensitivity: target.sensitivity,
-    contentPolicy: target.contentPolicy,
-    restorePolicy: restorePolicyFor(kind),
-    captureStatus: "captured",
-    confidence: "high",
-    ...(value === undefined ? {} : { value }),
-    ...(metadata === undefined ? {} : { metadata }),
-  };
-}
-
 function parseFailedItem(target: ScanTarget, kind: DiscoveredItem["kind"], error: string): DiscoveredItem {
-  return {
-    ...capturedItem(target, kind, { error }),
-    id: itemId(target, `${kind}-parse-failed`),
-    captureStatus: "parse_failed",
-  };
-}
-
-function itemId(target: Pick<ScanTarget, "scope" | "agent" | "sourcePath">, suffix: string): string {
-  return `${target.scope}.${target.agent}.${target.sourcePath}.${suffix}`
-    .replace(/^~\//, "home/")
-    .replace(/[^A-Za-z0-9_.-]+/g, ".")
-    .replace(/^\.+|\.+$/g, "")
-    .toLowerCase();
+  return base.parseFailed(target, kind, error);
 }
 
 function normalizeSourcePath(root: string, absolutePath: string): string {
   return path.relative(root, absolutePath).split(path.sep).join("/");
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
 function dedupeSkillsByName(evidence: DiscoveredItem[]): DiscoveredItem[] {
@@ -672,8 +635,4 @@ function dedupeSkillsByName(evidence: DiscoveredItem[]): DiscoveredItem[] {
   }
 
   return result;
-}
-
-function metadataStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }

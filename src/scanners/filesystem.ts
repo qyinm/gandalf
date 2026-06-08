@@ -5,6 +5,7 @@ import { ignoredDirectory, MAX_DIRECTORY_DEPTH, MAX_DIRECTORY_ENTRIES, MAX_FILE_
 import { parseDotenvKeys, parseJson, parseMarkdown, parseTomlKeyValues } from "../parsers.js";
 import type { DiscoveredItem } from "../types.js";
 import type { ScanTarget } from "./index.js";
+import { scannerItemId } from "./base.js";
 
 export async function scanTargets(targets: ScanTarget[]): Promise<DiscoveredItem[]> {
   const evidence: DiscoveredItem[] = [];
@@ -340,11 +341,7 @@ function baseItem(
 }
 
 function itemId(target: ScanTarget, suffix: string): string {
-  return `${target.scope}.${target.agent}.${target.sourcePath}.${suffix}`
-    .replace(/^~\//, "home/")
-    .replace(/[^A-Za-z0-9_.-]+/g, ".")
-    .replace(/^\.+|\.+$/g, "")
-    .toLowerCase();
+  return scannerItemId(target.scope, target.agent, target.sourcePath, suffix);
 }
 
 function isNotFound(error: unknown): boolean {

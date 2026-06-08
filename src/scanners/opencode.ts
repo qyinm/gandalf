@@ -5,6 +5,9 @@ import { scanTargets } from "./filesystem.js";
 import type { DiscoveredItem } from "../types.js";
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
+import { createScannerBase, metadataStringArray } from "./base.js";
+
+const base = createScannerBase({ agentId: "opencode" });
 
 export const opencodeScanner: ScannerPlugin = {
   agentId: "opencode",
@@ -92,7 +95,7 @@ async function scanOpenCodeSkillDirectory(target: ScanTarget): Promise<Discovere
     const entrypointStatus = await skillEntrypointStatus(target.absolutePath, skillFile);
 
     evidence.push({
-      id: itemId({ ...target, sourcePath }, "skill"),
+      id: base.itemId({ ...target, sourcePath }, "skill"),
       agent: target.agent,
       kind: "skill",
       sourcePath,
@@ -251,14 +254,6 @@ function builtinCustomizeOpenCodeSkill(): DiscoveredItem {
   };
 }
 
-function itemId(target: ScanTarget, suffix: string): string {
-  return `${target.scope}.${target.agent}.${target.sourcePath}.${suffix}`
-    .replace(/^~\//, "home/")
-    .replace(/[^A-Za-z0-9_.-]+/g, ".")
-    .replace(/^\.+|\.+$/g, "")
-    .toLowerCase();
-}
-
 function dedupeSkillsByName(evidence: DiscoveredItem[]): DiscoveredItem[] {
   const result: DiscoveredItem[] = [];
   const skillIndexes = new Map<string, number>();
@@ -290,8 +285,4 @@ function dedupeSkillsByName(evidence: DiscoveredItem[]): DiscoveredItem[] {
   }
 
   return result;
-}
-
-function metadataStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
