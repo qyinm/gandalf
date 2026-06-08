@@ -170,7 +170,7 @@ Every command supports `--json` where structured output is useful.
 |---|---|
 | Claude Code | settings.json, .mcp.json, CLAUDE.md, skills, hooks, agents |
 | Codex | .codex/config.toml, AGENTS.md, MCP config |
-| Cursor | .cursor/mcp.json |
+| Cursor | .cursor/mcp.json, skills, hooks |
 | OpenCode | config, skills |
 | Pi Agent | settings, extensions, skills, themes, prompts, agents, models |
 | Project | AGENTS.md, CLAUDE.md, CODE.md, .mcp.json, .env keys |
