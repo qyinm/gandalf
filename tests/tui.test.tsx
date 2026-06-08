@@ -545,10 +545,10 @@ describe("TUI timeline model", () => {
   it("builds the design navigation sections with Timeline selected first", () => {
     const model = buildTuiNavigationModel({
       evidence: [
-        { agent: "claude-code" },
-        { agent: "codex" },
-        { agent: "claude-code" },
-        { agent: "project" }
+        { agent: "claude-code", kind: "skill" },
+        { agent: "codex", kind: "mcp_server" },
+        { agent: "claude-code", kind: "hook" },
+        { agent: "project", kind: "env_key" }
       ]
     });
 
@@ -564,9 +564,24 @@ describe("TUI timeline model", () => {
     assert.equal(model.flatItems[model.cursor]?.id, INITIAL_NAV_ITEM_ID);
   });
 
+  it("counts only setup inventory in agent navigation totals", () => {
+    const model = buildTuiNavigationModel({
+      evidence: [
+        { agent: "claude-code", kind: "skill" },
+        { agent: "claude-code", kind: "hook" },
+        { agent: "claude-code", kind: "permission" },
+        { agent: "claude-code", kind: "agent_config" },
+        { agent: "claude-code", kind: "agent_instruction" },
+        { agent: "codex", kind: "mcp_server" }
+      ]
+    });
+
+    assert.deepEqual(model.sections[1].items.map((item) => item.evidenceCount), [2, 1]);
+  });
+
   it("keeps agent selection on Timeline as a filter", () => {
     const model = buildTuiNavigationModel({
-      evidence: [{ agent: "claude-code" }]
+      evidence: [{ agent: "claude-code", kind: "skill" }]
     });
     const agentItem = model.flatItems.find((item) => item.id === "agent:claude-code");
     assert.ok(agentItem);
@@ -589,7 +604,7 @@ describe("TUI timeline model", () => {
       selectedProfile: "default"
     });
     const model = buildTuiNavigationModel({
-      evidence: [{ agent: "claude-code" }],
+      evidence: [{ agent: "claude-code", kind: "skill" }],
       selectedItemId
     });
 
@@ -600,7 +615,7 @@ describe("TUI timeline model", () => {
 
   it("opens agent detail when selecting an agent outside Timeline", () => {
     const model = buildTuiNavigationModel({
-      evidence: [{ agent: "claude-code" }]
+      evidence: [{ agent: "claude-code", kind: "skill" }]
     });
     const agentItem = model.flatItems.find((item) => item.id === "agent:claude-code");
     assert.ok(agentItem);
@@ -618,14 +633,16 @@ describe("TUI timeline model", () => {
 
   it("adds All agents as the first timeline filter", () => {
     const filters = buildAgentFilterEntries([
-      { agent: "claude-code" },
-      { agent: "codex" },
-      { agent: "claude-code" }
+      { agent: "claude-code", kind: "skill" },
+      { agent: "codex", kind: "mcp_server" },
+      { agent: "claude-code", kind: "hook" },
+      { agent: "claude-code", kind: "permission" }
     ]);
 
     assert.equal(filters[0].id, null);
     assert.equal(filters[0].label, "All agents");
     assert.equal(filters[0].evidenceCount, 3);
+    assert.deepEqual(filters.slice(1).map((filter) => filter.evidenceCount), [2, 1]);
     assert.deepEqual(filters.slice(1).map((filter) => filter.id), ["claude-code", "codex"]);
   });
 });

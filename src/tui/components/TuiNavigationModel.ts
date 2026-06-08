@@ -39,7 +39,7 @@ export const DEFAULT_PROFILE = "default";
 export const INITIAL_NAV_ITEM_ID = "history:all-changes";
 
 export function buildTuiNavigationModel(input: {
-  evidence: Pick<DiscoveredItem, "agent">[];
+  evidence: Pick<DiscoveredItem, "agent" | "kind">[];
   selectedItemId?: string;
   cursor?: number;
 }): TuiNavigationModel {
@@ -60,7 +60,7 @@ export function buildTuiNavigationModel(input: {
   };
 }
 
-export function buildTuiNavSections(evidence: Pick<DiscoveredItem, "agent">[]): TuiNavSection[] {
+export function buildTuiNavSections(evidence: Pick<DiscoveredItem, "agent" | "kind">[]): TuiNavSection[] {
   const agentItems = buildAgentEntries(evidence).flatMap<TuiNavItem>((agent) => {
     if (!agent.id) return [];
 

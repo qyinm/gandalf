@@ -6,7 +6,7 @@
  */
 import React from "react";
 import { Text, Box } from "ink";
-import type { AgentId } from "../../types.js";
+import type { AgentId, DiscoveredItem, EvidenceKind } from "../../types.js";
 import { formatAgentLabel } from "./TuiFormatters.js";
 import type { TuiNavSection } from "./TuiNavigationModel.js";
 
@@ -32,35 +32,46 @@ export const VISIBLE_AGENTS: AgentId[] = [
   "pi-agent",
 ];
 
+const SIDEBAR_COUNT_KINDS = new Set<EvidenceKind>(["skill", "mcp_server", "hook"]);
+
 function agentLabel(id: AgentId): string {
   return formatAgentLabel(id);
 }
 
+type AgentCountEvidence = Pick<DiscoveredItem, "agent" | "kind">;
+
+function countSidebarInventory(evidence: AgentCountEvidence[], agent?: AgentId): number {
+  return evidence.filter((item) => {
+    if (!SIDEBAR_COUNT_KINDS.has(item.kind)) return false;
+    return agent ? item.agent === agent : item.agent !== "project";
+  }).length;
+}
+
 export function buildAgentEntries(
-  evidence: { agent: AgentId }[]
+  evidence: AgentCountEvidence[]
 ): AgentEntry[] {
   const found = new Set(evidence.map((e) => e.agent));
   return VISIBLE_AGENTS.filter((a) => found.has(a)).map((id) => ({
     id,
     label: agentLabel(id),
-    evidenceCount: evidence.filter((e) => e.agent === id).length,
+    evidenceCount: countSidebarInventory(evidence, id),
   }));
 }
 
-export function buildSupportedAgentEntries(evidence: { agent: AgentId }[]): AgentEntry[] {
+export function buildSupportedAgentEntries(evidence: AgentCountEvidence[]): AgentEntry[] {
   return VISIBLE_AGENTS.map((id) => ({
     id,
     label: agentLabel(id),
-    evidenceCount: evidence.filter((e) => e.agent === id).length,
+    evidenceCount: countSidebarInventory(evidence, id),
   }));
 }
 
-export function buildAgentFilterEntries(evidence: { agent: AgentId }[]): AgentEntry[] {
+export function buildAgentFilterEntries(evidence: AgentCountEvidence[]): AgentEntry[] {
   return [
     {
       id: null,
       label: "All agents",
-      evidenceCount: evidence.length,
+      evidenceCount: countSidebarInventory(evidence),
     },
     ...buildAgentEntries(evidence),
   ];
