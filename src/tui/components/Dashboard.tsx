@@ -33,7 +33,6 @@ import type { TimelineUndoPlan } from "../../timeline-undo.js";
 import type { GraphDiff } from "../../diff.js";
 
 import Sidebar, { buildAgentEntries, buildAgentFilterEntries, agentLabelStr } from "./Sidebar.js";
-import type { TabId } from "./TabBar.js";
 import ScanView, { DEFAULT_SCAN_WINDOW_SIZE } from "./ScanView.js";
 import AuditView from "./AuditView.js";
 import SnapshotList from "./SnapshotList.js";
@@ -59,6 +58,8 @@ import {
 } from "./TuiNavigationModel.js";
 
 // ── State types ──────────────────────────────────────────────
+
+type TabId = "timeline" | "snapshots" | "scan" | "audit" | "diff";
 
 type AppError = {
   code: string;
