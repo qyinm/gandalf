@@ -65,6 +65,8 @@ export interface CurrentSetupSummaryModel {
   instructions: string;
 }
 
+export type CurrentSetupInventorySection = "skill" | "mcp_server" | "hook";
+
 export function buildTimelineViewModel(input: {
   entries: TimelineEntry[];
   selectedIndex: number;
@@ -150,7 +152,7 @@ function rowsForKind(
       const name = displayNameForItem(item);
       return agentFilter ? name : `${formatAgentLabel(item.agent)}: ${name}`;
     });
-  return [...new Set(rows)].sort().slice(0, 6);
+  return [...new Set(rows)].sort();
 }
 
 function displayNameForItem(

@@ -27,7 +27,7 @@ import { diffGraphs } from "../../diff.js";
 import type { AuditFinding } from "../../types.js";
 import type { ScanResult } from "../../scan.js";
 import type { RuntimeOptions } from "../../cli-shared.js";
-import type { AgentId, DaemonStatusReadResult, Snapshot, TimelineEntry } from "../../types.js";
+import type { AgentId, DaemonStatusReadResult, DiscoveredItem, Snapshot, TimelineEntry } from "../../types.js";
 import type { TimelineCorruptEvent } from "../../store.js";
 import type { TimelineUndoPlan } from "../../timeline-undo.js";
 import type { GraphDiff } from "../../diff.js";
@@ -42,8 +42,12 @@ import { buildSaveSetupViewModel } from "./SaveSetupViewModel.js";
 import CompareView from "./CompareView.js";
 import { latestSnapshotByCreatedAt } from "./CompareViewModel.js";
 import ErrorPage from "./ErrorPage.js";
-import TimelineView from "./TimelineView.js";
-import { clampTimelineIndex } from "./TimelineViewModel.js";
+import TimelineView, { DEFAULT_CURRENT_SETUP_WINDOW_SIZE } from "./TimelineView.js";
+import {
+  buildCurrentSetupSummaryModel,
+  clampTimelineIndex,
+  type CurrentSetupInventorySection
+} from "./TimelineViewModel.js";
 import AgentDetailView from "./AgentDetailView.js";
 import ProfileView from "./ProfileView.js";
 import {
@@ -76,6 +80,8 @@ type DashboardState = {
   timelineEntries: TimelineEntry[];
   timelineCorruptEvents: TimelineCorruptEvent[];
   timelineCursor: number;
+  currentSetupFocus: CurrentSetupInventorySection | "timeline";
+  currentSetupOffsets: Record<CurrentSetupInventorySection, number>;
   timelineUndoState:
     | { type: "idle" }
     | { type: "rendered"; plan: TimelineUndoPlan }
@@ -150,6 +156,8 @@ export default function Dashboard({ options }: DashboardProps) {
     timelineEntries: [],
     timelineCorruptEvents: [],
     timelineCursor: 0,
+    currentSetupFocus: "timeline",
+    currentSetupOffsets: emptyCurrentSetupOffsets(),
     timelineUndoState: { type: "idle" },
     snapshots: [],
     saveSetupState: { type: "idle" },
@@ -209,6 +217,8 @@ export default function Dashboard({ options }: DashboardProps) {
           timelineEntries: timeline.entries,
           timelineCorruptEvents: timeline.corruptEvents,
           timelineCursor: 0,
+          currentSetupFocus: "timeline",
+          currentSetupOffsets: emptyCurrentSetupOffsets(),
           timelineUndoState: { type: "idle" },
           daemonStatus,
         }));
@@ -268,6 +278,7 @@ export default function Dashboard({ options }: DashboardProps) {
         timelineEntries: timeline.entries,
         timelineCorruptEvents: timeline.corruptEvents,
         timelineCursor: clampTimelineIndex(s.timelineCursor, timeline.entries),
+        currentSetupOffsets: clampCurrentSetupOffsets(s.currentSetupOffsets, scan.evidence, newAgent),
         timelineUndoState: { type: "idle" },
         diffState: { type: "idle" },
         error: null,
@@ -300,6 +311,7 @@ export default function Dashboard({ options }: DashboardProps) {
         timelineEntries: timeline.entries,
         timelineCorruptEvents: timeline.corruptEvents,
         timelineCursor: clampTimelineIndex(s.timelineCursor, timeline.entries),
+        currentSetupOffsets: clampCurrentSetupOffsets(s.currentSetupOffsets, s.scan?.evidence ?? [], agent),
         timelineUndoState: { type: "idle" },
         diffState: { type: "idle" },
         scanScrollOffset: 0,
@@ -335,6 +347,8 @@ export default function Dashboard({ options }: DashboardProps) {
       timelineEntries: timeline.entries,
       timelineCorruptEvents: timeline.corruptEvents,
       timelineCursor: clampTimelineIndex(s.timelineCursor, timeline.entries),
+      currentSetupFocus: "timeline",
+      currentSetupOffsets: emptyCurrentSetupOffsets(),
       timelineUndoState: { type: "idle" },
       diffState: { type: "idle" }
     }));
@@ -361,6 +375,8 @@ export default function Dashboard({ options }: DashboardProps) {
       timelineEntries: timeline.entries,
       timelineCorruptEvents: timeline.corruptEvents,
       timelineCursor: clampTimelineIndex(s.timelineCursor, timeline.entries),
+      currentSetupFocus: "timeline",
+      currentSetupOffsets: emptyCurrentSetupOffsets(),
       timelineUndoState: { type: "idle" },
       diffState: { type: "idle" }
     }));
@@ -646,6 +662,7 @@ export default function Dashboard({ options }: DashboardProps) {
           : state.scan.evidence.length
         : 0;
       const maxScanScrollOffset = Math.max(0, scanEvidenceCount - DEFAULT_SCAN_WINDOW_SIZE);
+      const currentSetupFocus = state.currentSetupFocus;
 
       if (key.escape) {
         if (state.previousView) {
@@ -753,6 +770,14 @@ export default function Dashboard({ options }: DashboardProps) {
         return;
       }
 
+      if ((key.tab || key.shiftTab) && state.activeTab === "timeline") {
+        setState((s) => ({
+          ...s,
+          currentSetupFocus: nextCurrentSetupFocus(s.currentSetupFocus, key.shiftTab ? -1 : 1),
+        }));
+        return;
+      }
+
       // --- ↑↓/jk: move the persistent left navigation selection ---
       if (key.upArrow || input === "k") {
         setState((s) => ({
@@ -771,7 +796,15 @@ export default function Dashboard({ options }: DashboardProps) {
 
       // --- ←→/hl: move within the current content panel when it has local selection ---
       if (key.leftArrow || input === "h") {
-        if (state.activeTab === "scan") {
+        if (state.activeTab === "timeline" && currentSetupFocus !== "timeline") {
+          setState((s) => ({
+            ...s,
+            currentSetupOffsets: {
+              ...s.currentSetupOffsets,
+              [currentSetupFocus]: Math.max(0, s.currentSetupOffsets[currentSetupFocus] - DEFAULT_CURRENT_SETUP_WINDOW_SIZE),
+            },
+          }));
+        } else if (state.activeTab === "scan") {
           setState((s) => ({
             ...s,
             scanScrollOffset: Math.max(0, s.scanScrollOffset - 1),
@@ -788,7 +821,20 @@ export default function Dashboard({ options }: DashboardProps) {
         return;
       }
       if (key.rightArrow || input === "l") {
-        if (state.activeTab === "scan") {
+        if (state.activeTab === "timeline" && currentSetupFocus !== "timeline") {
+          const maxOffset = maxCurrentSetupOffset(
+            state.scan?.evidence ?? [],
+            state.selectedAgent,
+            currentSetupFocus
+          );
+          setState((s) => ({
+            ...s,
+            currentSetupOffsets: {
+              ...s.currentSetupOffsets,
+              [currentSetupFocus]: Math.min(maxOffset, s.currentSetupOffsets[currentSetupFocus] + DEFAULT_CURRENT_SETUP_WINDOW_SIZE),
+            },
+          }));
+        } else if (state.activeTab === "scan") {
           setState((s) => ({
             ...s,
             scanScrollOffset: Math.min(maxScanScrollOffset, s.scanScrollOffset + 1),
@@ -936,7 +982,7 @@ export default function Dashboard({ options }: DashboardProps) {
             {state.activeTab === "scan"
               ? "↑↓ move  Enter open  ←→ scroll  s=save  c=compare  a=audit  r=rescan  q=quit"
               : state.activeTab === "timeline"
-                ? "↑↓ move  Enter open  ←→ timeline  u=preview undo  c=compare  r=rescan  q=quit"
+                ? "↑↓ move  Enter open  Tab setup  ←→ scroll  u=preview undo  c=compare  r=rescan  q=quit"
                 : "↑↓ move  Enter open  s=save  c=compare  r=rescan  q=quit"}
           </Text>
         </Box>
@@ -956,6 +1002,8 @@ export default function Dashboard({ options }: DashboardProps) {
         corruptEvents={state.timelineCorruptEvents}
         undoPlan={state.timelineUndoState.type === "rendered" ? state.timelineUndoState.plan : null}
         undoError={state.timelineUndoState.type === "error" ? state.timelineUndoState.message : null}
+        currentSetupFocus={state.currentSetupFocus}
+        currentSetupOffsets={state.currentSetupOffsets}
       />
     );
   }
@@ -1151,6 +1199,61 @@ function captureDashboardView(state: DashboardState): DashboardView {
     selectedAgent: state.selectedAgent,
     profileScreenOpen: state.profileScreenOpen
   };
+}
+
+const CURRENT_SETUP_FOCUS_ORDER: Array<CurrentSetupInventorySection | "timeline"> = [
+  "skill",
+  "mcp_server",
+  "hook",
+  "timeline",
+];
+
+function nextCurrentSetupFocus(
+  current: CurrentSetupInventorySection | "timeline",
+  direction: 1 | -1
+): CurrentSetupInventorySection | "timeline" {
+  const index = CURRENT_SETUP_FOCUS_ORDER.indexOf(current);
+  const nextIndex = (index + direction + CURRENT_SETUP_FOCUS_ORDER.length) % CURRENT_SETUP_FOCUS_ORDER.length;
+  return CURRENT_SETUP_FOCUS_ORDER[nextIndex] ?? "timeline";
+}
+
+function emptyCurrentSetupOffsets(): Record<CurrentSetupInventorySection, number> {
+  return {
+    skill: 0,
+    mcp_server: 0,
+    hook: 0,
+  };
+}
+
+function clampCurrentSetupOffsets(
+  offsets: Record<CurrentSetupInventorySection, number>,
+  evidence: DiscoveredItem[],
+  agent: AgentId | null
+): Record<CurrentSetupInventorySection, number> {
+  return {
+    skill: Math.min(offsets.skill, maxCurrentSetupOffset(evidence, agent, "skill")),
+    mcp_server: Math.min(offsets.mcp_server, maxCurrentSetupOffset(evidence, agent, "mcp_server")),
+    hook: Math.min(offsets.hook, maxCurrentSetupOffset(evidence, agent, "hook")),
+  };
+}
+
+function maxCurrentSetupOffset(
+  evidence: DiscoveredItem[],
+  agent: AgentId | null,
+  section: CurrentSetupInventorySection
+): number {
+  return Math.max(0, currentSetupRowsForSection(evidence, agent, section).length - DEFAULT_CURRENT_SETUP_WINDOW_SIZE);
+}
+
+function currentSetupRowsForSection(
+  evidence: DiscoveredItem[],
+  agent: AgentId | null,
+  section: CurrentSetupInventorySection
+): string[] {
+  const model = buildCurrentSetupSummaryModel({ evidence, agentFilter: agent });
+  if (section === "skill") return model.skillRows;
+  if (section === "mcp_server") return model.mcpServerRows;
+  return model.hookRows;
 }
 
 export function daemonTrustHeaderModel(status: DaemonStatusReadResult | null): {
