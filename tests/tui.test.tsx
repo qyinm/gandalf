@@ -22,6 +22,8 @@ import { buildCompareViewModel, latestSnapshotByCreatedAt } from "../src/tui/com
 import { buildProfileViewModel } from "../src/tui/components/ProfileViewModel.js";
 import {
   formatAgentLabel,
+  formatInventoryNameWithSource,
+  formatInventorySourceRoot,
   formatTimelineTimestamp,
   truncateText
 } from "../src/tui/components/TuiFormatters.js";
@@ -228,6 +230,47 @@ describe("TUI timeline model", () => {
     assert.equal(truncateText("abcdefghijkl", 8), "abcde...");
   });
 
+  it("formats compact inventory source roots", () => {
+    const skill = discoveredItem({
+      id: "skill:review",
+      agent: "claude-code",
+      kind: "skill",
+      name: "review",
+      sourcePath: "~/.claude/skills/review",
+      scope: "user"
+    });
+    const mcpServer = discoveredItem({
+      id: "mcp:github",
+      agent: "claude-code",
+      kind: "mcp_server",
+      name: "github",
+      sourcePath: ".mcp.json",
+      scope: "project"
+    });
+    const hook = discoveredItem({
+      id: "hook:pre",
+      agent: "cursor",
+      kind: "hook",
+      name: "pre",
+      sourcePath: "~/.cursor/hooks.json",
+      scope: "user"
+    });
+    const managed = discoveredItem({
+      id: "hook:managed",
+      agent: "cursor",
+      kind: "hook",
+      name: "managed",
+      sourcePath: "/Library/Application Support/Cursor/hooks.json",
+      scope: "managed"
+    });
+
+    assert.equal(formatInventorySourceRoot(skill), "~/.claude/skills");
+    assert.equal(formatInventorySourceRoot(mcpServer), ".mcp.json");
+    assert.equal(formatInventorySourceRoot(hook), "~/.cursor/hooks.json");
+    assert.equal(formatInventorySourceRoot(managed), "Cursor/hooks.json");
+    assert.equal(formatInventoryNameWithSource("github", mcpServer), "github (project: .mcp.json)");
+  });
+
   it("renders an empty state with daemon start guidance", () => {
     const model = buildTimelineViewModel({
       entries: [],
@@ -283,12 +326,40 @@ describe("TUI timeline model", () => {
       agentFilter: null,
       evidence: [
         discoveredItem({ id: "agent:claude", agent: "claude-code", kind: "agent_config" }),
-        discoveredItem({ id: "skill:review", agent: "claude-code", kind: "skill", name: "review" }),
-        discoveredItem({ id: "mcp:github", agent: "claude-code", kind: "mcp_server", name: "github" }),
-        discoveredItem({ id: "hook:pre", agent: "claude-code", kind: "hook", name: "pre" }),
+        discoveredItem({
+          id: "skill:review",
+          agent: "claude-code",
+          kind: "skill",
+          name: "review",
+          sourcePath: "~/.claude/skills/review",
+          scope: "user"
+        }),
+        discoveredItem({
+          id: "mcp:github",
+          agent: "claude-code",
+          kind: "mcp_server",
+          name: "github",
+          sourcePath: "~/.claude/settings.json",
+          scope: "user"
+        }),
+        discoveredItem({
+          id: "hook:pre",
+          agent: "claude-code",
+          kind: "hook",
+          name: "pre",
+          sourcePath: "~/.claude/settings.json",
+          scope: "user"
+        }),
         discoveredItem({ id: "permission:bash", agent: "claude-code", kind: "permission", name: "bash" }),
         discoveredItem({ id: "instructions", agent: "claude-code", kind: "agent_instruction", sourcePath: "/project/AGENTS.md" }),
-        discoveredItem({ id: "skill:codex", agent: "codex", kind: "skill", name: "codex-skill" }),
+        discoveredItem({
+          id: "skill:codex",
+          agent: "codex",
+          kind: "skill",
+          name: "codex-skill",
+          sourcePath: "~/.codex/skills/codex-skill",
+          scope: "user"
+        }),
         discoveredItem({ id: "env:OPENAI_API_KEY", agent: "project", kind: "env_key", name: "OPENAI_API_KEY" })
       ]
     });
@@ -300,9 +371,12 @@ describe("TUI timeline model", () => {
     assert.equal(model.hooks, 1);
     assert.equal(model.permissions, 1);
     assert.equal(model.envKeys, 1);
-    assert.deepEqual(model.skillRows, ["Claude Code: review", "Codex: codex-skill"]);
-    assert.deepEqual(model.mcpServerRows, ["Claude Code: github"]);
-    assert.deepEqual(model.hookRows, ["Claude Code: pre"]);
+    assert.deepEqual(model.skillRows, [
+      "Claude Code: review (~/.claude/skills)",
+      "Codex: codex-skill (~/.codex/skills)"
+    ]);
+    assert.deepEqual(model.mcpServerRows, ["Claude Code: github (~/.claude/settings.json)"]);
+    assert.deepEqual(model.hookRows, ["Claude Code: pre (~/.claude/settings.json)"]);
     assert.deepEqual(model.envKeyRows, ["Project: OPENAI_API_KEY"]);
     assert.equal(model.instructions, "/project/AGENTS.md");
   });
@@ -315,23 +389,53 @@ describe("TUI timeline model", () => {
           id: `skill:${index}`,
           agent: "codex",
           kind: "skill",
-          name: `skill-${index}`
+          name: `skill-${index}`,
+          sourcePath: `~/.codex/skills/skill-${index}`,
+          scope: "user"
         })
       )
     });
 
     assert.equal(model.skills, 8);
     assert.equal(model.skillRows.length, 8);
-    assert.deepEqual(model.skillRows.slice(0, 2), ["skill-0", "skill-1"]);
-    assert.deepEqual(model.skillRows.slice(-2), ["skill-6", "skill-7"]);
+    assert.deepEqual(model.skillRows.slice(0, 2), [
+      "skill-0 (~/.codex/skills)",
+      "skill-1 (~/.codex/skills)"
+    ]);
+    assert.deepEqual(model.skillRows.slice(-2), [
+      "skill-6 (~/.codex/skills)",
+      "skill-7 (~/.codex/skills)"
+    ]);
   });
 
   it("summarizes the current setup for an agent-filtered Timeline", () => {
     const model = buildCurrentSetupSummaryModel({
       agentFilter: "claude-code",
       evidence: [
-        discoveredItem({ id: "skill:review", agent: "claude-code", kind: "skill", name: "review" }),
-        discoveredItem({ id: "mcp:github", agent: "claude-code", kind: "mcp_server", name: "github" }),
+        discoveredItem({
+          id: "skill:review",
+          agent: "claude-code",
+          kind: "skill",
+          name: "review",
+          sourcePath: "~/.claude/skills/review",
+          scope: "user"
+        }),
+        discoveredItem({
+          id: "mcp:github",
+          agent: "claude-code",
+          kind: "mcp_server",
+          name: "github",
+          sourcePath: ".mcp.json",
+          scope: "project"
+        }),
+        discoveredItem({
+          id: "hook:pre",
+          agent: "claude-code",
+          kind: "hook",
+          name: "pre",
+          sourcePath: "~/.claude/settings.json",
+          scope: "user"
+        }),
         discoveredItem({ id: "skill:codex", agent: "codex", kind: "skill", name: "codex-skill" }),
         discoveredItem({ id: "env:OPENAI_API_KEY", agent: "project", kind: "env_key", name: "OPENAI_API_KEY" })
       ]
@@ -341,10 +445,11 @@ describe("TUI timeline model", () => {
     assert.equal(model.agents, 1);
     assert.equal(model.skills, 1);
     assert.equal(model.mcpServers, 1);
+    assert.equal(model.hooks, 1);
     assert.equal(model.envKeys, 1);
-    assert.deepEqual(model.skillRows, ["review"]);
-    assert.deepEqual(model.mcpServerRows, ["github"]);
-    assert.deepEqual(model.hookRows, []);
+    assert.deepEqual(model.skillRows, ["review (~/.claude/skills)"]);
+    assert.deepEqual(model.mcpServerRows, ["github (project: .mcp.json)"]);
+    assert.deepEqual(model.hookRows, ["pre (~/.claude/settings.json)"]);
     assert.deepEqual(model.envKeyRows, ["OPENAI_API_KEY (project)"]);
   });
 
@@ -530,13 +635,58 @@ describe("TUI agent detail model", () => {
     const model = buildAgentDetailViewModel({
       agent: "claude-code",
       evidence: [
-        discoveredItem({ id: "skill:review", agent: "claude-code", kind: "skill", name: "review" }),
-        discoveredItem({ id: "skill:broken", agent: "claude-code", kind: "skill", name: "broken", captureStatus: "parse_failed" }),
-        discoveredItem({ id: "mcp:docs", agent: "claude-code", kind: "mcp_server", name: "docs" }),
-        discoveredItem({ id: "mcp:github", agent: "claude-code", kind: "mcp_server", name: "github", value: { disabled: true } }),
-        discoveredItem({ id: "mcp:linear", agent: "claude-code", kind: "mcp_server", name: "linear", value: { enabled: false } }),
+        discoveredItem({
+          id: "skill:review",
+          agent: "claude-code",
+          kind: "skill",
+          name: "review",
+          sourcePath: "~/.claude/skills/review",
+          scope: "user"
+        }),
+        discoveredItem({
+          id: "skill:broken",
+          agent: "claude-code",
+          kind: "skill",
+          name: "broken",
+          sourcePath: "~/.claude/skills/broken",
+          scope: "user",
+          captureStatus: "parse_failed"
+        }),
+        discoveredItem({
+          id: "mcp:docs",
+          agent: "claude-code",
+          kind: "mcp_server",
+          name: "docs",
+          sourcePath: "~/.claude/settings.json",
+          scope: "user"
+        }),
+        discoveredItem({
+          id: "mcp:github",
+          agent: "claude-code",
+          kind: "mcp_server",
+          name: "github",
+          sourcePath: "~/.claude/settings.json",
+          scope: "user",
+          value: { disabled: true }
+        }),
+        discoveredItem({
+          id: "mcp:linear",
+          agent: "claude-code",
+          kind: "mcp_server",
+          name: "linear",
+          sourcePath: ".mcp.json",
+          scope: "project",
+          value: { enabled: false }
+        }),
         discoveredItem({ id: "permission:bash", agent: "claude-code", kind: "permission", name: "bash" }),
-        discoveredItem({ id: "hook:pre", agent: "claude-code", kind: "hook", name: "pre-run" }),
+        discoveredItem({
+          id: "hook:pre",
+          agent: "claude-code",
+          kind: "hook",
+          name: "pre-run",
+          sourcePath: "~/.claude/settings.json",
+          scope: "user"
+        }),
         discoveredItem({ id: "instructions", agent: "claude-code", kind: "agent_instruction", sourcePath: "/project/AGENTS.md" }),
         discoveredItem({ id: "skill:codex", agent: "codex", kind: "skill", name: "codex-skill" }),
         discoveredItem({ id: "env:OPENAI_API_KEY", agent: "project", kind: "env_key", name: "OPENAI_API_KEY" })
@@ -567,11 +717,12 @@ describe("TUI agent detail model", () => {
       envKeys: 1,
       instructions: 1
     });
-    assert.equal(model.skills.find((row) => row.name === "broken")?.status, "parse_failed");
-    assert.equal(model.skills.find((row) => row.name === "review")?.status, undefined);
-    assert.equal(model.mcpServers.find((row) => row.name === "docs")?.status, "enabled");
-    assert.equal(model.mcpServers.find((row) => row.name === "github")?.status, "disabled");
-    assert.equal(model.mcpServers.find((row) => row.name === "linear")?.status, "disabled");
+    assert.equal(model.skills.find((row) => row.name === "broken (~/.claude/skills)")?.status, "parse_failed");
+    assert.equal(model.skills.find((row) => row.name === "review (~/.claude/skills)")?.status, undefined);
+    assert.equal(model.mcpServers.find((row) => row.name === "docs (~/.claude/settings.json)")?.status, "enabled");
+    assert.equal(model.mcpServers.find((row) => row.name === "github (~/.claude/settings.json)")?.status, "disabled");
+    assert.equal(model.mcpServers.find((row) => row.name === "linear (project: .mcp.json)")?.status, "disabled");
+    assert.deepEqual(model.hooks.map((row) => row.name), ["pre-run (~/.claude/settings.json)"]);
     assert.equal(model.envKeys[0].name, "OPENAI_API_KEY (project)");
     assert.equal(model.instructions[0].path, "/project/AGENTS.md");
     assert.equal(model.history.length, 1);

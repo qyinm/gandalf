@@ -1,7 +1,13 @@
 import type { TimelineUndoPlan } from "../../timeline-undo.js";
 import type { AgentId, DiscoveredItem, TimelineChangedSurface, TimelineEntry, TimelineRestoreReadiness } from "../../types.js";
 import type { TimelineCorruptEvent } from "../../store.js";
-import { formatAgentLabel, formatAgentScope, formatTimelineTimestamp } from "./TuiFormatters.js";
+import {
+  formatAgentLabel,
+  formatAgentScope,
+  formatInventoryNameWithSource,
+  formatInventorySourceRoot,
+  formatTimelineTimestamp
+} from "./TuiFormatters.js";
 
 export interface TimelineRowModel {
   id: string;
@@ -155,7 +161,7 @@ function rowsForKind(
     .map((item) => {
       const name = displayNameForItem(item);
       if (agentFilter) {
-        return item.agent === "project" ? `${name} (project)` : name;
+        return item.agent === "project" && !formatInventorySourceRoot(item) ? `${name} (project)` : name;
       }
       return `${formatAgentLabel(item.agent)}: ${name}`;
     });
@@ -166,13 +172,13 @@ function displayNameForItem(
   item: Pick<DiscoveredItem, "id" | "kind" | "metadata" | "name" | "scope" | "sourcePath">
 ): string {
   const suffix = item.scope === "managed" || item.metadata?.builtIn === true ? " (built-in)" : "";
-  if (item.name) return `${item.name}${suffix}`;
+  if (item.name) return formatInventoryNameWithSource(`${item.name}${suffix}`, item);
   const parts = item.sourcePath.split("/").filter(Boolean);
   const last = parts.at(-1);
-  if (last && last !== "SKILL.md") return `${last}${suffix}`;
+  if (last && last !== "SKILL.md") return formatInventoryNameWithSource(`${last}${suffix}`, item);
   const parent = parts.at(-2);
-  if (parent) return `${parent}${suffix}`;
-  return `${item.id}${suffix}`;
+  if (parent) return formatInventoryNameWithSource(`${parent}${suffix}`, item);
+  return formatInventoryNameWithSource(`${item.id}${suffix}`, item);
 }
 
 export function currentSetupEmptyText(
