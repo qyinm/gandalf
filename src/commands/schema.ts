@@ -6,6 +6,7 @@
  */
 
 import { json, hasFlag } from "../cli-shared.js";
+import { EVIDENCE_KINDS } from "../types.js";
 import type { CommandContext, Command } from "./index.js";
 
 const SCHEMA = {
@@ -20,10 +21,7 @@ const SCHEMA = {
     },
     evidenceKind: {
       type: "string",
-      enum: [
-        "agent_config", "agent_instruction", "mcp_server", "permission",
-        "skill", "env_key", "hook", "symlink", "unsupported"
-      ],
+      enum: EVIDENCE_KINDS,
       description: "Type of evidence discovered during scan"
     },
     captureStatus: {

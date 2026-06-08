@@ -63,6 +63,8 @@ bundle.hem
             └── ...
 ```
 
+`snapshot/evidence.json` stores the same JSON object shape that scanners emit. `DiscoveredItem` is typed in source as a `kind`-discriminated union, but bundles do not add a second discriminator, wrapper object, or empty `value`/`metadata` fields. Older bundles may also omit optional payload fields, so import and readiness code must continue to treat evidence JSON as a defensive boundary.
+
 ### Entry naming rules
 
 - All paths inside the tar are **relative**, never absolute, never containing `..`.

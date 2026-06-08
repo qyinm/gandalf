@@ -44,14 +44,13 @@ export function extractMcpBinaries(evidence: DiscoveredItem[], sourceHomeDir?: s
   const binaries: McpBinaryInfo[] = [];
   for (const item of evidence) {
     if (item.kind !== "mcp_server") continue;
-    const value = item.value as Record<string, unknown> | undefined;
-    if (!value || typeof value !== "object") continue;
+    const value = item.value;
 
-    const command = typeof value.command === "string" ? value.command : undefined;
-    const url = typeof value.url === "string" ? value.url : undefined;
+    const command = typeof value?.command === "string" ? value.command : undefined;
+    const url = typeof value?.url === "string" ? value.url : undefined;
 
     if (command || url) {
-      const args = Array.isArray(value.args) ? value.args.filter((a): a is string => typeof a === "string") : undefined;
+      const args = Array.isArray(value?.args) ? value.args.filter((a): a is string => typeof a === "string") : undefined;
       const safeUrl = url ? sanitizeRemoteUrl(url) : undefined;
       binaries.push({
         evidenceId: item.id,
@@ -260,17 +259,16 @@ export function formatReadinessSummaryLines(
 function envKeySet(evidence: DiscoveredItem[], includeMcpEnvKeys: boolean): Set<string> {
   const keys = new Set<string>();
   for (const item of evidence) {
-    const value = item.value as Record<string, unknown> | undefined;
     if (item.kind === "env_key") {
       const key = typeof item.name === "string"
         ? item.name
-        : typeof value?.key === "string"
-          ? value.key
+        : typeof item.value?.key === "string"
+          ? item.value.key
           : undefined;
       if (key) keys.add(key);
     }
-    if (includeMcpEnvKeys && item.kind === "mcp_server" && Array.isArray(value?.envKeys)) {
-      for (const key of value.envKeys) {
+    if (includeMcpEnvKeys && item.kind === "mcp_server" && Array.isArray(item.value?.envKeys)) {
+      for (const key of item.value.envKeys) {
         if (typeof key === "string") keys.add(key);
       }
     }

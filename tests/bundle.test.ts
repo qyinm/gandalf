@@ -180,6 +180,11 @@ describe("bundle export/import roundtrip", () => {
     assert.deepEqual(imported.evidence, sampleSnapshot(snapshotName).evidence);
     assert.deepEqual(imported.graph, sampleSnapshot(snapshotName).graph);
     assert.deepEqual(imported.auditFindings, sampleSnapshot(snapshotName).auditFindings);
+
+    const { entries } = await readTar(exportResult.bundlePath);
+    const bundledEvidence = JSON.parse(entries.find((entry) => entry.path === "snapshot/evidence.json")!.content.toString("utf-8"));
+    assert.equal("metadata" in bundledEvidence[0], false);
+    assert.deepEqual(Object.keys(bundledEvidence[0]).sort(), Object.keys(sampleSnapshot(snapshotName).evidence[0]!).sort());
   });
 
   it("stores home-scoped evidence paths as {home} and resolves them on import", async () => {

@@ -101,17 +101,10 @@ function displayNameForItem(item: DiscoveredItem): string {
 
 function statusForItem(item: DiscoveredItem): string | undefined {
   if (item.kind === "mcp_server") {
-    const value = asRecord(item.value);
-    if (value.disabled === true || value.enabled === false) return "disabled";
+    if (item.value?.disabled === true || item.value?.enabled === false) return "disabled";
     return "enabled";
   }
 
   if (item.captureStatus !== "captured") return item.captureStatus;
   return undefined;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
 }

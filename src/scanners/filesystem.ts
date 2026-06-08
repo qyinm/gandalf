@@ -5,7 +5,7 @@ import { ignoredDirectory, MAX_DIRECTORY_DEPTH, MAX_DIRECTORY_ENTRIES, MAX_FILE_
 import { parseDotenvKeys, parseJson, parseMarkdown, parseTomlKeyValues } from "../parsers.js";
 import type { DiscoveredItem } from "../types.js";
 import type { ScanTarget } from "./index.js";
-import { scannerItemId } from "./base.js";
+import { asRecord, unsafeDiscoveredItemFromScannerOutput, scannerItemId } from "./base.js";
 
 export async function scanTargets(targets: ScanTarget[]): Promise<DiscoveredItem[]> {
   const evidence: DiscoveredItem[] = [];
@@ -28,14 +28,14 @@ export async function scanTarget(target: ScanTarget): Promise<DiscoveredItem[]> 
   }
 
   if (stats.isSymbolicLink()) {
-    return [{
+    return [unsafeDiscoveredItemFromScannerOutput({
       ...baseItem(target, "omitted", { reason: "symlink_not_followed" }),
       id: itemId(target, "symlink"),
       kind: "symlink",
       parser: "filesystem",
       contentPolicy: "metadata_only",
       restorePolicy: restorePolicyFor("symlink"),
-    }];
+    })];
   }
 
   if (target.directory) {
@@ -59,7 +59,7 @@ export async function scanTarget(target: ScanTarget): Promise<DiscoveredItem[]> 
 
   const text = await readFile(target.absolutePath, "utf8");
   if (target.parser === "dotenv") {
-    return parseDotenvKeys(text).map((entry) => ({
+    return parseDotenvKeys(text).map((entry) => unsafeDiscoveredItemFromScannerOutput({
       ...baseItem(target, entry.captureStatus, { secretLike: entry.secretLike }),
       id: itemId(target, entry.key),
       name: entry.key,
@@ -172,13 +172,13 @@ async function scanDirectoryEntries(
     const stats = await lstat(absolutePath);
 
     if (stats.isSymbolicLink()) {
-      evidence.push({
+      evidence.push(unsafeDiscoveredItemFromScannerOutput({
         ...baseItem(childTarget, "omitted", { reason: "symlink_not_followed" }),
         id: itemId(childTarget, "symlink"),
         kind: "symlink",
         parser: "filesystem",
         restorePolicy: restorePolicyFor("symlink"),
-      });
+      }));
     } else if (stats.isDirectory()) {
       evidence.push(baseItem(childTarget, target.kind === "skill" ? "captured" : "unsupported", { present: true }));
       await scanDirectoryEntries(target, absolutePath, sourcePath, evidence, depth + 1);
@@ -205,7 +205,7 @@ function emitJsonEvidence(target: ScanTarget, value: unknown): DiscoveredItem[] 
   if (target.sourcePath.endsWith(".mcp.json") || target.sourcePath.endsWith("/mcp.json")) {
     const servers = mcpServers(value);
     if (servers) {
-      return Object.entries(servers).map(([name, serverValue]) => ({
+      return Object.entries(servers).map(([name, serverValue]) => unsafeDiscoveredItemFromScannerOutput({
         ...baseItem(
           {
             ...target,
@@ -226,11 +226,11 @@ function emitJsonEvidence(target: ScanTarget, value: unknown): DiscoveredItem[] 
 
   const evidence: DiscoveredItem[] = [];
   if (target.sourcePath.endsWith("/settings.json") || target.sourcePath.endsWith("settings.json")) {
-    const value_ = isObject(value) ? (value as Record<string, unknown>) : {};
+    const value_ = asRecord(value) ?? {};
     const perms = permissionsFrom(value_);
     if (perms) {
       for (const [permName, permRule] of Object.entries(perms)) {
-        evidence.push({
+        evidence.push(unsafeDiscoveredItemFromScannerOutput({
           ...baseItem(
             {
               ...target,
@@ -245,27 +245,29 @@ function emitJsonEvidence(target: ScanTarget, value: unknown): DiscoveredItem[] 
           id: itemId(target, `perm-${permName}`),
           kind: "permission",
           name: String(permRule),
-        });
+        }));
       }
     }
 
-    const hooksValue = isObject(value) ? (value as Record<string, unknown>)["hooks"] : undefined;
-    if (isObject(hooksValue)) {
-      for (const [eventName, eventHooks] of Object.entries(hooksValue as Record<string, unknown>)) {
+    const hooksValue = asRecord(value)?.["hooks"];
+    const hooks = asRecord(hooksValue);
+    if (hooks) {
+      for (const [eventName, eventHooks] of Object.entries(hooks)) {
         if (!Array.isArray(eventHooks)) continue;
         for (let i = 0; i < eventHooks.length; i++) {
-          const entry = eventHooks[i];
-          if (!isObject(entry)) continue;
-          const matcher = typeof (entry as Record<string, unknown>).matcher === "string"
-            ? (entry as Record<string, unknown>).matcher as string
+          const entry = asRecord(eventHooks[i]);
+          if (!entry) continue;
+          const matcher = typeof entry.matcher === "string"
+            ? entry.matcher
             : "*";
-          const nestedHooks = (entry as Record<string, unknown>)["hooks"];
+          const nestedHooks = entry["hooks"];
           if (!Array.isArray(nestedHooks)) continue;
           for (const hook of nestedHooks) {
-            if (!isObject(hook)) continue;
-            const command = (hook as Record<string, unknown>).command;
+            const hookRecord = asRecord(hook);
+            if (!hookRecord) continue;
+            const command = hookRecord.command;
             if (typeof command !== "string") continue;
-            evidence.push({
+            evidence.push(unsafeDiscoveredItemFromScannerOutput({
               ...baseItem(
                 {
                   ...target,
@@ -275,12 +277,12 @@ function emitJsonEvidence(target: ScanTarget, value: unknown): DiscoveredItem[] 
                 },
                 "captured",
                 { executable: true, eventName, matcher, command },
-                hook
+                hookRecord
               ),
               id: itemId(target, `hook-${eventName}-${i}`),
               kind: "hook",
               name: `${eventName}.${matcher}`,
-            });
+            }));
           }
         }
       }
@@ -291,29 +293,12 @@ function emitJsonEvidence(target: ScanTarget, value: unknown): DiscoveredItem[] 
   return evidence;
 }
 
-function isObject(value: unknown): boolean {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
 function mcpServers(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return undefined;
-  }
-
-  const servers = (value as Record<string, unknown>)["mcpServers"];
-  if (!servers || typeof servers !== "object" || Array.isArray(servers)) {
-    return undefined;
-  }
-
-  return servers as Record<string, unknown>;
+  return asRecord(asRecord(value)?.["mcpServers"]) ?? undefined;
 }
 
 function permissionsFrom(value: Record<string, unknown>): Record<string, unknown> | undefined {
-  const perms = value["permissions"];
-  if (!perms || typeof perms !== "object" || Array.isArray(perms)) {
-    return undefined;
-  }
-  return perms as Record<string, unknown>;
+  return asRecord(value["permissions"]) ?? undefined;
 }
 
 function baseItem(
@@ -322,7 +307,7 @@ function baseItem(
   metadata?: Record<string, unknown>,
   value?: unknown
 ): DiscoveredItem {
-  return {
+  return unsafeDiscoveredItemFromScannerOutput({
     id: itemId(target, target.kind),
     agent: target.agent,
     kind: target.kind,
@@ -337,7 +322,7 @@ function baseItem(
     confidence: "high",
     ...(value === undefined ? {} : { value }),
     ...(metadata === undefined ? {} : { metadata }),
-  };
+  });
 }
 
 function itemId(target: ScanTarget, suffix: string): string {

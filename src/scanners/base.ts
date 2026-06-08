@@ -1,5 +1,5 @@
 import { restorePolicyFor } from "../policy.js";
-import type { AgentId, DiscoveredItem, EvidenceScope } from "../types.js";
+import type { AgentId, DiscoveredItem, DiscoveredItemConstruction, EvidenceScope } from "../types.js";
 import type { ScanTarget } from "./index.js";
 
 type EvidenceBaseTarget = Pick<
@@ -30,7 +30,7 @@ export function createScannerBase(_adapter: ScannerBaseAdapter): ScannerBase {
       return scannerItemId(target.scope, target.agent, target.sourcePath, suffix);
     },
     captured(target, kind, metadata, value) {
-      return {
+      return unsafeDiscoveredItemFromScannerOutput({
         id: scannerItemId(target.scope, target.agent, target.sourcePath, kind),
         agent: target.agent,
         kind,
@@ -45,7 +45,7 @@ export function createScannerBase(_adapter: ScannerBaseAdapter): ScannerBase {
         confidence: "high",
         ...(value === undefined ? {} : { value }),
         ...(metadata === undefined ? {} : { metadata }),
-      };
+      });
     },
     parseFailed(target, kind, error) {
       return {
@@ -55,6 +55,11 @@ export function createScannerBase(_adapter: ScannerBaseAdapter): ScannerBase {
       };
     },
   };
+}
+
+// Scanner targets can be dynamic. Keep the cast named and localized at scanner boundaries.
+export function unsafeDiscoveredItemFromScannerOutput(item: DiscoveredItemConstruction): DiscoveredItem {
+  return item as DiscoveredItem;
 }
 
 export function scannerItemId(scope: EvidenceScope, agent: AgentId | string, sourcePath: string, suffix: string): string {

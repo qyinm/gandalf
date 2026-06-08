@@ -1,16 +1,19 @@
 export type AgentId = "claude-code" | "codex" | "cursor" | "opencode" | "pi-agent" | "project" | "unknown";
 
-export type EvidenceKind =
-  | "agent_config"
-  | "agent_instruction"
-  | "mcp_server"
-  | "permission"
-  | "skill"
-  | "extension"
-  | "env_key"
-  | "hook"
-  | "symlink"
-  | "unsupported";
+export const EVIDENCE_KINDS = [
+  "agent_config",
+  "agent_instruction",
+  "mcp_server",
+  "permission",
+  "skill",
+  "extension",
+  "env_key",
+  "hook",
+  "symlink",
+  "unsupported"
+] as const;
+
+export type EvidenceKind = typeof EVIDENCE_KINDS[number];
 
 export type RestorePolicy =
   | "full_content_supported"
@@ -30,24 +33,138 @@ export type CaptureStatus =
 
 export type Severity = "none" | "low" | "medium" | "high" | "critical";
 
-export interface DiscoveredItem {
+export type EvidenceParser = "json" | "toml" | "markdown" | "dotenv" | "filesystem" | "unknown";
+export type EvidenceConfidence = "low" | "medium" | "high";
+
+export interface EvidenceMetadata {
+  [key: string]: unknown;
+}
+
+export interface McpServerValue {
+  command?: string;
+  args?: string[];
+  url?: string;
+  type?: string;
+  transport?: string;
+  envKeys?: string[];
+  disabled?: boolean;
+  enabled?: boolean;
+  [key: string]: unknown;
+}
+
+export interface PermissionValue {
+  rule?: unknown;
+  action?: string;
+  [key: string]: unknown;
+}
+
+export interface HookValue {
+  type?: string;
+  command?: string;
+  timeout?: number;
+  matcher?: string;
+  failClosed?: boolean;
+  loop_limit?: number;
+  [key: string]: unknown;
+}
+
+export interface EnvKeyValue {
+  key?: string;
+  [key: string]: unknown;
+}
+
+export interface SymlinkValue {
+  target?: string;
+  [key: string]: unknown;
+}
+
+export interface SkillMetadata extends EvidenceMetadata {
+  builtIn?: boolean;
+  description?: string;
+  declaredName?: string;
+  directoryName?: string;
+  disableModelInvocation?: boolean;
+  duplicateSources?: string[];
+  entrypoint?: string;
+  entrypointSizeBytes?: number;
+  entrypointStatus?: string;
+  executable?: boolean;
+  nameMatchesDirectory?: boolean;
+  realPath?: string;
+  scopeRoot?: string;
+  sourceRoot?: string;
+}
+
+export interface McpServerMetadata extends EvidenceMetadata {
+  changed?: boolean;
+  remote?: boolean;
+  sourceRoot?: string;
+  transport?: string;
+}
+
+export interface HookMetadata extends EvidenceMetadata {
+  eventName?: string;
+  executable?: boolean;
+  hookCategory?: string;
+  policyEvaluated?: boolean;
+  sourcePriority?: number;
+  sourceRoot?: string;
+}
+
+export interface UnsupportedMetadata extends EvidenceMetadata {
+  error?: string;
+  reason?: string;
+  state?: string;
+}
+
+export interface SymlinkMetadata extends EvidenceMetadata {
+  reason?: string;
+  skipped?: boolean;
+}
+
+export interface DiscoveredItemBase<K extends EvidenceKind, V = unknown, M extends EvidenceMetadata = EvidenceMetadata> {
   id: string;
   agent: AgentId;
-  kind: EvidenceKind;
+  kind: K;
   sourcePath: string;
   scope: EvidenceScope;
   precedence: number;
-  parser: "json" | "toml" | "markdown" | "dotenv" | "filesystem" | "unknown";
+  parser: EvidenceParser;
   sensitivity: string;
   contentPolicy: string;
   restorePolicy: RestorePolicy;
   captureStatus: CaptureStatus;
-  confidence: "low" | "medium" | "high";
+  confidence: EvidenceConfidence;
   name?: string;
-  value?: unknown;
+  value?: V;
   checksum?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: M;
 }
+
+export type DiscoveredItemConstruction = DiscoveredItemBase<EvidenceKind, unknown, EvidenceMetadata>;
+
+export type AgentConfigItem = DiscoveredItemBase<"agent_config", unknown>;
+export type AgentInstructionItem = DiscoveredItemBase<"agent_instruction", string | Record<string, unknown>>;
+export type McpServerItem = DiscoveredItemBase<"mcp_server", McpServerValue, McpServerMetadata>;
+export type PermissionItem = DiscoveredItemBase<"permission", PermissionValue>;
+export type SkillItem = DiscoveredItemBase<"skill", unknown, SkillMetadata>;
+export type ExtensionItem = DiscoveredItemBase<"extension", unknown, SkillMetadata>;
+export type EnvKeyItem = DiscoveredItemBase<"env_key", EnvKeyValue>;
+export type HookItem = DiscoveredItemBase<"hook", HookValue, HookMetadata>;
+export type SymlinkItem = DiscoveredItemBase<"symlink", SymlinkValue, SymlinkMetadata>;
+export type UnsupportedItem = DiscoveredItemBase<"unsupported", unknown, UnsupportedMetadata>;
+
+export type DiscoveredItem =
+  | AgentConfigItem
+  | AgentInstructionItem
+  | McpServerItem
+  | PermissionItem
+  | SkillItem
+  | ExtensionItem
+  | EnvKeyItem
+  | HookItem
+  | SymlinkItem
+  | UnsupportedItem;
 
 export interface SnapshotManifest {
   schemaVersion: "0.1";
