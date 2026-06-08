@@ -16,7 +16,7 @@
  *  └──────────────┴────────────────────────────────────────────┘
  */
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { Text, Box, useInput } from "ink";
+import { Text, Box, useInput, useStdout } from "ink";
 import Spinner from "ink-spinner";
 
 import { scanProject } from "../../scan.js";
@@ -143,6 +143,9 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ options }: DashboardProps) {
+  const { stdout } = useStdout();
+  const dashboardHeight = Math.max(20, stdout.rows ? stdout.rows - 1 : 28);
+  const contentHeight = Math.max(12, dashboardHeight - 3);
   const [state, setState] = useState<DashboardState>({
     status: "boot",
     scan: null,
@@ -935,7 +938,7 @@ export default function Dashboard({ options }: DashboardProps) {
   });
 
   return (
-    <Box flexDirection="row" width="100%">
+    <Box flexDirection="row" width="100%" height={dashboardHeight}>
       {/* ── Sidebar ── */}
       <Sidebar
         agents={agents}
@@ -946,11 +949,11 @@ export default function Dashboard({ options }: DashboardProps) {
       />
 
       {/* ── Main panel ── */}
-      <Box flexDirection="column" paddingX={1} flexGrow={1}>
+      <Box flexDirection="column" paddingX={1} flexGrow={1} height={dashboardHeight}>
         <DaemonTrustHeader status={state.daemonStatus} />
 
         {/* Content area */}
-        <Box flexDirection="column" flexGrow={1}>
+        <Box flexDirection="column" height={contentHeight}>
           {state.error && (
             <Box marginBottom={1}>
               <ErrorPage
@@ -1004,6 +1007,7 @@ export default function Dashboard({ options }: DashboardProps) {
         undoError={state.timelineUndoState.type === "error" ? state.timelineUndoState.message : null}
         currentSetupFocus={state.currentSetupFocus}
         currentSetupOffsets={state.currentSetupOffsets}
+        height={contentHeight}
       />
     );
   }
