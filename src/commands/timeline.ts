@@ -157,7 +157,7 @@ function renderTimelineEntry(entry: TimelineEntry): string {
     `before snapshot: ${entry.beforeSnapshotName ?? "-"}`,
     `observed: ${entry.observedAt}`,
     `source: ${entry.source}`,
-    `daemon run: ${entry.daemonRunId}`,
+    `capture: ${entry.captureId}`,
     `project: ${entry.projectPath}`,
     `agent: ${entry.agent ?? "all"}`,
     `restore readiness: ${entry.restoreReadiness}`,

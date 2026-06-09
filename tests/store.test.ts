@@ -92,13 +92,13 @@ function timelineEntry(overrides: Partial<TimelineEntry> & Pick<TimelineEntry, "
   const { afterSnapshotName, observedAt, ...rest } = overrides;
   return {
     schemaVersion: "0.1",
-    source: "daemon",
+    source: "manual",
     eventKind: "setup_changed",
     title: "update github mcp",
     projectPath: "/tmp/project",
     agents: ["claude-code"],
     afterSnapshotName,
-    daemonRunId: "run-test",
+    captureId: "capture-test",
     createdAt: observedAt,
     observedAt,
     changedSurfaces: [
