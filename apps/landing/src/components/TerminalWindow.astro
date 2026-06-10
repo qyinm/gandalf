@@ -2,9 +2,10 @@
 export interface Props {
   lines?: { command: string }[];
   label?: string;
+  singleLine?: boolean;
 }
 
-const { lines, label } = Astro.props;
+const { lines, label, singleLine = false } = Astro.props;
 const hasLines = Array.isArray(lines) && lines.length > 0;
 ---
 
@@ -16,7 +17,7 @@ const hasLines = Array.isArray(lines) && lines.length > 0;
     {label && <span class="terminal__label">{label}</span>}
   </div>
 
-  <pre class="terminal__body">
+  <pre class={`terminal__body ${singleLine ? 'terminal__body--single' : ''}`}>
     <code>
       {hasLines ? (
         lines!.map((line) => (
@@ -73,6 +74,7 @@ const hasLines = Array.isArray(lines) && lines.length > 0;
     margin: 0;
     overflow-x: auto;
     padding: 20px 24px;
+    white-space: normal;
   }
 
   .terminal__body code {
@@ -82,6 +84,23 @@ const hasLines = Array.isArray(lines) && lines.length > 0;
     color: var(--muted-foreground);
     white-space: pre;
     display: block;
+  }
+
+  .terminal__body--single {
+    white-space: nowrap;
+  }
+
+  .terminal__body--single .terminal__line {
+    display: inline;
+  }
+
+  .terminal__body--single code {
+    white-space: nowrap;
+  }
+
+  .terminal__body--single .terminal__line + .terminal__line::before {
+    content: "  ·  ";
+    color: var(--muted-foreground);
   }
 
   .terminal__line {
