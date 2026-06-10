@@ -24,11 +24,51 @@ button {
   font: inherit;
 }
 
+@property --sidebar-width {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 208px;
+}
+
 .app-shell {
+  --sidebar-width: 208px;
+  --titlebar-height: 42px;
+  position: relative;
   height: 100vh;
   display: grid;
-  grid-template-rows: 42px 1fr;
+  grid-template-rows: var(--titlebar-height) 1fr;
   background: #f4f5f2;
+  transition: --sidebar-width 180ms ease;
+}
+
+.app-shell::before,
+.app-shell::after {
+  content: "";
+  position: absolute;
+  left: var(--sidebar-width);
+  z-index: 10;
+  pointer-events: none;
+  transition: left 180ms ease;
+}
+
+.app-shell::before {
+  top: 0;
+  width: 12px;
+  height: 12px;
+  border-top: 1px solid #d8dcd2;
+  border-left: 1px solid #d8dcd2;
+  border-top-left-radius: 12px;
+  background: #ffffff;
+}
+
+.app-shell::after {
+  top: 12px;
+  bottom: 0;
+  border-left: 1px solid #d8dcd2;
+}
+
+.app-shell.is-sidebar-collapsed {
+  --sidebar-width: 0px;
 }
 
 .titlebar {
@@ -37,9 +77,22 @@ button {
   align-items: center;
   justify-content: flex-end;
   padding: 0 14px 0 88px;
-  border-bottom: 1px solid #d8dcd2;
-  background: #fbfbf8;
+  background:
+    linear-gradient(#edefe8, #edefe8) var(--sidebar-width) 0 / 12px 12px no-repeat,
+    linear-gradient(to right, #edefe8 0 var(--sidebar-width), #ffffff var(--sidebar-width));
   user-select: none;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  left: 88px;
+  z-index: 11;
+  transform: translateY(-50%);
+}
+
+.app-shell.is-sidebar-collapsed .titlebar {
+  background: #ffffff;
 }
 
 .snapshot-chip,
@@ -54,6 +107,11 @@ button {
   border-radius: 6px;
   height: 25px;
   padding: 0 7px;
+}
+
+.sidebar-toggle.icon-button {
+  border: 0;
+  background: transparent;
 }
 
 .snapshot-chip {
@@ -124,16 +182,23 @@ button {
 .workspace {
   min-height: 0;
   display: grid;
-  grid-template-columns: 208px 1fr;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  transition: grid-template-columns 180ms ease;
 }
 
 .sidebar {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   padding: 10px;
-  border-right: 1px solid #d8dcd2;
   background: #edefe8;
+  transition: padding 180ms ease, visibility 180ms ease;
+}
+
+.app-shell.is-sidebar-collapsed .sidebar {
+  visibility: hidden;
+  padding: 0;
 }
 
 .profile-picker {
@@ -241,6 +306,7 @@ button {
   min-height: 0;
   overflow: auto;
   padding: 16px;
+  background: #ffffff;
 }
 
 .home-screen,
@@ -455,8 +521,8 @@ code {
 }
 
 @media (max-width: 1040px) {
-  .workspace {
-    grid-template-columns: 214px 1fr;
+  .app-shell {
+    --sidebar-width: 214px;
   }
 
   .metric-grid,

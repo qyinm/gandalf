@@ -10,6 +10,8 @@ import {
   GitCommit,
   GitCompare,
   Home,
+  PanelLeftClose,
+  PanelLeftOpen,
   PanelTop,
   RefreshCcw,
   RotateCcw,
@@ -103,6 +105,7 @@ function App() {
   const [settingsMode, setSettingsMode] = useState(false);
   const [state, setState] = useState<DesktopHomeState>(emptyState);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     invoke<DesktopHomeState>("desktop_home_state")
@@ -116,15 +119,17 @@ function App() {
   );
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${sidebarOpen ? "" : "is-sidebar-collapsed"}`}>
       <Titlebar
         snapshotId={state.currentSnapshotId}
         timelineOpen={timelineOpen}
         onToggleTimeline={() => setTimelineOpen((open) => !open)}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((open) => !open)}
         changelog={state.changelog}
       />
       <div className="workspace">
-        <aside className="sidebar">
+        <aside className="sidebar" aria-hidden={!sidebarOpen}>
           {settingsMode ? (
             <SettingsNav onBack={() => setSettingsMode(false)} />
           ) : (
@@ -180,11 +185,15 @@ function Titlebar({
   snapshotId,
   timelineOpen,
   onToggleTimeline,
+  sidebarOpen,
+  onToggleSidebar,
   changelog
 }: {
   snapshotId: string | null;
   timelineOpen: boolean;
   onToggleTimeline: () => void;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
   changelog: ChangelogEntry[];
 }) {
   const appWindow = getCurrentWindow();
@@ -196,8 +205,18 @@ function Titlebar({
     void appWindow.startDragging().catch(() => {});
   }
 
+  const SidebarToggleIcon = sidebarOpen ? PanelLeftClose : PanelLeftOpen;
+
   return (
     <header className="titlebar" data-tauri-drag-region onPointerDown={startWindowDrag}>
+      <button
+        className="sidebar-toggle icon-button"
+        aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+        title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+        onClick={onToggleSidebar}
+      >
+        <SidebarToggleIcon size={16} />
+      </button>
       <button className="snapshot-chip" type="button" onClick={onToggleTimeline} disabled={!snapshotId}>
         <GitCommit size={14} />
         <span>{snapshotId ?? "No snapshot"}</span>
