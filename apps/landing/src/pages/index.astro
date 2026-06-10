@@ -2,24 +2,24 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Nav from '../components/Nav.astro';
 import Hero from '../components/Hero.astro';
-import Pledge from '../components/Pledge.astro';
-import Services from '../components/Services.astro';
+import Manifesto from '../components/Manifesto.astro';
+import Primitives from '../components/Primitives.astro';
 import Install from '../components/Install.astro';
-import Guide from '../components/Guide.astro';
-import Philosophy from '../components/Philosophy.astro';
+import Closing from '../components/Closing.astro';
 import Footer from '../components/Footer.astro';
 ---
 
 <BaseLayout
-  title="Hem — Time Machine for your AI agent setup"
-  description="Hem saves, compares, and restores your AI coding agent setup across MCP servers, skills, hooks, permissions, and agent profiles."
+  title="Hem — Branches for your AI agent setup"
+  description="Hem saves, diffs, and restores the Codex setup on your Mac like a Git branch. MCP servers, skills, hooks, permissions, env keys — all versioned."
 >
   <Nav />
-  <Hero />
-  <Pledge />
-  <Services />
-  <Install />
-  <Guide />
-  <Philosophy />
+  <main>
+    <Hero />
+    <Manifesto />
+    <Primitives />
+    <Install />
+    <Closing />
+  </main>
   <Footer />
 </BaseLayout>
