@@ -6,20 +6,24 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview",
-    "typecheck": "astro check"
+    "preview": "npm run build && wrangler dev",
+    "typecheck": "astro check",
+    "deploy": "npm run build && wrangler deploy",
+    "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "astro": "^5.7.0",
+    "@astrojs/cloudflare": "12",
     "@astrojs/mdx": "^4.2.0",
     "@astrojs/react": "^4.2.0",
     "@astrojs/sitemap": "^3.3.0",
+    "astro": "^5.7.0",
+    "lucide-react": "^0.468.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "lucide-react": "^0.468.0"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.0",
-    "@types/react-dom": "^19.1.0"
+    "@types/react-dom": "^19.1.0",
+    "wrangler": "^4.99.0"
   }
 }

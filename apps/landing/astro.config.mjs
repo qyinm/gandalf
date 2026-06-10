@@ -3,11 +3,16 @@ import mdx from "@astrojs/mdx";
 import react from "@astrojs/react";
 import sitemap from "@astrojs/sitemap";
 
+import cloudflare from "@astrojs/cloudflare";
+
 export default defineConfig({
-	site: "https://usehem.com",
-	integrations: [mdx(), react(), sitemap()],
-	output: "static",
-	build: {
+    site: "https://usehem.com",
+    integrations: [mdx(), react(), sitemap()],
+    output: "static",
+
+    build: {
 		assets: "_assets",
 	},
+
+    adapter: cloudflare()
 });
