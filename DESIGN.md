@@ -11,40 +11,40 @@
 design:
   mode: light
   colors:
-    # ── Surfaces ──
+    # ── Surfaces (mono ramp) ──
     background: "#ffffff"          # Page background
-    surface: "#f8fafc"             # Card/section surface (slate 50)
-    surface-hover: "#f1f5f9"       # Surface hover state (slate 100)
-    foreground: "#0f172a"          # Primary text (slate 900)
+    surface: "#fafafa"             # Card/section surface (near-white)
+    surface-hover: "#f4f4f5"       # Surface hover (zinc 100)
+    foreground: "#0a0a0a"          # Primary text (near-black)
+    foreground-soft: "#18181b"     # Soft black (zinc 900)
 
-    # ── Brand ──
-    brand: "#FF5F6A"              # The only brand color. CTAs, logo, terminal prompt, decorative highlights.
-    brand-hover: "#e04e58"        # Brand hover state
-    brand-foreground: "#ffffff"   # Text on brand background
+    # ── Brand (appears in TWO places only) ──
+    brand: "#FF5F6A"              # Nav logo dot + terminal `$` sigil. Nothing else.
 
     # ── Neutrals ──
-    muted: "#f1f5f9"              # Muted background (slate 100)
-    muted-foreground: "#64748b"   # Muted text (slate 500)
-    border: "#e2e8f0"             # Borders, dividers (slate 200)
-    border-light: "#cbd5e1"       # Subtle borders (slate 300)
-    ring: "#FF5F6A"               # Focus rings (brand color)
+    muted: "#f4f4f5"              # Muted background (zinc 100)
+    muted-foreground: "#71717a"   # Muted text (zinc 500)
+    border: "#e4e4e7"             # Borders, dividers (zinc 200)
+    border-strong: "#d4d4d8"      # Strong borders (zinc 300)
+    ring: "#0a0a0a"               # Focus rings (black, not brand)
 
-    # ── Semantic ──
-    success: "#22c55e"            # Success / green (green 500)
-    warning: "#f59e0b"            # Warning / amber (amber 500)
-    destructive: "#ef4444"        # Error / destructive (red 500)
+    # ── Semantic (used in docs, not landing) ──
+    success: "#16a34a"            # Success / green 600
+    warning: "#ca8a04"            # Warning / amber 600
+    destructive: "#dc2626"        # Error / red 600
 ```
 
 ### Usage rules
 
 | Token | Where |
 |-------|-------|
-| `brand` | CTAs (primary buttons), logo icon, terminal `$` prompt, decorative highlights, hover states |
-| `foreground` | All body text |
-| `muted-foreground` | Secondary text, meta info, timestamps, captions |
-| `border` | Card borders, dividers, input borders |
+| `brand` | **Two surfaces only** — nav logo dot, terminal `$` sigil. Nothing else. |
+| `foreground` | All body text, primary button backgrounds, focus rings |
+| `muted-foreground` | Secondary text, meta info, timestamps, captions, nav links |
+| `border` | Card borders, dividers, input borders, section hairlines |
+| `surface` | Subtle card backgrounds, code block backgrounds |
 
-Brand is used sparingly. Most of the UI is mono/neutral. The brand color should feel like an accent, not a dominant color.
+The page is editorial — black on white — not branded. Primary buttons are `bg: var(--foreground)` (black on white). The brand color is a stamp, not a system.
 
 ---
 
