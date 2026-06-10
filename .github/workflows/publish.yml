@@ -42,14 +42,9 @@ jobs:
       - run: bun run build
       - run: bun run test
 
-      - name: Configure registry auth
-        shell: bash
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
-
       - name: Publish workspace packages
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           bun publish --cwd packages/core --access public --tolerate-republish
           bun publish --cwd apps/tui --access public --tolerate-republish
