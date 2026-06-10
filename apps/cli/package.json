@@ -1,0 +1,48 @@
+{
+  "name": "@qxinm/hem",
+  "version": "0.3.3",
+  "description": "Time Machine for AI coding agent setups.",
+  "type": "module",
+  "bin": {
+    "hem": "dist/src/cli.js"
+  },
+  "files": [
+    "dist/src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test dist/tests/*.test.js",
+    "prepublishOnly": "bun run build && bun run test",
+    "prepack": "bun run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "ai-agent",
+    "mcp",
+    "cli",
+    "audit",
+    "diff"
+  ],
+  "license": "MIT",
+  "author": "qyinm",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qyinm/hem.git"
+  },
+  "bugs": {
+    "url": "https://github.com/qyinm/hem/issues"
+  },
+  "homepage": "https://github.com/qyinm/hem#readme",
+  "dependencies": {
+    "@qxinm/hem-core": "0.3.3",
+    "@qxinm/hem-tui": "0.3.3",
+    "react": "^19.2.6"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

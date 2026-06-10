@@ -15,14 +15,14 @@ Objective:
 | Sequential integration work | CLI integration, dogfood, and output-contract fixes were done after module work landed | Done |
 | Update `PLAN.md` after each completed task | `PLAN.md` has `[done]` entries for scaffold, scan, store, graph/diff, audit/provenance, CLI, docs, and dogfood | Done |
 | Commit after each completed task | Git history contains milestone commits for docs, scaffold, errors, evidence model, scan, store, analysis, CLI, reports, dogfood, and audit | Done |
-| TypeScript CLI scaffold, tests, lockfile | `package.json`, `bun.lock`, `tsconfig.json`, `src/cli.ts`, `tests/cli.test.ts` | Done |
-| Shared error contract | `src/errors.ts`, `tests/errors.test.ts` | Done |
-| Shared evidence model | `src/types.ts` | Done |
-| Read-only scan and evidence inventory | `src/scan.ts`, `src/policy.ts`, `src/parsers.ts`, `tests/scan.test.ts` | Done |
-| Metadata-only snapshot store | `src/store.ts`, `tests/store.test.ts` | Done |
-| Normalized graph and semantic diff | `src/graph.ts`, `src/diff.ts`, `tests/analysis.test.ts` | Done |
-| Audit and provenance | `src/audit.ts`, `src/provenance.ts`, `tests/analysis.test.ts` | Done |
-| Markdown/JSON report path | `src/report.ts`, `src/cli.ts`, `tests/cli.test.ts` | Done |
+| TypeScript workspace scaffold, tests, lockfile | `package.json`, `bun.lock`, `tsconfig.base.json`, `packages/core/package.json`, `apps/cli/package.json`, `apps/cli/src/cli.ts`, `apps/cli/tests/cli.test.ts` | Done |
+| Shared error contract | `packages/core/src/errors.ts`, `packages/core/tests/errors.test.ts` | Done |
+| Shared evidence model | `packages/core/src/types.ts` | Done |
+| Read-only scan and evidence inventory | `packages/core/src/scan.ts`, `packages/core/src/policy.ts`, `packages/core/src/parsers.ts`, `packages/core/tests/scan.test.ts` | Done |
+| Metadata-only snapshot store | `packages/core/src/store.ts`, `packages/core/tests/store.test.ts` | Done |
+| Normalized graph and semantic diff | `packages/core/src/graph.ts`, `packages/core/src/diff.ts`, `packages/core/tests/analysis.test.ts` | Done |
+| Audit and provenance | `packages/core/src/audit.ts`, `packages/core/src/provenance.ts`, `packages/core/tests/analysis.test.ts` | Done |
+| Markdown/JSON report path | `packages/core/src/report.ts`, `apps/cli/src/cli.ts`, `apps/cli/tests/cli.test.ts` | Done |
 | Copy-paste workflows | `README.md` | Done |
 | Dogfood on three real project directories | `docs/dogfood.md`; scans/reports written under `/tmp/hem-dogfood` | Done |
 | Replace seed incident patterns with 10 real target-operator incidents | `docs/validation-incidents.md` contains 10 memory-derived real operator incidents with source pointers | Done |

@@ -1,0 +1,33 @@
+{
+  "name": "@qxinm/hem-core",
+  "version": "0.3.3",
+  "description": "Core domain logic for Hem.",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "files": [
+    "dist/src"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./*.js": {
+      "types": "./dist/src/*.d.ts",
+      "default": "./dist/src/*.js"
+    },
+    "./scanners/*.js": {
+      "types": "./dist/src/scanners/*.d.ts",
+      "default": "./dist/src/scanners/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test dist/tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
