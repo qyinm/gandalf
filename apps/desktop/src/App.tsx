@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import type { PointerEvent, ReactElement, SVGProps } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   AlertTriangle,
   Cable,
@@ -14,8 +16,7 @@ import {
   Save,
   Settings,
   Sparkles,
-  Upload,
-  Zap
+  Upload
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import "./App.css";
@@ -50,58 +51,63 @@ interface SetupSurface {
 }
 
 interface DesktopHomeState {
-  activeProfile: ProfileSummary;
-  currentSnapshotId: string;
+  activeProfile: ProfileSummary | null;
+  currentSnapshotId: string | null;
   protection: "on" | "off";
-  highestRisk: RiskLevel;
+  highestRisk: RiskLevel | null;
   workingChanges: number;
   changelog: ChangelogEntry[];
   surfaces: SetupSurface[];
 }
 
-const navItems: Array<{ id: NavItem; label: string; icon: LucideIcon }> = [
-  { id: "home", label: "Home", icon: Home },
-  { id: "setup", label: "Setup", icon: PanelTop },
-  { id: "mcp", label: "MCP", icon: Cable },
-  { id: "skills", label: "Skills", icon: Sparkles },
-  { id: "hooks", label: "Hooks", icon: Zap }
+type CustomIconProps = SVGProps<SVGSVGElement> & { size?: number };
+type CustomIcon = (props: CustomIconProps) => ReactElement;
+
+type NavIcon =
+  | { type: "lucide"; icon: LucideIcon }
+  | { type: "custom"; icon: CustomIcon };
+
+const navItems: Array<{ id: NavItem; label: string; icon: NavIcon }> = [
+  { id: "home", label: "Home", icon: { type: "lucide", icon: Home } },
+  { id: "setup", label: "Setup", icon: { type: "lucide", icon: PanelTop } },
+  { id: "mcp", label: "MCP", icon: { type: "lucide", icon: Cable } },
+  { id: "skills", label: "Skills", icon: { type: "lucide", icon: Sparkles } },
+  { id: "hooks", label: "Hooks", icon: { type: "custom", icon: PajamasHook } }
 ];
 
-const fallbackState: DesktopHomeState = {
-  activeProfile: {
-    name: "Default",
-    scope: "personal",
-    syncState: "local_only",
-    ahead: 0,
-    behind: 0
-  },
-  currentSnapshotId: "8f3a2c7",
-  protection: "on",
-  highestRisk: "medium",
-  workingChanges: 3,
-  surfaces: [
-    { id: "setup", label: "Setup", count: 7, risk: "medium", description: "Codex config, permissions, env key inventory" },
-    { id: "mcp", label: "MCP", count: 2, risk: "high", description: "Configured MCP servers and required env keys" },
-    { id: "skills", label: "Skills", count: 4, risk: "low", description: "Installed Codex skills detected in user-global roots" },
-    { id: "hooks", label: "Hooks", count: 1, risk: "medium", description: "Executable setup hooks requiring review" }
-  ],
-  changelog: [
-    { id: "8f3a2c7", title: "MCP server changed: figma", time: "12 min ago", source: "auto", risk: "high" },
-    { id: "72ab91d", title: "Snapshot created from Default", time: "1h ago", source: "manual", risk: "medium" },
-    { id: "19df02a", title: "Initial Codex setup captured", time: "Yesterday", source: "manual", risk: "low" }
-  ]
+function PajamasHook({ size = 16, ...props }: CustomIconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 16 16" {...props}>
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        d="M1 11.125a3.875 3.875 0 0 0 7 2.292a3.875 3.875 0 0 0 7-2.292V7.002l-1.28 1.28l-1.49 1.488a.75.75 0 0 0 1.061 1.061l.208-.208v.502a2.375 2.375 0 1 1-4.75 0v-5.24a2.501 2.501 0 1 0-1.5 0v5.24a2.375 2.375 0 1 1-4.75 0v-.502l.208.208a.75.75 0 1 0 1.06-1.06L2.28 8.281L1 7.002zM9 3.5a1 1 0 1 0-2 0a1 1 0 0 0 2 0"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+const emptyState: DesktopHomeState = {
+  activeProfile: null,
+  currentSnapshotId: null,
+  protection: "off",
+  highestRisk: null,
+  workingChanges: 0,
+  surfaces: [],
+  changelog: []
 };
 
 function App() {
   const [activeNav, setActiveNav] = useState<NavItem>("home");
   const [settingsMode, setSettingsMode] = useState(false);
-  const [state, setState] = useState<DesktopHomeState>(fallbackState);
+  const [state, setState] = useState<DesktopHomeState>(emptyState);
   const [timelineOpen, setTimelineOpen] = useState(false);
 
   useEffect(() => {
     invoke<DesktopHomeState>("desktop_home_state")
       .then(setState)
-      .catch(() => setState(fallbackState));
+      .catch(() => setState(emptyState));
   }, []);
 
   const activeSurface = useMemo(
@@ -126,7 +132,7 @@ function App() {
               <ProfilePicker profile={state.activeProfile} />
               <nav className="nav-list">
                 {navItems.map((item) => {
-                  const Icon = item.icon;
+                  const Icon = item.icon.icon;
                   return (
                     <button
                       key={item.id}
@@ -134,7 +140,7 @@ function App() {
                       type="button"
                       onClick={() => setActiveNav(item.id)}
                     >
-                      <Icon size={17} />
+                      <Icon size={16} />
                       <span>{item.label}</span>
                     </button>
                   );
@@ -153,7 +159,7 @@ function App() {
               aria-label="Open settings"
               onClick={() => setSettingsMode(true)}
             >
-              <Settings size={17} />
+              <Settings size={16} />
             </button>
           </div>
         </aside>
@@ -176,16 +182,25 @@ function Titlebar({
   onToggleTimeline,
   changelog
 }: {
-  snapshotId: string;
+  snapshotId: string | null;
   timelineOpen: boolean;
   onToggleTimeline: () => void;
   changelog: ChangelogEntry[];
 }) {
+  const appWindow = getCurrentWindow();
+
+  function startWindowDrag(event: PointerEvent<HTMLElement>) {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest("button")) return;
+    event.preventDefault();
+    void appWindow.startDragging().catch(() => {});
+  }
+
   return (
-    <header className="titlebar" data-tauri-drag-region>
-      <button className="snapshot-chip" type="button" onClick={onToggleTimeline}>
+    <header className="titlebar" data-tauri-drag-region onPointerDown={startWindowDrag}>
+      <button className="snapshot-chip" type="button" onClick={onToggleTimeline} disabled={!snapshotId}>
         <GitCommit size={14} />
-        <span>{snapshotId}</span>
+        <span>{snapshotId ?? "No snapshot"}</span>
       </button>
       {timelineOpen ? (
         <div className="snapshot-popover">
@@ -201,6 +216,9 @@ function Titlebar({
                 <RiskBadge risk={entry.risk} />
               </div>
             ))}
+            {changelog.length === 0 ? (
+              <div className="popover-empty">No snapshots yet</div>
+            ) : null}
           </div>
           <div className="popover-actions">
             <button type="button">Open Timeline</button>
@@ -212,14 +230,14 @@ function Titlebar({
   );
 }
 
-function ProfilePicker({ profile }: { profile: ProfileSummary }) {
+function ProfilePicker({ profile }: { profile: ProfileSummary | null }) {
   return (
     <button className="profile-picker" type="button">
       <div>
-        <strong>{profile.name}</strong>
-        <span>{syncLabel(profile)}</span>
+        <strong>{profile?.name ?? "No profile"}</strong>
+        <span>{profile ? syncLabel(profile) : "Not captured"}</span>
       </div>
-      <ChevronsUpDown size={16} />
+      <ChevronsUpDown size={15} />
     </button>
   );
 }
@@ -229,7 +247,7 @@ function SettingsNav({ onBack }: { onBack: () => void }) {
   return (
     <nav className="nav-list">
       <button className="nav-item" type="button" onClick={onBack}>
-        <RotateCcw size={16} />
+        <RotateCcw size={15} />
         <span>Back</span>
       </button>
       <div className="nav-separator" />
@@ -250,15 +268,15 @@ function HomeScreen({ state }: { state: DesktopHomeState }) {
         <div className="overall-heading">
           <div>
             <p className="eyebrow">Active Profile</p>
-            <h1>{state.activeProfile.name}</h1>
+            <h1>{state.activeProfile?.name ?? "Not captured"}</h1>
           </div>
-          <RiskBadge risk={state.highestRisk} />
+          {state.highestRisk ? <RiskBadge risk={state.highestRisk} /> : null}
         </div>
         <div className="metric-grid">
-          <Metric label="Snapshot" value={state.currentSnapshotId} />
+          <Metric label="Snapshot" value={state.currentSnapshotId ?? "None"} />
           <Metric label="Protection" value={state.protection === "on" ? "On" : "Off"} />
           <Metric label="Working Changes" value={String(state.workingChanges)} />
-          <Metric label="Cloud" value={syncLabel(state.activeProfile)} />
+          <Metric label="Cloud" value={state.activeProfile ? syncLabel(state.activeProfile) : "Not connected"} />
         </div>
         <div className="action-row">
           <ActionButton icon={Save} label="Create Snapshot" primary />
@@ -280,6 +298,9 @@ function HomeScreen({ state }: { state: DesktopHomeState }) {
             <p>{surface.description}</p>
           </article>
         ))}
+        {state.surfaces.length === 0 ? (
+          <div className="empty-panel">No setup surfaces captured yet.</div>
+        ) : null}
       </section>
 
       <section className="changelog">
@@ -298,6 +319,9 @@ function HomeScreen({ state }: { state: DesktopHomeState }) {
               <RiskBadge risk={entry.risk} />
             </article>
           ))}
+          {state.changelog.length === 0 ? (
+            <div className="empty-panel">No profile snapshots or setup changes yet.</div>
+          ) : null}
         </div>
       </section>
     </div>
@@ -310,7 +334,7 @@ function SurfaceScreen({ surface, nav }: { surface?: SetupSurface; nav: NavItem 
     <div className="surface-screen">
       <div className="section-heading">
         <h1>{title}</h1>
-        <span>{surface?.description ?? "Current Codex setup surface"}</span>
+        <span>{surface?.description ?? "No captured data for this setup surface"}</span>
       </div>
       <div className="surface-detail">
         <div>
@@ -346,7 +370,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 function ActionButton({ icon: Icon, label, primary = false }: { icon: LucideIcon; label: string; primary?: boolean }) {
   return (
     <button className={`action-button ${primary ? "is-primary" : ""}`} type="button">
-      <Icon size={16} />
+      <Icon size={15} />
       <span>{label}</span>
     </button>
   );
@@ -356,7 +380,7 @@ function RiskBadge({ risk }: { risk: RiskLevel }) {
   const Icon = risk === "high" ? AlertTriangle : risk === "medium" ? AlertTriangle : CheckCircle2;
   return (
     <span className={`risk-badge risk-${risk}`}>
-      <Icon size={14} />
+      <Icon size={13} />
       {risk}
     </span>
   );

@@ -32,10 +32,10 @@ struct SetupSurface {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DesktopHomeState {
-    active_profile: ProfileSummary,
-    current_snapshot_id: String,
+    active_profile: Option<ProfileSummary>,
+    current_snapshot_id: Option<String>,
     protection: String,
-    highest_risk: String,
+    highest_risk: Option<String>,
     working_changes: u32,
     changelog: Vec<ChangelogEntry>,
     surfaces: Vec<SetupSurface>,
@@ -44,70 +44,13 @@ struct DesktopHomeState {
 #[tauri::command]
 fn desktop_home_state() -> DesktopHomeState {
     DesktopHomeState {
-        active_profile: ProfileSummary {
-            name: "Default".into(),
-            scope: "personal".into(),
-            sync_state: "local_only".into(),
-            ahead: 0,
-            behind: 0,
-        },
-        current_snapshot_id: "8f3a2c7".into(),
-        protection: "on".into(),
-        highest_risk: "medium".into(),
-        working_changes: 3,
-        surfaces: vec![
-            SetupSurface {
-                id: "setup".into(),
-                label: "Setup".into(),
-                count: 7,
-                risk: "medium".into(),
-                description: "Codex config, permissions, env key inventory".into(),
-            },
-            SetupSurface {
-                id: "mcp".into(),
-                label: "MCP".into(),
-                count: 2,
-                risk: "high".into(),
-                description: "Configured MCP servers and required env keys".into(),
-            },
-            SetupSurface {
-                id: "skills".into(),
-                label: "Skills".into(),
-                count: 4,
-                risk: "low".into(),
-                description: "Installed Codex skills detected in user-global roots".into(),
-            },
-            SetupSurface {
-                id: "hooks".into(),
-                label: "Hooks".into(),
-                count: 1,
-                risk: "medium".into(),
-                description: "Executable setup hooks requiring review".into(),
-            },
-        ],
-        changelog: vec![
-            ChangelogEntry {
-                id: "8f3a2c7".into(),
-                title: "MCP server changed: figma".into(),
-                time: "12 min ago".into(),
-                source: "auto".into(),
-                risk: "high".into(),
-            },
-            ChangelogEntry {
-                id: "72ab91d".into(),
-                title: "Snapshot created from Default".into(),
-                time: "1h ago".into(),
-                source: "manual".into(),
-                risk: "medium".into(),
-            },
-            ChangelogEntry {
-                id: "19df02a".into(),
-                title: "Initial Codex setup captured".into(),
-                time: "Yesterday".into(),
-                source: "manual".into(),
-                risk: "low".into(),
-            },
-        ],
+        active_profile: None,
+        current_snapshot_id: None,
+        protection: "off".into(),
+        highest_risk: None,
+        working_changes: 0,
+        surfaces: Vec::new(),
+        changelog: Vec::new(),
     }
 }
 

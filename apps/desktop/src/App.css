@@ -2,6 +2,7 @@
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #161719;
   background: #f4f5f2;
+  font-size: 12.5px;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -46,18 +47,18 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   border: 1px solid #d7dbd0;
   background: #ffffff;
   color: #2e332c;
   border-radius: 6px;
-  height: 28px;
-  padding: 0 9px;
+  height: 25px;
+  padding: 0 7px;
 }
 
 .snapshot-chip {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .snapshot-popover {
@@ -88,14 +89,24 @@ button {
   display: grid;
 }
 
+.popover-empty,
+.empty-panel {
+  color: #697064;
+  font-size: 11.5px;
+}
+
+.popover-empty {
+  padding: 12px;
+}
+
 .popover-row {
   display: grid;
   grid-template-columns: 80px 1fr auto;
   align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
+  gap: 8px;
+  padding: 7px 9px;
   border-bottom: 1px solid #f0f2ec;
-  font-size: 13px;
+  font-size: 11.5px;
 }
 
 .popover-actions {
@@ -104,7 +115,7 @@ button {
 
 .popover-actions button {
   flex: 1;
-  height: 30px;
+  height: 27px;
   border: 1px solid #d7dbd0;
   border-radius: 6px;
   background: #f8f9f5;
@@ -113,21 +124,21 @@ button {
 .workspace {
   min-height: 0;
   display: grid;
-  grid-template-columns: 236px 1fr;
+  grid-template-columns: 208px 1fr;
 }
 
 .sidebar {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  padding: 10px;
   border-right: 1px solid #d8dcd2;
   background: #edefe8;
 }
 
 .profile-picker {
   width: 100%;
-  min-height: 46px;
+  min-height: 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -135,7 +146,7 @@ button {
   border-radius: 8px;
   background: #fbfbf8;
   color: #1c211b;
-  padding: 8px 10px;
+  padding: 6px 8px;
   text-align: left;
 }
 
@@ -151,25 +162,25 @@ button {
 .metric span,
 .surface-tile p {
   color: #697064;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .nav-list {
   display: grid;
-  gap: 4px;
-  margin-top: 14px;
+  gap: 3px;
+  margin-top: 12px;
 }
 
 .nav-item {
-  height: 36px;
+  height: 31px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border: 0;
   border-radius: 7px;
   background: transparent;
   color: #363b34;
-  padding: 0 10px;
+  padding: 0 9px;
   text-align: left;
 }
 
@@ -191,37 +202,37 @@ button {
 .account-row {
   margin-top: auto;
   display: grid;
-  grid-template-columns: 1fr 34px;
+  grid-template-columns: 1fr 28px;
   align-items: center;
   gap: 8px;
 }
 
 .account-button {
   min-width: 0;
-  height: 36px;
-  grid-template-columns: 24px 1fr;
+  height: 31px;
+  grid-template-columns: 20px 1fr;
   align-items: center;
   border: 0;
   border-radius: 7px;
   background: transparent;
   color: #262b24;
-  padding: 0 8px;
+  padding: 0 7px;
 }
 
 .avatar {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: #263126;
   color: #ffffff;
-  font-size: 12px;
+  font-size: 10.5px;
 }
 
 .icon-button {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   padding: 0;
 }
 
@@ -229,13 +240,13 @@ button {
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 22px;
+  padding: 16px;
 }
 
 .home-screen,
 .surface-screen {
   display: grid;
-  gap: 18px;
+  gap: 12px;
   max-width: 1120px;
 }
 
@@ -248,7 +259,7 @@ button {
 }
 
 .overall {
-  padding: 20px;
+  padding: 16px;
 }
 
 .overall-heading,
@@ -262,9 +273,9 @@ button {
 }
 
 .eyebrow {
-  margin: 0 0 4px;
+  margin: 0 0 3px;
   color: #6c7368;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0;
@@ -277,54 +288,54 @@ p {
 }
 
 h1 {
-  font-size: 28px;
-  line-height: 34px;
+  font-size: 22px;
+  line-height: 27px;
   letter-spacing: 0;
 }
 
 h2 {
-  font-size: 16px;
-  line-height: 22px;
+  font-size: 13.5px;
+  line-height: 19px;
   letter-spacing: 0;
 }
 
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(130px, 1fr));
-  gap: 10px;
-  margin-top: 18px;
+  gap: 7px;
+  margin-top: 12px;
 }
 
 .metric {
   display: grid;
-  gap: 5px;
-  padding: 12px;
+  gap: 4px;
+  padding: 9px;
   border: 1px solid #edf0e8;
   border-radius: 7px;
   background: #fafbf7;
 }
 
 .metric strong {
-  font-size: 16px;
+  font-size: 13.5px;
 }
 
 .action-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 18px;
+  gap: 6px;
+  margin-top: 12px;
 }
 
 .action-button {
-  min-height: 34px;
+  min-height: 29px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   border: 1px solid #d4d9cc;
   border-radius: 7px;
   background: #ffffff;
   color: #242923;
-  padding: 0 12px;
+  padding: 0 9px;
 }
 
 .action-button.is-primary {
@@ -336,18 +347,28 @@ h2 {
 .surface-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 7px;
 }
 
-.surface-tile {
-  min-height: 126px;
+.empty-panel {
+  grid-column: 1 / -1;
+  min-height: 86px;
   display: grid;
-  align-content: start;
-  gap: 10px;
+  place-items: center;
   border: 1px solid #d8dcd2;
   border-radius: 8px;
   background: #ffffff;
-  padding: 14px;
+}
+
+.surface-tile {
+  min-height: 98px;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  border: 1px solid #d8dcd2;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
 }
 
 .surface-tile > div {
@@ -358,48 +379,48 @@ h2 {
 
 .surface-label {
   color: #50574d;
-  font-size: 13px;
+  font-size: 11.5px;
 }
 
 .surface-tile strong,
 .surface-detail strong {
-  font-size: 24px;
+  font-size: 19px;
 }
 
 .changelog {
-  padding: 16px;
+  padding: 12px;
 }
 
 .timeline-list {
   display: grid;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 6px;
+  margin-top: 9px;
 }
 
 .timeline-row {
-  min-height: 54px;
+  min-height: 44px;
   justify-content: start;
-  grid-template-columns: 82px 1fr auto;
+  grid-template-columns: 70px 1fr auto;
   display: grid;
   border: 1px solid #edf0e8;
   border-radius: 7px;
-  padding: 10px 12px;
+  padding: 7px 9px;
 }
 
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .risk-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   width: fit-content;
-  height: 24px;
+  height: 21px;
   border-radius: 999px;
-  padding: 0 8px;
-  font-size: 12px;
+  padding: 0 6px;
+  font-size: 11px;
   font-weight: 650;
   text-transform: capitalize;
 }
@@ -429,8 +450,8 @@ code {
 
 .surface-detail {
   justify-content: start;
-  gap: 70px;
-  padding: 20px;
+  gap: 48px;
+  padding: 14px;
 }
 
 @media (max-width: 1040px) {

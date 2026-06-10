@@ -9,13 +9,13 @@ export interface DesktopHomeState {
     syncState: SyncState;
     ahead: number;
     behind: number;
-  };
-  currentSnapshotId: string;
+  } | null;
+  currentSnapshotId: string | null;
   protection: "on" | "off";
-  highestRisk: RiskLevel;
+  highestRisk: RiskLevel | null;
   workingChanges: number;
 }
 
 export function homeStateIsActionable(state: DesktopHomeState): boolean {
-  return state.protection === "on" && state.currentSnapshotId.length >= 7;
+  return state.protection === "on" && Boolean(state.activeProfile) && Boolean(state.currentSnapshotId);
 }
