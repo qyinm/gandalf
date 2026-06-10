@@ -28,7 +28,7 @@ export interface TimelineDetailModel {
   confidence: string;
   beforeSnapshotName: string;
   afterSnapshotName: string;
-  daemonRunId: string;
+  captureId: string;
   counts: string;
   highlights: string[];
   writableSurfaces: TimelineChangedSurface[];
@@ -95,7 +95,7 @@ export function buildTimelineViewModel(input: {
       agentFilter: input.agentFilter
     }),
     emptyMessage: input.entries.length === 0 ? "No timeline entries yet." : undefined,
-    emptyCommand: input.entries.length === 0 ? "hem daemon start --project ." : undefined,
+    emptyCommand: input.entries.length === 0 ? "Save a setup to start local history." : undefined,
     corruptWarning: corruptCount > 0
       ? `${corruptCount} corrupt timeline event${corruptCount === 1 ? "" : "s"} skipped`
       : undefined,
@@ -199,7 +199,7 @@ export function timelineDetailModel(entry: TimelineEntry): TimelineDetailModel {
     confidence: `${entry.confidence}: ${entry.confidenceReason}`,
     beforeSnapshotName: entry.beforeSnapshotName ?? "-",
     afterSnapshotName: entry.afterSnapshotName,
-    daemonRunId: entry.daemonRunId,
+    captureId: entry.captureId,
     counts: `${entry.evidenceCount} evidence, ${entry.graphNodeCount} graph nodes, ${entry.auditFindingCount} findings`,
     highlights: entry.changes.highlights,
     writableSurfaces,

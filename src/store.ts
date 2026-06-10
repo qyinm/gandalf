@@ -329,7 +329,7 @@ async function readTimelineEntries(dir: string, onCorruptEntry?: (event: Timelin
       continue;
     }
     try {
-      entries.push(await readJson<TimelineEntry>(path.join(dir, entry.name)));
+      entries.push(normalizeTimelineEntry(await readJson<unknown>(path.join(dir, entry.name))));
     } catch (error) {
       // Corrupt timeline events should not hide the rest of the local history.
       onCorruptEntry?.({
@@ -339,6 +339,24 @@ async function readTimelineEntries(dir: string, onCorruptEntry?: (event: Timelin
     }
   }
   return entries;
+}
+
+function normalizeTimelineEntry(raw: unknown): TimelineEntry {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("timeline event is not an object");
+  }
+
+  const record = raw as Record<string, unknown>;
+  const legacyDaemonRunId = typeof record.daemonRunId === "string" ? record.daemonRunId : undefined;
+  const captureId = typeof record.captureId === "string"
+    ? record.captureId
+    : legacyDaemonRunId ?? (typeof record.id === "string" ? record.id : "legacy");
+
+  return {
+    ...(record as unknown as TimelineEntry),
+    source: "manual",
+    captureId
+  };
 }
 
 function checksumsFromEvidence(evidence: DiscoveredItem[]): ChecksumRecord {

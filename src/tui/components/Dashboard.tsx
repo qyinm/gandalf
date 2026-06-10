@@ -2,7 +2,7 @@
  * Dashboard — sidebar-driven workspace layout for hem TUI.
  *
  *  ┌──────────────┬────────────────────────────────────────────┐
- *  │  Agents       │  Daemon: running/stopped/stale/error      │
+ *  │  Agents       │  Local setup workspace                    │
  *  │  ──────────   │  ────────────────────────────────────────  │
  *  │  ▸ Claude Cd  │  (content based on sidebar selection)      │
  *  │    Codex      │                                            │
@@ -27,7 +27,7 @@ import { diffGraphs } from "../../diff.js";
 import type { AuditFinding } from "../../types.js";
 import type { ScanResult } from "../../scan.js";
 import type { RuntimeOptions } from "../../cli-shared.js";
-import type { AgentId, DaemonStatusReadResult, DiscoveredItem, Snapshot, TimelineEntry } from "../../types.js";
+import type { AgentId, DiscoveredItem, Snapshot, TimelineEntry } from "../../types.js";
 import type { TimelineCorruptEvent } from "../../store.js";
 import type { TimelineUndoPlan } from "../../timeline-undo.js";
 import type { GraphDiff } from "../../diff.js";
@@ -117,7 +117,6 @@ type DashboardState = {
   error: AppError | null;
   /** Scroll offset for scan tab evidence/findings */
   scanScrollOffset: number;
-  daemonStatus: DaemonStatusReadResult | null;
 };
 
 type DashboardView = {
@@ -168,7 +167,6 @@ export default function Dashboard({ options }: DashboardProps) {
     diffState: { type: "idle" },
     error: null,
     scanScrollOffset: 0,
-    daemonStatus: null,
   });
   const filterRequestRef = useRef(0);
 
@@ -197,8 +195,6 @@ export default function Dashboard({ options }: DashboardProps) {
         const graph = buildGraph(scan.evidence);
         const findings = auditEvidence(scan.evidence, graph);
         const firstAgent = null;
-        const { readDaemonStatus } = await import("../../daemon.js");
-        const daemonStatus = await readDaemonStatus(options);
         const timeline = await loadTimelineForAgent(firstAgent);
         const snapshots = await listSnapshots(options.storeDir);
         const navModel = buildTuiNavigationModel({
@@ -224,7 +220,6 @@ export default function Dashboard({ options }: DashboardProps) {
           currentSetupFocus: "timeline",
           currentSetupOffsets: emptyCurrentSetupOffsets(),
           timelineUndoState: { type: "idle" },
-          daemonStatus,
         }));
       } catch (err) {
         setState((s) => ({
@@ -250,8 +245,6 @@ export default function Dashboard({ options }: DashboardProps) {
       const graph = buildGraph(scan.evidence);
       const findings = auditEvidence(scan.evidence, graph);
       const agents = buildAgentEntries(scan.evidence);
-      const { readDaemonStatus } = await import("../../daemon.js");
-      const daemonStatus = await readDaemonStatus(options);
 
       // Re-select current agent or first
       const currentAgent = state.selectedAgent;
@@ -286,7 +279,6 @@ export default function Dashboard({ options }: DashboardProps) {
         timelineUndoState: { type: "idle" },
         diffState: { type: "idle" },
         error: null,
-        daemonStatus,
         sidebarCursor: navModel.cursor,
       }));
     } catch {
@@ -619,16 +611,23 @@ export default function Dashboard({ options }: DashboardProps) {
     }));
 
     try {
-      const { writeSnapshot } = await import("../../store.js");
-      await writeSnapshot(options.storeDir, preview.snapshot);
+      const { captureTimelineSnapshot } = await import("../../timeline.js");
+      const saved = await captureTimelineSnapshot(options, {
+        snapshotName: preview.snapshot.manifest.name,
+        title: preview.snapshot.manifest.name
+      });
       const snapshots = await listSnapshots(options.storeDir);
+      const timeline = await loadTimelineForAgent(state.selectedAgent);
       setState((s) => ({
         ...s,
         snapshots,
+        timelineEntries: timeline.entries,
+        timelineCorruptEvents: timeline.corruptEvents,
+        timelineCursor: clampTimelineIndex(s.timelineCursor, timeline.entries),
         saveSetupState: {
           type: "saved",
-          name: preview.snapshot.manifest.name,
-          diff: preview.diff,
+          name: saved.state.snapshot.manifest.name,
+          diff: saved.diff ?? preview.diff,
           hasPreviousSnapshot: preview.hasPreviousSnapshot
         }
       }));
@@ -641,7 +640,7 @@ export default function Dashboard({ options }: DashboardProps) {
         }
       }));
     }
-  }, [options.storeDir, state.saveSetupState]);
+  }, [loadTimelineForAgent, options, state.saveSetupState, state.selectedAgent]);
 
   // ── Keyboard ───────────────────────────────────────────────
 
@@ -953,8 +952,6 @@ export default function Dashboard({ options }: DashboardProps) {
 
       {/* ── Main panel ── */}
       <Box flexDirection="column" paddingX={1} flexGrow={1} height={dashboardHeight}>
-        {!timelineScreenOpen && <DaemonTrustHeader status={state.daemonStatus} />}
-
         {/* Content area */}
         <Box flexDirection="column" height={activeContentHeight}>
           {state.error && (
@@ -1006,7 +1003,7 @@ export default function Dashboard({ options }: DashboardProps) {
         currentSetupFocus={state.currentSetupFocus}
         currentSetupOffsets={state.currentSetupOffsets}
         height={dashboardHeight}
-        header={<DaemonTrustHeader status={state.daemonStatus} />}
+        header={<LocalHistoryHeader entries={state.timelineEntries} snapshots={state.snapshots} />}
         footer={footerHintForTab("timeline")}
       />
     );
@@ -1158,34 +1155,16 @@ export default function Dashboard({ options }: DashboardProps) {
   }
 }
 
-export function DaemonTrustHeader({ status }: { status: DaemonStatusReadResult | null }) {
-  const model = daemonTrustHeaderModel(status);
-  if (!status) {
-    return (
-      <Box marginBottom={1}>
-        <Text dimColor>{model.title}</Text>
-      </Box>
-    );
-  }
-
+export function LocalHistoryHeader({ entries, snapshots }: { entries: TimelineEntry[]; snapshots: string[] }) {
   return (
     <Box flexDirection="column" marginBottom={1}>
-      <Text color={model.color}>
-        {model.title}
+      <Text color="cyan">
+        Local history
         <Text dimColor>
-          {"  "}last event: {model.lastEvent}
-          {"  "}watched: {model.watchedCount}
-          {"  "}store: {model.storeDir}
+          {"  "}entries: {entries.length}
+          {"  "}snapshots: {snapshots.length}
         </Text>
       </Text>
-      {model.error && (
-        <Text color="red">
-          {model.error}
-        </Text>
-      )}
-      {model.stale && (
-        <Text color="yellow">events may be stale</Text>
-      )}
     </Box>
   );
 }
@@ -1272,44 +1251,4 @@ function footerHintForTab(activeTab: TabId): string {
     return "↑↓ move  Enter open  Tab setup  ←→ scroll  u=preview undo  c=compare  r=rescan  q=quit";
   }
   return "↑↓ move  Enter open  s=save  c=compare  r=rescan  q=quit";
-}
-
-export function daemonTrustHeaderModel(status: DaemonStatusReadResult | null): {
-  title: string;
-  color: "green" | "yellow" | "red";
-  lastEvent: string;
-  watchedCount: number;
-  storeDir: string;
-  stale: boolean;
-  error?: string;
-} {
-  if (!status) {
-    return {
-      title: "Daemon: checking...",
-      color: "yellow",
-      lastEvent: "-",
-      watchedCount: 0,
-      storeDir: "-",
-      stale: false
-    };
-  }
-
-  const daemon = status.status;
-  const label = !status.ok
-    ? "error"
-    : daemon.running
-      ? daemon.stale ? "stale" : "running"
-      : daemon.stale ? "stale" : "stopped";
-
-  return {
-    title: `Daemon: ${label}`,
-    color: label === "running" ? "green" : label === "stopped" ? "yellow" : "red",
-    lastEvent: daemon.lastEventAt ?? "-",
-    watchedCount: daemon.watchedPaths.length,
-    storeDir: daemon.storeDir,
-    stale: daemon.stale,
-    ...((!status.ok || daemon.errors.length > 0)
-      ? { error: status.ok ? daemon.errors[0] : status.error }
-      : {})
-  };
 }

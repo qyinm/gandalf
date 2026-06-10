@@ -185,7 +185,7 @@ export interface Snapshot {
   provenance: ProvenanceEntry[];
 }
 
-export type TimelineEntrySource = "daemon";
+export type TimelineEntrySource = "manual";
 export type TimelineEntryEventKind = "baseline" | "setup_changed" | "unchanged";
 export type TimelineRestoreReadiness = "full" | "partial" | "observe-only";
 export type TimelineConfidence = "low" | "medium" | "high";
@@ -222,7 +222,7 @@ export interface TimelineEntry {
   agents: AgentId[];
   beforeSnapshotName?: string;
   afterSnapshotName: string;
-  daemonRunId: string;
+  captureId: string;
   createdAt: string;
   observedAt: string;
   changedSurfaces: TimelineChangedSurface[];
@@ -241,29 +241,6 @@ export interface TimelineCaptureResult {
   snapshot: Snapshot;
   reason?: "unchanged";
 }
-
-export interface DaemonStatus {
-  running: boolean;
-  pid?: number;
-  pidAlive?: boolean;
-  identityHash?: string;
-  identityVerified: boolean;
-  identityError?: string;
-  startedAt?: string;
-  lastHeartbeatAt?: string;
-  lastEventAt?: string;
-  runId?: string;
-  projectPath: string;
-  storeDir: string;
-  watchedPaths: string[];
-  stale: boolean;
-  staleReason?: string;
-  errors: string[];
-}
-
-export type DaemonStatusReadResult =
-  | { ok: true; status: DaemonStatus }
-  | { ok: false; error: string; status: DaemonStatus };
 
 export interface GraphNode {
   id: string;
