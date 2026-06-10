@@ -9,13 +9,8 @@
 
 import * as clack from "@clack/prompts";
 
-import { auditEvidence } from "../../audit.js";
-import { buildGraph } from "../../graph.js";
-import { buildProvenance } from "../../provenance.js";
-import { scanProject } from "../../scan.js";
-import { ensureStore, writeSnapshot } from "../../store.js";
-import type { AuditFinding, Snapshot, SnapshotManifest } from "../../types.js";
-import type { ScanResult } from "../../scan.js";
+import { ensureStore } from "../../store.js";
+import { captureTimelineSnapshot } from "../../timeline.js";
 import type { RuntimeOptions } from "../../cli-shared.js";
 import { formatSnapError } from "../../errors.js";
 
@@ -78,31 +73,12 @@ export async function snapshotCreateWizard(
   spinner.start("Scanning project...");
 
   try {
-    const scan: ScanResult = await scanProject(options);
-    const graph = buildGraph(scan.evidence);
-    const auditFindings: AuditFinding[] = auditEvidence(scan.evidence, graph);
-    const provenance = buildProvenance(graph, scan.evidence);
-
-    const manifest: SnapshotManifest = {
-      schemaVersion: "0.1",
-      name,
-      createdAt: new Date().toISOString(),
-      projectPath: options.projectPath,
-      security: {
-        rawSecretsIncluded: false,
-        redactionPolicy: "metadata-only",
-      },
-    };
-
-    const snapshot: Snapshot = {
-      manifest,
-      evidence: scan.evidence,
-      graph,
-      auditFindings,
-      provenance,
-    };
-
-    await writeSnapshot(options.storeDir, snapshot, options.agent);
+    const result = await captureTimelineSnapshot(options, {
+      snapshotName: String(name),
+      title: String(name)
+    });
+    const scan = result.state.scan;
+    const auditFindings = result.state.snapshot.auditFindings;
 
     // Show summary
     const agentCount = new Set(scan.evidence.map((e) => e.agent)).size;

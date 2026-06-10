@@ -8,11 +8,10 @@
  */
 
 import { formatSnapError } from "../errors.js";
-import { captureCurrentState } from "../current-state.js";
+import { captureTimelineSnapshot } from "../timeline.js";
 import {
   listSnapshots,
   readSnapshot,
-  writeSnapshot,
 } from "../store.js";
 import React from "react";
 import { hasFlag, json, valueAfter } from "../cli-shared.js";
@@ -63,8 +62,10 @@ export const snapshotCommand: Command = {
         return 1;
       }
 
-      const state = await captureCurrentState(options, name);
-      await writeSnapshot(options.storeDir, state.snapshot, options.agent);
+      await captureTimelineSnapshot(options, {
+        snapshotName: name,
+        title: name
+      });
       process.stdout.write(`Created metadata-only snapshot: ${name}`);
       if (options.agent) process.stdout.write(` (agent: ${options.agent})`);
       process.stdout.write("\n");

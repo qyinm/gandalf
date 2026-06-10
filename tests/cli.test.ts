@@ -211,6 +211,13 @@ describe("hem CLI scaffold", () => {
     assert.equal(create.status, 0, create.stderr);
     assert.match(create.stdout, /Created metadata-only snapshot: baseline/);
 
+    const timelineAfterCreate = runCli(["timeline", "list", "--project", project, "--json"], project, env);
+    assert.equal(timelineAfterCreate.status, 0, timelineAfterCreate.stderr);
+    const timelineEntries = JSON.parse(timelineAfterCreate.stdout);
+    assert.equal(timelineEntries.length, 1);
+    assert.equal(timelineEntries[0].source, "manual");
+    assert.equal(timelineEntries[0].afterSnapshotName, "baseline");
+
     const list = runCli(["snapshot", "list"], project, env);
     assert.equal(list.status, 0, list.stderr);
     assert.match(list.stdout, /baseline/);

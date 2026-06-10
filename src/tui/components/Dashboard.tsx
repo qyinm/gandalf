@@ -611,16 +611,23 @@ export default function Dashboard({ options }: DashboardProps) {
     }));
 
     try {
-      const { writeSnapshot } = await import("../../store.js");
-      await writeSnapshot(options.storeDir, preview.snapshot);
+      const { captureTimelineSnapshot } = await import("../../timeline.js");
+      const saved = await captureTimelineSnapshot(options, {
+        snapshotName: preview.snapshot.manifest.name,
+        title: preview.snapshot.manifest.name
+      });
       const snapshots = await listSnapshots(options.storeDir);
+      const timeline = await loadTimelineForAgent(state.selectedAgent);
       setState((s) => ({
         ...s,
         snapshots,
+        timelineEntries: timeline.entries,
+        timelineCorruptEvents: timeline.corruptEvents,
+        timelineCursor: clampTimelineIndex(s.timelineCursor, timeline.entries),
         saveSetupState: {
           type: "saved",
-          name: preview.snapshot.manifest.name,
-          diff: preview.diff,
+          name: saved.state.snapshot.manifest.name,
+          diff: saved.diff ?? preview.diff,
           hasPreviousSnapshot: preview.hasPreviousSnapshot
         }
       }));
@@ -633,7 +640,7 @@ export default function Dashboard({ options }: DashboardProps) {
         }
       }));
     }
-  }, [options.storeDir, state.saveSetupState]);
+  }, [loadTimelineForAgent, options, state.saveSetupState, state.selectedAgent]);
 
   // ── Keyboard ───────────────────────────────────────────────
 
