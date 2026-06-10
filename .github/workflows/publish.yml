@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - package.json
+      - bun.lock
+      - packages/core/package.json
+      - apps/tui/package.json
+      - apps/cli/package.json
   workflow_dispatch:
 
 permissions:
@@ -27,41 +31,29 @@ jobs:
         id: package
         shell: bash
         run: |
-          VERSION="$(bun -p "require('./package.json').version")"
-          NAME="$(bun -p "require('./package.json').name")"
+          VERSION="$(bun -p "require('./apps/cli/package.json').version")"
+          NAME="$(bun -p "require('./apps/cli/package.json').name")"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Check registry version
-        id: registry
-        shell: bash
-        run: |
-          if bun pm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - run: bun install --frozen-lockfile
-        if: steps.registry.outputs.publish == 'true'
       - run: bun run typecheck
-        if: steps.registry.outputs.publish == 'true'
       - run: bun run build
-        if: steps.registry.outputs.publish == 'true'
       - run: bun run test
-        if: steps.registry.outputs.publish == 'true'
 
       - name: Configure registry auth
-        if: steps.registry.outputs.publish == 'true'
         shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
 
-      - run: bun publish --access public
-        if: steps.registry.outputs.publish == 'true'
+      - name: Publish workspace packages
+        run: |
+          bun publish --cwd packages/core --access public --tolerate-republish
+          bun publish --cwd apps/tui --access public --tolerate-republish
+          bun publish --cwd apps/cli --access public --tolerate-republish
 
       - name: Check GitHub Release
         id: release

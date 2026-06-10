@@ -196,4 +196,16 @@ bun install
 bun run check        # build + test
 bun run typecheck    # TypeScript only, no emit
 bun run test         # run tests (requires build first)
+bun run desktop:dev  # run the Tauri desktop app in development
 ```
+
+## Repository Layout
+
+Hem is a Bun workspace:
+
+| Workspace | Purpose |
+|---|---|
+| `packages/core` | Read-only scan, snapshot, diff, audit, bundle, restore, and shared domain types |
+| `apps/cli` | Published `hem` command and command handlers |
+| `apps/tui` | Ink/Clack terminal workspace used by `hem tui` |
+| `apps/desktop` | Tauri v2 + Vite desktop dashboard shell |
