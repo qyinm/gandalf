@@ -1,0 +1,143 @@
+---
+import TerminalWindow from './TerminalWindow.astro';
+
+const terminalLines = [
+  { command: 'hem save baseline', prompt: true },
+  { command: 'saved · 12 MCPs · 8 skills · 14 hooks', prompt: false },
+  { command: 'hem diff baseline', prompt: true },
+  { command: ' + skill web-search', prompt: false },
+  { command: ' ~ mcp github  env keys changed', prompt: false },
+  { command: 'hem restore baseline', prompt: true },
+];
+---
+
+<section class="hero section--no-rule">
+  <div class="container">
+    <div class="hero__meta" aria-hidden="true">
+      <span class="mono-tag">v0.1 · macOS</span>
+      <span class="mono-tag">[ CLI ]</span>
+      <span class="mono-tag">[ MIT ]</span>
+    </div>
+
+    <h1 class="hero__title">
+      Your agent setup, <em>versioned</em>.
+    </h1>
+
+    <p class="hero__lede">
+      Hem saves, diffs, and restores the Codex setup on your Mac
+      like a Git branch.
+    </p>
+
+    <div class="hero__actions">
+      <a href="#install" class="btn btn--primary">
+        Install Hem
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+      </a>
+      <a href="/docs/bundle-format" class="btn btn--outline">
+        Read the docs
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </a>
+    </div>
+
+    <p class="hero__sub-meta">
+      <span>v0.1.0</span>
+      <span class="hero__sub-meta-dot">·</span>
+      <span>macOS 13+</span>
+      <span class="hero__sub-meta-dot">·</span>
+      <code>npm install -g @qxinm/hem</code>
+    </p>
+
+    <div class="hero__terminal">
+      <TerminalWindow label="hem" lines={terminalLines} />
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero {
+    padding: 80px 0 64px;
+    text-align: left;
+  }
+
+  .hero__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 28px;
+  }
+
+  .hero__title {
+    font-family: var(--font-serif);
+    font-size: clamp(2.4rem, 6vw, 4rem);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.025em;
+    margin-bottom: 20px;
+    max-width: 18ch;
+  }
+
+  .hero__title em {
+    font-style: italic;
+    font-weight: 600;
+  }
+
+  .hero__lede {
+    font-size: clamp(1rem, 1.4vw, 1.125rem);
+    color: var(--muted-foreground);
+    line-height: 1.55;
+    max-width: 44ch;
+    margin-bottom: 36px;
+  }
+
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .hero__sub-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+    margin-bottom: 56px;
+  }
+
+  .hero__sub-meta code {
+    background: var(--surface);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+  }
+
+  .hero__sub-meta-dot {
+    opacity: 0.5;
+  }
+
+  .hero__terminal {
+    width: 100%;
+  }
+
+  .hero__terminal .terminal {
+    width: 100%;
+  }
+
+  .terminal__add { color: var(--foreground); font-weight: 500; }
+  .terminal__mod { color: var(--foreground); font-weight: 500; }
+
+  @media (max-width: 640px) {
+    .hero {
+      padding: 56px 0 48px;
+    }
+
+    .hero__actions .btn {
+      flex: 1;
+      justify-content: center;
+    }
+  }
+</style>

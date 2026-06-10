@@ -25,7 +25,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "bun test dist/tests/*.test.js"
+    "test": "bun test ./dist/tests/*.test.js"
   },
   "engines": {
     "node": ">=22"

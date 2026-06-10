@@ -1,0 +1,119 @@
+---
+export interface Props {
+  lines?: { command: string; prompt?: boolean }[];
+  label?: string;
+}
+
+const { lines, label } = Astro.props;
+const hasLines = Array.isArray(lines) && lines.length > 0;
+---
+
+<div class="terminal">
+  <div class="terminal__bar">
+    <span class="terminal__dot terminal__dot--red"></span>
+    <span class="terminal__dot terminal__dot--yellow"></span>
+    <span class="terminal__dot terminal__dot--green"></span>
+    {label && <span class="terminal__label">{label}</span>}
+  </div>
+
+  <pre class="terminal__body">
+    <code>
+      {hasLines ? (
+        lines!.map((line) => (
+          <span class="terminal__line">
+            {line.prompt === false ? (
+              <span>{line.command}</span>
+            ) : (
+              <>
+                <span class="terminal__prompt">$</span>
+                <span> {line.command}</span>
+              </>
+            )}
+          </span>
+        ))
+      ) : (
+        <slot />
+      )}
+    </code>
+  </pre>
+</div>
+
+<style>
+  .terminal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    text-align: left;
+    box-shadow: var(--shadow-terminal);
+  }
+
+  .terminal__bar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 12px 16px;
+    background: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .terminal__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--border);
+  }
+
+  .terminal__dot--red { background: var(--muted-foreground); }
+  .terminal__dot--yellow { background: var(--muted-foreground); }
+  .terminal__dot--green { background: var(--muted-foreground); }
+
+  .terminal__label {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--muted-foreground);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+
+  .terminal__body {
+    margin: 0;
+    overflow-x: auto;
+    padding: 20px 24px;
+  }
+
+  .terminal__body code {
+    font-family: var(--font-mono);
+    font-size: clamp(0.75rem, 1.2vw, 0.85rem);
+    line-height: 2.1;
+    color: var(--muted-foreground);
+    white-space: pre-wrap;
+    display: block;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .terminal__line {
+    display: block;
+    line-height: 2.1;
+    white-space: normal;
+  }
+
+  .terminal__prompt {
+    color: var(--brand); /* SURFACE 2/2 constraint: ONLY terminal prompt uses brand */
+    margin-right: 10px;
+    white-space: nowrap;
+  }
+
+  .terminal__add {
+    color: var(--foreground);
+    font-weight: 500;
+  }
+
+  .terminal__mod {
+    color: var(--foreground);
+    font-weight: 500;
+  }
+</style>
