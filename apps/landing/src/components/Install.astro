@@ -1,0 +1,47 @@
+---
+import TerminalWindow from './TerminalWindow.astro';
+
+const lines = [
+  { command: 'bun install -g @qxinm/hem' },
+  { command: 'hem scan --project .' },
+];
+---
+
+<section class="install" id="install">
+  <div class="container">
+    <h2 class="section__title">Install Hem</h2>
+    <div class="install__terminal">
+      <TerminalWindow lines={lines} />
+    </div>
+    <p class="install__note">Requires Node.js 22 or later</p>
+  </div>
+</section>
+
+<style>
+  .install {
+    text-align: center;
+    position: relative;
+    padding: 4rem 0;
+  }
+
+  .install::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 10%;
+    right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+  }
+
+  .install__terminal {
+    max-width: 440px;
+    margin: 0 auto 16px;
+  }
+
+  .install__note {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    opacity: 0.7;
+  }
+</style>
