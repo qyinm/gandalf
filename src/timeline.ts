@@ -12,7 +12,7 @@ import type { RuntimeOptions } from "./cli-shared.js";
 import type { AgentId, TimelineChangedSurface, TimelineEntry, TimelineRestoreReadiness } from "./types.js";
 
 export interface CaptureTimelineOptions {
-  daemonRunId: string;
+  captureId?: string;
   snapshotName?: string;
   title?: string;
   skipUnchanged?: boolean;
@@ -34,7 +34,8 @@ export async function captureTimelineSnapshot(
     projectPath: options.projectPath,
     agent: options.agent
   });
-  const snapshotName = captureOptions.snapshotName ?? timelineSnapshotName(captureOptions.daemonRunId, options.agent);
+  const captureId = captureOptions.captureId ?? shortId();
+  const snapshotName = captureOptions.snapshotName ?? timelineSnapshotName(captureId, options.agent);
   const state = await captureCurrentState(options, snapshotName);
 
   let diff: GraphDiff | undefined;
@@ -64,7 +65,7 @@ export async function captureTimelineSnapshot(
   const entry: TimelineEntry = {
     schemaVersion: "0.1",
     id: shortId(),
-    source: "daemon",
+    source: "manual",
     eventKind: eventKindFor(previous, diff),
     title: captureOptions.title ?? titleForDiff(diff, options.agent),
     projectPath: state.snapshot.manifest.projectPath,
@@ -72,7 +73,7 @@ export async function captureTimelineSnapshot(
     agents: agentsForState(state),
     ...(previous ? { beforeSnapshotName: previous.afterSnapshotName } : {}),
     afterSnapshotName: snapshotName,
-    daemonRunId: captureOptions.daemonRunId,
+    captureId,
     createdAt: new Date().toISOString(),
     observedAt: state.snapshot.manifest.createdAt,
     changedSurfaces,
@@ -97,9 +98,9 @@ export async function captureTimelineSnapshot(
   return { written: true, entry, state, diff };
 }
 
-export function timelineSnapshotName(runId: string, agent?: AgentId): string {
+export function timelineSnapshotName(captureId: string, agent?: AgentId): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return ["daemon", runId, agent, timestamp, shortId()].filter(Boolean).join("-");
+  return ["history", captureId, agent, timestamp, shortId()].filter(Boolean).join("-");
 }
 
 function shortId(): string {
@@ -226,7 +227,7 @@ function confidenceFor(diff: GraphDiff | undefined, surfaces: TimelineChangedSur
 
 function confidenceReasonFor(diff: GraphDiff | undefined, surfaces: TimelineChangedSurface[], diffError?: string): string {
   if (diffError) return `previous snapshot could not be diffed: ${diffError}`;
-  if (!diff) return "first daemon baseline";
+  if (!diff) return "first manual history baseline";
   if (surfaces.length === 0) return "no semantic or raw source changes";
   if (surfaces.some((surface) => surface.path === "unknown")) return "some changes lacked source path metadata";
   return "derived from snapshot graph diff";

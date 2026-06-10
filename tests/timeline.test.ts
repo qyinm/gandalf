@@ -28,20 +28,20 @@ async function writeMcp(projectPath: string, command: string): Promise<void> {
 }
 
 describe("timeline capture", () => {
-  it("creates a daemon baseline, captures partial MCP+skill changes, and builds MCP-only dry-run undo", async () => {
+  it("creates a manual baseline, captures partial MCP+skill changes, and builds MCP-only dry-run undo", async () => {
     const options = await makeRuntime();
     await writeMcp(options.projectPath, "gh-mcp");
 
     const baseline = await captureTimelineSnapshot(options, {
-      daemonRunId: "run-test",
-      snapshotName: "daemon-baseline-run-test"
+      captureId: "capture-test",
+      snapshotName: "manual-baseline-capture-test"
     });
 
     assert.equal(baseline.written, true);
     assert.equal(baseline.entry?.eventKind, "baseline");
     assert.equal(baseline.entry?.restoreReadiness, "observe-only");
     assert.equal((await listTimelineEntries(options.storeDir)).length, 1);
-    assert.equal((await readSnapshot(options.storeDir, "daemon-baseline-run-test")).manifest.name, "daemon-baseline-run-test");
+    assert.equal((await readSnapshot(options.storeDir, "manual-baseline-capture-test")).manifest.name, "manual-baseline-capture-test");
 
     await writeMcp(options.projectPath, "gh-mcp-v2");
     const skillDir = path.join(options.homeDir, ".claude", "skills", "react-review");
@@ -49,7 +49,7 @@ describe("timeline capture", () => {
     await writeFile(path.join(skillDir, "SKILL.md"), "# React Review\n");
 
     const changed = await captureTimelineSnapshot(options, {
-      daemonRunId: "run-test",
+      captureId: "capture-test",
       skipUnchanged: true
     });
 
@@ -68,7 +68,7 @@ describe("timeline capture", () => {
     assert.ok(undo.observeOnlySurfaces.length >= 1);
 
     const unchanged = await captureTimelineSnapshot(options, {
-      daemonRunId: "run-test",
+      captureId: "capture-test",
       skipUnchanged: true
     });
     assert.equal(unchanged.written, false);

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { daemonTrustHeaderModel } from "../src/tui/components/Dashboard.js";
 import { buildAgentFilterEntries } from "../src/tui/components/Sidebar.js";
 import {
   buildCurrentSetupSummaryModel,
@@ -28,50 +27,14 @@ import {
   truncateText
 } from "../src/tui/components/TuiFormatters.js";
 import type { TimelineUndoPlan } from "../src/timeline-undo.js";
-import type { DaemonStatusReadResult, DiscoveredItem, GraphNode, Snapshot, TimelineEntry } from "../src/types.js";
-
-function statusResult(overrides: Partial<DaemonStatusReadResult["status"]> = {}): DaemonStatusReadResult {
-  return {
-    ok: true,
-    status: {
-      running: true,
-      pid: 123,
-      identityHash: "sha256:test",
-      startedAt: "2026-06-08T00:00:00.000Z",
-      lastHeartbeatAt: "2026-06-08T00:00:01.000Z",
-      lastEventAt: "2026-06-08T00:00:02.000Z",
-      runId: "run-test",
-      projectPath: "/project",
-      storeDir: "/store",
-      watchedPaths: ["/project/.mcp.json", "/home/.claude/settings.json"],
-      stale: false,
-      errors: [],
-      ...overrides,
-      identityVerified: overrides.identityVerified ?? true
-    }
-  };
-}
-
-function statusReadError(): DaemonStatusReadResult {
-  return {
-    ok: false,
-    error: "status unreadable",
-    status: statusResult({
-      running: false,
-      pidAlive: false,
-      identityVerified: false,
-      stale: true,
-      errors: ["status unreadable"]
-    }).status
-  };
-}
+import type { DiscoveredItem, GraphNode, Snapshot, TimelineEntry } from "../src/types.js";
 
 function timelineEntry(overrides: Partial<TimelineEntry> & Pick<TimelineEntry, "id" | "observedAt" | "afterSnapshotName">): TimelineEntry {
   const { id, afterSnapshotName, observedAt, ...rest } = overrides;
   return {
     schemaVersion: "0.1",
     id,
-    source: "daemon",
+    source: "manual",
     eventKind: "setup_changed",
     title: "MCP server changed",
     projectPath: "/project",
@@ -79,7 +42,7 @@ function timelineEntry(overrides: Partial<TimelineEntry> & Pick<TimelineEntry, "
     agents: ["claude-code"],
     beforeSnapshotName: "before",
     afterSnapshotName,
-    daemonRunId: "run-test",
+    captureId: "capture-test",
     createdAt: observedAt,
     observedAt,
     changedSurfaces: [
@@ -165,55 +128,6 @@ function snapshotForTui(name: string, createdAt: string, graph: GraphNode[]): Sn
   };
 }
 
-describe("TUI daemon trust header", () => {
-  it("renders checking state before daemon status is loaded", () => {
-    const model = daemonTrustHeaderModel(null);
-
-    assert.equal(model.title, "Daemon: checking...");
-    assert.equal(model.color, "yellow");
-    assert.equal(model.lastEvent, "-");
-  });
-
-  it("renders running daemon trust metadata", () => {
-    const model = daemonTrustHeaderModel(statusResult());
-
-    assert.equal(model.title, "Daemon: running");
-    assert.equal(model.color, "green");
-    assert.equal(model.lastEvent, "2026-06-08T00:00:02.000Z");
-    assert.equal(model.watchedCount, 2);
-    assert.equal(model.storeDir, "/store");
-  });
-
-  it("renders stopped daemon state", () => {
-    const model = daemonTrustHeaderModel(statusResult({
-      running: false,
-      pidAlive: false,
-      identityVerified: false,
-      stale: false
-    }));
-
-    assert.equal(model.title, "Daemon: stopped");
-    assert.equal(model.color, "yellow");
-    assert.equal(model.stale, false);
-  });
-
-  it("renders stale daemon warning", () => {
-    const model = daemonTrustHeaderModel(statusResult({ running: false, stale: true }));
-
-    assert.equal(model.title, "Daemon: stale");
-    assert.equal(model.color, "red");
-    assert.equal(model.stale, true);
-  });
-
-  it("renders daemon status read errors", () => {
-    const model = daemonTrustHeaderModel(statusReadError());
-
-    assert.equal(model.title, "Daemon: error");
-    assert.equal(model.color, "red");
-    assert.equal(model.error, "status unreadable");
-  });
-});
-
 describe("TUI timeline model", () => {
   it("formats shared display labels and widths", () => {
     assert.equal(formatAgentLabel("claude-code"), "Claude Code");
@@ -271,7 +185,7 @@ describe("TUI timeline model", () => {
     assert.equal(formatInventoryNameWithSource("github", mcpServer), "github (project: .mcp.json)");
   });
 
-  it("renders an empty state with daemon start guidance", () => {
+  it("renders an empty state with save setup guidance", () => {
     const model = buildTimelineViewModel({
       entries: [],
       selectedIndex: 0,
@@ -280,7 +194,7 @@ describe("TUI timeline model", () => {
 
     assert.equal(model.filterLabel, "All agents");
     assert.equal(model.emptyMessage, "No timeline entries yet.");
-    assert.equal(model.emptyCommand, "hem daemon start --project .");
+    assert.equal(model.emptyCommand, "Save a setup to start local history.");
     assert.deepEqual(model.rows, []);
     assert.equal(model.selectedEntry, undefined);
   });
