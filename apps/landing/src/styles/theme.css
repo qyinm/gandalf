@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════
    Hem Design Tokens
    Source of truth: DESIGN.md
+   Mono palette + brand color #FF5F6A
    ═══════════════════════════════════════════ */
 
 :root {
@@ -10,27 +11,22 @@
   --surface-hover: #f1f5f9;
   --foreground: #0f172a;
 
-  /* ── Brand ── */
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
-  --primary-foreground: #ffffff;
-
-  --accent: #ff5f6a;
-  --accent-hover: #e04e58;
-  --accent-foreground: #ffffff;
+  /* ── Brand (sparingly) ── */
+  --brand: #ff5f6a;
+  --brand-hover: #e04e58;
+  --brand-foreground: #ffffff;
 
   /* ── Neutrals ── */
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
   --border: #e2e8f0;
   --border-light: #cbd5e1;
-  --ring: #3b82f6;
+  --ring: #ff5f6a;
 
   /* ── Semantic ── */
   --success: #22c55e;
   --warning: #f59e0b;
   --destructive: #ef4444;
-  --info: #3b82f6;
 
   /* ── Layout ── */
   --radius: 12px;
