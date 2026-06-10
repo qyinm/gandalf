@@ -19,45 +19,49 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-          cache: npm
+          bun-version: 1.3.14
 
       - name: Read package version
         id: package
         shell: bash
         run: |
-          VERSION="$(node -p "require('./package.json').version")"
-          NAME="$(node -p "require('./package.json').name")"
+          VERSION="$(bun -p "require('./package.json').version")"
+          NAME="$(bun -p "require('./package.json').name")"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Check npm version
-        id: npm
+      - name: Check registry version
+        id: registry
         shell: bash
         run: |
-          if npm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
+          if bun pm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
           else
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - run: npm ci
-        if: steps.npm.outputs.publish == 'true'
-      - run: npm run typecheck
-        if: steps.npm.outputs.publish == 'true'
-      - run: npm run build
-        if: steps.npm.outputs.publish == 'true'
-      - run: npm test
-        if: steps.npm.outputs.publish == 'true'
+      - run: bun install --frozen-lockfile
+        if: steps.registry.outputs.publish == 'true'
+      - run: bun run typecheck
+        if: steps.registry.outputs.publish == 'true'
+      - run: bun run build
+        if: steps.registry.outputs.publish == 'true'
+      - run: bun run test
+        if: steps.registry.outputs.publish == 'true'
 
-      - run: npm publish
-        if: steps.npm.outputs.publish == 'true'
+      - name: Configure registry auth
+        if: steps.registry.outputs.publish == 'true'
+        shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+
+      - run: bun publish --access public
+        if: steps.registry.outputs.publish == 'true'
 
       - name: Check GitHub Release
         id: release

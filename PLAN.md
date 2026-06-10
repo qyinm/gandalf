@@ -117,7 +117,7 @@ hem restore --snapshot <name> --apply --rollback --project .
 The first useful moment must sell local history immediately.
 
 ```bash
-npm install -g @qxinm/hem
+bun install -g @qxinm/hem
 
 # Save the setup that works
 hem snapshot create --name baseline --metadata-only --project ~/my-project
