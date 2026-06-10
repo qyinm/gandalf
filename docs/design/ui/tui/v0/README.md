@@ -20,7 +20,7 @@ The app is not primarily a marketplace, security dashboard, or brand page. It is
 | Current local agent files | working tree | Current setup |
 | Named environment line | branch | Profile |
 | Saved state in a profile | commit | Snapshot / saved setup |
-| Daemon-observed setup event | log entry | Timeline event / change |
+| Local setup history event | log entry | Timeline event / change |
 | Change list between states | diff | Compare |
 | Revert to saved state | checkout/reset | Restore |
 | Portable bundle | archive | `.hem` file |
@@ -82,11 +82,11 @@ Examples:
 
 ## Layout
 
-The TUI uses a persistent left nav and a main workspace. The Timeline screen is the first screen. On Timeline, the main workspace is split into two framed panels: Current Setup on top and Timeline below it. The daemon status lives inside the top workspace frame so all three visible areas line up vertically.
+The TUI uses a persistent left nav and a main workspace. The Timeline screen is the first screen. On Timeline, the main workspace is split into two framed panels: Current Setup on top and Timeline below it. Local history status lives inside the top workspace frame so all three visible areas line up vertically.
 
 ```text
 ┌──────────────────────┬────────────────────────────────────────────────────────┐
-│ Profiles             │ Daemon: stopped  last event: -  watched: 4             │
+│ Profiles             │ Local history  entries: 0  snapshots: 0                │
 │   default            │                                                        │
 │                      │ Current Setup                                          │
 │ Agents               │   Scope: All agents                                    │
@@ -101,7 +101,7 @@ The TUI uses a persistent left nav and a main workspace. The Timeline screen is 
 │                      │                                                        │
 │                      │ Timeline  Filter: All agents                           │
 │                      │ No timeline entries yet.                               │
-│                      │ hem daemon start --project .                           │
+│                      │ Save a setup to start local history.                   │
 ├──────────────────────┴────────────────────────────────────────────────────────┤
 │ ↑↓ move  Enter open  Tab setup  ←→ scroll  u=preview undo  c=compare  q=quit │
 └───────────────────────────────────────────────────────────────────────────────┘
@@ -374,9 +374,9 @@ Current setup will be saved first as
 [Restore] [Cancel]
 ```
 
-Original TUI v0 restore targets full setup restore. Daemon P0 deliberately narrows this:
+Original TUI v0 restore targets full setup restore. Local history preview deliberately narrows this:
 
-- daemon timeline restore is MCP-only dry-run undo
+- timeline restore preview is MCP-only dry-run undo
 - skills, hooks, and permissions appear as observe-only surfaces
 - full setup restore remains post-P0 until restore handlers are audited and covered by tests
 
@@ -463,7 +463,7 @@ s save setup
 ```text
 No timeline entries yet.
 
-hem daemon start --project .
+Save a setup to start local history.
 ```
 
 ### No Detected Agents

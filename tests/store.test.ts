@@ -92,13 +92,13 @@ function timelineEntry(overrides: Partial<TimelineEntry> & Pick<TimelineEntry, "
   const { afterSnapshotName, observedAt, ...rest } = overrides;
   return {
     schemaVersion: "0.1",
-    source: "daemon",
+    source: "manual",
     eventKind: "setup_changed",
     title: "update github mcp",
     projectPath: "/tmp/project",
     agents: ["claude-code"],
     afterSnapshotName,
-    daemonRunId: "run-test",
+    captureId: "capture-test",
     createdAt: observedAt,
     observedAt,
     changedSurfaces: [
@@ -299,5 +299,43 @@ describe("timeline event store", () => {
     assert.equal(corruptEvents.length, 1);
     assert.equal(path.basename(corruptEvents[0].filePath), "bad.json");
     assert.match(corruptEvents[0].error, /json/i);
+  });
+
+  it("normalizes legacy daemon timeline events at the store boundary", async () => {
+    const storeDir = await tempStore();
+    const eventsDir = path.join(storeDir, "timeline", "events");
+    await ensureStore(storeDir);
+    await import("node:fs/promises").then(({ mkdir }) => mkdir(eventsDir, { recursive: true }));
+    await writeFile(path.join(eventsDir, "legacy.json"), JSON.stringify({
+      schemaVersion: "0.1",
+      id: "legacy-event",
+      source: "daemon",
+      eventKind: "baseline",
+      title: "legacy daemon baseline",
+      projectPath: "/tmp/project",
+      agents: ["claude-code"],
+      afterSnapshotName: "legacy-baseline",
+      daemonRunId: "run-legacy",
+      createdAt: "2026-06-07T00:00:00.000Z",
+      observedAt: "2026-06-07T00:00:00.000Z",
+      changedSurfaces: [],
+      restoreReadiness: "observe-only",
+      confidence: "high",
+      confidenceReason: "legacy",
+      evidenceCount: 0,
+      graphNodeCount: 0,
+      auditFindingCount: 0,
+      changes: {
+        hasChanges: false,
+        semanticChangeCount: 0,
+        rawSourceChangeCount: 0,
+        highlights: []
+      }
+    }, null, 2));
+
+    const entry = (await listTimelineEntries(storeDir))[0];
+    assert.equal(entry.source, "manual");
+    assert.equal(entry.captureId, "run-legacy");
+    assert.equal(entry.afterSnapshotName, "legacy-baseline");
   });
 });

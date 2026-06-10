@@ -15,8 +15,7 @@ hem snapshot create --name baseline --metadata-only --project .
 # See what changed after installing skills/MCPs
 hem diff baseline current --project .
 
-# Keep a local daemon timeline of setup changes
-hem daemon start --project . --json
+# Open the local setup workspace
 hem tui
 
 # Preview a restore before applying it
@@ -102,29 +101,23 @@ hem restore --snapshot baseline --apply --experimental --project .
 hem restore --snapshot baseline --apply --rollback --experimental --project .
 ```
 
-### Daemon Timeline
+### Local Setup Workspace
 
 ```bash
-# Start local setup history capture
-hem daemon start --project . --json
-
-# Check daemon trust/status metadata
-hem daemon status --project . --json
-
-# Inspect captured setup changes
+# Inspect local setup history entries, when present
 hem timeline list --project .
 hem timeline show <id>
 
 # Preview undo for a timeline event without writing files
 hem timeline undo <id> --dry-run --json
 
-# Open the Timeline-first TUI
+# Open the local setup workspace
 hem tui --project .
 ```
 
-Timeline undo is P0 dry-run preview only. It reports `writesFiles=false`, shows MCP changes that could be reversed, and keeps skills, hooks, permissions, env keys, and unsupported surfaces as observe-only.
+Timeline undo is P0 dry-run preview only for stored history entries. It reports `writesFiles=false`, shows MCP changes that could be reversed, and keeps skills, hooks, permissions, env keys, and unsupported surfaces as observe-only.
 
-`hem tui` opens a local setup-history workspace with persistent `Profiles`, `Agents`, and `History` navigation. The first screen is `History > All changes` with Current Setup above Timeline and an `All agents` filter. The `Agents` nav lists detected agents only. Project-scoped evidence appears in Current Setup as `Project` or `(project)`, not as an agent. Agent screens show current setup inventory, snapshots are full setup save points, Save Setup previews deterministic titles before writing, and Compare shows explicit From / To / Scope before side-by-side setup changes.
+`hem tui` opens a local setup-history workspace with persistent `Profiles`, `Agents`, and `History` navigation. The first screen is `History > All changes` with Current Setup above local history and an `All agents` filter. The `Agents` nav lists detected agents only. Project-scoped evidence appears in Current Setup as `Project` or `(project)`, not as an agent. Agent screens show current setup inventory, snapshots are full setup save points, Save Setup previews deterministic titles before writing, and Compare shows explicit From / To / Scope before side-by-side setup changes.
 
 ### Bundle And Move Setups
 
@@ -187,9 +180,9 @@ Scanner plugin interface: add new agents by implementing `ScannerPlugin`. `Proje
 | Bundle export/import (`.hem` format) | ✅ v0.2 experimental |
 | Restore engine (dry-run, apply, rollback) | ✅ v0.2 experimental |
 | TUI setup-history workspace | ✅ v0.3 preview |
-| Daemon timeline and Timeline-first TUI | ✅ v0.3 preview |
 | Local multi-profile persistence | 📋 next |
 | MCP/skills add-remove manager | 📋 future |
+| Background setup-change daemon | 📋 future |
 | Cloud profiles and multi-machine sync | 📋 Pro |
 
 ---
