@@ -55,10 +55,7 @@ button {
   top: 0;
   width: 12px;
   height: 12px;
-  border-top: 1px solid #d8dcd2;
-  border-left: 1px solid #d8dcd2;
-  border-top-left-radius: 12px;
-  background: #ffffff;
+  background: radial-gradient(circle at 100% 100%, #ffffff 0 11px, #d8dcd2 11px 12px, #edefe8 12px);
 }
 
 .app-shell::after {
@@ -77,10 +74,18 @@ button {
   align-items: center;
   justify-content: flex-end;
   padding: 0 14px 0 88px;
-  background:
-    linear-gradient(#edefe8, #edefe8) var(--sidebar-width) 0 / 12px 12px no-repeat,
-    linear-gradient(to right, #edefe8 0 var(--sidebar-width), #ffffff var(--sidebar-width));
+  background: #ffffff;
   user-select: none;
+}
+
+.titlebar::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--sidebar-width);
+  background: #edefe8;
+  pointer-events: none;
+  transition: width 180ms ease;
 }
 
 .sidebar-toggle {
@@ -91,9 +96,6 @@ button {
   transform: translateY(-50%);
 }
 
-.app-shell.is-sidebar-collapsed .titlebar {
-  background: #ffffff;
-}
 
 .snapshot-chip,
 .icon-button {
