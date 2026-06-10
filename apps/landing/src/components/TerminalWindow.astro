@@ -2,10 +2,9 @@
 export interface Props {
   lines?: { command: string }[];
   label?: string;
-  singleLine?: boolean;
 }
 
-const { lines, label, singleLine = false } = Astro.props;
+const { lines, label } = Astro.props;
 const hasLines = Array.isArray(lines) && lines.length > 0;
 ---
 
@@ -17,7 +16,7 @@ const hasLines = Array.isArray(lines) && lines.length > 0;
     {label && <span class="terminal__label">{label}</span>}
   </div>
 
-  <pre class={`terminal__body ${singleLine ? 'terminal__body--single' : ''}`}>
+  <pre class="terminal__body">
     <code>
       {hasLines ? (
         lines!.map((line) => (
@@ -74,7 +73,6 @@ const hasLines = Array.isArray(lines) && lines.length > 0;
     margin: 0;
     overflow-x: auto;
     padding: 20px 24px;
-    white-space: normal;
   }
 
   .terminal__body code {
@@ -82,34 +80,21 @@ const hasLines = Array.isArray(lines) && lines.length > 0;
     font-size: clamp(0.75rem, 1.2vw, 0.85rem);
     line-height: 2.1;
     color: var(--muted-foreground);
-    white-space: pre;
+    white-space: pre-wrap;
     display: block;
-  }
-
-  .terminal__body--single {
-    white-space: nowrap;
-  }
-
-  .terminal__body--single .terminal__line {
-    display: inline;
-  }
-
-  .terminal__body--single code {
-    white-space: nowrap;
-  }
-
-  .terminal__body--single .terminal__line + .terminal__line::before {
-    content: "  ·  ";
-    color: var(--muted-foreground);
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .terminal__line {
     display: block;
     line-height: 2.1;
+    white-space: normal;
   }
 
   .terminal__prompt {
     color: var(--brand); /* SURFACE 2/2 constraint: ONLY terminal prompt uses brand */
     margin-right: 10px;
+    white-space: nowrap;
   }
 </style>
