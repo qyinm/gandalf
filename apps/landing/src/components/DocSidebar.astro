@@ -1,0 +1,92 @@
+---
+import { getCollection } from 'astro:content';
+
+const allDocs = await getCollection('docs');
+const sorted = allDocs.sort((a, b) => (a.data.order ?? 99) - (b.data.order ?? 99));
+const grouped: Record<string, typeof sorted> = {};
+
+for (const doc of sorted) {
+  const category = doc.data.category ?? 'General';
+  if (!grouped[category]) grouped[category] = [];
+  grouped[category].push(doc);
+}
+
+const { currentSlug } = Astro.props as { currentSlug?: string };
+---
+
+<aside class="sidebar">
+  <nav>
+    {Object.entries(grouped).map(([category, docs]) => (
+      <div class="sidebar__group">
+        <h4 class="sidebar__category">{category}</h4>
+        <ul class="sidebar__list">
+          {docs.map(doc => (
+            <li>
+              <a
+                href={`/docs/${doc.slug}`}
+                class:list={{ 'sidebar__link': true, 'sidebar__link--active': doc.slug === currentSlug }}
+              >
+                {doc.data.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))}
+  </nav>
+</aside>
+
+<style>
+  .sidebar {
+    width: var(--sidebar-width, 240px);
+    flex-shrink: 0;
+    padding: 2rem 1rem;
+    border-right: 1px solid var(--border);
+  }
+
+  .sidebar__group {
+    margin-bottom: 1.5rem;
+  }
+
+  .sidebar__category {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+    margin-bottom: 0.5rem;
+  }
+
+  .sidebar__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .sidebar__link {
+    display: block;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+    transition: all 0.15s;
+  }
+
+  .sidebar__link:hover {
+    color: var(--foreground);
+    background: var(--surface-hover);
+  }
+
+  .sidebar__link--active {
+    color: var(--primary);
+    font-weight: 500;
+  }
+
+  @media (max-width: 768px) {
+    .sidebar {
+      display: none;
+    }
+  }
+</style>
