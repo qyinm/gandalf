@@ -206,20 +206,20 @@ stateDiagram-v2
 - **Dependencies:** Branch-mode decision has no dependency and should happen before implementation if PR flow is desired; final release verification depends on U1, U2, U3, U4, and U5.
 - **Files:**
   - `package.json`
-  - `package-lock.json`
+  - `bun.lock`
   - `README.md`
   - `CHANGELOG.md` if the release process adopts a changelog for this package
   - `VERSION` only if the project decides to introduce a separate version source of truth
   - `docs/dogfood-reports/2026-06-08-main-daemon-timeline-dogfood.md`
-- **Approach:** Decide whether the project wants direct `main` push or a PR before implementation continues. For PR flow, create a feature branch from current HEAD before adding timeline/docs/release commits. Treat `.hermes/` and `dogfood-output/` as untracked artifacts to either ignore, clean, or deliberately document outside the release commit. Keep `package.json` and `package-lock.json` synchronized when bumping the npm package version. Do not introduce `VERSION` or `CHANGELOG.md` unless that release convention is explicitly chosen.
+- **Approach:** Decide whether the project wants direct `main` push or a PR before implementation continues. For PR flow, create a feature branch from current HEAD before adding timeline/docs/release commits. Treat `.hermes/` and `dogfood-output/` as untracked artifacts to either ignore, clean, or deliberately document outside the release commit. Keep `package.json` and `bun.lock` synchronized when bumping the bun pm package version. Do not introduce `VERSION` or `CHANGELOG.md` unless that release convention is explicitly chosen.
 - **Patterns to follow:** Existing package scripts in `package.json`, package publication contract via `prepack` / `prepublishOnly`, and prior dogfood verification list.
 - **Test scenarios:**
-  - `npm run typecheck` passes.
-  - `npm run build` passes.
-  - `npm test` passes with timeline/TUI coverage included.
+  - `bun run typecheck` passes.
+  - `bun run build` passes.
+  - `bun run test` passes with timeline/TUI coverage included.
   - Isolated daemon/timeline CLI dogfood passes using temporary `HOME`, `HEM_STORE`, and project.
   - PTY TUI smoke confirms Timeline tab, daemon header, and undo preview render without overlapping text.
-  - `npm pack` or package dry-run confirms the published package includes `dist/src` and README.
+  - `bun pm pack` or package dry-run confirms the published package includes `dist/src` and README.
 - **Verification:** Release branch has no unintended tracked artifacts, version metadata is synchronized, and release notes or a changelog, if adopted, cover daemon/timeline/TUI/docs changes.
 
 ---

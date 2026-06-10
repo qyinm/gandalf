@@ -112,18 +112,18 @@ None.
 
 ## Verification
 
-- `npm run typecheck` - pass
-- `npm run build` - pass
-- `node --test dist/tests/daemon.test.js` - pass, 6/6
+- `bun run typecheck` - pass
+- `bun run build` - pass
+- `bun test dist/tests/daemon.test.js` - pass, 6/6
 - isolated daemon/timeline CLI dogfood - pass
 - PTY TUI smoke - pass, stopped header rendered without stale watcher error
-- `npm test` - pass, 197/197
+- `bun run test` - pass, 197/197
 - `git diff --check` - pass
 
 Follow-up Timeline-first verification adds:
 
-- `node --test dist/tests/tui.test.js` - Timeline model, left navigation, profile/agent detail, compare, save setup, corrupt warning, and undo preview coverage
-- `node --test dist/tests/cli.test.js --test-name-pattern timeline` - CLI timeline dry-run and corrupt-event contract
+- `bun test dist/tests/tui.test.js` - Timeline model, left navigation, profile/agent detail, compare, save setup, corrupt warning, and undo preview coverage
+- `bun test dist/tests/cli.test.js --test-name-pattern timeline` - CLI timeline dry-run and corrupt-event contract
 - PTY TUI smoke - Timeline first screen, `All agents`, daemon header, empty timeline command, and preview footer rendered
 
 ## Final Status

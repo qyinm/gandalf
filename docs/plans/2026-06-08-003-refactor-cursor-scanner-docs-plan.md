@@ -184,7 +184,7 @@ flowchart LR
 - Interpolation syntax such as `${env:NAME}`, `${userHome}`, and `${workspaceFolder}` remains visible only as safe reference metadata, not resolved secret values.
 - Malformed MCP JSON emits parse-failure evidence and scan continues.
 
-**Verification:** `npm run typecheck`, `npm test -- tests/scan.test.ts` or the repo-supported equivalent, and final `npm run check`.
+**Verification:** `bun run typecheck`, `bun run test -- tests/scan.test.ts` or the repo-supported equivalent, and final `bun run check`.
 
 ### U3. Cursor skills discovery
 
@@ -265,7 +265,7 @@ flowchart LR
 - Cursor agent detail lists skills/MCP/hooks when evidence exists.
 - Timeline/diff snapshots include Cursor evidence changes through standard kinds.
 
-**Verification:** `npm run typecheck`, `npm test`, and a TUI smoke run with a temporary Cursor fixture project.
+**Verification:** `bun run typecheck`, `bun run test`, and a TUI smoke run with a temporary Cursor fixture project.
 
 ### U6. Dogfood and release readiness
 
@@ -282,9 +282,9 @@ flowchart LR
 **Approach:** Build a temporary project/home fixture under the test temp directory or `/tmp`, populate documented Cursor MCP/skills/hooks examples, and run scan/TUI/report commands against that temp environment. Do not use the user's actual home config as a required test input.
 
 **Verification:**
-- `npm run typecheck`
-- `npm run build`
-- `npm test`
+- `bun run typecheck`
+- `bun run build`
+- `bun run test`
 - `git diff --check`
 - Manual JSON scan on the temp fixture confirms Cursor counts for MCP, skills, and hooks.
 

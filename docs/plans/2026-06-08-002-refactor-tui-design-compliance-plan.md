@@ -384,12 +384,12 @@ This changes Hem's primary interactive surface from a developer command dashboar
 
 The final implementation should be verified with:
 
-- `npm run typecheck`
-- `npm run build`
-- `node --test dist/tests/tui.test.js`
-- `node --test dist/tests/timeline.test.js`
-- `node --test dist/tests/cli.test.js --test-name-pattern timeline`
-- `npm test`
+- `bun run typecheck`
+- `bun run build`
+- `bun test dist/tests/tui.test.js`
+- `bun test dist/tests/timeline.test.js`
+- `bun test dist/tests/cli.test.js --test-name-pattern timeline`
+- `bun run test`
 - A PTY smoke run of `hem tui` that confirms Timeline-first launch, left nav sections, Agent Detail, Save Setup preview, Compare From/To, and `u` dry-run undo preview.
 
 ## Sources / Research

@@ -333,7 +333,7 @@ Side-by-side
 │                               │ + github                        │
 │ Permissions                    │ Permissions                     │
 │   allow read                   │   allow read                    │
-│                               │ + allow bash: npm test          │
+│                               │ + allow bash: bun run test          │
 ├───────────────────────────────┼────────────────────────────────┤
 │ Files                          │ Files                           │
 │ ~/.claude/settings.json        │ ~/.claude/settings.json         │

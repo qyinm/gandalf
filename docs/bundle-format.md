@@ -286,7 +286,7 @@ export interface BundleChecksums {
 
 ### Dependencies
 
-No new npm dependencies. Use Node.js built-in `crypto` for hashing and the
+No new package dependencies. Use Node.js built-in `crypto` for hashing and the
 tar/untar logic can be implemented using raw `Buffer` operations on tar blocks
 or the `node:tar`-style stream parsing. Since the format is simple and block-based,
 a minimal tar reader/writer is ~200 lines.

@@ -283,7 +283,7 @@ function summarize(items: ReadinessItem[]): Record<ReadinessCategory, number> {
 }
 
 function installHintForCommand(command: string, kind?: McpBinaryReport["binaryKind"]): string {
-  if (command === "npx") return "Install Node.js/npm on this Mac, then rerun the dry-run.";
+  if (command === "npx") return "Install Node.js on this Mac, then rerun the dry-run.";
   if (command === "uvx") return "Install uv on this Mac, then rerun the dry-run.";
   if (command === "gh") return "Install GitHub CLI on this Mac and authenticate it if the MCP server needs GitHub access.";
   if (kind === "package_runner") return `Install package runner ${command} on this Mac, then rerun the dry-run.`;
@@ -291,7 +291,7 @@ function installHintForCommand(command: string, kind?: McpBinaryReport["binaryKi
 }
 
 function installActionsForCommand(command: string, kind?: McpBinaryReport["binaryKind"]) {
-  if (command === "npx") return [{ label: "Install Node.js/npm", command: "brew install node" }];
+  if (command === "npx") return [{ label: "Install Node.js", command: "brew install node" }];
   if (command === "uvx") return [{ label: "Install uv", command: "brew install uv" }];
   if (command === "gh") return [{ label: "Install GitHub CLI", command: "brew install gh" }];
   if (kind === "package_runner") return [{ label: `Install ${command}` }];

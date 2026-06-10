@@ -49,7 +49,7 @@ async function main() {
     await mkdir(macProject, { recursive: true });
     await mkdir(path.join(macHome, ".claude"), { recursive: true });
     await mkdir(path.join(macHome, ".local/bin"), { recursive: true });
-    await writeFile(path.join(macHome, ".claude/settings.json"), JSON.stringify({ permissions: { allow: ["Bash(npm test:*)"] } }));
+    await writeFile(path.join(macHome, ".claude/settings.json"), JSON.stringify({ permissions: { allow: ["Bash(bun test:*)"] } }));
     await writeFile(path.join(macHome, ".local/bin/private-mcp"), "#!/bin/sh\nexit 0\n");
     await writeFile(path.join(macProject, ".mcp.json"), JSON.stringify({
       mcpServers: {

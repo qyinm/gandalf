@@ -228,7 +228,7 @@ Avoid coupling new features directly to CLI output. The durable contract should 
 Use the standard verification path before shipping architecture-sensitive changes:
 
 ```bash
-npm run check
+bun run check
 ```
 
 This runs the TypeScript build and Node test suite. For CLI behavior changes, add a focused test under `tests/*.test.ts` and keep command output compatible with `--json` where applicable.
