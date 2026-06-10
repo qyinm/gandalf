@@ -14,15 +14,6 @@ const columns = [
       { label: "Bundle format", href: "/docs/bundle-format" },
     ],
   },
-  {
-    title: "Community",
-    links: [
-      { label: "GitHub",      href: "https://github.com/usehem/hem" },
-      { label: "Discussions", href: "https://github.com/usehem/hem/discussions" },
-      { label: "Issues",      href: "https://github.com/usehem/hem/issues" },
-      { label: "X / Twitter", href: "https://x.com/usehem" },
-    ],
-  },
 ];
 
 const year = new Date().getFullYear();
@@ -63,7 +54,7 @@ const year = new Date().getFullYear();
 
   .footer__columns {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 32px;
     margin-bottom: 48px;
   }
@@ -130,13 +121,8 @@ const year = new Date().getFullYear();
 
   @media (max-width: 768px) {
     .footer__columns {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-
-  @media (max-width: 480px) {
-    .footer__columns {
       grid-template-columns: 1fr;
     }
   }
+
 </style>
