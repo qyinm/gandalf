@@ -1,0 +1,114 @@
+---
+const links = [
+  { href: '/#services', label: 'Services' },
+  { href: '/#install', label: 'Install' },
+  { href: '/#use', label: 'How to Use' },
+];
+---
+
+<nav class="nav">
+  <div class="container nav__inner">
+    <a href="/" class="nav__logo">
+      <svg class="nav__logo-icon" width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="8" y="8" width="48" height="48" rx="8" stroke="currentColor" stroke-width="2" fill="none"/>
+        <path d="M22 20 L30 32 L38 20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M22 44 L30 32 L38 44" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="30" cy="32" r="2.5" fill="currentColor"/>
+      </svg>
+      <span class="nav__logo-text">Hem</span>
+    </a>
+    <div class="nav__links">
+      {links.map(link => <a href={link.href}>{link.label}</a>)}
+      <a href="https://github.com/qyinm/hem" target="_blank" rel="noopener" class="nav__github">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<style>
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+  }
+
+  .nav__logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--foreground);
+    font-weight: 600;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+  }
+
+  .nav__logo:hover {
+    color: var(--foreground);
+  }
+
+  .nav__logo-icon {
+    color: var(--accent);
+  }
+
+  .nav__logo-text {
+    color: var(--foreground);
+  }
+
+  .nav__links {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .nav__links a {
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: color 0.2s;
+    text-decoration: none;
+  }
+
+  .nav__links a:hover {
+    color: var(--foreground);
+  }
+
+  .nav__github {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--muted-foreground) !important;
+    font-size: 0.8125rem;
+    transition: all 0.2s !important;
+  }
+
+  .nav__github:hover {
+    color: var(--foreground) !important;
+    border-color: var(--border-light);
+  }
+
+  @media (max-width: 640px) {
+    .nav__links a:not(.nav__github):not([href="#services"]):not([href="#install"]):not([href="#use"]) {
+      display: none;
+    }
+  }
+</style>

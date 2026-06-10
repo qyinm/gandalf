@@ -1,0 +1,92 @@
+<footer class="footer">
+  <div class="container">
+    <div class="footer__main">
+      <div class="footer__brand">
+        <svg width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="8" y="8" width="48" height="48" rx="8" stroke="currentColor" stroke-width="2" fill="none"/>
+          <path d="M22 20 L30 32 L38 20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M22 44 L30 32 L38 44" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="30" cy="32" r="2.5" fill="currentColor"/>
+        </svg>
+        <span>Hem</span>
+      </div>
+      <p class="footer__tagline">Time Machine for your AI agent setup</p>
+      <div class="footer__links">
+        <a href="https://github.com/qyinm/hem" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://www.npmjs.com/package/@qxinm/hem" target="_blank" rel="noopener">Registry</a>
+        <a href="https://github.com/qyinm/hem/issues" target="_blank" rel="noopener">Issues</a>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <p>MIT License &middot; Crafted by <a href="https://github.com/qyinm" target="_blank" rel="noopener">qyinm</a></p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    padding: 3rem 0 1.5rem;
+    border-top: 1px solid var(--border);
+    margin-top: 4rem;
+  }
+
+  .footer__main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  .footer__brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .footer__brand svg {
+    color: var(--accent);
+  }
+
+  .footer__tagline {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 0.9rem;
+    color: var(--muted-foreground);
+  }
+
+  .footer__links {
+    display: flex;
+    gap: 22px;
+    margin-top: 4px;
+  }
+
+  .footer__links a {
+    font-size: 0.85rem;
+    color: var(--text-dim, var(--muted-foreground));
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  .footer__links a:hover {
+    color: var(--foreground);
+  }
+
+  .footer__bottom {
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-dim, var(--muted-foreground));
+  }
+
+  .footer__bottom a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .footer__bottom a:hover {
+    color: var(--foreground);
+  }
+</style>
