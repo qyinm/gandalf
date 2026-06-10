@@ -183,7 +183,6 @@ function Titlebar({
 }) {
   return (
     <header className="titlebar" data-tauri-drag-region>
-      <div className="brand" data-tauri-drag-region>Hem</div>
       <button className="snapshot-chip" type="button" onClick={onToggleTimeline}>
         <GitCommit size={14} />
         <span>{snapshotId}</span>

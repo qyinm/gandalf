@@ -34,16 +34,11 @@ button {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 14px 0 18px;
+  justify-content: flex-end;
+  padding: 0 14px 0 88px;
   border-bottom: 1px solid #d8dcd2;
   background: #fbfbf8;
   user-select: none;
-}
-
-.brand {
-  font-weight: 700;
-  letter-spacing: 0;
 }
 
 .snapshot-chip,
