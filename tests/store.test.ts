@@ -58,7 +58,7 @@ function snapshot(name: string): Snapshot {
         sourcePath: ".claude/settings.json",
         entityKind: "agent_config",
         entityName: "settings",
-        effectiveValue: { permissions: ["Bash(npm test)"] },
+        effectiveValue: { permissions: ["Bash(bun test)"] },
         confidence: "high",
         evidenceId: "claude.project.settings"
       }
@@ -68,7 +68,7 @@ function snapshot(name: string): Snapshot {
         code: "EXECUTABLE_CONFIG_ADDED",
         severity: "medium",
         problem: "Project config allows an executable command.",
-        cause: ".claude/settings.json allows Bash(npm test).",
+        cause: ".claude/settings.json allows Bash(bun test).",
         fix: "Review the allowed command before sharing the project config.",
         path: ".claude/settings.json",
         evidenceId: "claude.project.settings"

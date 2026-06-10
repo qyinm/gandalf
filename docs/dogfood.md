@@ -5,8 +5,8 @@ Date: 2026-05-12 (initial), 2026-05-15 (re-run after symlink noise fix and TOML 
 Command shape:
 
 ```bash
-HEM_STORE=/tmp/hem-dogfood/store node dist/src/cli.js scan --project <project> --json
-HEM_STORE=/tmp/hem-dogfood/store node dist/src/cli.js report current --project <project> --out /tmp/hem-dogfood/reports/<name>-report.md
+HEM_STORE=/tmp/hem-dogfood/store bun dist/src/cli.js scan --project <project> --json
+HEM_STORE=/tmp/hem-dogfood/store bun dist/src/cli.js report current --project <project> --out /tmp/hem-dogfood/reports/<name>-report.md
 ```
 
 The store was redirected to `/tmp/hem-dogfood/store` so dogfood did not write to the user's real `~/.hem` store.
@@ -43,7 +43,7 @@ Only finding: `MEDIUM SECRET_LIKE_VALUE_OMITTED` — expected, from a skill dire
 Command:
 
 ```bash
-npm run dogfood:cross-machine
+bun run dogfood:cross-machine
 ```
 
 This builds a disposable macOS-side snapshot/bundle, then runs `bundle import --dry-run --json` inside a Linux `node:22-bookworm` Docker container with separate `/home/hem`, `/linux/project`, and `/linux/store` paths.
@@ -62,11 +62,11 @@ Command shape:
 ```bash
 HOME=/tmp/hem-dogfood/home \
 HEM_STORE=/tmp/hem-dogfood/store \
-node dist/src/cli.js timeline list --project /tmp/hem-dogfood/project --json
+bun dist/src/cli.js timeline list --project /tmp/hem-dogfood/project --json
 
 HOME=/tmp/hem-dogfood/home \
 HEM_STORE=/tmp/hem-dogfood/store \
-node dist/src/cli.js timeline undo <id> --project /tmp/hem-dogfood/project --dry-run --json
+bun dist/src/cli.js timeline undo <id> --project /tmp/hem-dogfood/project --dry-run --json
 ```
 
 Validation checks:

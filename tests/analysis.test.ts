@@ -234,8 +234,8 @@ describe("analysis modules", () => {
         sourcePath: ".claude/settings.json",
         scope: "project",
         precedence: 40,
-        name: "Bash(npm test)",
-        value: { action: "allow", rule: "Bash(npm test)" },
+        name: "Bash(bun test)",
+        value: { action: "allow", rule: "Bash(bun test)" },
         checksum: "permission-removed"
       })
     ]);
@@ -296,8 +296,8 @@ describe("analysis modules", () => {
         sourcePath: ".claude/settings.json",
         scope: "project",
         precedence: 40,
-        name: "Bash(npm run build)",
-        value: { action: "allow", rule: "Bash(npm run build)" },
+        name: "Bash(bun run build)",
+        value: { action: "allow", rule: "Bash(bun run build)" },
         checksum: "permission-added"
       })
     ]);

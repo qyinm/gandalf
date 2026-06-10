@@ -63,7 +63,7 @@ export function noticeForLatestVersion(latestVersion: string | undefined): Updat
   return {
     currentVersion: packageJson.version,
     latestVersion,
-    message: `✨ hem ${latestVersion} is available. Update with: npm install -g ${packageJson.name}`
+    message: `✨ hem ${latestVersion} is available. Update with: bun install -g ${packageJson.name}`
   };
 }
 

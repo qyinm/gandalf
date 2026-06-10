@@ -277,6 +277,8 @@ describe("defaultUndoHandlerRegistry — built-in type mappings", () => {
     assert.ok(typeof registry.mcp_server === "function", "mcp_server should have a handler");
     assert.ok(typeof registry.skill === "function", "skill should have a handler");
     assert.ok(typeof registry.agent_config === "function", "agent_config should have a handler");
+  });
+
   it("maps all types to restorePreviousContentUndoHandler", () => {
     const registry = defaultUndoHandlerRegistry();
     // All registered types now use the content-restore undo handler
@@ -286,7 +288,6 @@ describe("defaultUndoHandlerRegistry — built-in type mappings", () => {
     }
     // unsupported remains no-op
     assert.equal(registry.unsupported, noopUndoHandler);
-  });
   });
 
   it("returns noop for undefined/unknown type lookups", () => {

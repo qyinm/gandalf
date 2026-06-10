@@ -20,7 +20,7 @@ describe("update check", () => {
     assert.ok(notice);
     assert.equal(notice.latestVersion, "99.0.0");
     assert.match(notice.message, /^✨ hem 99\.0\.0 is available\./);
-    assert.match(notice.message, /npm install -g @qxinm\/hem/);
+    assert.match(notice.message, /bun install -g @qxinm\/hem/);
   });
 
   it("skips checks that could break automation output", () => {

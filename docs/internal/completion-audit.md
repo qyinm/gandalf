@@ -15,7 +15,7 @@ Objective:
 | Sequential integration work | CLI integration, dogfood, and output-contract fixes were done after module work landed | Done |
 | Update `PLAN.md` after each completed task | `PLAN.md` has `[done]` entries for scaffold, scan, store, graph/diff, audit/provenance, CLI, docs, and dogfood | Done |
 | Commit after each completed task | Git history contains milestone commits for docs, scaffold, errors, evidence model, scan, store, analysis, CLI, reports, dogfood, and audit | Done |
-| TypeScript CLI scaffold, tests, lockfile | `package.json`, `package-lock.json`, `tsconfig.json`, `src/cli.ts`, `tests/cli.test.ts` | Done |
+| TypeScript CLI scaffold, tests, lockfile | `package.json`, `bun.lock`, `tsconfig.json`, `src/cli.ts`, `tests/cli.test.ts` | Done |
 | Shared error contract | `src/errors.ts`, `tests/errors.test.ts` | Done |
 | Shared evidence model | `src/types.ts` | Done |
 | Read-only scan and evidence inventory | `src/scan.ts`, `src/policy.ts`, `src/parsers.ts`, `tests/scan.test.ts` | Done |
@@ -30,7 +30,7 @@ Objective:
 ## Verification Commands
 
 ```bash
-npm run check
+bun run check
 ```
 
 Result: passing.

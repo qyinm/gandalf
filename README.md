@@ -7,7 +7,7 @@ Hem helps you view, save, compare, and restore the MCP servers, skills, hooks, p
 Use it when you let agents change their own setup, experiment with MCPs and skills, or move your agent environment to a new machine.
 
 ```bash
-npm install -g @qxinm/hem
+bun install -g @qxinm/hem
 
 # Save a restore point
 hem snapshot create --name baseline --metadata-only --project .
@@ -192,8 +192,8 @@ Scanner plugin interface: add new agents by implementing `ScannerPlugin`. `Proje
 ```bash
 git clone git@github.com:qyinm/hem.git
 cd hem
-npm install
-npm run check        # build + test
-npm run typecheck    # TypeScript only, no emit
-npm test             # run tests (requires build first)
+bun install
+bun run check        # build + test
+bun run typecheck    # TypeScript only, no emit
+bun run test         # run tests (requires build first)
 ```
