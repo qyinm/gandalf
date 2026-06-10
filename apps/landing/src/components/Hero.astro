@@ -1,129 +1,135 @@
 ---
 import TerminalWindow from './TerminalWindow.astro';
-
-const commands = [
-  { command: 'hem snapshot create --name baseline --metadata-only --project .' },
-  { command: 'hem diff baseline current --project .' },
-  { command: 'hem restore --snapshot baseline --dry-run --project .' },
-  { command: 'hem bundle export --name baseline --out daily.hem --project .' },
-];
 ---
 
-<section class="hero">
+<section class="hero section--no-rule">
   <div class="container">
-    <div class="hero__badge">
-      <span class="hero__badge-line"></span>
-      Local history for AI coding agent setups
-      <span class="hero__badge-line"></span>
+    <div class="hero__meta" aria-hidden="true">
+      <span class="mono-tag">v0.1 · macOS</span>
+      <span class="mono-tag">[ CLI ]</span>
+      <span class="mono-tag">[ MIT ]</span>
     </div>
+
     <h1 class="hero__title">
-      Time Machine for<br />
-      <span class="hero__title-em">Your AI Agent Setup</span>
+      Your agent setup, <em>versioned</em>.
     </h1>
-    <p class="hero__subtitle">
-      Save, compare, and restore your MCP servers, skills, hooks,<br />
-      permissions, prompts, and agent profiles.
+
+    <p class="hero__lede">
+      Hem saves, diffs, and restores the Codex setup on your Mac
+      like a Git branch.
     </p>
+
     <div class="hero__actions">
       <a href="#install" class="btn btn--primary">
-        <svg class="btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-        Get Started
+        Install Hem
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
       </a>
-      <a href="https://github.com/qyinm/hem" target="_blank" rel="noopener" class="btn btn--outline">
-        View on GitHub
+      <a href="/docs/bundle-format" class="btn btn--outline">
+        Read the docs
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
       </a>
     </div>
-    <div class="hero__terminal-wrapper">
-      <TerminalWindow lines={commands} label="Agent Setup" />
+
+    <p class="hero__sub-meta">
+      <span>v0.1.0</span>
+      <span class="hero__sub-meta-dot">·</span>
+      <span>macOS 13+</span>
+      <span class="hero__sub-meta-dot">·</span>
+      <code>brew install hem</code>
+    </p>
+
+    <div class="hero__terminal">
+      <TerminalWindow label="hem">
+        <span class="terminal__line"><span class="terminal__prompt">$</span>hem save baseline</span>
+        <span class="terminal__line">  saved · 12 MCPs · 8 skills · 14 hooks</span>
+        <span class="terminal__line"><span class="terminal__prompt">$</span>hem diff baseline</span>
+        <span class="terminal__line">  + skill <span class="terminal__add">web-search</span></span>
+        <span class="terminal__line">  ~ mcp   <span class="terminal__mod">github</span>  env keys changed</span>
+        <span class="terminal__line"><span class="terminal__prompt">$</span>hem restore baseline</span>
+      </TerminalWindow>
     </div>
   </div>
 </section>
 
 <style>
   .hero {
-    padding: 100px 0 80px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
+    padding: 80px 0 64px;
+    text-align: left;
   }
 
-  .hero::before {
-    content: '';
-    position: absolute;
-    top: -160px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 700px;
-    height: 700px;
-    background: radial-gradient(circle, color-mix(in srgb, var(--brand) 5%, transparent) 0%, transparent 65%);
-    pointer-events: none;
-  }
-
-  .hero__badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--muted-foreground);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    margin-bottom: 32px;
-  }
-
-  .hero__badge-line {
-    display: inline-block;
-    width: 32px;
-    height: 1px;
-    background: var(--border-light);
+  .hero__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 28px;
   }
 
   .hero__title {
     font-family: var(--font-serif);
-    font-size: clamp(2.4rem, 5.5vw, 3.6rem);
-    font-weight: 700;
-    line-height: 1.15;
-    letter-spacing: -0.01em;
+    font-size: clamp(2.4rem, 6vw, 4rem);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.025em;
     margin-bottom: 20px;
+    max-width: 18ch;
   }
 
-  .hero__title-em {
-    color: var(--brand);
+  .hero__title em {
     font-style: italic;
+    font-weight: 600;
   }
 
-  .hero__subtitle {
-    font-size: clamp(0.95rem, 1.6vw, 1.1rem);
+  .hero__lede {
+    font-size: clamp(1rem, 1.4vw, 1.125rem);
     color: var(--muted-foreground);
-    max-width: 560px;
-    margin: 0 auto 36px;
-    line-height: 1.7;
+    line-height: 1.55;
+    max-width: 44ch;
+    margin-bottom: 36px;
   }
 
   .hero__actions {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    margin-bottom: 52px;
     flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
   }
 
-  .hero__terminal-wrapper {
-    max-width: min(92vw, 680px);
-    margin: 0 auto;
+  .hero__sub-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+    margin-bottom: 56px;
   }
+
+  .hero__sub-meta code {
+    background: var(--surface);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+  }
+
+  .hero__sub-meta-dot {
+    opacity: 0.5;
+  }
+
+  .hero__terminal {
+    max-width: 720px;
+  }
+
+  .terminal__add { color: var(--foreground); font-weight: 500; }
+  .terminal__mod { color: var(--foreground); font-weight: 500; }
 
   @media (max-width: 640px) {
     .hero {
-      padding: 64px 0 56px;
-    }
-    .hero__actions {
-      flex-direction: column;
+      padding: 56px 0 48px;
     }
     .hero__actions .btn {
-      width: 100%;
+      flex: 1;
       justify-content: center;
     }
   }
