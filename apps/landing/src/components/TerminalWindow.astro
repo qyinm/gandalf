@@ -1,10 +1,11 @@
 ---
 export interface Props {
-  lines: { command: string }[];
+  lines?: { command: string }[];
   label?: string;
 }
 
 const { lines, label } = Astro.props;
+const hasLines = Array.isArray(lines) && lines.length > 0;
 ---
 
 <div class="terminal">
@@ -14,7 +15,18 @@ const { lines, label } = Astro.props;
     <span class="terminal__dot terminal__dot--green"></span>
     {label && <span class="terminal__label">{label}</span>}
   </div>
-  <pre class="terminal__body"><code>{lines.map(line => <span class="terminal__line"><span class="terminal__prompt">$</span> {line.command}</span>)}</code></pre>
+
+  <pre class="terminal__body">
+    <code>
+      {hasLines ? (
+        lines!.map((line) => (
+          <span class="terminal__line"><span class="terminal__prompt">$</span> {line.command}</span>
+        ))
+      ) : (
+        <slot />
+      )}
+    </code>
+  </pre>
 </div>
 
 <style>
@@ -43,9 +55,9 @@ const { lines, label } = Astro.props;
     background: var(--border);
   }
 
-  .terminal__dot--red { background: #bf5a4a; }
-  .terminal__dot--yellow { background: #bfa04a; }
-  .terminal__dot--green { background: #5a9f5a; }
+  .terminal__dot--red { background: var(--muted-foreground); }
+  .terminal__dot--yellow { background: var(--muted-foreground); }
+  .terminal__dot--green { background: var(--muted-foreground); }
 
   .terminal__label {
     margin-left: auto;
@@ -58,9 +70,9 @@ const { lines, label } = Astro.props;
   }
 
   .terminal__body {
-    padding: 20px 24px;
     margin: 0;
     overflow-x: auto;
+    padding: 20px 24px;
   }
 
   .terminal__body code {
@@ -78,7 +90,7 @@ const { lines, label } = Astro.props;
   }
 
   .terminal__prompt {
-    color: var(--brand);
+    color: var(--brand); /* SURFACE 2/2 constraint: ONLY terminal prompt uses brand */
     margin-right: 10px;
   }
 </style>
