@@ -3,36 +3,24 @@ const columns = [
   {
     title: "Product",
     links: [
-      { label: "Install",      href: "#install" },
-      { label: "Primitives",   href: "#primitives" },
-      { label: "Changelog",    href: "https://github.com/usehem/hem/releases" },
-      { label: "Roadmap",      href: "/docs/roadmap" },
+      { label: "Install",    href: "#install" },
+      { label: "Primitives", href: "#primitives" },
+      { label: "Changelog",  href: "https://github.com/usehem/hem/releases" },
     ],
   },
   {
     title: "Docs",
     links: [
-      { label: "Bundle format",       href: "/docs/bundle-format" },
-      { label: "CLI reference",       href: "/docs/cli" },
-      { label: "MCP support",         href: "/docs/mcp" },
-      { label: "Troubleshooting",     href: "/docs/troubleshooting" },
+      { label: "Bundle format", href: "/docs/bundle-format" },
     ],
   },
   {
     title: "Community",
     links: [
-      { label: "GitHub",     href: "https://github.com/usehem/hem" },
+      { label: "GitHub",      href: "https://github.com/usehem/hem" },
       { label: "Discussions", href: "https://github.com/usehem/hem/discussions" },
       { label: "Issues",      href: "https://github.com/usehem/hem/issues" },
       { label: "X / Twitter", href: "https://x.com/usehem" },
-    ],
-  },
-  {
-    title: "Legal",
-    links: [
-      { label: "License (MIT)", href: "/docs/license" },
-      { label: "Privacy",       href: "/docs/privacy" },
-      { label: "Security",      href: "/docs/security" },
     ],
   },
 ];
@@ -60,9 +48,7 @@ const year = new Date().getFullYear();
         <span class="footer__dot" aria-hidden="true"></span>
         <span>Hem</span>
       </div>
-      <p class="footer__meta">
-        © {year} Hem · Built for the agent age · MIT
-      </p>
+      <p class="footer__meta">© {year} Hem · Built for the agent age</p>
     </div>
   </div>
 </footer>
@@ -77,7 +63,7 @@ const year = new Date().getFullYear();
 
   .footer__columns {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 32px;
     margin-bottom: 48px;
   }
