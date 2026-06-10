@@ -203,7 +203,7 @@ Every scanner emits a policy-aware intermediate item:
 }
 ```
 
-Implementation status: TypeScript model in `src/types.ts`. **restorePolicy is the active development surface — currently defaulting to `"not_supported_v0_1"`, needs per-kind policy mapping.**
+Implementation status: TypeScript model in `packages/core/src/types.ts`. **restorePolicy is the active development surface — currently defaulting to `"not_supported_v0_1"`, needs per-kind policy mapping.**
 
 ### Capture Status Values
 
