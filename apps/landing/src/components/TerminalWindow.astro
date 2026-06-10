@@ -1,6 +1,6 @@
 ---
 export interface Props {
-  lines?: { command: string }[];
+  lines?: { command: string; prompt?: boolean }[];
   label?: string;
 }
 
@@ -20,7 +20,16 @@ const hasLines = Array.isArray(lines) && lines.length > 0;
     <code>
       {hasLines ? (
         lines!.map((line) => (
-          <span class="terminal__line"><span class="terminal__prompt">$</span> {line.command}</span>
+          <span class="terminal__line">
+            {line.prompt === false ? (
+              <span>{line.command}</span>
+            ) : (
+              <>
+                <span class="terminal__prompt">$</span>
+                <span> {line.command}</span>
+              </>
+            )}
+          </span>
         ))
       ) : (
         <slot />
@@ -96,5 +105,15 @@ const hasLines = Array.isArray(lines) && lines.length > 0;
     color: var(--brand); /* SURFACE 2/2 constraint: ONLY terminal prompt uses brand */
     margin-right: 10px;
     white-space: nowrap;
+  }
+
+  .terminal__add {
+    color: var(--foreground);
+    font-weight: 500;
+  }
+
+  .terminal__mod {
+    color: var(--foreground);
+    font-weight: 500;
   }
 </style>
