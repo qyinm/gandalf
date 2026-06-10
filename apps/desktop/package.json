@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "bun test src/**/*.test.ts",
+    "test": "bun test src",
     "preview": "vite preview",
     "tauri": "tauri"
   },

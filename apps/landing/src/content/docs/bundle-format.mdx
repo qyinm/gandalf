@@ -1,0 +1,30 @@
+---
+title: Bundle Format
+description: Understanding the .hem bundle file format
+order: 1
+category: Reference
+---
+
+# Bundle Format
+
+Hem uses `.hem` bundles as portable profile export files.
+
+## Structure
+
+A `.hem` file is a gzipped tar archive containing:
+
+- `manifest.json` — metadata about the bundle
+- `snapshots/` — snapshot data
+- `profiles/` — profile configurations
+
+## Usage
+
+```bash
+hem bundle export --name baseline --out backup.hem --project .
+hem bundle inspect backup.hem
+hem bundle import backup.hem --dry-run --project .
+```
+
+## Security
+
+Bundles do not contain raw secret values. Environment key names are preserved but values are redacted.

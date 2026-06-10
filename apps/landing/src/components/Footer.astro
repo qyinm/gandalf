@@ -1,0 +1,128 @@
+---
+const columns = [
+  {
+    title: "Product",
+    links: [
+      { label: "Install",    href: "#install" },
+      { label: "Primitives", href: "#primitives" },
+      { label: "Changelog",  href: "https://github.com/usehem/hem/releases" },
+    ],
+  },
+  {
+    title: "Docs",
+    links: [
+      { label: "Bundle format", href: "/docs/bundle-format" },
+    ],
+  },
+];
+
+const year = new Date().getFullYear();
+---
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer__columns">
+      {columns.map((col) => (
+        <div class="footer__col">
+          <h4 class="footer__col-title">{col.title}</h4>
+          <ul>
+            {col.links.map((l) => (
+              <li><a href={l.href}>{l.label}</a></li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+
+    <div class="footer__bottom">
+      <div class="footer__brand">
+        <span class="footer__dot" aria-hidden="true"></span>
+        <span>Hem</span>
+      </div>
+      <p class="footer__meta">© {year} Hem · Built for the agent age</p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 64px 0 32px;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+  }
+
+  .footer__columns {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px;
+    margin-bottom: 48px;
+  }
+
+  .footer__col-title {
+    font-family: var(--font-sans);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--foreground);
+    margin-bottom: 14px;
+  }
+
+  .footer__col ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .footer__col a {
+    color: var(--muted-foreground);
+    transition: color 0.15s;
+  }
+
+  .footer__col a:hover {
+    color: var(--foreground);
+  }
+
+  .footer__bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .footer__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .footer__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--foreground); /* Footer dot is BLACK, not brand */
+  }
+
+  .footer__meta {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+  }
+
+  @media (max-width: 768px) {
+    .footer__columns {
+      grid-template-columns: 1fr;
+    }
+  }
+
+</style>
