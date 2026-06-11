@@ -320,7 +320,7 @@ button {
 
 .overall,
 .changelog,
-.inventory-list {
+.surface-tile {
   border: 1px solid #d8dcd2;
   border-radius: 8px;
   background: #ffffff;
@@ -433,9 +433,6 @@ h2 {
   display: grid;
   align-content: start;
   gap: 7px;
-  border: 1px solid #d8dcd2;
-  border-radius: 8px;
-  background: #ffffff;
   padding: 10px;
 }
 
@@ -461,12 +458,14 @@ h2 {
 .timeline-list,
 .inventory-rows {
   display: grid;
-  gap: 6px;
   margin-top: 9px;
 }
 
-.timeline-row,
-.inventory-row {
+.timeline-list {
+  gap: 6px;
+}
+
+.timeline-row {
   min-height: 44px;
   justify-content: start;
   display: grid;
@@ -479,13 +478,14 @@ h2 {
   grid-template-columns: 70px 1fr auto;
 }
 
-.inventory-list {
-  padding: 12px;
-}
-
 .inventory-row {
+  min-height: 44px;
+  display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 6px 12px;
+  border-bottom: 1px solid #edf0e8;
+  padding: 9px 0;
 }
 
 .inventory-row > div {
@@ -505,11 +505,18 @@ h2 {
 
 .inventory-status {
   align-self: start;
-  border: 1px solid #d7dbd0;
-  border-radius: 999px;
   color: #50574d;
   font-size: 11px;
-  padding: 2px 7px;
+  padding-top: 1px;
+}
+
+.inventory-empty {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #edf0e8;
+  color: #697064;
+  font-size: 11.5px;
 }
 
 code {
