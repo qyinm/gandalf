@@ -42,36 +42,8 @@ button {
   transition: --sidebar-width 180ms ease;
 }
 
-.app-shell::before,
-.app-shell::after {
-  content: "";
-  position: absolute;
-  left: var(--sidebar-width);
-  z-index: 10;
-  pointer-events: none;
-  transition: left 180ms ease, opacity 180ms ease;
-}
-
-.app-shell::before {
-  top: 0;
-  width: 12px;
-  height: 12px;
-  background: radial-gradient(circle at 100% 100%, #ffffff 0 11px, #d8dcd2 11px 12px, transparent 12px);
-}
-
-.app-shell::after {
-  top: 12px;
-  bottom: 0;
-  border-left: 1px solid #d8dcd2;
-}
-
 .app-shell.is-sidebar-collapsed {
   --sidebar-width: 0px;
-}
-
-.app-shell.is-sidebar-collapsed::before,
-.app-shell.is-sidebar-collapsed::after {
-  opacity: 0;
 }
 
 .titlebar {
@@ -303,10 +275,13 @@ button {
 }
 
 .content {
+  position: relative;
   min-width: 0;
   min-height: 0;
   overflow: auto;
   padding: calc(var(--titlebar-height) + 40px) 32px 32px;
+  border-left: 1px solid #d8dcd2;
+  border-top-left-radius: 12px;
   background: #ffffff;
 }
 
