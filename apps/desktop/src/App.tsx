@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-import { Sidebar, type NavItem } from "./components/Sidebar";
+import { Sidebar, type NavItem, type SettingsSection } from "./components/Sidebar";
 import { Titlebar } from "./components/Titlebar";
 import {
   emptyDesktopHomeState,
@@ -12,12 +12,14 @@ import {
   type SetupSurface
 } from "./domain/home-state";
 import { HomeScreen } from "./screens/HomeScreen";
+import { SettingsScreen } from "./screens/SettingsScreen";
 import { SurfaceScreen } from "./screens/SurfaceScreen";
 import "./App.css";
 
 function App() {
   const [activeNav, setActiveNav] = useState<NavItem>("home");
   const [settingsMode, setSettingsMode] = useState(false);
+  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSection>("account");
   const [state, setState] = useState<DesktopHomeState>(emptyDesktopHomeState);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -45,14 +47,21 @@ function App() {
           profile={state.activeProfile}
           activeNav={activeNav}
           settingsMode={settingsMode}
+          activeSettingsSection={activeSettingsSection}
           onSelectNav={setActiveNav}
-          onOpenSettings={() => setSettingsMode(true)}
+          onSelectSettingsSection={setActiveSettingsSection}
+          onOpenSettings={() => {
+            setActiveSettingsSection("account");
+            setSettingsMode(true);
+          }}
           onCloseSettings={() => setSettingsMode(false)}
           sidebarOpen={sidebarOpen}
         />
 
         <section className="content">
-          {activeNav === "home" ? (
+          {settingsMode ? (
+            <SettingsScreen section={activeSettingsSection} state={state} onSelectSection={setActiveSettingsSection} />
+          ) : activeNav === "home" ? (
             <HomeScreen state={state} />
           ) : (
             <SurfaceScreen inventory={inventoryForNav(state, activeNav)} surface={activeSurface} nav={activeNav} />

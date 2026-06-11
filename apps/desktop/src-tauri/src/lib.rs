@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,6 +69,13 @@ struct DesktopHomeState {
     inventory: DesktopInventory,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NotificationPermission {
+    granted: bool,
+    status: String,
+}
+
 #[tauri::command]
 fn desktop_home_state() -> DesktopHomeState {
     let project_path = desktop_project_path();
@@ -84,6 +92,11 @@ fn desktop_home_state() -> DesktopHomeState {
         changelog: Vec::new(),
         inventory,
     }
+}
+
+#[tauri::command]
+fn request_notification_permission() -> Result<NotificationPermission, String> {
+    native_notifications::request_permission()
 }
 
 fn scan_inventory(project_path: &Path, home_dir: Option<&Path>) -> DesktopInventory {
@@ -683,7 +696,60 @@ fn home_dir() -> Option<PathBuf> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![desktop_home_state])
+        .invoke_handler(tauri::generate_handler![
+            desktop_home_state,
+            request_notification_permission
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(target_os = "macos")]
+mod native_notifications {
+    use super::{Duration, NotificationPermission};
+    use block2::RcBlock;
+    use objc2::runtime::Bool;
+    use objc2_foundation::NSError;
+    use objc2_user_notifications::{UNAuthorizationOptions, UNUserNotificationCenter};
+    use std::sync::mpsc;
+
+    pub fn request_permission() -> Result<NotificationPermission, String> {
+        let center = UNUserNotificationCenter::currentNotificationCenter();
+        let options = UNAuthorizationOptions::Alert
+            | UNAuthorizationOptions::Sound
+            | UNAuthorizationOptions::Badge;
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let completion = RcBlock::new(move |granted: Bool, error: *mut NSError| {
+            let result = if error.is_null() {
+                Ok(granted.as_bool())
+            } else {
+                Err("macOS notification authorization failed".to_owned())
+            };
+            let _ = sender.send(result);
+        });
+
+        center.requestAuthorizationWithOptions_completionHandler(options, &completion);
+
+        match receiver.recv_timeout(Duration::from_secs(30)) {
+            Ok(Ok(true)) => Ok(NotificationPermission {
+                granted: true,
+                status: "granted".into(),
+            }),
+            Ok(Ok(false)) => Ok(NotificationPermission {
+                granted: false,
+                status: "denied".into(),
+            }),
+            Ok(Err(message)) => Err(message),
+            Err(_) => Err("Timed out waiting for macOS notification authorization".into()),
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+mod native_notifications {
+    use super::NotificationPermission;
+
+    pub fn request_permission() -> Result<NotificationPermission, String> {
+        Err("Notification permission requests are only implemented for macOS".into())
+    }
 }

@@ -1,10 +1,27 @@
 import type { ReactElement, SVGProps } from "react";
-import { Cable, ChevronsUpDown, Home, PanelTop, RotateCcw, Settings, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  Bell,
+  Cable,
+  ChevronsUpDown,
+  Cloud,
+  FolderOpen,
+  Home,
+  Info,
+  LockKeyhole,
+  Monitor,
+  PanelTop,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  UserRound
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { syncLabel, type ProfileSummary, type SetupSurfaceId } from "../domain/home-state";
 
 export type NavItem = "home" | "setup" | SetupSurfaceId;
+export type SettingsSection = "account" | "cloud" | "device" | "protection" | "notifications" | "local-paths" | "privacy" | "about";
 
 type CustomIconProps = SVGProps<SVGSVGElement> & { size?: number };
 type CustomIcon = (props: CustomIconProps) => ReactElement;
@@ -21,11 +38,24 @@ const navItems: Array<{ id: NavItem; label: string; icon: NavIcon }> = [
   { id: "hooks", label: "Hooks", icon: { type: "custom", icon: PajamasHook } }
 ];
 
+const settingsItems: Array<{ id: SettingsSection; label: string; icon: LucideIcon }> = [
+  { id: "account", label: "Account", icon: UserRound },
+  { id: "cloud", label: "Cloud", icon: Cloud },
+  { id: "device", label: "Device", icon: Monitor },
+  { id: "protection", label: "Protection", icon: ShieldCheck },
+  { id: "notifications", label: "Notifications", icon: Bell },
+  { id: "local-paths", label: "Local Paths", icon: FolderOpen },
+  { id: "privacy", label: "Privacy", icon: LockKeyhole },
+  { id: "about", label: "About", icon: Info }
+];
+
 export function Sidebar({
   profile,
   activeNav,
   settingsMode,
+  activeSettingsSection,
   onSelectNav,
+  onSelectSettingsSection,
   onOpenSettings,
   onCloseSettings,
   sidebarOpen
@@ -33,7 +63,9 @@ export function Sidebar({
   profile: ProfileSummary | null;
   activeNav: NavItem;
   settingsMode: boolean;
+  activeSettingsSection: SettingsSection;
   onSelectNav: (nav: NavItem) => void;
+  onSelectSettingsSection: (section: SettingsSection) => void;
   onOpenSettings: () => void;
   onCloseSettings: () => void;
   sidebarOpen: boolean;
@@ -41,7 +73,7 @@ export function Sidebar({
   return (
     <aside className="sidebar" aria-hidden={!sidebarOpen}>
       {settingsMode ? (
-        <SettingsNav onBack={onCloseSettings} />
+        <SettingsNav activeSection={activeSettingsSection} onSelectSection={onSelectSettingsSection} onBack={onCloseSettings} />
       ) : (
         <>
           <ProfilePicker profile={profile} />
@@ -88,21 +120,36 @@ function ProfilePicker({ profile }: { profile: ProfileSummary | null }) {
   );
 }
 
-function SettingsNav({ onBack }: { onBack: () => void }) {
-  const items = ["Account", "Cloud", "Device", "Protection", "Notifications", "Local Paths", "Privacy", "About"];
+function SettingsNav({
+  activeSection,
+  onSelectSection,
+  onBack
+}: {
+  activeSection: SettingsSection;
+  onSelectSection: (section: SettingsSection) => void;
+  onBack: () => void;
+}) {
   return (
     <nav className="nav-list">
       <button className="nav-item" type="button" onClick={onBack}>
-        <RotateCcw size={15} />
+        <ArrowLeft size={15} />
         <span>Back</span>
       </button>
       <div className="nav-separator" />
-      {items.map((item) => (
-        <button className="nav-item" type="button" key={item}>
-          <span className="nav-spacer" />
-          <span>{item}</span>
-        </button>
-      ))}
+      {settingsItems.map((item) => {
+        const Icon = item.icon;
+        return (
+          <button
+            className={`nav-item ${activeSection === item.id ? "is-active" : ""}`}
+            type="button"
+            key={item.id}
+            onClick={() => onSelectSection(item.id)}
+          >
+            <Icon size={15} />
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
     </nav>
   );
 }
