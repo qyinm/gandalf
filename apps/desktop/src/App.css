@@ -325,6 +325,16 @@ button {
   padding: 0;
 }
 
+.account-settings-button {
+  border: 0;
+  background: transparent;
+  color: #3a3b3d;
+}
+
+.account-settings-button:hover {
+  color: #161719;
+}
+
 .content {
   position: relative;
   min-width: 0;

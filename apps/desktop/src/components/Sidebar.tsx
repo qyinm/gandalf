@@ -103,7 +103,7 @@ export function Sidebar({
           <span className="avatar">h</span>
           <span>hippoo</span>
         </button>
-        <button className="icon-button" type="button" aria-label="Open settings" onClick={onOpenSettings}>
+        <button className="icon-button account-settings-button" type="button" aria-label="Open settings" onClick={onOpenSettings}>
           <Settings size={16} />
         </button>
       </div>
