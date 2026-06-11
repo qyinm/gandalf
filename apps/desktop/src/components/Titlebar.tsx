@@ -3,7 +3,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { GitCommit, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import type { ChangelogEntry } from "../domain/home-state";
-import { RiskBadge } from "./ui";
 
 export function Titlebar({
   snapshotId,
@@ -56,7 +55,6 @@ export function Titlebar({
               <div className="popover-row" key={entry.id}>
                 <code>{entry.id}</code>
                 <span>{entry.time}</span>
-                <RiskBadge risk={entry.risk} />
               </div>
             ))}
             {changelog.length === 0 ? <div className="popover-empty">No snapshots yet</div> : null}

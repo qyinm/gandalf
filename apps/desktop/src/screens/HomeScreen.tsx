@@ -1,7 +1,7 @@
 import { Save } from "lucide-react";
 
 import type { DesktopHomeState } from "../domain/home-state";
-import { ActionButton, RiskBadge } from "../components/ui";
+import { ActionButton } from "../components/ui";
 
 export function HomeScreen({ state }: { state: DesktopHomeState }) {
   return (
@@ -21,7 +21,6 @@ export function HomeScreen({ state }: { state: DesktopHomeState }) {
           <article className="surface-row" key={surface.id}>
             <span className="surface-label">{surface.label}</span>
             <strong>{surface.count}</strong>
-            <RiskBadge risk={surface.risk} />
           </article>
         ))}
         {state.surfaces.length === 0 ? <div className="inline-empty">No setup surfaces captured yet.</div> : null}
@@ -40,7 +39,6 @@ export function HomeScreen({ state }: { state: DesktopHomeState }) {
                 <strong>{entry.title}</strong>
                 <span className="timeline-meta">{entry.source} - {entry.time}</span>
               </div>
-              <RiskBadge risk={entry.risk} />
             </article>
           ))}
           {state.changelog.length === 0 ? <div className="inline-empty">No profile snapshots or setup changes yet.</div> : null}
