@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Hem",
@@ -20,6 +21,11 @@
         "decorations": true,
         "hiddenTitle": true,
         "titleBarStyle": "Overlay",
+        "transparent": true,
+        "windowEffects": {
+          "effects": ["sidebar"],
+          "state": "active"
+        },
         "trafficLightPosition": {
           "x": 18,
           "y": 22
