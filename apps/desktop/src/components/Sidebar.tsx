@@ -1,4 +1,4 @@
-import type { ReactElement, SVGProps } from "react";
+import { useEffect, useRef, useState, type ReactElement, type SVGProps } from "react";
 import {
   ArrowLeft,
   Bell,
@@ -11,6 +11,7 @@ import {
   LockKeyhole,
   Monitor,
   PanelTop,
+  Plus,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -51,6 +52,7 @@ const settingsItems: Array<{ id: SettingsSection; label: string; icon: LucideIco
 
 export function Sidebar({
   profile,
+  profiles,
   activeNav,
   settingsMode,
   activeSettingsSection,
@@ -61,6 +63,7 @@ export function Sidebar({
   sidebarOpen
 }: {
   profile: ProfileSummary | null;
+  profiles: ProfileSummary[];
   activeNav: NavItem;
   settingsMode: boolean;
   activeSettingsSection: SettingsSection;
@@ -76,7 +79,7 @@ export function Sidebar({
         <SettingsNav activeSection={activeSettingsSection} onSelectSection={onSelectSettingsSection} onBack={onCloseSettings} />
       ) : (
         <>
-          <ProfilePicker profile={profile} />
+          <ProfilePicker profile={profile} profiles={profiles} />
           <nav className="nav-list">
             {navItems.map((item) => {
               const Icon = item.icon.icon;
@@ -108,15 +111,47 @@ export function Sidebar({
   );
 }
 
-function ProfilePicker({ profile }: { profile: ProfileSummary | null }) {
+function ProfilePicker({ profile, profiles }: { profile: ProfileSummary | null; profiles: ProfileSummary[] }) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const visibleProfiles = profiles.length > 0 ? profiles : profile ? [profile] : [];
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (menuRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open]);
+
   return (
-    <button className="profile-picker" type="button">
-      <div>
-        <strong>{profile?.name ?? "No profile"}</strong>
-        <span className="profile-sync">{profile ? syncLabel(profile) : "Not captured"}</span>
-      </div>
-      <ChevronsUpDown size={15} />
-    </button>
+    <div className="profile-menu" ref={menuRef}>
+      <button className="profile-picker" type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <div>
+          <strong>{profile?.name ?? "No profile"}</strong>
+          <span className="profile-sync">{profile ? syncLabel(profile) : "Not captured"}</span>
+        </div>
+        <ChevronsUpDown size={15} />
+      </button>
+      {open ? (
+        <div className="profile-options">
+          {visibleProfiles.map((item) => (
+            <button className="profile-option" type="button" key={item.name} aria-current={item.name === profile?.name ? "true" : undefined}>
+              <span>{item.name}</span>
+              <span className="profile-sync">{syncLabel(item)}</span>
+            </button>
+          ))}
+          <button className="profile-create" type="button">
+            <Plus size={14} />
+            <span>Create New Profile</span>
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

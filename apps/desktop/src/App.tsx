@@ -45,6 +45,7 @@ function App() {
       <div className="workspace">
         <Sidebar
           profile={state.activeProfile}
+          profiles={state.profiles}
           activeNav={activeNav}
           settingsMode={settingsMode}
           activeSettingsSection={activeSettingsSection}

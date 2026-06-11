@@ -48,6 +48,7 @@ export interface DesktopInventory {
 
 export interface DesktopHomeState {
   activeProfile: ProfileSummary | null;
+  profiles: ProfileSummary[];
   currentSnapshotId: string | null;
   protection: ProtectionState;
   highestRisk: RiskLevel | null;
@@ -64,7 +65,8 @@ export const emptyDesktopInventory: DesktopInventory = {
 };
 
 export const emptyDesktopHomeState: DesktopHomeState = {
-  activeProfile: null,
+  activeProfile: defaultProfile(),
+  profiles: [defaultProfile()],
   currentSnapshotId: null,
   protection: "off",
   highestRisk: null,
@@ -83,7 +85,8 @@ export function normalizeDesktopHomeState(value: unknown): DesktopHomeState {
   const inventory = normalizeDesktopInventory(payload.inventory);
 
   return {
-    activeProfile: normalizeProfile(payload.activeProfile),
+    activeProfile: normalizeProfile(payload.activeProfile) ?? defaultProfile(),
+    profiles: normalizeProfiles(payload.profiles),
     currentSnapshotId: optionalString(payload.currentSnapshotId),
     protection: isProtectionState(payload.protection) ? payload.protection : emptyDesktopHomeState.protection,
     highestRisk: isRiskLevel(payload.highestRisk) ? payload.highestRisk : emptyDesktopHomeState.highestRisk,
@@ -91,6 +94,16 @@ export function normalizeDesktopHomeState(value: unknown): DesktopHomeState {
     changelog: arrayFrom(payload.changelog).map(normalizeChangelogEntry).filter(isPresent),
     surfaces: normalizeSetupSurfaces(payload.surfaces, inventory),
     inventory
+  };
+}
+
+export function defaultProfile(): ProfileSummary {
+  return {
+    name: "default",
+    scope: "personal",
+    syncState: "local_only",
+    ahead: 0,
+    behind: 0
   };
 }
 
@@ -117,6 +130,14 @@ function normalizeDesktopInventory(value: unknown): DesktopInventory {
     mcp: arrayFrom(payload.mcp).map(normalizeInventoryItem).filter(isPresent),
     hooks: arrayFrom(payload.hooks).map(normalizeInventoryItem).filter(isPresent)
   };
+}
+
+function normalizeProfiles(value: unknown): ProfileSummary[] {
+  const profiles = arrayFrom(value).map(normalizeProfile).filter(isPresent);
+  if (!profiles.some((profile) => profile.name === "default")) {
+    profiles.push(defaultProfile());
+  }
+  return profiles;
 }
 
 function normalizeSetupSurfaces(value: unknown, inventory: DesktopInventory): SetupSurface[] {

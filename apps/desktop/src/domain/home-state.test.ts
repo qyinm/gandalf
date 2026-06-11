@@ -17,6 +17,7 @@ describe("homeStateIsActionable", () => {
         ahead: 0,
         behind: 0
       },
+      profiles: [],
       currentSnapshotId: "snapshot-id",
       protection: "on",
       highestRisk: "low",
@@ -32,6 +33,7 @@ describe("homeStateIsActionable", () => {
   it("rejects an uncaptured state", () => {
     const state: DesktopHomeState = {
       activeProfile: null,
+      profiles: [],
       currentSnapshotId: null,
       protection: "on",
       highestRisk: null,
@@ -60,7 +62,8 @@ describe("normalizeDesktopHomeState", () => {
         }
       });
 
-    expect(state.activeProfile).toBeNull();
+    expect(state.activeProfile?.name).toBe("default");
+    expect(state.profiles.map((profile) => profile.name)).toContain("default");
     expect(state.inventory).toEqual({ skills: [], mcp: [], hooks: [] });
     expect(state.surfaces.map((surface) => [surface.id, surface.count])).toEqual([
       ["mcp", 0],
@@ -78,6 +81,7 @@ describe("normalizeDesktopHomeState", () => {
         ahead: 0,
         behind: 0
       },
+      profiles: [{ name: "Captured", scope: "personal", syncState: "local_only", ahead: 0, behind: 0 }],
       currentSnapshotId: "snapshot-id",
       protection: "on",
       highestRisk: "medium",

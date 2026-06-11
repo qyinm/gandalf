@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::env;
@@ -6,7 +6,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-#[derive(Serialize)]
+const DEFAULT_PROFILE_NAME: &str = "default";
+
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ProfileSummary {
     name: String,
@@ -60,6 +62,7 @@ struct DesktopInventory {
 #[serde(rename_all = "camelCase")]
 struct DesktopHomeState {
     active_profile: Option<ProfileSummary>,
+    profiles: Vec<ProfileSummary>,
     current_snapshot_id: Option<String>,
     protection: String,
     highest_risk: Option<String>,
@@ -80,10 +83,12 @@ struct NotificationPermission {
 fn desktop_home_state() -> DesktopHomeState {
     let project_path = desktop_project_path();
     let home_dir = home_dir();
+    let profile_state = ensure_profile_state(home_dir.as_deref()).unwrap_or_else(|_| default_profile_state());
     let inventory = scan_inventory(&project_path, home_dir.as_deref());
 
     DesktopHomeState {
-        active_profile: None,
+        active_profile: profile_state.active,
+        profiles: profile_state.profiles,
         current_snapshot_id: None,
         protection: "off".into(),
         highest_risk: None,
@@ -92,6 +97,99 @@ fn desktop_home_state() -> DesktopHomeState {
         changelog: Vec::new(),
         inventory,
     }
+}
+
+struct ProfileState {
+    active: Option<ProfileSummary>,
+    profiles: Vec<ProfileSummary>,
+}
+
+fn ensure_profile_state(home_dir: Option<&Path>) -> std::io::Result<ProfileState> {
+    let Some(home_dir) = home_dir else {
+        return Ok(default_profile_state());
+    };
+
+    let store_dir = home_dir.join(".hem");
+    let profiles_dir = store_dir.join("profiles");
+    let default_profile_dir = profiles_dir.join(DEFAULT_PROFILE_NAME);
+    let current_profile_path = store_dir.join("current-profile");
+    let default_profile_path = default_profile_dir.join("profile.json");
+
+    fs::create_dir_all(&default_profile_dir)?;
+    if !default_profile_path.exists() {
+        write_profile(&default_profile_path, &default_profile())?;
+    }
+    if !current_profile_path.exists() {
+        fs::write(&current_profile_path, format!("{DEFAULT_PROFILE_NAME}\n"))?;
+    }
+
+    let active_name = fs::read_to_string(&current_profile_path)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| DEFAULT_PROFILE_NAME.to_string());
+
+    let mut profiles = read_profiles(&profiles_dir)?;
+    if !profiles.iter().any(|profile| profile.name == DEFAULT_PROFILE_NAME) {
+        profiles.push(default_profile());
+    }
+    profiles.sort_by(|left, right| match (left.name == active_name, right.name == active_name) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => left.name.cmp(&right.name),
+    });
+
+    let active = profiles
+        .iter()
+        .find(|profile| profile.name == active_name)
+        .cloned()
+        .or_else(|| profiles.first().cloned());
+
+    Ok(ProfileState { active, profiles })
+}
+
+fn default_profile_state() -> ProfileState {
+    let profile = default_profile();
+    ProfileState {
+        active: Some(profile.clone()),
+        profiles: vec![profile],
+    }
+}
+
+fn default_profile() -> ProfileSummary {
+    ProfileSummary {
+        name: DEFAULT_PROFILE_NAME.into(),
+        scope: "personal".into(),
+        sync_state: "local_only".into(),
+        ahead: 0,
+        behind: 0,
+    }
+}
+
+fn write_profile(path: &Path, profile: &ProfileSummary) -> std::io::Result<()> {
+    let payload = serde_json::to_vec_pretty(profile)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+    fs::write(path, payload)
+}
+
+fn read_profiles(profiles_dir: &Path) -> std::io::Result<Vec<ProfileSummary>> {
+    let mut profiles = Vec::new();
+    for entry in fs::read_dir(profiles_dir)? {
+        let Ok(entry) = entry else {
+            continue;
+        };
+        let path = entry.path().join("profile.json");
+        if !path.exists() {
+            continue;
+        }
+        let Ok(payload) = fs::read_to_string(path) else {
+            continue;
+        };
+        if let Ok(profile) = serde_json::from_str::<ProfileSummary>(&payload) {
+            profiles.push(profile);
+        }
+    }
+    Ok(profiles)
 }
 
 #[tauri::command]
