@@ -12,7 +12,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import path from "node:path";
-import type { AgentId, AuditFinding, DiscoveredItem, Snapshot, TimelineEntry } from "./types.js";
+import type { AgentId, AuditFinding, DiscoveredItem, Snapshot, SnapshotContentEntry, TimelineEntry } from "./types.js";
 
 const SNAPSHOT_FILES = {
   manifest: "manifest.json",
@@ -21,9 +21,11 @@ const SNAPSHOT_FILES = {
   auditFindings: "audit-findings.json",
   provenance: "provenance.json",
   checksums: "checksums.json",
-  redactions: "redactions.json"
+  redactions: "redactions.json",
+  contentIndex: "content-index.json"
 } as const;
 
+const CONTENT_DIR = "content";
 const TIMELINE_EVENTS_DIR = path.join("timeline", "events");
 const AGENT_STORE_DIRS: AgentId[] = ["claude-code", "codex", "cursor", "opencode", "pi-agent", "project", "unknown"];
 
@@ -130,6 +132,30 @@ export async function writeSnapshot(
     writeJsonAtomic(path.join(dir, SNAPSHOT_FILES.checksums), snapshot.checksums ?? checksumsFromEvidence(snapshot.evidence)),
     writeJsonAtomic(path.join(dir, SNAPSHOT_FILES.redactions), snapshot.redactions ?? [])
   ]);
+
+  if (snapshot.content && snapshot.content.length > 0) {
+    const contentDir = path.join(dir, CONTENT_DIR);
+    await rm(contentDir, { recursive: true, force: true });
+    await mkdir(contentDir, { recursive: true, mode: 0o700 });
+    await chmod(contentDir, 0o700);
+
+    for (const entry of snapshot.content) {
+      if (entry.captureStatus !== "captured" || typeof entry.content !== "string") {
+        continue;
+      }
+      if (!isSafeSnapshotRelativePath(entry.storagePath) || !entry.storagePath.startsWith(`${CONTENT_DIR}/`)) {
+        throw new Error(`Unsafe snapshot content path: ${JSON.stringify(entry.storagePath)}`);
+      }
+      const contentPath = path.join(dir, entry.storagePath);
+      await mkdir(path.dirname(contentPath), { recursive: true, mode: 0o700 });
+      await writeTextAtomic(contentPath, entry.content);
+    }
+
+    await writeJsonAtomic(
+      path.join(dir, SNAPSHOT_FILES.contentIndex),
+      snapshot.content.map(({ content: _content, ...entry }) => entry)
+    );
+  }
 }
 
 export async function readSnapshot(
@@ -140,12 +166,13 @@ export async function readSnapshot(
   const safeName = validateSnapshotName(name);
   const dir = snapshotDir(storeDir, safeName, agent);
 
-  const [manifest, evidence, graph, auditFindings, provenance] = await Promise.all([
+  const [manifest, evidence, graph, auditFindings, provenance, content] = await Promise.all([
     readJson<Snapshot["manifest"]>(path.join(dir, SNAPSHOT_FILES.manifest)),
     readJson<Snapshot["evidence"]>(path.join(dir, SNAPSHOT_FILES.evidence)),
     readJson<Snapshot["graph"]>(path.join(dir, SNAPSHOT_FILES.graph)),
     readJson<Snapshot["auditFindings"]>(path.join(dir, SNAPSHOT_FILES.auditFindings)),
-    readJson<Snapshot["provenance"]>(path.join(dir, SNAPSHOT_FILES.provenance))
+    readJson<Snapshot["provenance"]>(path.join(dir, SNAPSHOT_FILES.provenance)),
+    readOptionalJson<SnapshotContentEntry[]>(path.join(dir, SNAPSHOT_FILES.contentIndex))
   ]);
 
   return {
@@ -153,8 +180,22 @@ export async function readSnapshot(
     evidence,
     graph,
     auditFindings,
-    provenance
+    provenance,
+    ...(content && content.length > 0 ? { content } : {})
   };
+}
+
+export async function readSnapshotContent(
+  storeDir: string,
+  name: string,
+  entry: SnapshotContentEntry,
+  agent?: AgentId
+): Promise<string> {
+  const safeName = validateSnapshotName(name);
+  if (!isSafeSnapshotRelativePath(entry.storagePath) || !entry.storagePath.startsWith(`${CONTENT_DIR}/`)) {
+    throw new Error(`Unsafe snapshot content path: ${JSON.stringify(entry.storagePath)}`);
+  }
+  return await readFile(path.join(snapshotDir(storeDir, safeName, agent), entry.storagePath), "utf8");
 }
 
 export async function listSnapshots(
@@ -298,6 +339,13 @@ function isSafeSnapshotName(name: string): boolean {
   return name.trim().length > 0 && !name.includes("..") && !name.includes("/") && !name.includes("\\");
 }
 
+function isSafeSnapshotRelativePath(name: string): boolean {
+  return name.trim().length > 0 &&
+    !path.isAbsolute(name) &&
+    !name.includes("\\") &&
+    !name.split("/").includes("..");
+}
+
 async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> {
   const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
   try {
@@ -309,8 +357,31 @@ async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> 
   }
 }
 
+async function writeTextAtomic(filePath: string, value: string): Promise<void> {
+  const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(tempPath, value, { mode: 0o600 });
+    await rename(tempPath, filePath);
+  } catch (error) {
+    await rm(tempPath, { force: true });
+    throw error;
+  }
+}
+
 async function readJson<T>(filePath: string): Promise<T> {
   return JSON.parse(await readFile(filePath, "utf8")) as T;
+}
+
+async function readOptionalJson<T>(filePath: string): Promise<T | undefined> {
+  try {
+    return await readJson<T>(filePath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 function timelineEventsDir(storeDir: string): string {

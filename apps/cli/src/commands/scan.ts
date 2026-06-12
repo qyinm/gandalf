@@ -60,7 +60,7 @@ function renderScanText(state: CurrentState): string {
     lines.push(`  ${blindSpot}`);
   }
 
-  lines.push("", "Next", "  hem snapshot create --name baseline --metadata-only --project .");
+  lines.push("", "Next", "  hem snapshot create --name baseline --agent codex --scope user --project .");
   return `${lines.join("\n")}\n`;
 }
 

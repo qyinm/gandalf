@@ -173,8 +173,21 @@ export interface SnapshotManifest {
   projectPath: string;
   security: {
     rawSecretsIncluded: false;
-    redactionPolicy: "metadata-only";
+    redactionPolicy: "metadata-only" | "content-backed";
   };
+}
+
+export interface SnapshotContentEntry {
+  evidenceId: string;
+  sourcePath: string;
+  restorePath: string;
+  checksum: string;
+  byteLength: number;
+  encoding: "utf8";
+  storagePath: string;
+  captureStatus: "captured" | "omitted";
+  reason?: string;
+  content?: string;
 }
 
 export interface Snapshot {
@@ -183,6 +196,7 @@ export interface Snapshot {
   graph: GraphNode[];
   auditFindings: AuditFinding[];
   provenance: ProvenanceEntry[];
+  content?: SnapshotContentEntry[];
 }
 
 export type TimelineEntrySource = "manual";
@@ -314,6 +328,8 @@ export interface ScanOptions {
   homeDir: string;
   storeDir: string;
   explain?: boolean;
+  agent?: AgentId;
+  scope?: EvidenceScope;
 }
 
 // ── Restore dry-run types (v0.2) ──────────────────────────────
@@ -378,6 +394,7 @@ export interface RestorePlan {
   planId: string;
   sourceSnapshot: string;
   targetProject: string;
+  targetHome: string;
   createdAt: string;
   itemCount: number;
   riskSummary: RiskSummary;
@@ -396,6 +413,8 @@ export interface RestoreOptions {
   dryRun: boolean;
   /** Optional agent scope for snapshot lookup. */
   agent?: AgentId;
+  /** Optional evidence scope for current-state comparison. */
+  scope?: EvidenceScope;
 }
 
 // ── Restore apply types (v0.2+ Phase-1) ──────────────────────────

@@ -1,28 +1,28 @@
 # Hem
 
-Time Machine for your AI coding agent setup.
+Rollback safety net for Codex setup experiments.
 
-Hem helps you view, save, compare, and restore the MCP servers, skills, hooks, permissions, instructions, and agent configs used by Claude Code, Codex, Cursor, OpenCode, and Pi Agent.
+Hem's current wedge is narrow on purpose: save, diff, and restore your user-global Codex setup under `~/.codex/` after an agent, MCP, hook, or skill experiment goes wrong.
 
-Use it when you let agents change their own setup, experiment with MCPs and skills, or move your agent environment to a new machine.
+Use it before you let Codex or another agent change Codex config, install skills, or edit hooks. The broad multi-agent, profile, desktop, team, and cloud product is future direction, not the Gate 2 CLI path.
 
 ```bash
 bun install -g @qxinm/hem
 
-# Save a restore point
-hem snapshot create --name baseline --metadata-only --project .
+# Save a Codex user-global restore point
+hem snapshot create --name baseline --agent codex --scope user --project .
 
 # See what changed after installing skills/MCPs
-hem diff baseline current --project .
-
-# Open the local setup workspace
-hem tui
+hem diff baseline current --agent codex --scope user --project .
 
 # Preview a restore before applying it
-hem restore --snapshot baseline --dry-run --project .
+hem restore --snapshot baseline --dry-run --agent codex --scope user --project .
+
+# Apply the rollback when the plan looks right
+hem restore --snapshot baseline --apply --experimental --agent codex --scope user --project .
 ```
 
-Hem can also export a saved setup as a portable `.hem` bundle.
+Hem also has broader experimental scan, TUI, restore, and bundle commands. Those are useful for dogfooding, but the current product test is Codex user-global rollback.
 
 ```bash
 # Machine A: export your setup
@@ -49,14 +49,13 @@ AI coding power users constantly change their agent environment:
 
 The problem is that agent setup changes usually have no history. After a few experiments, it is hard to know what was original, what changed, and what can be safely removed.
 
-Hem gives that setup a local history:
+Hem gives the supported Codex setup a local rollback history:
 
 - **Current setup**: what is installed right now
 - **Snapshot**: a saved point in time
 - **Compare**: what changed between two points
 - **Restore**: go back to a saved setup
-- **Profile**: a named setup line, like `default`, `frontend`, or `clean-baseline`
-- **Bundle**: a portable `.hem` file for moving a setup between machines
+Profiles, bundles, desktop UI, team sync, and cloud sync are future product direction, not the current demand-test wedge.
 
 ---
 
@@ -87,18 +86,19 @@ hem scan --project . --explain
 hem scan --project . --json
 
 # Save point-in-time state
+hem snapshot create --name baseline --agent codex --scope user --project .
 hem snapshot create --name baseline --metadata-only --project .
 hem snapshot list
 hem snapshot show baseline --json
 
 # Compare saved setup with current setup
-hem diff baseline current --project .
-hem diff baseline current --project . --json
+hem diff baseline current --agent codex --scope user --project .
+hem diff baseline current --agent codex --scope user --project . --json
 
 # Restore with preview
-hem restore --snapshot baseline --dry-run --project .
-hem restore --snapshot baseline --apply --experimental --project .
-hem restore --snapshot baseline --apply --rollback --experimental --project .
+hem restore --snapshot baseline --dry-run --agent codex --scope user --project .
+hem restore --snapshot baseline --apply --experimental --agent codex --scope user --project .
+hem restore --snapshot baseline --apply --rollback --experimental --agent codex --scope user --project .
 ```
 
 ### Local Setup Workspace
@@ -162,7 +162,7 @@ Every command supports `--json` where structured output is useful.
 | Surface | Config surface |
 |---|---|
 | Claude Code | settings.json, .mcp.json, CLAUDE.md, skills, hooks, agents |
-| Codex | .codex/config.toml, AGENTS.md, MCP config |
+| Codex | Current Gate 2 path: user-global `~/.codex/config.toml`, user hooks, user skills, managed plugin skill inventory |
 | Cursor | .cursor/mcp.json, skills, hooks |
 | OpenCode | config, skills |
 | Pi Agent | settings, extensions, skills, themes, prompts, agents, models |
@@ -180,10 +180,11 @@ Scanner plugin interface: add new agents by implementing `ScannerPlugin`. `Proje
 | Bundle export/import (`.hem` format) | ✅ v0.2 experimental |
 | Restore engine (dry-run, apply, rollback) | ✅ v0.2 experimental |
 | TUI setup-history workspace | ✅ v0.3 preview |
-| Local multi-profile persistence | 📋 next |
-| MCP/skills add-remove manager | 📋 future |
-| Background setup-change daemon | 📋 future |
-| Cloud profiles and multi-machine sync | 📋 Pro |
+| Codex user-global content-backed rollback | current Gate 2 wedge |
+| Local multi-profile persistence | future |
+| MCP/skills add-remove manager | future |
+| Background setup-change daemon | future |
+| Cloud profiles and multi-machine sync | future |
 
 ---
 

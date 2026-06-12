@@ -1,15 +1,45 @@
 # Hem Product Definition
 
 Status: working product document
-Last updated: 2026-06-10
+Last updated: 2026-06-12
+
+## Current Gate 2 CLI Wedge
+
+The current implementation target is not the full profile/cloud/team product described below.
+
+Gate 2 is a Codex-only rollback demand test:
+
+```text
+snapshot -> diff -> restore
+scope: --agent codex --scope user
+surface: ~/.codex/ user-global setup only
+distribution: CLI first
+```
+
+In scope now:
+
+- content-backed snapshots for supported Codex user-global files
+- byte-exact restore for supported non-secret content
+- explicit unsupported reasons for surfaces Hem cannot safely restore yet
+- tests that prove rollback from a damaged `~/.codex/config.toml`
+
+Not in scope now:
+
+- desktop launch
+- profiles and profile switching
+- team/cloud sync
+- broad multi-agent restore
+- repo-local setup management
+
+The larger "Git branches for Codex setups" product direction remains useful, but implementation should not expand into it until the rollback demand test clears.
 
 ## One-Line Definition
 
-Hem lets developers save, switch, compare, and restore their user-global Codex setup like Git branches.
+Hem lets developers snapshot, diff, and roll back their user-global Codex setup after risky setup experiments.
 
 Korean:
 
-> 내 Mac의 Codex 설정을 프로필로 저장하고 Git branch처럼 전환하세요.
+> 내 Mac의 Codex 설정 변경을 저장하고, 비교하고, 필요하면 되돌리세요.
 
 ## Product Thesis
 
@@ -4474,9 +4504,9 @@ Current CLI language can use snapshot because snapshot and profile save are the 
 Current:
 
 ```bash
-hem snapshot create --name baseline --metadata-only
-hem diff baseline current
-hem restore --snapshot baseline --dry-run
+hem snapshot create --name baseline --agent codex --scope user --project .
+hem diff baseline current --agent codex --scope user --project .
+hem restore --snapshot baseline --dry-run --agent codex --scope user --project .
 ```
 
 Future:

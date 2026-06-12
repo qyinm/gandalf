@@ -6,8 +6,11 @@ import type { DiscoveredItem } from "../types.js";
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { createScannerBase } from "./base.js";
+import { MAX_DIRECTORY_ENTRIES } from "../policy.js";
 
 const base = createScannerBase({ agentId: "codex" });
+const CODEX_SKILL_MAX_FILES_PER_ROOT = 500;
+const CODEX_SKILL_SCAN_BUDGET_MS = 1000;
 
 export const codexScanner: ScannerPlugin = {
   agentId: "codex",
@@ -21,13 +24,14 @@ export const codexScanner: ScannerPlugin = {
     ];
   },
 
-  async scan({ projectPath, homeDir }): Promise<DiscoveredItem[]> {
-    const configEvidence = await scanTargets(this.targets(projectPath, homeDir));
-    const mcpEvidence = await scanCodexMcpServers(homeDir);
-    const hookEvidence = await scanCodexHooks(projectPath, homeDir);
+  async scan({ projectPath, homeDir, scope }): Promise<DiscoveredItem[]> {
+    const inScope = (target: ScanTarget) => scope === undefined || target.scope === scope;
+    const configEvidence = await scanTargets(this.targets(projectPath, homeDir).filter(inScope));
+    const mcpEvidence = scope === undefined || scope === "user" ? await scanCodexMcpServers(homeDir) : [];
+    const hookEvidence = await scanCodexHooks(projectPath, homeDir, scope);
     const skillEvidence: DiscoveredItem[] = [];
 
-    for (const target of codexSkillTargets(homeDir)) {
+    for (const target of codexSkillTargets(homeDir).filter(inScope)) {
       skillEvidence.push(...await scanCodexSkillDirectory(target));
     }
 
@@ -61,13 +65,14 @@ function codexHookTargets(projectPath: string, homeDir: string): ScanTarget[] {
   ];
 }
 
-async function scanCodexHooks(projectPath: string, homeDir: string): Promise<DiscoveredItem[]> {
+async function scanCodexHooks(projectPath: string, homeDir: string, scope?: string): Promise<DiscoveredItem[]> {
   const evidence: DiscoveredItem[] = [];
+  const inScope = (target: ScanTarget) => scope === undefined || target.scope === scope;
 
-  for (const target of codexHookTargets(projectPath, homeDir)) {
+  for (const target of codexHookTargets(projectPath, homeDir).filter(inScope)) {
     evidence.push(...await scanCodexHooksFile(target));
   }
-  for (const target of codexInlineHookTargets(projectPath, homeDir)) {
+  for (const target of codexInlineHookTargets(projectPath, homeDir).filter(inScope)) {
     evidence.push(...await scanCodexInlineHooksFile(target));
   }
 
@@ -442,10 +447,29 @@ function secretLikePath(pathParts: string[]): boolean {
 }
 
 async function scanCodexSkillDirectory(target: ScanTarget): Promise<DiscoveredItem[]> {
-  const skillFiles = await findSkillFiles(target.absolutePath);
+  const scan = await findSkillFiles(target.absolutePath);
   const evidence: DiscoveredItem[] = [];
 
-  for (const skillFile of skillFiles) {
+  if (scan.skippedEntries > 0 || scan.skippedRoots.length > 0 || scan.timedOut) {
+    evidence.push({
+      ...base.captured(target, "unsupported", {
+        reason: "codex_skill_scan_budget_exceeded",
+        skippedEntries: scan.skippedEntries,
+        skippedRoots: scan.skippedRoots,
+        scannedFiles: scan.files.length,
+        maxFiles: CODEX_SKILL_MAX_FILES_PER_ROOT,
+        maxEntriesPerDirectory: MAX_DIRECTORY_ENTRIES,
+        budgetMs: CODEX_SKILL_SCAN_BUDGET_MS,
+        timedOut: scan.timedOut
+      }),
+      id: base.itemId(target, "skill-scan-budget"),
+      kind: "unsupported",
+      restorePolicy: "not_supported",
+      captureStatus: "unsupported",
+    });
+  }
+
+  for (const skillFile of scan.files) {
     const frontmatter = await readSkillFrontmatter(skillFile);
     const skillDir = path.dirname(skillFile);
     const relativeSkillDir = path.relative(target.absolutePath, skillDir).split(path.sep).join("/");
@@ -484,19 +508,42 @@ async function scanCodexSkillDirectory(target: ScanTarget): Promise<DiscoveredIt
   return evidence;
 }
 
-async function findSkillFiles(root: string): Promise<string[]> {
+interface SkillFileScan {
+  files: string[];
+  skippedEntries: number;
+  skippedRoots: string[];
+  timedOut: boolean;
+}
+
+async function findSkillFiles(root: string): Promise<SkillFileScan> {
   const files: string[] = [];
-  await walkSkillFiles(root, files, 0, new Set());
-  return files;
+  const scan: SkillFileScan = {
+    files,
+    skippedEntries: 0,
+    skippedRoots: [],
+    timedOut: false
+  };
+  await walkSkillFiles(root, scan, 0, new Set(), Date.now() + CODEX_SKILL_SCAN_BUDGET_MS);
+  return scan;
 }
 
 async function walkSkillFiles(
   dir: string,
-  files: string[],
+  scan: SkillFileScan,
   depth: number,
-  seen: Set<string>
+  seen: Set<string>,
+  deadlineMs: number
 ): Promise<void> {
   if (depth > 8) {
+    return;
+  }
+  if (Date.now() > deadlineMs) {
+    scan.timedOut = true;
+    scan.skippedRoots.push(dir);
+    return;
+  }
+  if (scan.files.length >= CODEX_SKILL_MAX_FILES_PER_ROOT) {
+    scan.skippedRoots.push(dir);
     return;
   }
 
@@ -517,8 +564,22 @@ async function walkSkillFiles(
   } catch {
     return;
   }
+  if (entries.length > MAX_DIRECTORY_ENTRIES) {
+    scan.skippedEntries += entries.length - MAX_DIRECTORY_ENTRIES;
+    entries = entries.slice(0, MAX_DIRECTORY_ENTRIES);
+  }
 
   for (const entry of entries) {
+    if (Date.now() > deadlineMs) {
+      scan.timedOut = true;
+      scan.skippedRoots.push(dir);
+      return;
+    }
+    if (scan.files.length >= CODEX_SKILL_MAX_FILES_PER_ROOT) {
+      scan.skippedRoots.push(dir);
+      return;
+    }
+
     const absolutePath = path.join(dir, entry.name);
     let stats;
     try {
@@ -528,12 +589,12 @@ async function walkSkillFiles(
     }
 
     if (stats.isDirectory()) {
-      await walkSkillFiles(absolutePath, files, depth + 1, seen);
+      await walkSkillFiles(absolutePath, scan, depth + 1, seen, deadlineMs);
       continue;
     }
 
     if (stats.isFile() && entry.name.toLowerCase() === "skill.md") {
-      files.push(absolutePath);
+      scan.files.push(absolutePath);
     }
   }
 }

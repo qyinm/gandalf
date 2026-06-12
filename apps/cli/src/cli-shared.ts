@@ -2,7 +2,7 @@
  * Shared helpers extracted from cli.ts for use across command modules.
  */
 import path from "node:path";
-import type { AgentId, RuntimeOptions } from "@qxinm/hem-core";
+import type { AgentId, EvidenceScope, RuntimeOptions } from "@qxinm/hem-core";
 import { defaultStoreDir } from "@qxinm/hem-core";
 
 export type { RuntimeOptions };
@@ -27,19 +27,28 @@ export const VALID_AGENTS: AgentId[] = [
   "unknown"
 ];
 
+export const VALID_SCOPES: EvidenceScope[] = ["user", "project", "managed", "unknown"];
+
 export function runtimeOptions(args: string[]): RuntimeOptions {
   const homeDir = process.env.HOME ?? process.cwd();
   const agent = valueAfter(args, "--agent") as AgentId | undefined;
+  const scope = valueAfter(args, "--scope") as EvidenceScope | undefined;
   if (agent && !VALID_AGENTS.includes(agent)) {
     throw new Error(
       `Invalid agent: "${agent}". Valid agents: ${VALID_AGENTS.join(", ")}`
+    );
+  }
+  if (scope && !VALID_SCOPES.includes(scope)) {
+    throw new Error(
+      `Invalid scope: "${scope}". Valid scopes: ${VALID_SCOPES.join(", ")}`
     );
   }
   return {
     projectPath: path.resolve(valueAfter(args, "--project") ?? process.cwd()),
     homeDir,
     storeDir: process.env.HEM_STORE ?? defaultStoreDir(homeDir),
-    agent
+    agent,
+    scope
   };
 }
 

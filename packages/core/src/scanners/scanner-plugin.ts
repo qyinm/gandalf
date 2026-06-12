@@ -2,7 +2,7 @@
  * Scanner Plugin Interface.
  * Each AI coding agent implements this to declare which files to scan.
  */
-import type { AgentId, DiscoveredItem, DiscoveredItemConstruction } from "../types.js";
+import type { AgentId, DiscoveredItem, DiscoveredItemConstruction, EvidenceScope } from "../types.js";
 import type { ScanTarget } from "./index.js";
 
 export interface ScannerContext {
@@ -10,6 +10,7 @@ export interface ScannerContext {
   homeDir: string;
   storeDir: string;
   explain?: boolean;
+  scope?: EvidenceScope;
 }
 
 export interface ScannerPlugin {

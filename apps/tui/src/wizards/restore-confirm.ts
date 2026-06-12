@@ -69,6 +69,7 @@ export async function restoreWizard(
       homeDir: options.homeDir,
       dryRun: true,
       agent: options.agent,
+      scope: options.scope,
     });
     drySpinner.stop("Restore plan generated");
   } catch (err) {

@@ -196,6 +196,66 @@ describe("scanProject", () => {
     assert.ok(codexHooks.every((item) => item.sourcePath === "~/.codex/config.toml"));
   });
 
+  it("filters to Codex user-global evidence when agent and scope are specified", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    await mkdir(join(projectPath, ".codex"), { recursive: true });
+    await mkdir(join(homeDir, ".codex", "skills", "review"), { recursive: true });
+    await mkdir(join(projectPath, ".claude"), { recursive: true });
+    await writeFile(join(projectPath, "AGENTS.md"), "project instructions", "utf8");
+    await writeFile(join(projectPath, ".codex", "hooks.json"), JSON.stringify({
+      hooks: { PreToolUse: [{ hooks: [{ type: "command", command: "project-hook" }] }] }
+    }), "utf8");
+    await writeFile(join(projectPath, ".claude", "settings.json"), JSON.stringify({ permissions: { allow: ["Bash(echo hi)"] } }), "utf8");
+    await writeFile(join(homeDir, ".codex", "config.toml"), [
+      "model = \"gpt-5\"",
+      "[mcp_servers.docs]",
+      "command = \"docs-mcp\"",
+      "",
+      "[[hooks.Stop]]",
+      "[[hooks.Stop.hooks]]",
+      "type = \"command\"",
+      "command = \"notify\"",
+    ].join("\n"), "utf8");
+    await writeFile(join(homeDir, ".codex", "skills", "review", "SKILL.md"), "---\nname: review\n---\n", "utf8");
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir, agent: "codex", scope: "user" });
+
+    assert.ok(scan.evidence.length > 0);
+    assert.ok(scan.evidence.every((item) => item.agent === "codex"));
+    assert.ok(scan.evidence.every((item) => item.scope === "user"));
+    assert.ok(scan.evidence.every((item) => item.sourcePath.startsWith("~/.codex/")));
+    assert.equal(scan.evidence.some((item) => item.sourcePath === "AGENTS.md"), false);
+    assert.equal(scan.evidence.some((item) => item.sourcePath === ".codex/hooks.json"), false);
+    assert.equal(scan.evidence.some((item) => item.agent === "claude-code"), false);
+    assert.ok(scan.evidence.some((item) => item.kind === "agent_config" && item.sourcePath === "~/.codex/config.toml"));
+    assert.ok(scan.evidence.some((item) => item.kind === "mcp_server" && item.name === "docs"));
+    assert.ok(scan.evidence.some((item) => item.kind === "hook" && item.name === "Stop.*"));
+    assert.ok(scan.evidence.some((item) => item.kind === "skill" && item.name === "review"));
+  });
+
+  it("reports Codex plugin-cache skill scan budget skips", async () => {
+    const { projectPath, homeDir, storeDir } = await makeSandbox();
+    const cacheRoot = join(homeDir, ".codex", "plugins", "cache");
+    for (let index = 0; index < 260; index++) {
+      const skillPath = join(cacheRoot, `plugin-${String(index).padStart(3, "0")}`, "skills", "tool", "SKILL.md");
+      await mkdir(join(skillPath, ".."), { recursive: true });
+      await writeFile(skillPath, "---\nname: tool\n---\n", "utf8");
+    }
+
+    const scan = await scanProject({ projectPath, homeDir, storeDir, agent: "codex", scope: "user" });
+    const budgetItem = scan.evidence.find(
+      (item) =>
+        item.agent === "codex" &&
+        item.kind === "unsupported" &&
+        item.sourcePath === "~/.codex/plugins/cache" &&
+        item.metadata?.["reason"] === "codex_skill_scan_budget_exceeded"
+    );
+
+    assert.ok(budgetItem);
+    assert.equal(budgetItem.metadata?.["skippedEntries"], 10);
+    assert.equal(budgetItem.metadata?.["maxEntriesPerDirectory"], 250);
+  });
+
   it("emits parse_failed evidence for malformed JSON instead of throwing", async () => {
     const { projectPath, homeDir, storeDir } = await makeSandbox();
     await mkdir(join(projectPath, ".claude"), { recursive: true });

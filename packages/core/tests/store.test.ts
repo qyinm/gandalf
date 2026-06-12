@@ -12,10 +12,12 @@ import {
   listSnapshots,
   listTimelineEntries,
   readSnapshot,
+  readSnapshotContent,
   snapshotExists,
   writeSnapshot
 } from "../src/store.js";
 import type { Snapshot, TimelineEntry } from "../src/types.js";
+import { captureCurrentState } from "../src/current-state.js";
 
 async function tempStore(): Promise<string> {
   return mkdtemp(path.join(tmpdir(), "hem-store-test-"));
@@ -200,6 +202,91 @@ describe("snapshot store", () => {
       }
     });
     assert.deepEqual(redactions, []);
+  });
+
+  it("writes and reads content-backed snapshot entries without inlining raw content into the index", async () => {
+    const storeDir = await tempStore();
+    const contentSnapshot = {
+      ...snapshot("codex-baseline"),
+      manifest: {
+        ...snapshot("codex-baseline").manifest,
+        security: {
+          rawSecretsIncluded: false as const,
+          redactionPolicy: "content-backed" as const
+        }
+      },
+      content: [
+        {
+          evidenceId: "claude.project.settings",
+          sourcePath: "~/.codex/config.toml",
+          restorePath: "~/.codex/config.toml",
+          checksum: "sha256:codex-config",
+          byteLength: 14,
+          encoding: "utf8" as const,
+          storagePath: "content/claude.project.settings.txt",
+          captureStatus: "captured" as const,
+          content: "model = \"gpt-5\""
+        },
+        {
+          evidenceId: "secret",
+          sourcePath: "~/.codex/config.toml",
+          restorePath: "~/.codex/config.toml",
+          checksum: "sha256:secret",
+          byteLength: 18,
+          encoding: "utf8" as const,
+          storagePath: "content/secret.txt",
+          captureStatus: "omitted" as const,
+          reason: "secret_like_assignment"
+        }
+      ]
+    };
+
+    await writeSnapshot(storeDir, contentSnapshot, "codex");
+    const read = await readSnapshot(storeDir, "codex-baseline", "codex");
+    const contentIndex = read.content ?? [];
+
+    assert.equal(contentIndex.length, 2);
+    assert.equal("content" in contentIndex[0], false);
+    assert.equal(contentIndex[1].captureStatus, "omitted");
+    assert.equal(contentIndex[1].reason, "secret_like_assignment");
+    assert.equal(
+      await readSnapshotContent(storeDir, "codex-baseline", contentIndex[0], "codex"),
+      "model = \"gpt-5\""
+    );
+    await assert.rejects(
+      () => readSnapshotContent(storeDir, "codex-baseline", { ...contentIndex[0], storagePath: "../escape" }, "codex"),
+      /unsafe snapshot content path/i
+    );
+  });
+
+  it("omits secret-like Codex content during content-backed capture", async () => {
+    const root = await tempStore();
+    const projectPath = path.join(root, "project");
+    const homeDir = path.join(root, "home");
+    const storeDir = path.join(root, "store");
+    await import("node:fs/promises").then(({ mkdir }) => mkdir(path.join(homeDir, ".codex"), { recursive: true }));
+    await writeFile(path.join(homeDir, ".codex", "config.toml"), [
+      "[mcp_servers.docs]",
+      "command = \"docs\"",
+      "[mcp_servers.docs.env]",
+      "OPENAI_API_KEY = \"sk-secret\"",
+      ""
+    ].join("\n"), "utf8");
+
+    const state = await captureCurrentState({
+      projectPath,
+      homeDir,
+      storeDir,
+      agent: "codex",
+      scope: "user",
+      captureContent: true
+    }, "secret-baseline");
+
+    const configContent = state.snapshot.content?.find((entry) => entry.sourcePath === "~/.codex/config.toml");
+    assert.equal(configContent?.captureStatus, "omitted");
+    assert.equal(configContent?.reason, "secret_like_assignment");
+    assert.equal(configContent && "content" in configContent, false);
+    assert.doesNotMatch(JSON.stringify(state.snapshot), /sk-secret/);
   });
 });
 
