@@ -70,6 +70,7 @@ export function noticeForLatestVersion(latestVersion: string | undefined): Updat
 export function shouldCheckForUpdates(options: UpdateCheckOptions): boolean {
   const env = options.env ?? process.env;
   if (env.HEM_UPDATE_CHECK === "0" || env.NO_UPDATE_NOTIFIER === "1") return false;
+  if (env.HEM_UPDATE_CHECK !== "1") return false;
   if (env.CI === "true" || env.CI === "1") return false;
   if (options.stderrIsTty === false) return false;
   if (options.args.includes("--json")) return false;

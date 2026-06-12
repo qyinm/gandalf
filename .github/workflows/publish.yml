@@ -6,9 +6,14 @@ on:
     paths:
       - package.json
       - bun.lock
-      - packages/core/package.json
-      - apps/tui/package.json
-      - apps/cli/package.json
+      - README.md
+      - PRODUCT.md
+      - tsconfig*.json
+      - packages/core/**
+      - apps/tui/**
+      - apps/cli/**
+      - scripts/gate2-demo.mjs
+      - scripts/package-smoke.mjs
   workflow_dispatch:
 
 permissions:
@@ -37,10 +42,33 @@ jobs:
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Require version bump on publish-triggering push
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "No previous commit to compare; allowing initial publish."
+            exit 0
+          fi
+          if ! git cat-file -e "$BEFORE:apps/cli/package.json" 2>/dev/null; then
+            echo "Previous CLI package metadata not found; allowing publish."
+            exit 0
+          fi
+          PREVIOUS_VERSION="$(git show "$BEFORE:apps/cli/package.json" | node -e 'let data = ""; process.stdin.on("data", chunk => data += chunk); process.stdin.on("end", () => console.log(JSON.parse(data).version));')"
+          CURRENT_VERSION="${{ steps.package.outputs.version }}"
+          if [ "$PREVIOUS_VERSION" = "$CURRENT_VERSION" ]; then
+            echo "Publish-triggering source changes require an apps/cli/package.json version bump."
+            echo "Previous version: $PREVIOUS_VERSION"
+            echo "Current version:  $CURRENT_VERSION"
+            exit 1
+          fi
+
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run build
       - run: bun run test
+      - run: bun run package:smoke
 
       - name: Publish workspace packages
         env:

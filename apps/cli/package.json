@@ -1,7 +1,7 @@
 {
   "name": "@qxinm/hem",
-  "version": "0.3.3",
-  "description": "Time Machine for AI coding agent setups.",
+  "version": "0.3.4",
+  "description": "Local rollback safety net for Codex setup experiments.",
   "type": "module",
   "bin": {
     "hem": "dist/src/cli.js"
@@ -22,13 +22,15 @@
   },
   "keywords": [
     "ai-agent",
+    "codex",
+    "rollback",
     "mcp",
     "cli",
     "audit",
     "diff"
   ],
   "license": "MIT",
-  "author": "qyinm",
+  "author": "qxinm",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/qyinm/hem.git"
@@ -38,8 +40,8 @@
   },
   "homepage": "https://github.com/qyinm/hem#readme",
   "dependencies": {
-    "@qxinm/hem-core": "0.3.3",
-    "@qxinm/hem-tui": "0.3.3",
+    "@qxinm/hem-core": "0.3.4",
+    "@qxinm/hem-tui": "0.3.4",
     "react": "^19.2.6"
   },
   "engines": {

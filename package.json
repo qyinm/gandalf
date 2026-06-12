@@ -1,6 +1,6 @@
 {
   "name": "hem-workspace",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "description": "Workspace for Hem CLI, TUI, core, and desktop apps.",
   "type": "module",
@@ -17,7 +17,9 @@
     "desktop:dev": "bun run --cwd apps/desktop tauri dev",
     "desktop:build": "bun run --cwd apps/desktop tauri build",
     "prepublishOnly": "bun run check",
-    "dogfood:cross-machine": "bun scripts/cross-machine-dogfood.mjs"
+    "package:smoke": "bun scripts/package-smoke.mjs",
+    "dogfood:cross-machine": "bun scripts/cross-machine-dogfood.mjs",
+    "dogfood:gate2": "bun scripts/gate2-demo.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",

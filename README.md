@@ -22,6 +22,8 @@ hem restore --snapshot baseline --dry-run --agent codex --scope user --project .
 hem restore --snapshot baseline --apply --experimental --agent codex --scope user --project .
 ```
 
+Package note: `@qxinm/hem` is the npm package because `qxinm` is the publishing account. The source repository remains `qyinm/hem`.
+
 Hem also has broader experimental scan, TUI, restore, and bundle commands. Those are useful for dogfooding, but the current product test is Codex user-global rollback.
 
 ```bash
@@ -65,13 +67,15 @@ By default Hem:
 
 - reads local user and project agent configuration **only**
 - does **not** execute MCP commands, hooks, scripts, plugins, or agent tools
-- does **not** use the network
+- does **not** use the network unless you explicitly opt into an update check with `HEM_UPDATE_CHECK=1`
 - writes **only** to `~/.hem`, unless `--out` is explicit
 - omits raw secrets and raw `.env` values
 - does **not** follow symlinks
 - requires explicit apply flags before restoring content
 - creates rollback paths for restore operations where supported
 - reports missing local tools and env keys without installing packages or restoring secret values
+
+Update notices are off by default. To run a one-off npm registry check, use `HEM_UPDATE_CHECK=1 hem --help`.
 
 ---
 

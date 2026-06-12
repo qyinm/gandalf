@@ -23,21 +23,37 @@ describe("update check", () => {
     assert.match(notice.message, /bun install -g @qxinm\/hem/);
   });
 
-  it("skips checks that could break automation output", () => {
+  it("requires explicit opt-in before any network update check", () => {
     assert.equal(shouldCheckForUpdates({
-      args: ["scan", "--json"],
+      args: ["scan"],
       homeDir: "/tmp/home",
       stderrIsTty: true
     }), false);
     assert.equal(shouldCheckForUpdates({
       args: ["scan"],
       homeDir: "/tmp/home",
+      env: { HEM_UPDATE_CHECK: "1" },
+      stderrIsTty: true
+    }), true);
+  });
+
+  it("skips checks that could break automation output even when opted in", () => {
+    assert.equal(shouldCheckForUpdates({
+      args: ["scan", "--json"],
+      homeDir: "/tmp/home",
+      env: { HEM_UPDATE_CHECK: "1" },
+      stderrIsTty: true
+    }), false);
+    assert.equal(shouldCheckForUpdates({
+      args: ["scan"],
+      homeDir: "/tmp/home",
+      env: { HEM_UPDATE_CHECK: "1" },
       stderrIsTty: false
     }), false);
     assert.equal(shouldCheckForUpdates({
       args: ["scan"],
       homeDir: "/tmp/home",
-      env: { CI: "true" },
+      env: { CI: "true", HEM_UPDATE_CHECK: "1" },
       stderrIsTty: true
     }), false);
     assert.equal(shouldCheckForUpdates({

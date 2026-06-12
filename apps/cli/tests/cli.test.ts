@@ -138,6 +138,7 @@ describe("hem CLI scaffold", () => {
     assert.match(result.stdout, /hem timeline undo <id> --dry-run --json/);
     assert.match(result.stdout, /hem scan --project/);
     assert.match(result.stdout, /snapshot create --name baseline --metadata-only/);
+    assert.match(result.stdout, /preview a non-mutating restore plan/);
     assert.match(result.stdout, /diff baseline current --project/);
     assert.match(result.stdout, /audit current --project/);
     assert.match(result.stdout, /provenance current --project/);
@@ -309,6 +310,32 @@ describe("hem CLI scaffold", () => {
       diffJson.semanticChanges.some((change: { details?: { sourcePath?: string } }) => change.details?.sourcePath === "AGENTS.md"),
       false
     );
+
+    const dryRun = runCli([
+      "restore",
+      "--snapshot", "codex-baseline",
+      "--dry-run",
+      "--agent", "codex",
+      "--scope", "user",
+      "--project", project
+    ], project, env);
+    assert.equal(dryRun.status, 0, dryRun.stderr);
+    assert.match(dryRun.stdout, /hem restore dry-run/);
+    assert.match(dryRun.stdout, /Writable changes:/);
+    assert.match(dryRun.stdout, /No files were changed\./);
+    assert.throws(() => JSON.parse(dryRun.stdout));
+
+    const dryRunJson = runCli([
+      "restore",
+      "--snapshot", "codex-baseline",
+      "--dry-run",
+      "--agent", "codex",
+      "--scope", "user",
+      "--project", project,
+      "--json"
+    ], project, env);
+    assert.equal(dryRunJson.status, 0, dryRunJson.stderr);
+    assert.equal(JSON.parse(dryRunJson.stdout).sourceSnapshot, "codex-baseline");
 
     const restore = runCli([
       "restore",

@@ -1,6 +1,6 @@
 {
   "name": "@qxinm/hem-core",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Core domain logic for Hem.",
   "type": "module",
   "main": "dist/src/index.js",
