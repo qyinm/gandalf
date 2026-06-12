@@ -1,6 +1,6 @@
 {
   "name": "@qxinm/hem-tui",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Terminal UI surfaces for Hem.",
   "type": "module",
   "main": "dist/src/index.js",
@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.4.0",
-    "@qxinm/hem-core": "0.3.3",
+    "@qxinm/hem-core": "0.3.4",
     "ink": "^7.0.3",
     "ink-spinner": "^5.0.0",
     "react": "^19.2.6"

@@ -14,7 +14,11 @@ snapshot -> diff -> restore
 scope: --agent codex --scope user
 surface: ~/.codex/ user-global setup only
 distribution: CLI first
+public npm package: @qxinm/hem
+source repository: qyinm/hem
 ```
+
+The npm package intentionally uses the `qxinm` account because that is the publishing identity. GitHub source and issue tracking stay under `qyinm/hem`.
 
 In scope now:
 

@@ -2,7 +2,8 @@
  * Command-pattern implementation of the `restore` CLI command.
  *
  * v0.2 dry-run mode:
- *   restore --snapshot <name> --dry-run --project .   output a non-mutating restore plan as JSON
+ *   restore --snapshot <name> --dry-run --project .          output a human restore preview
+ *   restore --snapshot <name> --dry-run --project . --json   output the restore plan as JSON
  *
  * v0.2+ apply mode (requires --experimental):
  *   restore --snapshot <name> --apply --project .              apply restore items sequentially
@@ -10,7 +11,7 @@
  *   restore --snapshot <name> --apply --rollback --project .   apply then auto-rollback on failure
  */
 
-import { hasFlag, json, runtimeOptions, valueAfter } from "../cli-shared.js";
+import { hasFlag, json, valueAfter } from "../cli-shared.js";
 import { formatSnapError } from "@qxinm/hem-core/errors.js";
 import { detectTuiMode } from "@qxinm/hem-tui";
 import {
@@ -25,6 +26,7 @@ import {
   parseDryRunOutput
 } from "@qxinm/hem-core/restore.js";
 import { ensureStore, snapshotExists } from "@qxinm/hem-core/store.js";
+import type { RestorePlan, RestorePlanItem, RiskSummary, UnsupportedPlanItem } from "@qxinm/hem-core/types.js";
 import type { Command, CommandContext } from "./index.js";
 
 // ── Command export ─────────────────────────────────────────────
@@ -100,7 +102,7 @@ export const restoreCommand: Command = {
       return 1;
     }
 
-    // ── Dry-run mode: build plan and output as JSON ─────────
+    // ── Dry-run mode: build plan and output preview ─────────
     if (isDryRun) {
       const plan = await buildRestorePlan({
         sourceSnapshot: snapshotName,
@@ -112,7 +114,7 @@ export const restoreCommand: Command = {
         scope: options.scope
       });
 
-      process.stdout.write(json(plan));
+      process.stdout.write(hasFlag(args, "--json") ? json(plan) : formatRestorePlanPreview(plan));
       return 0;
     }
 
@@ -187,5 +189,75 @@ export const restoreCommand: Command = {
     return hasFailures ? 1 : 0;
   }
 };
+
+function formatRestorePlanPreview(plan: RestorePlan): string {
+  const lines = [
+    "hem restore dry-run",
+    "",
+    `Snapshot: ${plan.sourceSnapshot}`,
+    `Target project: ${plan.targetProject}`,
+    `Target home: ${plan.targetHome}`,
+    `Writable changes: ${plan.items.length}`,
+    `Unsupported items: ${plan.unsupportedItems.length}`,
+    `Risk: ${formatRiskSummary(plan.riskSummary)}`,
+    ""
+  ];
+
+  if (plan.items.length === 0 && plan.unsupportedItems.length === 0) {
+    lines.push("No restore actions needed.");
+  }
+
+  if (plan.items.length > 0) {
+    lines.push("Plan:");
+    plan.items.forEach((item, index) => {
+      lines.push(formatRestorePlanItem(item, index + 1));
+    });
+  }
+
+  if (plan.unsupportedItems.length > 0) {
+    lines.push("", "Unsupported:");
+    plan.unsupportedItems.forEach((item, index) => {
+      lines.push(formatUnsupportedPlanItem(item, index + 1));
+    });
+  }
+
+  lines.push(
+    "",
+    "No files were changed.",
+    "Use --apply --experimental to apply this plan.",
+    "Use --json for the machine-readable restore plan."
+  );
+
+  return `${lines.join("\n")}\n`;
+}
+
+function formatRestorePlanItem(item: RestorePlanItem, index: number): string {
+  const fields = [
+    `${index}. ${item.action} ${item.kind} at ${item.sourcePath}`,
+    `   risk: ${item.riskLevel}${item.needsConfirmation ? " (confirmation required)" : ""}`,
+    `   rollback: ${item.rollbackInstruction}`
+  ];
+  const changedFields = [
+    ...item.diff.changes,
+    ...item.diff.additions.map((field) => `+${field}`),
+    ...item.diff.removals.map((field) => `-${field}`)
+  ];
+  if (changedFields.length > 0) {
+    fields.push(`   fields: ${changedFields.join(", ")}`);
+  }
+  return fields.join("\n");
+}
+
+function formatUnsupportedPlanItem(item: UnsupportedPlanItem, index: number): string {
+  return `${index}. ${item.kind} at ${item.sourcePath}\n   reason: ${item.reason}`;
+}
+
+function formatRiskSummary(riskSummary: RiskSummary): string {
+  const ordered: Array<keyof RiskSummary> = ["critical", "high", "medium", "low", "none"];
+  const nonZero = ordered
+    .filter((risk) => riskSummary[risk] > 0)
+    .map((risk) => `${risk} ${riskSummary[risk]}`);
+  return nonZero.length > 0 ? nonZero.join(", ") : "none";
+}
 
 export default restoreCommand;

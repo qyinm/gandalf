@@ -12,7 +12,7 @@
     },
     "apps/cli": {
       "name": "@qxinm/hem",
-      "version": "0.3.3",
+      "version": "0.3.4",
       "bin": {
         "hem": "dist/src/cli.js",
       },
@@ -60,7 +60,7 @@
     },
     "apps/tui": {
       "name": "@qxinm/hem-tui",
-      "version": "0.3.3",
+      "version": "0.3.4",
       "dependencies": {
         "@clack/prompts": "^1.4.0",
         "@qxinm/hem-core": "workspace:*",
@@ -71,7 +71,7 @@
     },
     "packages/core": {
       "name": "@qxinm/hem-core",
-      "version": "0.3.3",
+      "version": "0.3.4",
     },
   },
   "packages": {

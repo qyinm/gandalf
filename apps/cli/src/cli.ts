@@ -45,7 +45,7 @@ const HELP = [
   '  hem doctor --project .',
   "",
   "Restore commands:",
-  '  hem restore --snapshot <name> --dry-run --agent codex --scope user --project . generate a non-mutating restore plan as JSON',
+  '  hem restore --snapshot <name> --dry-run --agent codex --scope user --project . preview a non-mutating restore plan',
   '  hem restore --snapshot <name> --apply --experimental --agent codex --scope user --project . apply restore items sequentially',
   '  hem restore --snapshot <name> --apply --fail-fast --project . stop on first failure during apply',
   '  hem restore --snapshot <name> --apply --rollback --project . apply then automatically rollback',

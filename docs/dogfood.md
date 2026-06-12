@@ -79,3 +79,22 @@ Validation checks:
 - TUI opens on `History > All changes`, keeps Current Setup above Timeline, and exposes `u=preview undo` without writing files
 
 See `docs/dogfood-reports/2026-06-08-main-daemon-timeline-dogfood.md` for the earlier daemon/timeline matrix that informed deferring background capture.
+
+## Gate 2 Codex rollback demo
+
+Command:
+
+```bash
+bun run dogfood:gate2
+```
+
+This records the launch-path rollback story in a disposable environment:
+
+- creates separate temp `HOME`, `HEM_STORE`, and project directories
+- writes a clean synthetic `~/.codex/config.toml`
+- saves a content-backed Codex user snapshot
+- simulates a bad harness install by zero-filling config and adding a synthetic Codex skill
+- runs diff, human dry-run restore preview, and restore apply
+- verifies the original config is restored and the synthetic skill is removed
+
+This is the primary Gate 2 demo path because it is deterministic and does not depend on a third-party installer changing behavior. A real LazyCodex/harness recording can be added later as a non-blocking appendix.
