@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
@@ -252,6 +252,77 @@ describe("hem CLI scaffold", () => {
     const reportJson = runCli(["report", "current", "--project", project, "--json"], project, env);
     assert.equal(reportJson.status, 0, reportJson.stderr);
     assert.equal(JSON.parse(reportJson.stdout).snapshot.manifest.name, "current");
+  });
+
+  it("runs Codex user-global snapshot diff restore rollback end-to-end", async () => {
+    const root = await makeTempRoot();
+    const project = join(root, "project");
+    const home = join(root, "home");
+    const store = join(root, "store");
+    const codexDir = join(home, ".codex");
+    const configPath = join(codexDir, "config.toml");
+    await mkdir(project, { recursive: true });
+    await mkdir(codexDir, { recursive: true });
+    await writeFile(join(project, "AGENTS.md"), "project instructions should stay out of scope", "utf8");
+
+    const originalConfig = "model = \"gpt-5\"\napproval_policy = \"on-request\"\n";
+    await writeFile(configPath, originalConfig, "utf8");
+    const env = { HOME: home, HEM_STORE: store };
+
+    const create = runCli([
+      "snapshot", "create",
+      "--name", "codex-baseline",
+      "--agent", "codex",
+      "--scope", "user",
+      "--project", project
+    ], project, env);
+    assert.equal(create.status, 0, create.stderr);
+    assert.match(create.stdout, /Created content-backed snapshot: codex-baseline/);
+    assert.match(create.stdout, /agent: codex/);
+    assert.match(create.stdout, /scope: user/);
+
+    const show = runCli(["snapshot", "show", "codex-baseline", "--agent", "codex", "--json"], project, env);
+    assert.equal(show.status, 0, show.stderr);
+    const shown = JSON.parse(show.stdout);
+    assert.equal(shown.manifest.security.redactionPolicy, "content-backed");
+    assert.equal(shown.content.some((entry: { sourcePath: string; captureStatus: string }) =>
+      entry.sourcePath === "~/.codex/config.toml" && entry.captureStatus === "captured"
+    ), true);
+
+    await writeFile(configPath, "", "utf8");
+    const addedSkill = join(codexDir, "skills", "unsafe", "SKILL.md");
+    await mkdir(join(addedSkill, ".."), { recursive: true });
+    await writeFile(addedSkill, "---\nname: unsafe\n---\n", "utf8");
+
+    const diff = runCli([
+      "diff", "codex-baseline", "current",
+      "--agent", "codex",
+      "--scope", "user",
+      "--project", project,
+      "--json"
+    ], project, env);
+    assert.equal(diff.status, 0, diff.stderr);
+    const diffJson = JSON.parse(diff.stdout);
+    assert.ok(diffJson.semanticChanges.some((change: { code: string }) => change.code === "AGENT_CONFIG_CHANGED"));
+    assert.ok(diffJson.semanticChanges.some((change: { code: string }) => change.code === "SKILL_ADDED"));
+    assert.equal(
+      diffJson.semanticChanges.some((change: { details?: { sourcePath?: string } }) => change.details?.sourcePath === "AGENTS.md"),
+      false
+    );
+
+    const restore = runCli([
+      "restore",
+      "--snapshot", "codex-baseline",
+      "--apply",
+      "--experimental",
+      "--agent", "codex",
+      "--scope", "user",
+      "--project", project
+    ], project, env);
+    assert.equal(restore.status, 0, restore.stderr);
+    assert.match(restore.stdout, /Successful:/);
+    assert.equal(await readFile(configPath, "utf8"), originalConfig);
+    await assert.rejects(() => stat(addedSkill), /ENOENT/);
   });
 
   it("runs doctor with JSON readiness output", async () => {

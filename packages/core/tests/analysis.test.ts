@@ -364,6 +364,6 @@ describe("analysis modules", () => {
     assert.match(markdown, /unsupported: 1/);
     assert.match(markdown, /## Provenance/);
     assert.match(markdown, /unsupported-codex/);
-    assert.match(markdown, /hem snapshot create --name baseline --metadata-only --project \./);
+    assert.match(markdown, /hem snapshot create --name baseline --agent codex --scope user --project \./);
   });
 });

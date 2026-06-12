@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { scanProject } from "./scan.js";
-import { readSnapshot } from "./store.js";
+import { readSnapshot, readSnapshotContent } from "./store.js";
 import {
   buildGraph
 } from "./graph.js";
@@ -27,6 +27,8 @@ import type {
   RollbackOptions,
   RollbackSummary,
   Severity,
+  Snapshot,
+  SnapshotContentEntry,
   UndoExecutor,
   UndoHandler,
   UndoHandlerRegistry,
@@ -95,6 +97,7 @@ export function parseDryRunOutput(input: string): ParseDryRunResult {
 
   const plan = parsed as Record<string, unknown>;
   const targetProject = typeof plan.targetProject === "string" ? plan.targetProject : undefined;
+  const targetHome = typeof plan.targetHome === "string" ? plan.targetHome : undefined;
 
   // Validate items array
   if (!Array.isArray(plan.items)) {
@@ -142,17 +145,16 @@ export function parseDryRunOutput(input: string): ParseDryRunResult {
 
     const order =
       orderLookup.get(planItem.itemId) ?? nextAppendOrder++;
-    const canRollback =
-      planItem.action === "create" || planItem.action === "update";
+    const canRollback = canRollbackAction(planItem.action);
 
     result.push({
       itemId: planItem.itemId,
       path: planItem.sourcePath,
       type: planItem.kind,
       source: planItem.sourcePath,
-      dest: resolvePlanDestination(planItem, targetProject),
+      dest: resolvePlanDestination(planItem, targetProject, targetHome),
       action: planItem.action,
-      status: "pending",
+      status: planItem.action === "unsupported" ? "unsupported" : "pending",
       executionOrder: order,
       rollbackState: null,
       targetContent: planItem.targetState?.value,
@@ -214,9 +216,12 @@ export async function buildRestorePlan(options: RestoreOptions): Promise<Restore
   const scan = await scanProject({
     projectPath: options.projectPath,
     homeDir: options.homeDir,
-    storeDir: options.storeDir
+    storeDir: options.storeDir,
+    agent: options.agent,
+    scope: options.scope
   });
   const currentGraph = buildGraph(scan.evidence);
+  const snapshotContent = await snapshotContentByEvidenceId(snapshot, options);
 
   // Build a meaningful plan from the diff
   const diff = diffGraphs(snapshot.graph, currentGraph);
@@ -228,26 +233,44 @@ export async function buildRestorePlan(options: RestoreOptions): Promise<Restore
   // Generate restore items from semantic changes
   for (const change of diff.semanticChanges) {
     // Find matching graph nodes for current/target state
-    const currentState = findMatchingEvidence(change, scan.evidence, false);
-    const targetState = findMatchingEvidence(change, snapshot.evidence, true);
+    const sourcePath = typeof change.details.sourcePath === "string" ? change.details.sourcePath : undefined;
+    const currentState = findMatchingEvidence(change, scan.evidence, sourcePath);
+    const targetState = withSnapshotContent(
+      findMatchingEvidence(change, snapshot.evidence, sourcePath),
+      snapshotContent
+    );
     const itemId = `${change.entityKind}:${change.entityName}:${randomUUID().slice(0, 8)}`;
-    const sourcePath = sourcePathForRestoreItem(
+    const restorePath = restorePathFromContent(targetState)
+      ?? restorePathFromContent(currentState)
+      ?? restorePathForEvidenceFile(targetState)
+      ?? restorePathForEvidenceFile(currentState)
+      ?? sourcePathForRestoreItem(
       change.entityKind,
       change.entityName,
       currentState,
       targetState,
-      typeof change.details.sourcePath === "string" ? change.details.sourcePath : undefined
+      sourcePath
     );
-    const action = restoreActionForChange(change.code);
+    const action = restoreActionForChange(change.code, currentState, targetState);
 
     const riskLevel = change.severity;
-    riskCounts[riskLevel]++;
+    if (action === "unsupported" || action === "skip") {
+      unsupportedItems.push({
+        itemId,
+        agent: agentForRestoreItem(currentState, targetState),
+        kind: change.entityKind,
+        sourcePath: restorePath,
+        reason: unsupportedReasonFor(change.code, change.entityKind, change.entityName, currentState, targetState)
+      });
+      continue;
+    }
 
+    riskCounts[riskLevel]++;
     items.push({
       itemId,
-      agent: resolveAgent(change.entityName),
+      agent: agentForRestoreItem(currentState, targetState),
       kind: change.entityKind,
-      sourcePath,
+      sourcePath: restorePath,
       dependsOn: [],
       action,
       currentState,
@@ -268,25 +291,13 @@ export async function buildRestorePlan(options: RestoreOptions): Promise<Restore
     executionOrder.push(itemId);
   }
 
-  // Mark unsupported items from the diff
-  for (const change of diff.semanticChanges) {
-    if (change.code === "UNSUPPORTED_STATE_CHANGED") {
-      unsupportedItems.push({
-        itemId: `unsupported:${change.entityName}:${randomUUID().slice(0, 8)}`,
-        agent: resolveAgent(change.entityName),
-        kind: change.entityKind,
-        sourcePath: resolveSourcePathByKind(change.entityKind, change.entityName),
-        reason: `Unsupported state change: ${change.entityKind} ${change.entityName}`
-      });
-    }
-  }
-
   const planId = `plan-${randomUUID().slice(0, 12)}`;
 
   return {
     planId,
     sourceSnapshot: options.sourceSnapshot,
     targetProject: options.projectPath,
+    targetHome: options.homeDir,
     createdAt: new Date().toISOString(),
     itemCount: items.length,
     riskSummary: riskCounts,
@@ -301,6 +312,89 @@ export async function buildRestorePlan(options: RestoreOptions): Promise<Restore
       generatedBy: "hem restore"
     }
   };
+}
+
+async function snapshotContentByEvidenceId(
+  snapshot: Snapshot,
+  options: RestoreOptions
+): Promise<Map<string, SnapshotContentEntry & { content: string }>> {
+  const content = new Map<string, SnapshotContentEntry & { content: string }>();
+  for (const entry of snapshot.content ?? []) {
+    if (entry.captureStatus !== "captured") {
+      continue;
+    }
+    const text = await readSnapshotContent(options.storeDir, options.sourceSnapshot, entry, options.agent);
+    content.set(entry.evidenceId, { ...entry, content: text });
+  }
+  return content;
+}
+
+function withSnapshotContent(
+  item: DiscoveredItem | null,
+  content: Map<string, SnapshotContentEntry & { content: string }>
+): DiscoveredItem | null {
+  if (!item) {
+    return null;
+  }
+  const entry = content.get(item.id);
+  if (!entry) {
+    return item;
+  }
+  return {
+    ...item,
+    value: entry.content,
+    metadata: {
+      ...(item.metadata ?? {}),
+      contentCaptureStatus: "captured",
+      contentRestorePath: entry.restorePath,
+      contentChecksum: entry.checksum
+    }
+  } as DiscoveredItem;
+}
+
+function restorePathFromContent(item: DiscoveredItem | null): string | undefined {
+  const restorePath = item?.metadata?.contentRestorePath;
+  return typeof restorePath === "string" && restorePath.length > 0 ? restorePath : undefined;
+}
+
+function restorePathForEvidenceFile(item: DiscoveredItem | null): string | undefined {
+  if (!item) {
+    return undefined;
+  }
+  if (item.kind === "skill") {
+    const entrypoint = typeof item.metadata?.entrypoint === "string" ? item.metadata.entrypoint : "SKILL.md";
+    return `${item.sourcePath}/${entrypoint}`;
+  }
+  if (item.sourcePath.startsWith("~/") || item.sourcePath.startsWith(".") || path.isAbsolute(item.sourcePath)) {
+    return item.sourcePath;
+  }
+  return undefined;
+}
+
+function agentForRestoreItem(currentState: DiscoveredItem | null, targetState: DiscoveredItem | null): AgentId {
+  return targetState?.agent ?? currentState?.agent ?? "unknown";
+}
+
+function unsupportedReasonFor(
+  code: string,
+  kind: EvidenceKind,
+  name: string,
+  currentState: DiscoveredItem | null,
+  targetState: DiscoveredItem | null
+): string {
+  if (!currentState && !targetState) {
+    return `Cannot map ${code} for ${kind} ${name} to captured evidence`;
+  }
+  if (targetState && targetState.metadata?.contentCaptureStatus === "omitted") {
+    return `Snapshot content for ${kind} ${name} was omitted: ${String(targetState.metadata.contentCaptureReason ?? "policy")}`;
+  }
+  if (kind === "env_key") {
+    return `Environment key values are key-inventory-only; ${code} cannot be restored without a user-supplied value`;
+  }
+  if (code === "UNSUPPORTED_STATE_CHANGED") {
+    return `Unsupported state change: ${kind} ${name}`;
+  }
+  return `No supported restore action for ${code} on ${kind} ${name}`;
 }
 
 // ── Apply execution loop (v0.2+ Phase-1) ───────────────────────
@@ -441,16 +535,38 @@ async function readCurrentContent(filePath: string): Promise<string | null> {
   }
 }
 
-/** Save previous content to item.rollbackState and write target content. */
-async function writeWithRollback(
+export async function writeFileAtomically(filePath: string, content: string): Promise<void> {
+  const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await fs.promises.writeFile(tempPath, content, "utf-8");
+    await fs.promises.rename(tempPath, filePath);
+  } catch (error) {
+    await fs.promises.rm(tempPath, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+async function applyFileMutation(
   item: RestoreItem,
   filePath: string,
-  content: string
+  content?: string,
+  mode?: number,
+  forceWrite = false
 ): Promise<void> {
   const prev = await readCurrentContent(filePath);
-  item.rollbackState = prev !== null ? { content: prev } : null;
+  item.rollbackState = { filePath, previousContent: prev };
+  if (item.action === "delete" && !forceWrite) {
+    await fs.promises.rm(filePath, { force: true });
+    return;
+  }
+  if (content === undefined) {
+    throw new Error(`Missing target content for ${item.itemId}`);
+  }
   await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.promises.writeFile(filePath, content, "utf-8");
+  await writeFileAtomically(filePath, content);
+  if (mode !== undefined) {
+    await fs.promises.chmod(filePath, mode);
+  }
 }
 
 /**
@@ -460,10 +576,7 @@ export const applyAgentConfig: ApplyHandler = async (item: RestoreItem): Promise
   const value = item.targetContent;
   const filePath = item.dest;
   const content = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  const prev = await readCurrentContent(filePath);
-  item.rollbackState = { filePath, previousContent: prev };
-  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.promises.writeFile(filePath, content + "\n", "utf-8");
+  await applyFileMutation(item, filePath, content);
 };
 
 /**
@@ -474,10 +587,7 @@ export const applyAgentInstruction: ApplyHandler = async (item: RestoreItem): Pr
     ? item.targetContent
     : String(item.targetContent ?? "");
   const filePath = item.dest;
-  const prev = await readCurrentContent(filePath);
-  item.rollbackState = { filePath, previousContent: prev };
-  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.promises.writeFile(filePath, content, "utf-8");
+  await applyFileMutation(item, filePath, content);
 };
 
 /**
@@ -488,11 +598,7 @@ export const applyHook: ApplyHandler = async (item: RestoreItem): Promise<void> 
     ? item.targetContent
     : String(item.targetContent ?? "");
   const filePath = item.dest;
-  const prev = await readCurrentContent(filePath);
-  item.rollbackState = { filePath, previousContent: prev };
-  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.promises.writeFile(filePath, content, "utf-8");
-  await fs.promises.chmod(filePath, 0o755);
+  await applyFileMutation(item, filePath, content, 0o755);
 };
 
 /**
@@ -501,7 +607,6 @@ export const applyHook: ApplyHandler = async (item: RestoreItem): Promise<void> 
  */
 export const applyMcpServer: ApplyHandler = async (item: RestoreItem): Promise<void> => {
   const mcpPath = mcpConfigPathForItem(item);
-  const mcpDir = path.dirname(mcpPath);
 
   let mcpConfig: Record<string, unknown> = { mcpServers: {} };
   const existing = await readCurrentContent(mcpPath);
@@ -516,13 +621,6 @@ export const applyMcpServer: ApplyHandler = async (item: RestoreItem): Promise<v
   const servers = mcpConfig.mcpServers as Record<string, unknown>;
   const prevEntry = servers[serverName] ?? null;
 
-  item.rollbackState = {
-    filePath: mcpPath,
-    previousContent: existing,
-    mcpPath,
-    previousEntry: prevEntry
-  };
-
   if (item.action === "delete") {
     delete servers[serverName];
   } else {
@@ -532,8 +630,12 @@ export const applyMcpServer: ApplyHandler = async (item: RestoreItem): Promise<v
     servers[serverName] = item.targetContent;
   }
 
-  await fs.promises.mkdir(mcpDir, { recursive: true });
-  await fs.promises.writeFile(mcpPath, JSON.stringify(mcpConfig, null, 2) + "\n", "utf-8");
+  await applyFileMutation(item, mcpPath, JSON.stringify(mcpConfig, null, 2) + "\n", undefined, true);
+  item.rollbackState = {
+    ...(item.rollbackState ?? {}),
+    mcpPath,
+    previousEntry: prevEntry
+  };
 };
 
 /**
@@ -541,25 +643,24 @@ export const applyMcpServer: ApplyHandler = async (item: RestoreItem): Promise<v
  */
 export const applyPermission: ApplyHandler = async (item: RestoreItem): Promise<void> => {
   const filePath = item.dest;
-  const targetDir = path.dirname(filePath);
-
   let settings: Record<string, unknown> = {};
   const existing = await readCurrentContent(filePath);
   if (existing) {
     try { settings = JSON.parse(existing); } catch { settings = {}; }
   }
 
-  item.rollbackState = { filePath, previousContent: existing };
-
   const permValue = item.targetContent;
   const permName = item.itemId.split(".").pop() ?? "permission";
   if (!settings.permissions || typeof settings.permissions !== "object") {
     settings.permissions = {};
   }
-  (settings.permissions as Record<string, unknown>)[permName] = permValue;
+  if (item.action === "delete") {
+    delete (settings.permissions as Record<string, unknown>)[permName];
+  } else {
+    (settings.permissions as Record<string, unknown>)[permName] = permValue;
+  }
 
-  await fs.promises.mkdir(targetDir, { recursive: true });
-  await fs.promises.writeFile(filePath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
+  await applyFileMutation(item, filePath, JSON.stringify(settings, null, 2) + "\n", undefined, true);
 };
 
 /**
@@ -572,16 +673,20 @@ export const applyEnvKey: ApplyHandler = async (item: RestoreItem): Promise<void
     ? item.targetContent : String(item.targetContent ?? "");
 
   const existing = await readCurrentContent(envPath);
-  item.rollbackState = { filePath: envPath, previousContent: existing };
 
   const lines = existing ? existing.split("\n") : [];
   const keyIndex = lines.findIndex((l) => l.trim().startsWith(`${keyName}=`));
-  const newLine = `${keyName}=${value}`;
-  if (keyIndex >= 0) { lines[keyIndex] = newLine; }
-  else { lines.push(newLine); }
+  if (item.action === "delete") {
+    if (keyIndex >= 0) {
+      lines.splice(keyIndex, 1);
+    }
+  } else {
+    const newLine = `${keyName}=${value}`;
+    if (keyIndex >= 0) { lines[keyIndex] = newLine; }
+    else { lines.push(newLine); }
+  }
 
-  await fs.promises.mkdir(path.dirname(envPath), { recursive: true });
-  await fs.promises.writeFile(envPath, lines.join("\n") + "\n", "utf-8");
+  await applyFileMutation(item, envPath, lines.filter((line, index) => line.length > 0 || index < lines.length - 1).join("\n") + "\n", undefined, true);
 };
 
 /**
@@ -591,10 +696,7 @@ export const applySkill: ApplyHandler = async (item: RestoreItem): Promise<void>
   const skillPath = item.dest;
   const content = typeof item.targetContent === "string"
     ? item.targetContent : JSON.stringify(item.targetContent, null, 2);
-  const prev = await readCurrentContent(skillPath);
-  item.rollbackState = { filePath: skillPath, previousContent: prev };
-  await fs.promises.mkdir(path.dirname(skillPath), { recursive: true });
-  await fs.promises.writeFile(skillPath, content + "\n", "utf-8");
+  await applyFileMutation(item, skillPath, content);
 };
 
 /** Default apply handler registry for known restore item types. */
@@ -639,18 +741,21 @@ export const restorePreviousContentUndoHandler: UndoHandler = async (
     if (prevContent === null) {
       await fs.promises.rm(filePath, { force: true }).catch(() => {});
     } else {
-      await fs.promises.writeFile(filePath, prevContent, "utf-8");
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+      await writeFileAtomically(filePath, prevContent);
     }
   } else if (mcpPath) {
     const savedConfig = state.mcpConfig as Record<string, unknown> | null;
     if (savedConfig) {
-      await fs.promises.writeFile(mcpPath, JSON.stringify(savedConfig, null, 2) + "\n", "utf-8");
+      await fs.promises.mkdir(path.dirname(mcpPath), { recursive: true });
+      await writeFileAtomically(mcpPath, JSON.stringify(savedConfig, null, 2) + "\n");
     }
   } else if (envPath) {
     if (prevContent === null) {
       await fs.promises.rm(envPath, { force: true }).catch(() => {});
     } else {
-      await fs.promises.writeFile(envPath, prevContent, "utf-8");
+      await fs.promises.mkdir(path.dirname(envPath), { recursive: true });
+      await writeFileAtomically(envPath, prevContent);
     }
   }
 };
@@ -1021,10 +1126,10 @@ function buildRollbackSteps(items: RestorePlanItem[]): Array<{ itemId: string; a
   return items
     .filter((item) => canRollbackAction(item.action))
     .map((item) => ({
-	      itemId: item.itemId,
-	      action: rollbackActionFor(item.action),
-	      instruction: item.rollbackInstruction
-	    }));
+      itemId: item.itemId,
+      action: rollbackActionFor(item.action),
+      instruction: item.rollbackInstruction
+    }));
 }
 
 function rollbackActionFor(action: RestoreAction): string {
@@ -1033,19 +1138,44 @@ function rollbackActionFor(action: RestoreAction): string {
   return "revert";
 }
 
-function restoreActionForChange(code: string): RestoreAction {
+function restoreActionForChange(
+  code: string,
+  currentState: DiscoveredItem | null,
+  targetState: DiscoveredItem | null
+): RestoreAction {
   switch (code) {
+    case "AGENT_CONFIG_ADDED":
+    case "SKILL_ADDED":
+    case "HOOK_ADDED":
+      return currentState ? "delete" : "unsupported";
     case "MCP_ADDED":
-      return "delete";
+      return currentState && isJsonMcpState(currentState) ? "delete" : "unsupported";
+    case "AGENT_CONFIG_REMOVED":
+    case "SKILL_REMOVED":
+    case "HOOK_REMOVED":
+      return targetState ? "create" : "unsupported";
     case "MCP_REMOVED":
-      return "create";
+      return targetState && isJsonMcpState(targetState) ? "create" : "unsupported";
+    case "AGENT_CONFIG_CHANGED":
+    case "HOOK_CHANGED":
+    case "PERMISSION_CHANGED":
+    case "INSTRUCTION_CHANGED":
+    case "SKILL_EXECUTABLE_APPEARED":
+      return targetState ? "update" : "unsupported";
     case "MCP_CHANGED":
-      return "update";
+      return targetState && isJsonMcpState(targetState) ? "update" : "unsupported";
     case "ENV_KEY_ADDED":
-      return "create";
+      return currentState ? "delete" : "unsupported";
+    case "ENV_KEY_REMOVED":
+    case "UNSUPPORTED_STATE_CHANGED":
+      return "unsupported";
     default:
-      return "skip";
+      return "unsupported";
   }
+}
+
+function isJsonMcpState(item: DiscoveredItem): boolean {
+  return item.sourcePath.endsWith(".mcp.json") || item.sourcePath.endsWith("/mcp.json");
 }
 
 function rollbackInstructionFor(action: RestoreAction, kind: EvidenceKind, name: string): string {
@@ -1075,8 +1205,14 @@ function isVirtualSourcePath(sourcePath: string): boolean {
   return /^[a-z_]+:/i.test(sourcePath);
 }
 
-function resolvePlanDestination(planItem: RestorePlanItem, targetProject?: string): string {
-  if (!targetProject || path.isAbsolute(planItem.sourcePath) || planItem.sourcePath.startsWith("~") || isVirtualSourcePath(planItem.sourcePath)) {
+function resolvePlanDestination(planItem: RestorePlanItem, targetProject?: string, targetHome?: string): string {
+  if (targetHome && planItem.sourcePath === "~") {
+    return targetHome;
+  }
+  if (targetHome && planItem.sourcePath.startsWith("~/")) {
+    return path.resolve(targetHome, planItem.sourcePath.slice(2));
+  }
+  if (!targetProject || path.isAbsolute(planItem.sourcePath) || isVirtualSourcePath(planItem.sourcePath)) {
     return planItem.sourcePath;
   }
 
@@ -1085,6 +1221,10 @@ function resolvePlanDestination(planItem: RestorePlanItem, targetProject?: strin
 
 function restoreItemMetadata(planItem: RestorePlanItem): Record<string, unknown> | undefined {
   const metadata: Record<string, unknown> = {};
+  const restorePath = restorePathFromContent(planItem.targetState) ?? restorePathFromContent(planItem.currentState);
+  if (restorePath) {
+    metadata.restorePath = restorePath;
+  }
 
   if (planItem.kind === "mcp_server") {
     const serverName = planItem.targetState?.name ?? planItem.currentState?.name;
@@ -1092,6 +1232,9 @@ function restoreItemMetadata(planItem: RestorePlanItem): Record<string, unknown>
       metadata.serverName = serverName;
     }
     metadata.sourcePath = planItem.sourcePath;
+    if (planItem.sourcePath.endsWith(".mcp.json") || planItem.sourcePath.endsWith("/mcp.json")) {
+      metadata.mcpPath = planItem.sourcePath;
+    }
   }
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;
@@ -1099,7 +1242,7 @@ function restoreItemMetadata(planItem: RestorePlanItem): Record<string, unknown>
 
 function mcpConfigPathForItem(item: RestoreItem): string {
   const metadataPath = item.metadata?.mcpPath;
-  if (typeof metadataPath === "string" && metadataPath.length > 0) {
+  if (typeof metadataPath === "string" && metadataPath.length > 0 && path.isAbsolute(metadataPath)) {
     return metadataPath;
   }
 
@@ -1147,8 +1290,20 @@ function resolveAgent(name: string): AgentId {
 function findMatchingEvidence(
   change: { entityName: string; entityKind: string },
   evidence: DiscoveredItem[],
-  target: boolean
+  sourcePath?: string
 ): DiscoveredItem | null {
+  if (sourcePath) {
+    for (const item of evidence) {
+      if (item.kind === change.entityKind && item.name === change.entityName && item.sourcePath === sourcePath) {
+        return item;
+      }
+    }
+    for (const item of evidence) {
+      if (item.kind === change.entityKind && item.sourcePath === sourcePath) {
+        return item;
+      }
+    }
+  }
   // First pass: match both kind AND name (exact match)
   for (const item of evidence) {
     if (item.kind === change.entityKind && item.name === change.entityName) {

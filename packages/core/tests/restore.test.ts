@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, it } from "node:test";
 import {
+  applyAgentConfig,
   applyRestoreItems,
   applyWithRollback,
+  buildRestorePlan,
   clearAppliedItems,
+  createDefaultApplyExecutor,
+  defaultApplyHandlerRegistry,
   createDefaultUndoExecutor,
   defaultUndoHandlerRegistry,
   formatApplySummary,
@@ -11,10 +18,13 @@ import {
   getAppliedItems,
   getSuccessfulItems,
   noopUndoHandler,
+  parseDryRunOutput,
   restorePreviousStateUndoHandler,
   rollbackAppliedItems,
   sortByDescendingOrder
 } from "../src/restore.js";
+import { captureCurrentState } from "../src/current-state.js";
+import { writeSnapshot } from "../src/store.js";
 import type {
   ApplyOptions,
   ApplySummary,
@@ -27,6 +37,181 @@ import type {
   UndoHandler,
   UndoHandlerRegistry
 } from "../src/types.js";
+
+async function makeRestoreSandbox(): Promise<{ projectPath: string; homeDir: string; storeDir: string }> {
+  const root = await mkdtemp(path.join(tmpdir(), "hem-restore-"));
+  const projectPath = path.join(root, "project");
+  const homeDir = path.join(root, "home");
+  const storeDir = path.join(root, "store");
+  await mkdir(projectPath, { recursive: true });
+  await mkdir(homeDir, { recursive: true });
+  return { projectPath, homeDir, storeDir };
+}
+
+describe("content-backed Codex user restore planning", () => {
+  it("restores a zero-filled Codex config byte-for-byte through targetHome", async () => {
+    const { projectPath, homeDir, storeDir } = await makeRestoreSandbox();
+    const configPath = path.join(homeDir, ".codex", "config.toml");
+    const original = "model = \"gpt-5\"\napproval_policy = \"on-request\"\n";
+    await mkdir(path.dirname(configPath), { recursive: true });
+    await writeFile(configPath, original, "utf8");
+
+    const state = await captureCurrentState({
+      projectPath,
+      homeDir,
+      storeDir,
+      agent: "codex",
+      scope: "user",
+      captureContent: true
+    }, "baseline");
+    await writeSnapshot(storeDir, state.snapshot, "codex");
+    await writeFile(configPath, "", "utf8");
+
+    const plan = await buildRestorePlan({
+      sourceSnapshot: "baseline",
+      projectPath,
+      homeDir,
+      storeDir,
+      dryRun: true,
+      agent: "codex",
+      scope: "user"
+    });
+    const configItem = plan.items.find((item) => item.kind === "agent_config");
+
+    assert.ok(configItem);
+    assert.equal(configItem.action, "update");
+    assert.equal(configItem.agent, "codex");
+    assert.equal(configItem.sourcePath, "~/.codex/config.toml");
+    assert.equal(plan.targetHome, homeDir);
+
+    const parsed = parseDryRunOutput(JSON.stringify(plan));
+    assert.deepEqual(parsed.errors, []);
+    const executableConfigItem = parsed.items.find((item) => item.type === "agent_config");
+    assert.equal(executableConfigItem?.dest, configPath);
+    assert.equal(executableConfigItem?.targetContent, original);
+
+    const summary = await applyRestoreItems(
+      parsed.items,
+      createDefaultApplyExecutor(defaultApplyHandlerRegistry()),
+      { failFast: true }
+    );
+
+    assert.equal(summary.failed, 0);
+    assert.equal(await readFile(configPath, "utf8"), original);
+  });
+
+  it("deletes a Codex user skill added after the baseline", async () => {
+    const { projectPath, homeDir, storeDir } = await makeRestoreSandbox();
+    await mkdir(path.join(homeDir, ".codex"), { recursive: true });
+    await writeFile(path.join(homeDir, ".codex", "config.toml"), "model = \"gpt-5\"\n", "utf8");
+    const state = await captureCurrentState({
+      projectPath,
+      homeDir,
+      storeDir,
+      agent: "codex",
+      scope: "user",
+      captureContent: true
+    }, "baseline");
+    await writeSnapshot(storeDir, state.snapshot, "codex");
+
+    const skillFile = path.join(homeDir, ".codex", "skills", "unsafe", "SKILL.md");
+    await mkdir(path.dirname(skillFile), { recursive: true });
+    await writeFile(skillFile, "---\nname: unsafe\n---\n", "utf8");
+
+    const plan = await buildRestorePlan({
+      sourceSnapshot: "baseline",
+      projectPath,
+      homeDir,
+      storeDir,
+      dryRun: true,
+      agent: "codex",
+      scope: "user"
+    });
+    const skillItem = plan.items.find((item) => item.kind === "skill" && item.action === "delete");
+
+    assert.ok(skillItem);
+    assert.equal(skillItem.agent, "codex");
+    assert.equal(skillItem.sourcePath, "~/.codex/skills/unsafe/SKILL.md");
+
+    const parsed = parseDryRunOutput(JSON.stringify(plan));
+    const summary = await applyRestoreItems(
+      parsed.items,
+      createDefaultApplyExecutor(defaultApplyHandlerRegistry()),
+      { failFast: true }
+    );
+
+    assert.equal(summary.failed, 0);
+    await assert.rejects(() => stat(skillFile), /ENOENT/);
+  });
+
+  it("marks Codex TOML MCP changes unsupported while config bytes carry the restore", async () => {
+    const { projectPath, homeDir, storeDir } = await makeRestoreSandbox();
+    const configPath = path.join(homeDir, ".codex", "config.toml");
+    await mkdir(path.dirname(configPath), { recursive: true });
+    await writeFile(configPath, [
+      "model = \"gpt-5\"",
+      "[mcp_servers.docs]",
+      "command = \"docs-old\"",
+      ""
+    ].join("\n"), "utf8");
+    const state = await captureCurrentState({
+      projectPath,
+      homeDir,
+      storeDir,
+      agent: "codex",
+      scope: "user",
+      captureContent: true
+    }, "baseline");
+    await writeSnapshot(storeDir, state.snapshot, "codex");
+
+    await writeFile(configPath, [
+      "model = \"gpt-5\"",
+      "[mcp_servers.docs]",
+      "command = \"docs-new\"",
+      ""
+    ].join("\n"), "utf8");
+
+    const plan = await buildRestorePlan({
+      sourceSnapshot: "baseline",
+      projectPath,
+      homeDir,
+      storeDir,
+      dryRun: true,
+      agent: "codex",
+      scope: "user"
+    });
+
+    assert.ok(plan.items.some((item) => item.kind === "agent_config" && item.action === "update"));
+    assert.ok(
+      plan.unsupportedItems.some(
+        (item) =>
+          item.kind === "mcp_server" &&
+          item.agent === "codex" &&
+          item.reason.includes("No supported restore action")
+      )
+    );
+  });
+
+  it("writes agent config content exactly without appending a newline", async () => {
+    const { homeDir } = await makeRestoreSandbox();
+    const configPath = path.join(homeDir, ".codex", "config.toml");
+    await applyAgentConfig({
+      itemId: "config",
+      path: "~/.codex/config.toml",
+      type: "agent_config",
+      source: "~/.codex/config.toml",
+      dest: configPath,
+      action: "update",
+      status: "pending",
+      executionOrder: 1,
+      rollbackState: null,
+      targetContent: "model = \"gpt-5\"",
+      canRollback: true
+    });
+
+    assert.equal(await readFile(configPath, "utf8"), "model = \"gpt-5\"");
+  });
+});
 
 // ── Tests for per-item undo dispatch ──────────────────────────────
 

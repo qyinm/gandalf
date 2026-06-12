@@ -147,7 +147,7 @@ export function renderMarkdownReport(input: ReportInput): string {
   lines.push(
     "",
     "## Next",
-    "- `hem snapshot create --name baseline --metadata-only --project .`"
+    "- `hem snapshot create --name baseline --agent codex --scope user --project .`"
   );
 
   return `${lines.join("\n")}\n`;

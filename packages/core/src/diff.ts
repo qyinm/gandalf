@@ -1,6 +1,9 @@
 import type { GraphNode } from "./types.js";
 
 export type SemanticChangeCode =
+  | "AGENT_CONFIG_ADDED"
+  | "AGENT_CONFIG_REMOVED"
+  | "AGENT_CONFIG_CHANGED"
   | "MCP_ADDED"
   | "MCP_REMOVED"
   | "MCP_CHANGED"
@@ -136,6 +139,16 @@ export function diffGraphs(baselineGraph: GraphNode[], currentGraph: GraphNode[]
           details: { changedFields: [], sourcePath: after.sourcePath }
         });
       }
+      if (after.entityKind === "agent_config") {
+        semanticChanges.push({
+          code: "AGENT_CONFIG_ADDED",
+          entityKind: after.entityKind,
+          entityName: after.entityName,
+          severity: "medium",
+          after: after.effectiveValue,
+          details: { changedFields: [], sourcePath: after.sourcePath }
+        });
+      }
       if (after.entityKind === "env_key") {
         semanticChanges.push({
           code: "ENV_KEY_ADDED",
@@ -221,6 +234,18 @@ export function diffGraphs(baselineGraph: GraphNode[], currentGraph: GraphNode[]
       });
     }
 
+    if (after.entityKind === "agent_config" && stable(before.effectiveValue) !== stable(after.effectiveValue)) {
+      semanticChanges.push({
+        code: "AGENT_CONFIG_CHANGED",
+        entityKind: after.entityKind,
+        entityName: after.entityName,
+        severity: "medium",
+        before: before.effectiveValue,
+        after: after.effectiveValue,
+        details: { changedFields: [], sourcePath: after.sourcePath }
+      });
+    }
+
     if (after.entityKind === "hook" && stable(before.effectiveValue) !== stable(after.effectiveValue)) {
       semanticChanges.push({
         code: "HOOK_CHANGED",
@@ -302,6 +327,16 @@ export function diffGraphs(baselineGraph: GraphNode[], currentGraph: GraphNode[]
     if (before.entityKind === "mcp_server") {
       semanticChanges.push({
         code: "MCP_REMOVED",
+        entityKind: before.entityKind,
+        entityName: before.entityName,
+        severity: "medium",
+        before: before.effectiveValue,
+        details: { changedFields: [], sourcePath: before.sourcePath }
+      });
+    }
+    if (before.entityKind === "agent_config") {
+      semanticChanges.push({
+        code: "AGENT_CONFIG_REMOVED",
         entityKind: before.entityKind,
         entityName: before.entityName,
         severity: "medium",

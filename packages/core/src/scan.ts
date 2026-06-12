@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import type { DiscoveredItem } from "./types.js";
+import type { AgentId, DiscoveredItem, EvidenceScope } from "./types.js";
 import { unsafeDiscoveredItemFromScannerOutput } from "./scanners/base.js";
 import { defaultScannerPlugins } from "./scanners/index.js";
 import { scanTargets } from "./scanners/filesystem.js";
@@ -23,6 +23,8 @@ export interface ScanProjectOptions {
   homeDir: string;
   storeDir: string;
   explain?: boolean;
+  agent?: AgentId;
+  scope?: EvidenceScope;
 }
 
 export async function scanProject(options: ScanProjectOptions): Promise<ScanResult> {
@@ -34,16 +36,28 @@ export async function scanProject(options: ScanProjectOptions): Promise<ScanResu
     homeDir,
     storeDir: options.storeDir,
     explain: options.explain,
+    scope: options.scope,
   };
 
   for (const plugin of defaultScannerPlugins()) {
+    if (options.agent && plugin.agentId !== options.agent) {
+      continue;
+    }
+
     if (plugin.scan) {
       evidence.push(...(await plugin.scan(context)).map(unsafeDiscoveredItemFromScannerOutput));
       continue;
     }
 
-    evidence.push(...await scanTargets(plugin.targets(projectPath, homeDir)));
+    const targets = plugin.targets(projectPath, homeDir)
+      .filter((target) => options.scope === undefined || target.scope === options.scope);
+    evidence.push(...await scanTargets(targets));
   }
+
+  const filteredEvidence = evidence.filter((item) =>
+    (options.agent === undefined || item.agent === options.agent) &&
+    (options.scope === undefined || item.scope === options.scope)
+  );
 
   return {
     trust: {
@@ -52,7 +66,7 @@ export async function scanProject(options: ScanProjectOptions): Promise<ScanResu
       commandsExecuted: [],
       storeWriteLocation: options.storeDir,
     },
-    evidence,
+    evidence: filteredEvidence,
     blindSpots: [
       "Remote MCP server behavior cannot be captured",
       "Provider-side model routing cannot be verified",

@@ -3,6 +3,7 @@
  *
  * Subcommands:
  *   snapshot create --name <name> --metadata-only --project .
+ *   snapshot create --name <name> --agent codex --scope user --project .
  *   snapshot list
  *   snapshot show <name>  show <name> [--json]
  */
@@ -24,7 +25,7 @@ import type { Command, CommandContext } from "./index.js";
 
 export const snapshotCommand: Command = {
   name: "snapshot",
-  description: "Create, list, and show metadata-only snapshots.",
+  description: "Create, list, and show snapshots.",
 
   async execute(ctx: CommandContext): Promise<number> {
     const { args, options } = ctx;
@@ -50,24 +51,30 @@ export const snapshotCommand: Command = {
         );
         return 1;
       }
-      if (!hasFlag(args, "--metadata-only")) {
+      const metadataOnly = hasFlag(args, "--metadata-only");
+      const contentBackedCodexUser = options.agent === "codex" && options.scope === "user";
+      if (!metadataOnly && !contentBackedCodexUser) {
         process.stderr.write(
           formatSnapError({
             code: "HEM_METADATA_ONLY_REQUIRED",
             problem: "Snapshots are metadata-only.",
             cause: "`snapshot create` was called without `--metadata-only`.",
-            fix: "Add `--metadata-only`; raw content snapshot storage is not supported."
+            fix: "Add `--metadata-only`, or use `--agent codex --scope user` for the Codex rollback safety-net path."
           })
         );
         return 1;
       }
 
-      await captureTimelineSnapshot(options, {
+      await captureTimelineSnapshot({
+        ...options,
+        captureContent: !metadataOnly && contentBackedCodexUser
+      }, {
         snapshotName: name,
         title: name
       });
-      process.stdout.write(`Created metadata-only snapshot: ${name}`);
+      process.stdout.write(`Created ${metadataOnly ? "metadata-only" : "content-backed"} snapshot: ${name}`);
       if (options.agent) process.stdout.write(` (agent: ${options.agent})`);
+      if (options.scope) process.stdout.write(` (scope: ${options.scope})`);
       process.stdout.write("\n");
       return 0;
     }

@@ -129,6 +129,10 @@ function titleForDiff(diff: GraphDiff | undefined, agent?: AgentId): string {
   }
 
   switch (first.code) {
+    case "AGENT_CONFIG_ADDED":
+    case "AGENT_CONFIG_REMOVED":
+    case "AGENT_CONFIG_CHANGED":
+      return scopedTitle("update config", agent);
     case "MCP_ADDED":
       return scopedTitle(`add ${first.entityName} mcp`, agent);
     case "MCP_REMOVED":

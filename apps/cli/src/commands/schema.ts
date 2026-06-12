@@ -97,6 +97,7 @@ const SCHEMA = {
         code: {
           type: "string",
           enum: [
+            "AGENT_CONFIG_ADDED", "AGENT_CONFIG_REMOVED", "AGENT_CONFIG_CHANGED",
             "MCP_ADDED", "MCP_REMOVED", "MCP_CHANGED",
             "SKILL_ADDED", "SKILL_REMOVED",
             "HOOK_ADDED", "HOOK_REMOVED", "HOOK_CHANGED",

@@ -108,7 +108,8 @@ export const restoreCommand: Command = {
         homeDir: options.homeDir,
         storeDir: options.storeDir,
         dryRun: true,
-        agent: options.agent
+        agent: options.agent,
+        scope: options.scope
       });
 
       process.stdout.write(json(plan));
@@ -135,7 +136,8 @@ export const restoreCommand: Command = {
       homeDir: options.homeDir,
       storeDir: options.storeDir,
       dryRun: true,
-      agent: options.agent
+      agent: options.agent,
+      scope: options.scope
     });
 
     // Serialize the plan and parse it into executable RestoreItems
