@@ -2,6 +2,8 @@
 
 Rollback safety net for Codex setup experiments.
 
+![Hem product demo](demo/product-demo/product-demo.gif)
+
 Hem's current wedge is narrow on purpose: save, diff, and restore your user-global Codex setup under `~/.codex/` after an agent, MCP, hook, or skill experiment goes wrong.
 
 Use it before you let Codex or another agent change Codex config, install skills, or edit hooks. The broad multi-agent, profile, desktop, team, and cloud product is future direction, not the Gate 2 CLI path.
