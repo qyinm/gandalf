@@ -3,6 +3,7 @@ node_modules/
 *.log
 .DS_Store
 docs/private
+TODOS.md
 demo/*.gif
 demo/*.mp4
 demo/*.webm
