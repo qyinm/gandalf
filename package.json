@@ -19,7 +19,10 @@
     "prepublishOnly": "bun run check",
     "package:smoke": "bun scripts/package-smoke.mjs",
     "dogfood:cross-machine": "bun scripts/cross-machine-dogfood.mjs",
-    "dogfood:gate2": "bun scripts/gate2-demo.mjs"
+    "dogfood:gate2": "bun scripts/gate2-demo.mjs",
+    "demo:pain:vhs": "node scripts/run-gate2-vhs.mjs demo/pain.tape",
+    "demo:fix:vhs": "node scripts/run-gate2-vhs.mjs demo/fix.tape",
+    "demo:gate2:vhs": "bun run demo:pain:vhs && bun run demo:fix:vhs"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",
