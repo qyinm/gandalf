@@ -6,3 +6,7 @@ docs/private
 demo/*.gif
 demo/*.mp4
 demo/*.webm
+demo/**/*.gif
+demo/**/*.mp4
+demo/**/*.webm
+demo/**/renders/
