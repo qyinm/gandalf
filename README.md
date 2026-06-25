@@ -28,6 +28,8 @@ Package note: `@qxinm/hem` is the npm package because `qxinm` is the publishing 
 
 Hem also has broader experimental scan, TUI, restore, and bundle commands. Those are useful for dogfooding, but the current product test is Codex user-global rollback.
 
+**Rust engine:** The canonical engine lives in `crates/hem-core` with `crates/hem-cli` as the Rust CLI. Build and test with `cargo test --workspace`. The Bun `packages/core` and `apps/cli` stacks are deprecated reference implementations.
+
 ```bash
 # Machine A: export your setup
 hem bundle export --name baseline --out daily.hem --project .

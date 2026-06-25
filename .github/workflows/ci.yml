@@ -20,7 +20,7 @@ jobs:
         with:
           workspaces: .
 
-      - run: cargo test -p hem-core -p hem-cli
+      - run: cargo test --workspace
       - run: cargo check -p hem-desktop
 
   test:
