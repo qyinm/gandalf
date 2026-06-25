@@ -1,5 +1,4 @@
-use hem_core::ENGINE_ID;
-
 fn main() {
-    eprintln!("{ENGINE_ID} cli scaffold");
+    let code = hem_cli::run(std::env::args().skip(1));
+    std::process::exit(code);
 }

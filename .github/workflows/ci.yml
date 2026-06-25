@@ -20,7 +20,8 @@ jobs:
         with:
           workspaces: .
 
-      - run: cargo test -p hem-core
+      - run: cargo test -p hem-core -p hem-cli
+      - run: cargo check -p hem-desktop
 
   test:
     runs-on: ubuntu-latest

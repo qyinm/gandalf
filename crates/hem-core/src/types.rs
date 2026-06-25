@@ -34,7 +34,13 @@ impl<'de> Deserialize<'de> for AgentId {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Ok(match value.as_str() {
+        Ok(AgentId::from_str(&value))
+    }
+}
+
+impl AgentId {
+    pub fn from_str(value: &str) -> Self {
+        match value {
             "claude-code" => AgentId::ClaudeCode,
             "codex" => AgentId::Codex,
             "cursor" => AgentId::Cursor,
@@ -43,7 +49,19 @@ impl<'de> Deserialize<'de> for AgentId {
             "project" => AgentId::Project,
             "unknown" => AgentId::Unknown,
             _ => AgentId::Unknown,
-        })
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AgentId::ClaudeCode => "claude-code",
+            AgentId::Codex => "codex",
+            AgentId::Cursor => "cursor",
+            AgentId::Opencode => "opencode",
+            AgentId::PiAgent => "pi-agent",
+            AgentId::Project => "project",
+            AgentId::Unknown => "unknown",
+        }
     }
 }
 
@@ -60,6 +78,23 @@ pub enum EvidenceKind {
     Hook,
     Symlink,
     Unsupported,
+}
+
+impl EvidenceKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            EvidenceKind::AgentConfig => "agent_config",
+            EvidenceKind::AgentInstruction => "agent_instruction",
+            EvidenceKind::McpServer => "mcp_server",
+            EvidenceKind::Permission => "permission",
+            EvidenceKind::Skill => "skill",
+            EvidenceKind::Extension => "extension",
+            EvidenceKind::EnvKey => "env_key",
+            EvidenceKind::Hook => "hook",
+            EvidenceKind::Symlink => "symlink",
+            EvidenceKind::Unsupported => "unsupported",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -80,6 +115,17 @@ pub enum EvidenceScope {
     Unknown,
 }
 
+impl EvidenceScope {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            EvidenceScope::User => "user",
+            EvidenceScope::Project => "project",
+            EvidenceScope::Managed => "managed",
+            EvidenceScope::Unknown => "unknown",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CaptureStatus {
@@ -89,6 +135,19 @@ pub enum CaptureStatus {
     ParseFailed,
     UnsafeToExport,
     Unsupported,
+}
+
+impl CaptureStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CaptureStatus::Captured => "captured",
+            CaptureStatus::Redacted => "redacted",
+            CaptureStatus::Omitted => "omitted",
+            CaptureStatus::ParseFailed => "parse_failed",
+            CaptureStatus::UnsafeToExport => "unsafe_to_export",
+            CaptureStatus::Unsupported => "unsupported",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -373,4 +432,214 @@ pub struct RestoreItem {
     pub metadata: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub apply_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeOptions {
+    pub project_path: String,
+    pub home_dir: String,
+    pub store_dir: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<EvidenceScope>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capture_content: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreOptions {
+    pub source_snapshot: String,
+    pub project_path: String,
+    pub home_dir: String,
+    pub store_dir: String,
+    pub dry_run: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<EvidenceScope>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScanTrust {
+    pub read_only: bool,
+    pub network: String,
+    pub commands_executed: Vec<String>,
+    pub store_write_location: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanResult {
+    pub trust: ScanTrust,
+    pub evidence: Vec<DiscoveredItem>,
+    pub blind_spots: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CurrentState {
+    pub scan: ScanResult,
+    pub snapshot: Snapshot,
+    pub store_findings: Vec<AuditFinding>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyOptions {
+    pub fail_fast: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rollback: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyFailure {
+    pub item_id: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplySummary {
+    pub total: u32,
+    pub successful: u32,
+    pub failed: u32,
+    pub skipped: u32,
+    pub unsupported: u32,
+    pub failures: Vec<ApplyFailure>,
+    pub applied_items: Vec<RestoreItem>,
+    pub status_registry: std::collections::HashMap<String, RestoreItemStatus>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UndoStatus {
+    Undone,
+    Skipped,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UndoResult {
+    pub item_id: String,
+    pub status: UndoStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RollbackSummary {
+    pub total: u32,
+    pub undone: u32,
+    pub skipped: u32,
+    pub failed: u32,
+    pub results: Vec<UndoResult>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyWithRollbackResult {
+    pub apply_summary: ApplySummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rollback_summary: Option<RollbackSummary>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TimelineEntrySource {
+    Manual,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimelineEntryEventKind {
+    Baseline,
+    SetupChanged,
+    Unchanged,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TimelineRestoreReadiness {
+    Full,
+    Partial,
+    #[serde(rename = "observe-only")]
+    ObserveOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TimelineConfidence {
+    Low,
+    Medium,
+    High,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineChangeSummary {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_entry_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_snapshot_name: Option<String>,
+    pub has_changes: bool,
+    pub semantic_change_count: u32,
+    pub raw_source_change_count: u32,
+    pub highlights: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineChangedSurface {
+    pub kind: String,
+    pub change_type: String,
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity_name: Option<String>,
+    pub restorable: bool,
+    pub observe_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineEntry {
+    pub schema_version: String,
+    pub id: String,
+    pub source: TimelineEntrySource,
+    pub event_kind: TimelineEntryEventKind,
+    pub title: String,
+    pub project_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentId>,
+    pub agents: Vec<AgentId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before_snapshot_name: Option<String>,
+    pub after_snapshot_name: String,
+    pub capture_id: String,
+    pub created_at: String,
+    pub observed_at: String,
+    pub changed_surfaces: Vec<TimelineChangedSurface>,
+    pub restore_readiness: TimelineRestoreReadiness,
+    pub confidence: TimelineConfidence,
+    pub confidence_reason: String,
+    pub evidence_count: u32,
+    pub graph_node_count: u32,
+    pub audit_finding_count: u32,
+    pub changes: TimelineChangeSummary,
+}
+
+impl Default for RiskSummary {
+    fn default() -> Self {
+        Self {
+            none: 0,
+            low: 0,
+            medium: 0,
+            high: 0,
+            critical: 0,
+        }
+    }
 }
