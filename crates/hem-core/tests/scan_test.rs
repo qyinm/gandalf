@@ -372,9 +372,7 @@ fn captures_dotenv_key_inventory_while_omitting_secret_values() {
     assert!(!serialized.contains("local"));
 }
 
-#[test]
-fn multi_agent_sandbox_discovers_at_least_four_agents() {
-    let sandbox = make_sandbox();
+fn seed_verification_fixture(sandbox: &Sandbox) {
     fs::write(
         sandbox.project_path.join(".mcp.json"),
         r#"{"mcpServers":{"claude-mcp":{"command":"claude"}}}"#,
@@ -383,9 +381,23 @@ fn multi_agent_sandbox_discovers_at_least_four_agents() {
     fs::create_dir_all(sandbox.home_dir.join(".codex")).expect("codex");
     fs::write(
         sandbox.home_dir.join(".codex/config.toml"),
-        "[mcp_servers.codex]\ncommand = \"codex\"\n",
+        r#"[mcp_servers.context7]
+command = "npx"
+
+[mcp_servers.node_repl]
+command = "node"
+
+[mcp_servers.node_repl.env]
+OPENAI_API_KEY = "secret"
+"#,
     )
     .expect("codex config");
+    fs::create_dir_all(sandbox.home_dir.join(".claude")).expect("claude");
+    fs::write(
+        sandbox.home_dir.join(".claude/settings.json"),
+        r#"{"permissions":{"allow":["Bash(echo hi)"]}}"#,
+    )
+    .expect("claude settings");
     fs::create_dir_all(sandbox.project_path.join(".cursor")).expect("cursor");
     fs::write(
         sandbox.project_path.join(".cursor/mcp.json"),
@@ -405,6 +417,59 @@ fn multi_agent_sandbox_discovers_at_least_four_agents() {
     )
     .expect("pi settings");
     fs::write(sandbox.project_path.join(".env"), "HEM_MODE=local\n").expect("env");
+}
+
+#[test]
+fn export_scan_evidence_fixture_for_scratch() {
+    let scratch_dir = match std::env::var("HEM_SCRATCH_DIR") {
+        Ok(dir) => dir,
+        Err(_) => return,
+    };
+
+    let sandbox = make_sandbox();
+    seed_verification_fixture(&sandbox);
+    let scan = scan_project(&scan_options(&sandbox));
+
+    let agents: std::collections::HashSet<_> = scan.evidence.iter().map(|item| item.agent).collect();
+    assert!(agents.len() >= 4);
+    assert!(scan.evidence.iter().any(|item| {
+        item.agent == AgentId::Codex
+            && item.kind == EvidenceKind::McpServer
+            && item.name.as_deref() == Some("context7")
+    }));
+    assert!(scan.evidence.iter().any(|item| {
+        item.restore_policy == hem_core::RestorePolicy::StructuredFieldsOnly
+            && item.kind == EvidenceKind::McpServer
+    }));
+
+    let codex_mcp: Vec<_> = scan
+        .evidence
+        .iter()
+        .filter(|item| item.agent == AgentId::Codex && item.kind == EvidenceKind::McpServer)
+        .collect();
+    let serialized = serde_json::to_string(&codex_mcp).expect("serialize codex mcp");
+    assert!(!serialized.contains("secret"));
+
+    let output = serde_json::json!({
+        "entrypoint": "hem_core::scan_project",
+        "projectPath": sandbox.project_path.display().to_string(),
+        "homeDir": sandbox.home_dir.display().to_string(),
+        "agentCount": agents.len(),
+        "agents": agents.iter().map(|agent| agent.as_str()).collect::<Vec<_>>(),
+        "evidence": scan.evidence,
+    });
+    let path = std::path::Path::new(&scratch_dir).join("scan-evidence-fixture.json");
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(&output).expect("pretty json"),
+    )
+    .expect("write scratch fixture");
+}
+
+#[test]
+fn multi_agent_sandbox_discovers_at_least_four_agents() {
+    let sandbox = make_sandbox();
+    seed_verification_fixture(&sandbox);
 
     let scan = scan_project(&scan_options(&sandbox));
     let agents: std::collections::HashSet<_> = scan.evidence.iter().map(|item| item.agent).collect();
