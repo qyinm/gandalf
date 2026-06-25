@@ -14,3 +14,7 @@ walkdir.workspace = true
 toml.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
+regex = "1"
+
+[dev-dependencies]
+serde_json.workspace = true
