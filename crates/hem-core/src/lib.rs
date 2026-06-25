@@ -1,21 +1,31 @@
 //! Hem core engine — Rust port of `packages/core`.
 
 pub mod audit;
+pub mod bundle;
 pub mod diff;
 pub mod errors;
 pub mod graph;
 pub mod parsers;
 pub mod policy;
 pub mod provenance;
+pub mod readiness;
+pub mod report;
 pub mod restore;
 pub mod scan;
 pub mod snapshot;
 pub mod store;
+pub mod tar;
+pub mod timeline;
+pub mod timeline_undo;
 pub mod types;
 
 pub const ENGINE_ID: &str = "hem-core";
 
 pub use audit::audit_evidence;
+pub use bundle::{
+    bundle_export, bundle_import, bundle_inspect, bundle_verify, BundleError, BundleResult,
+};
+pub use tar::{read_tar, validate_tar_path, write_tar, TarError};
 pub use diff::{diff_graphs, GraphDiff, RawSourceChange, SemanticChange, SemanticChangeCode};
 pub use errors::{format_snap_error, SnapError};
 pub use graph::build_graph;
@@ -40,7 +50,21 @@ pub use scan::{
     default_scanner_plugins, home_target, project_target, scan_project, scan_skill_directory,
     scan_target, scan_targets, ScanTarget, ScanTargetOverrides, ScannerContext, ScannerPlugin,
 };
+pub use readiness::{
+    build_readiness_report, check_mcp_binary_availability, classify_mcp_binary,
+    current_platform, extract_mcp_binaries, format_readiness_summary_lines,
+    readiness_item_for_mcp_report, ReadinessFormatOptions, ReadinessOptions,
+};
+pub use report::{render_markdown_report, ReportInput, ReportTrust};
 pub use snapshot::capture_current_state;
+pub use timeline::{
+    capture_timeline_snapshot, timeline_snapshot_name, CaptureTimelineOptions, CaptureTimelineResult,
+    TimelineError,
+};
+pub use timeline_undo::{
+    build_timeline_undo_plan, BuildTimelineUndoOptions, TimelineUndoAction, TimelineUndoItem,
+    TimelineUndoPlan,
+};
 pub use store::{
     agent_store_dir, append_timeline_entry, default_store_dir, ensure_store, find_timeline_entry,
     list_agents, list_snapshots, list_timeline_entries, read_snapshot, read_snapshot_content,

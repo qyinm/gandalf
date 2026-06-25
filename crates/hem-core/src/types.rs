@@ -602,6 +602,10 @@ pub struct TimelineChangedSurface {
     pub entity_name: Option<String>,
     pub restorable: bool,
     pub observe_only: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -642,4 +646,290 @@ impl Default for RiskSummary {
             critical: 0,
         }
     }
+}
+
+// ── Readiness types ─────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReadinessCategory {
+    Ready,
+    NeedsManualAction,
+    Warning,
+    Unverified,
+    Unsupported,
+    Blocked,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReadinessAction {
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadinessItem {
+    pub id: String,
+    pub category: ReadinessCategory,
+    pub severity: Severity,
+    pub code: String,
+    pub problem: String,
+    pub cause: String,
+    pub fix: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actions: Option<Vec<ReadinessAction>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadinessReport {
+    pub target_platform: String,
+    pub summary: std::collections::HashMap<ReadinessCategory, u32>,
+    pub items: Vec<ReadinessItem>,
+}
+
+// ── Bundle types ────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceMachine {
+    pub home_dir: String,
+    pub platform: String,
+    pub hostname: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleSecurity {
+    pub raw_secrets_included: bool,
+    pub redaction_policy: String,
+    pub signed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature_algorithm: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleManifest {
+    pub format_version: u32,
+    pub snapshot_name: String,
+    pub created_at: String,
+    pub project_path: String,
+    pub includes_content: bool,
+    pub content_file_count: u32,
+    pub content_total_bytes: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_machine: Option<SourceMachine>,
+    pub security: BundleSecurity,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BundleChecksums {
+    pub algorithm: String,
+    pub entries: std::collections::HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleExportOptions {
+    pub snapshot_name: String,
+    pub output_path: String,
+    pub store_dir: String,
+    pub project_path: String,
+    pub home_dir: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include_content: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleImportOptions {
+    pub bundle_path: String,
+    pub store_dir: String,
+    pub project_path: String,
+    pub home_dir: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub apply_content: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dry_run: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quarantine: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trust: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_platform: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpBinaryInfo {
+    pub evidence_id: String,
+    pub command: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub args: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binary_kind: Option<McpBinaryKind>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum McpBinaryKind {
+    PackageRunner,
+    SourceLocalPath,
+    PathBinary,
+    Command,
+    RemoteUrl,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpBinaryReport {
+    pub evidence_id: String,
+    pub command: String,
+    pub available_on_target: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binary_kind: Option<McpBinaryKind>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MachineDiff {
+    pub source_home: String,
+    pub target_home: String,
+    pub source_platform: String,
+    pub target_platform: String,
+    pub source_hostname: String,
+    pub target_hostname: String,
+    pub cross_os: bool,
+    pub os_differences: Vec<String>,
+    pub remapped_paths: Vec<String>,
+    pub source_mcp_binaries: Vec<McpBinaryInfo>,
+    pub mcp_binary_report: Vec<McpBinaryReport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleImportResult {
+    pub snapshot_name: String,
+    pub evidence_count: usize,
+    pub includes_content: bool,
+    pub content_applied: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quarantined_content_dir: Option<String>,
+    pub warnings: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub machine_diff: Option<MachineDiff>,
+    pub readiness: ReadinessReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleExportResult {
+    pub bundle_path: String,
+    pub checksum: String,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleInspectResult {
+    pub bundle_path: String,
+    pub format_version: u32,
+    pub snapshot_name: String,
+    pub created_at: String,
+    pub project_path: String,
+    pub includes_content: bool,
+    pub content_file_count: u32,
+    pub content_total_bytes: u64,
+    pub checksum_algorithm: String,
+    pub bundle_checksum: String,
+    pub is_signed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature_algorithm: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_machine: Option<SourceMachine>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleVerifyOptions {
+    pub bundle_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature_key: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleVerifyChecksumResult {
+    pub checked: bool,
+    pub ok: bool,
+    pub entries_checked: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleVerifySignatureResult {
+    pub signed: bool,
+    pub checked: bool,
+    pub ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub algorithm: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleVerifyResult {
+    pub bundle_path: String,
+    pub valid: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format_version: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot_name: Option<String>,
+    pub checksums: BundleVerifyChecksumResult,
+    pub signature: BundleVerifySignatureResult,
+    pub warnings: Vec<String>,
+    pub errors: Vec<String>,
+}
+
+// ── Tar types ───────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TarEntryType {
+    File,
+    Directory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TarEntry {
+    pub path: String,
+    pub content: Vec<u8>,
+    pub mode: u32,
+    pub mtime: u64,
+    pub entry_type: TarEntryType,
 }
