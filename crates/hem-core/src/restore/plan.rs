@@ -163,7 +163,7 @@ pub fn parse_dry_run_output(input: &str) -> ParseDryRunResult {
             skip_reason: None,
             execution_order: order,
             rollback_state: None,
-            target_content: plan_item.target_state.as_ref().and_then(|s| s.value.clone()),
+            target_content: target_content_for_plan_item(&plan_item),
             can_rollback,
             metadata: restore_item_metadata(&plan_item),
             apply_at: None,
@@ -358,12 +358,25 @@ fn snapshot_content_by_evidence_id(
     Ok(content)
 }
 
+fn target_content_for_plan_item(plan_item: &RestorePlanItem) -> Option<Value> {
+    match plan_item
+        .target_state
+        .as_ref()
+        .and_then(|state| state.value.as_ref())
+    {
+        Some(Value::String(_)) => plan_item.target_state.as_ref()?.value.clone(),
+        _ => None,
+    }
+}
+
 fn with_snapshot_content(
     item: Option<DiscoveredItem>,
     content: &HashMap<String, SnapshotContentEntry>,
 ) -> Option<DiscoveredItem> {
     let mut item = item?;
-    let entry = content.get(&item.id)?;
+    let Some(entry) = content.get(&item.id) else {
+        return Some(item);
+    };
     let mut metadata = item.metadata.clone().unwrap_or_else(|| json!({}));
     if let Some(obj) = metadata.as_object_mut() {
         obj.insert("contentCaptureStatus".to_string(), json!("captured"));

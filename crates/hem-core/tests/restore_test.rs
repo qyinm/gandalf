@@ -223,6 +223,87 @@ fn marks_codex_toml_mcp_changes_unsupported_while_config_carries_restore() {
 }
 
 #[test]
+fn metadata_only_snapshot_refuses_agent_config_apply_without_content_backing() {
+    let (_root, project_path, home_dir, store_dir) = make_restore_sandbox();
+    let config_path = format!("{home_dir}/.codex/config.toml");
+    let original = "model = \"gpt-5\"\napproval_policy = \"on-request\"\n";
+    fs::create_dir_all(format!("{home_dir}/.codex")).expect("mkdir");
+    fs::write(&config_path, original).expect("write config");
+
+    let state = capture_current_state(
+        &RuntimeOptions {
+            project_path: project_path.clone(),
+            home_dir: home_dir.clone(),
+            store_dir: store_dir.clone(),
+            agent: Some(AgentId::Codex),
+            scope: Some(EvidenceScope::User),
+            capture_content: Some(false),
+        },
+        "baseline",
+    )
+    .expect("capture");
+    assert!(state.snapshot.content.is_none());
+
+    write_snapshot(
+        std::path::Path::new(&store_dir),
+        StoreSnapshot::from(state.snapshot),
+        Some(AgentId::Codex),
+    )
+    .expect("write snapshot");
+    fs::write(&config_path, "").expect("clear config");
+
+    let plan = build_restore_plan(&RestoreOptions {
+        source_snapshot: "baseline".to_string(),
+        project_path,
+        home_dir: home_dir.clone(),
+        store_dir,
+        dry_run: true,
+        agent: Some(AgentId::Codex),
+        scope: Some(EvidenceScope::User),
+    })
+    .expect("plan");
+
+    let config_plan_item = plan
+        .items
+        .iter()
+        .find(|item| item.kind == hem_core::EvidenceKind::AgentConfig)
+        .expect("config plan item");
+    assert!(config_plan_item.target_state.as_ref().unwrap().value.is_some());
+
+    let parsed = parse_dry_run_output(&serde_json::to_string(&plan).expect("serialize plan"));
+    let executable = parsed
+        .items
+        .iter()
+        .find(|item| item.item_type == "agent_config")
+        .expect("executable item");
+    assert!(
+        executable.target_content.is_none(),
+        "metadata-only snapshots must not populate string file content for apply"
+    );
+
+    let mut items = parsed.items;
+    let mut executor = create_default_apply_executor();
+    let summary = apply_restore_items(
+        &mut items,
+        &mut executor,
+        &ApplyOptions {
+            fail_fast: true,
+            rollback: None,
+        },
+    );
+    assert_eq!(summary.successful, 0);
+    assert_eq!(summary.failed, 1);
+    assert!(
+        summary.failures[0]
+            .reason
+            .contains("Missing target content"),
+        "unexpected failure: {}",
+        summary.failures[0].reason
+    );
+    assert_ne!(fs::read_to_string(&config_path).expect("read"), original);
+}
+
+#[test]
 fn writes_agent_config_content_without_appending_newline() {
     let (_root, _project_path, home_dir, _store_dir) = make_restore_sandbox();
     let config_path = format!("{home_dir}/.codex/config.toml");

@@ -28,7 +28,7 @@ const AGENT_STORE_DIRS: &[AgentId] = &[
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ChecksumRecord {
+pub struct ChecksumRecord {
     source_path: String,
     checksum: String,
 }

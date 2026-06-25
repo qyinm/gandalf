@@ -12,8 +12,9 @@ use crate::provenance::build_provenance;
 use crate::scan::scan_project;
 use crate::store::ensure_store;
 use crate::types::{
-    CurrentState, DiscoveredItem, RuntimeOptions, ScanOptions, Snapshot, SnapshotContentEntry,
-    SnapshotManifest, SnapshotSecurity,
+    AgentId, CaptureStatus, CurrentState, DiscoveredItem, EvidenceKind, EvidenceScope,
+    RuntimeOptions, ScanOptions, Snapshot, SnapshotContentEntry, SnapshotManifest,
+    SnapshotSecurity,
 };
 
 pub fn capture_current_state(options: &RuntimeOptions, name: &str) -> Result<CurrentState, std::io::Error> {
@@ -104,7 +105,7 @@ fn capture_content_backed_evidence(
         let Some(restore_path) = restore_path_for_content(item) else {
             continue;
         };
-        if !is_codex_user_global_content_candidate(item) {
+        if !is_user_global_content_candidate(item) {
             continue;
         }
         let Some(absolute_path) = absolute_path_for_source_path(&restore_path, options) else {
@@ -190,17 +191,46 @@ fn capture_content_backed_evidence(
     })
 }
 
-fn is_codex_user_global_content_candidate(item: &DiscoveredItem) -> bool {
-    item.agent == crate::types::AgentId::Codex
-        && item.scope == crate::types::EvidenceScope::User
-        && item.capture_status == crate::types::CaptureStatus::Captured
-        && item.source_path.starts_with("~/.codex/")
-        && matches!(
-            item.kind,
-            crate::types::EvidenceKind::AgentConfig
-                | crate::types::EvidenceKind::Skill
-                | crate::types::EvidenceKind::Hook
-        )
+fn is_user_global_content_candidate(item: &DiscoveredItem) -> bool {
+    if item.scope != EvidenceScope::User {
+        return false;
+    }
+    if item.capture_status != CaptureStatus::Captured {
+        return false;
+    }
+    if !item.source_path.starts_with("~/") {
+        return false;
+    }
+    // M1: ~/.claude.json MCP inventory stays metadata-only.
+    if item.source_path == "~/.claude.json" {
+        return false;
+    }
+    if !matches!(
+        item.kind,
+        EvidenceKind::AgentConfig | EvidenceKind::Skill | EvidenceKind::Hook
+    ) {
+        return false;
+    }
+    user_global_path_for_agent(item.agent, &item.source_path)
+}
+
+fn user_global_path_for_agent(agent: AgentId, source_path: &str) -> bool {
+    match agent {
+        AgentId::Codex => source_path.starts_with("~/.codex/"),
+        AgentId::ClaudeCode => source_path.starts_with("~/.claude/"),
+        AgentId::Cursor => {
+            source_path.starts_with("~/.cursor/") || source_path.starts_with("~/.agents/")
+        }
+        AgentId::Opencode => {
+            source_path.starts_with("~/.config/opencode/")
+                || source_path.starts_with("~/.claude/skills/")
+                || source_path.starts_with("~/.codex/skills/")
+        }
+        AgentId::PiAgent => {
+            source_path.starts_with("~/.pi/") || source_path.starts_with("~/.agents/")
+        }
+        _ => false,
+    }
 }
 
 fn restore_path_for_content(item: &DiscoveredItem) -> Option<String> {

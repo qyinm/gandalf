@@ -194,7 +194,12 @@ fn apply_file_mutation(
 pub fn apply_agent_config(item: &mut RestoreItem) -> Result<(), String> {
     let content = match &item.target_content {
         Some(Value::String(text)) => text.clone(),
-        Some(value) => serde_json::to_string_pretty(value).map_err(|e| e.to_string())?,
+        Some(_) => {
+            return Err(format!(
+                "Refusing to apply parsed metadata as file content for {} — snapshot needs content-backed capture",
+                item.item_id
+            ));
+        }
         None => return Err(format!("Missing target content for {}", item.item_id)),
     };
     let dest = item.dest.clone();
@@ -234,23 +239,28 @@ pub fn apply_skill(item: &mut RestoreItem) -> Result<(), String> {
 }
 
 pub fn default_apply_handler_registry() -> ApplyHandlerRegistry {
-    ApplyHandlerRegistry {
-        handlers: HashMap::new(),
-    }
+    let mut handlers: HashMap<String, ApplyHandler> = HashMap::new();
+    handlers.insert(
+        "agent_config".to_string(),
+        Box::new(|item| apply_agent_config(item)),
+    );
+    handlers.insert(
+        "agent_instruction".to_string(),
+        Box::new(|item| apply_agent_instruction(item)),
+    );
+    handlers.insert("hook".to_string(), Box::new(|item| apply_hook(item)));
+    handlers.insert("skill".to_string(), Box::new(|item| apply_skill(item)));
+    ApplyHandlerRegistry { handlers }
 }
 
 pub fn dispatch_default_apply(item: &mut RestoreItem) -> Result<(), String> {
-    match item.item_type.as_str() {
-        "agent_config" => apply_agent_config(item),
-        "agent_instruction" => apply_agent_instruction(item),
-        "hook" => apply_hook(item),
-        "skill" => apply_skill(item),
-        other => {
-            let message = format!("No apply handler for type \"{other}\"");
-            item.skip_reason = Some(message.clone());
-            Err(message)
-        }
+    let mut registry = default_apply_handler_registry();
+    if let Some(handler) = registry.handlers.get_mut(&item.item_type) {
+        return handler(item);
     }
+    let message = format!("No apply handler for type \"{}\"", item.item_type);
+    item.skip_reason = Some(message.clone());
+    Err(message)
 }
 
 pub fn create_default_apply_executor() -> RestoreExecutor {
@@ -309,7 +319,11 @@ pub fn dispatch_default_undo(item: &mut RestoreItem) -> Result<(), String> {
     if !item.can_rollback || item.item_type == "unsupported" {
         return Ok(());
     }
-    restore_previous_content_undo_handler(item)
+    let mut registry = default_undo_handler_registry();
+    if let Some(handler) = registry.handlers.get_mut(&item.item_type) {
+        return handler(item);
+    }
+    noop_undo_handler(item)
 }
 
 pub fn create_default_undo_executor() -> UndoExecutor {
