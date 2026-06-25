@@ -1,0 +1,14 @@
+[package]
+name = "hem-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Hem terminal client (ratatui scaffold)"
+
+[[bin]]
+name = "hem"
+path = "src/main.rs"
+
+[dependencies]
+hem-core = { path = "../hem-core" }
