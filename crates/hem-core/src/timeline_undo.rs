@@ -1,12 +1,14 @@
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::store::{find_timeline_entry, TimelineListOptions};
 use crate::timeline::TimelineError;
 use crate::types::{TimelineChangedSurface, TimelineRestoreReadiness};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TimelineUndoAction {
     Add,
     Remove,
@@ -23,7 +25,8 @@ impl TimelineUndoAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TimelineUndoItem {
     pub action: TimelineUndoAction,
     pub kind: String,
@@ -33,7 +36,8 @@ pub struct TimelineUndoItem {
     pub current_value: Option<Value>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TimelineUndoPlan {
     pub entry_id: String,
     pub title: String,

@@ -107,6 +107,8 @@ fn timeline_entry(
             entity_name: Some("github".to_string()),
             restorable: true,
             observe_only: false,
+            before: None,
+            after: None,
         }],
         restore_readiness: TimelineRestoreReadiness::Full,
         confidence: TimelineConfidence::High,

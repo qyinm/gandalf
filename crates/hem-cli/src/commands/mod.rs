@@ -1,7 +1,12 @@
+mod extended;
+
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
+use extended::{
+    BundleCommand, DoctorArgs, ReportArgs, TimelineCommand,
+};
 use hem_core::{
     apply_with_rollback, build_restore_plan, capture_current_state, create_default_apply_executor,
     create_default_undo_executor, default_store_dir, diff_graphs, ensure_store,
@@ -47,6 +52,20 @@ pub enum Commands {
     Diff(DiffArgs),
     /// Generate a restore plan (dry-run) or apply a snapshot (experimental)
     Restore(RestoreArgs),
+    /// Check local readiness for agent setup portability
+    Doctor(DoctorArgs),
+    /// Generate a markdown report of agent state and findings
+    Report(ReportArgs),
+    /// List and inspect local timeline entries
+    Timeline {
+        #[command(subcommand)]
+        command: TimelineCommand,
+    },
+    /// Export, import, inspect, and verify .hem bundle archives
+    Bundle {
+        #[command(subcommand)]
+        command: BundleCommand,
+    },
 }
 
 #[derive(Debug, Parser)]
@@ -123,7 +142,7 @@ pub struct RestoreArgs {
 }
 
 #[derive(Debug, Parser)]
-pub struct CommonOptions {
+pub(crate) struct CommonOptions {
     /// Project directory to scan
     #[arg(long, default_value = ".")]
     project: PathBuf,
@@ -167,6 +186,10 @@ where
         Some(Commands::Snapshot { command }) => execute_snapshot(command),
         Some(Commands::Diff(args)) => execute_diff(args),
         Some(Commands::Restore(args)) => execute_restore(args),
+        Some(Commands::Doctor(args)) => extended::execute_doctor(args),
+        Some(Commands::Report(args)) => extended::execute_report(args),
+        Some(Commands::Timeline { command }) => extended::execute_timeline(command),
+        Some(Commands::Bundle { command }) => extended::execute_bundle(command),
     }
 }
 
@@ -494,7 +517,7 @@ fn execute_restore(args: RestoreArgs) -> i32 {
     write_stdout(&output)
 }
 
-fn resolve_runtime(common: &CommonOptions) -> Result<RuntimeOptions, SnapError> {
+pub(super) fn resolve_runtime(common: &CommonOptions) -> Result<RuntimeOptions, SnapError> {
     let home_dir = common
         .home
         .clone()
@@ -560,7 +583,7 @@ fn parse_scope(value: &str) -> EvidenceScope {
     }
 }
 
-fn snapshot_by_ref(
+pub(super) fn snapshot_by_ref(
     reference: &str,
     runtime: &RuntimeOptions,
 ) -> Result<hem_core::Snapshot, SnapError> {
@@ -905,11 +928,20 @@ fn print_help() {
         "Restore commands:",
         "  hem restore --snapshot <name> --dry-run --agent codex --scope user --project .",
         "  hem restore --snapshot <name> --apply --experimental --agent codex --scope user --project .",
+        "",
+        "Extended commands:",
+        "  hem doctor --project . [--json]",
+        "  hem report [ref] --project . [--out path] [--json]",
+        "  hem timeline list --project . [--json]",
+        "  hem timeline undo <id> --dry-run --project . [--json]",
+        "  hem bundle export --name <snapshot> --out file.hem --project .",
+        "  hem bundle import file.hem --dry-run --project . [--json]",
+        "  hem bundle verify file.hem",
     ];
     let _ = write_stdout(&format!("{}\n", help.join("\n")));
 }
 
-fn write_json<T: serde::Serialize>(value: &T) -> i32 {
+pub(super) fn write_json<T: serde::Serialize>(value: &T) -> i32 {
     match serde_json::to_string_pretty(value) {
         Ok(json) => write_stdout(&format!("{json}\n")),
         Err(error) => write_error(&SnapError {
@@ -922,14 +954,14 @@ fn write_json<T: serde::Serialize>(value: &T) -> i32 {
     }
 }
 
-fn write_stdout(text: &str) -> i32 {
+pub(super) fn write_stdout(text: &str) -> i32 {
     match io::stdout().write_all(text.as_bytes()) {
         Ok(()) => 0,
         Err(_) => 1,
     }
 }
 
-fn write_error(error: &SnapError) -> i32 {
+pub(super) fn write_error(error: &SnapError) -> i32 {
     let _ = io::stderr().write_all(format_snap_error(error).as_bytes());
     1
 }
