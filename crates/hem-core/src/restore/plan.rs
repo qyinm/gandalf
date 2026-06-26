@@ -7,6 +7,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::diff::{diff_graphs, SemanticChange};
+use crate::path_confinement::path_has_traversal;
 use crate::graph::build_graph;
 use crate::scan::scan_project;
 use crate::store::{read_snapshot, read_snapshot_content};
@@ -146,13 +147,27 @@ pub fn parse_dry_run_output(input: &str) -> ParseDryRunResult {
                 current
             });
         let can_rollback = can_rollback_action(plan_item.action);
+        let dest = resolve_plan_destination(
+            &plan_item,
+            target_project.as_deref(),
+            target_home.as_deref(),
+        );
+        if path_has_traversal(Path::new(&dest)) {
+            errors.push(ParseDryRunError {
+                message: format!(
+                    "Skipping item \"{}\": destination path contains traversal components",
+                    plan_item.item_id
+                ),
+            });
+            continue;
+        }
 
         result.push(RestoreItem {
             item_id: plan_item.item_id.clone(),
             path: plan_item.source_path.clone(),
             item_type: plan_item.kind.as_str().to_string(),
             source: plan_item.source_path.clone(),
-            dest: resolve_plan_destination(&plan_item, target_project.as_deref(), target_home.as_deref()),
+            dest,
             action: Some(plan_item.action),
             status: if plan_item.action == RestoreAction::Unsupported {
                 RestoreItemStatus::Unsupported

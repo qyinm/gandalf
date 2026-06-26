@@ -491,6 +491,10 @@ pub struct ApplyOptions {
     pub fail_fast: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rollback: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub home_dir: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

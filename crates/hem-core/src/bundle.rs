@@ -9,7 +9,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 
+use crate::path_confinement::{
+    validate_constrained_write_path, validate_home_relative_import_segment, ConfinementRoots,
+};
 use crate::policy::restore_policy_for;
+use crate::restore::write_file_atomically;
 use crate::readiness::{build_readiness_report, check_mcp_binary_availability, current_platform, extract_mcp_binaries, ReadinessOptions};
 use crate::scan::scan_project;
 use crate::store::{read_snapshot, write_snapshot, StoreError, StoreSnapshot};
@@ -695,13 +699,13 @@ pub fn bundle_import(options: &BundleImportOptions) -> BundleResult<BundleImport
     let imported_evidence = resolve_snapshot_paths_for_import(
         serde_json::from_slice(&evidence_entry.content)?,
         home_dir,
-    );
+    )?;
     let imported_graph = resolve_snapshot_paths_for_import(
         serde_json::from_slice(&graph_entry.content)?,
         home_dir,
-    );
+    )?;
     let imported_provenance = if let Some(entry) = provenance_entry {
-        resolve_snapshot_paths_for_import(serde_json::from_slice(&entry.content)?, home_dir)
+        resolve_snapshot_paths_for_import(serde_json::from_slice(&entry.content)?, home_dir)?
     } else {
         Vec::new()
     };
@@ -774,13 +778,21 @@ pub fn bundle_import(options: &BundleImportOptions) -> BundleResult<BundleImport
             ));
             quarantined_content_dir = Some(quarantine_dir.to_string_lossy().to_string());
         } else {
+            let roots = ConfinementRoots {
+                home_dir: home_dir.to_path_buf(),
+                project_path: project_path.to_path_buf(),
+            };
             for entry in apply_entries {
                 let relative_path = entry.path.strip_prefix("content/").unwrap_or(&entry.path);
                 let resolved = resolve_bundle_path(relative_path, home_dir, project_path);
+                validate_constrained_write_path(&resolved, &roots).map_err(BundleError::Message)?;
                 if let Some(parent) = resolved.parent() {
                     fs::create_dir_all(parent)?;
                 }
-                fs::write(&resolved, &entry.content)?;
+                let content = String::from_utf8(entry.content.clone())
+                    .map_err(|error| BundleError::Message(error.to_string()))?;
+                write_file_atomically(&resolved, &content)
+                    .map_err(|error| BundleError::Message(error.to_string()))?;
             }
             content_applied = true;
         }
@@ -1036,7 +1048,7 @@ fn verify_bundle_signature(
     }
     let Some(key) = key else {
         return SignatureVerification {
-            ok: true,
+            ok: false,
             checked: false,
             warning: Some(
                 "Bundle is signed, but no signature key was provided; signature was not verified."
@@ -1201,22 +1213,32 @@ where
         .collect()
 }
 
-fn resolve_snapshot_path_for_import(source_path: &str, home_dir: &Path) -> String {
+fn resolve_snapshot_path_for_import(source_path: &str, home_dir: &Path) -> Result<String, BundleError> {
     if let Some(rest) = source_path.strip_prefix(&format!("{HOME_TOKEN}/")) {
-        return home_dir.join(rest).to_string_lossy().to_string();
+        validate_home_relative_import_segment(rest).map_err(BundleError::Message)?;
+        return Ok(home_dir.join(rest).to_string_lossy().to_string());
     }
-    source_path.to_string()
+    if source_path.contains("..") {
+        return Err(BundleError::Message(format!(
+            "Path traversal detected: \"{source_path}\" contains \"..\""
+        )));
+    }
+    Ok(source_path.to_string())
 }
 
-fn resolve_snapshot_paths_for_import<T>(items: Vec<T>, home_dir: &Path) -> Vec<T>
+fn resolve_snapshot_paths_for_import<T>(
+    items: Vec<T>,
+    home_dir: &Path,
+) -> Result<Vec<T>, BundleError>
 where
     T: SourcePathAccessor,
 {
     items
         .into_iter()
         .map(|mut item| {
-            item.set_source_path(resolve_snapshot_path_for_import(item.source_path(), home_dir));
-            item
+            let resolved = resolve_snapshot_path_for_import(item.source_path(), home_dir)?;
+            item.set_source_path(resolved);
+            Ok(item)
         })
         .collect()
 }
