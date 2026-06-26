@@ -1,7 +1,7 @@
 {
   "name": "@qxinm/hem-tui",
   "version": "0.3.4",
-  "description": "Terminal UI surfaces for Hem.",
+  "description": "[DEPRECATED] Use crates/hem-cli. Ink TUI kept until ratatui client ships.",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",

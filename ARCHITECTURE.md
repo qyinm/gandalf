@@ -4,80 +4,43 @@ Hem is a local-first workspace for inspecting, packaging, and restoring AI codin
 
 The core architectural rule is simple: scan paths are read-only and policy-aware; write paths are explicit, narrow, and reversible where possible.
 
+**Canonical engine (2026-06):** `crates/hem-core` is the Rust port of `packages/core`. New feature work lands in `hem-core` first; the TypeScript core remains as a parity reference until client cutover completes.
+
 ## System Shape
 
 ```text
                 +----------------------+
-                | Hem CLI              |
-                | apps/cli/src/cli.ts  |
+                | hem-cli (Rust)       |
+                | crates/hem-cli       |
                 +----------+-----------+
                            |
                            v
                 +----------------------+
-                | Command handlers     |
-                | apps/cli/src/commands/* |
+                | hem-core             |
+                | crates/hem-core      |
+                | scan/store/restore/  |
+                | bundle/timeline/...  |
                 +----------+-----------+
                            |
         +------------------+------------------+
         |                                     |
         v                                     v
 +-------------------+              +-------------------+
-| Core package      |              | TUI renderers     |
-| packages/core/src |              | apps/tui/src/*    |
-+---------+---------+              +-------------------+
-          |
-          v
-+-------------------+       +-------------------+
-| Scanner plugins   | ----> | DiscoveredItem[]  |
-| packages/core/src/scanners/* | | packages/core/src/types.ts |
-+---------+---------+       +---------+---------+
-          |                           |
-          |                           v
-          |                 +-------------------+
-          |                 | Graph builder     |
-          |                 | src/graph.ts      |
-          |                 +---------+---------+
-          |                           |
-          +---------------------------+---------------------------+
-                                      |
-             +------------------------+------------------------+
-             |                        |                        |
-             v                        v                        v
-      +--------------+         +--------------+          +--------------+
-      | Diff         |         | Audit        |          | Provenance   |
-      | src/diff.ts  |         | src/audit.ts |          | src/provenance.ts |
-      +------+-------+         +------+-------+          +------+-------+
-             |                        |                        |
-             +------------------------+------------------------+
-                                      |
-                                      v
-                          +-----------------------+
-                          | Snapshot/report/store |
-                          | packages/core/src/store.ts |
-                          | packages/core/src/report.ts |
-                          +-----------+-----------+
-                                      |
-                    +-----------------+-----------------+
-                    |                                   |
-                    v                                   v
-          +-------------------+              +-------------------+
-          | .hem bundles     |              | Restore planner   |
-          | packages/core/src/bundle.ts |      | packages/core/src/restore.ts |
-          +-------------------+              +-------------------+
+| Desktop Tauri     |              | Legacy TS CLI/TUI |
+| apps/desktop      |              | apps/cli, apps/tui|
+| src-tauri -> core |              | packages/core (*) |
++-------------------+              +-------------------+
 
-                +----------------------+
-                | Desktop dashboard    |
-                | apps/desktop         |
-                +----------------------+
+(*) Deprecated reference implementation — do not extend for new engine behavior.
 ```
 
 ## Runtime Entry Points
 
-- `apps/cli/src/cli.ts` is the process entry point and command registry. It maps top-level commands to implementations in `apps/cli/src/commands/*`.
-- `apps/cli/src/cli-shared.ts` centralizes flag parsing and runtime options shared across command handlers.
-- `apps/cli/src/commands/*` adapts CLI arguments into domain calls. These files should stay thin: parse options, call core modules, format JSON/text/TUI output, and convert errors into user-facing messages.
-- `apps/tui/src/*` is a terminal presentation layer. It renders richer Ink/Clack views for supported commands without changing core behavior.
-- `apps/desktop` is the Tauri v2 + Vite desktop shell. Its Rust boundary exposes small command APIs to the React frontend; core setup behavior should still live in `packages/core`.
+- `crates/hem-cli` is the primary Rust CLI (`cargo run -p hem-cli -- …`). It exposes scan, snapshot, diff, restore, doctor, report, timeline, and bundle subcommands.
+- `crates/hem-core` holds all engine logic: scanners, store, snapshot, graph, diff, audit, provenance, restore, bundle, timeline, readiness, and report rendering.
+- `apps/desktop/src-tauri` depends on `hem-core` in-process. Tauri commands are thin adapters over the Rust engine; bespoke scan parsers in `lib.rs` are removed.
+- `apps/cli` and `packages/core` are deprecated Bun/TypeScript stacks kept for parity tests and npm publish continuity until M4 cleanup.
+- `apps/tui` is a deprecated Ink presentation layer over the TS core.
 
 ## Core Data Model
 

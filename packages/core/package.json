@@ -1,7 +1,7 @@
 {
   "name": "@qxinm/hem-core",
   "version": "0.3.4",
-  "description": "Core domain logic for Hem.",
+  "description": "[DEPRECATED] Use crates/hem-core. TS core kept for parity reference until Rust client cutover.",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",

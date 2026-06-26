@@ -1,3 +1,9 @@
+use hem_core::{
+    build_graph, default_store_dir, diff_graphs, list_agents, list_snapshots, list_timeline_entries,
+    scan_project,
+    types::{AgentId, DiscoveredItem, EvidenceKind, EvidenceParser, ScanOptions},
+    TimelineListOptions,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
@@ -81,21 +87,142 @@ struct NotificationPermission {
 
 #[tauri::command]
 fn desktop_home_state() -> DesktopHomeState {
-    let project_path = desktop_project_path();
-    let home_dir = home_dir();
-    let profile_state = ensure_profile_state(home_dir.as_deref()).unwrap_or_else(|_| default_profile_state());
-    let inventory = scan_inventory(&project_path, home_dir.as_deref());
+    build_desktop_home_state(&desktop_project_path(), home_dir().as_deref())
+}
+
+fn build_desktop_home_state(project_path: &Path, home_dir: Option<&Path>) -> DesktopHomeState {
+    let home = home_dir_for_scan(project_path, home_dir);
+    let store_dir = default_store_dir(&home);
+    let profile_state =
+        ensure_profile_state(Some(&home)).unwrap_or_else(|_| default_profile_state());
+    let inventory = scan_inventory(project_path, Some(&home));
+    let latest_snapshot = latest_snapshot_reference(&store_dir);
+    let current_snapshot_id = latest_snapshot.as_ref().map(|(name, _)| name.clone());
+    let protection = if current_snapshot_id.is_some() {
+        "on".into()
+    } else {
+        "off".into()
+    };
+
+    let (working_changes, highest_risk) =
+        working_change_summary(project_path, &home, &store_dir, latest_snapshot.as_ref());
+    let changelog = timeline_changelog(&store_dir, project_path);
 
     DesktopHomeState {
         active_profile: profile_state.active,
         profiles: profile_state.profiles,
-        current_snapshot_id: None,
-        protection: "off".into(),
-        highest_risk: None,
-        working_changes: 0,
+        current_snapshot_id,
+        protection,
+        highest_risk,
+        working_changes,
         surfaces: surfaces_for(&inventory),
-        changelog: Vec::new(),
+        changelog,
         inventory,
+    }
+}
+
+fn latest_snapshot_reference(store_dir: &Path) -> Option<(String, Option<AgentId>)> {
+    let mut snapshots = Vec::new();
+    for agent in list_agents(store_dir).unwrap_or_default() {
+        for name in list_snapshots(store_dir, Some(agent)).unwrap_or_default() {
+            snapshots.push((name, Some(agent)));
+        }
+    }
+    for name in list_snapshots(store_dir, None).unwrap_or_default() {
+        snapshots.push((name, None));
+    }
+    snapshots.sort_by(|left, right| left.0.cmp(&right.0));
+    snapshots.pop()
+}
+
+fn working_change_summary(
+    project_path: &Path,
+    home_dir: &Path,
+    store_dir: &Path,
+    latest_snapshot: Option<&(String, Option<AgentId>)>,
+) -> (u32, Option<String>) {
+    let Some((snapshot_name, agent)) = latest_snapshot else {
+        return (0, None);
+    };
+    let scan = scan_project(&ScanOptions {
+        project_path: project_path.display().to_string(),
+        home_dir: home_dir.display().to_string(),
+        store_dir: store_dir.display().to_string(),
+        explain: None,
+        agent: None,
+        scope: None,
+    });
+    let current_graph = build_graph(&scan.evidence);
+    let snapshot_graph = match hem_core::read_snapshot(store_dir, snapshot_name, *agent) {
+        Ok(snapshot) => snapshot.graph,
+        Err(_) => return (0, None),
+    };
+    let diff = diff_graphs(&snapshot_graph, &current_graph);
+    let working_changes = diff.semantic_changes.len() as u32;
+    let highest_risk = diff
+        .semantic_changes
+        .iter()
+        .map(|change| severity_label(change.severity))
+        .max_by_key(severity_rank)
+        .flatten();
+    (working_changes, highest_risk)
+}
+
+fn severity_label(severity: hem_core::Severity) -> Option<String> {
+    match severity {
+        hem_core::Severity::None => None,
+        hem_core::Severity::Low => Some("low".into()),
+        hem_core::Severity::Medium => Some("medium".into()),
+        hem_core::Severity::High => Some("high".into()),
+        hem_core::Severity::Critical => Some("high".into()),
+    }
+}
+
+fn severity_rank(label: &Option<String>) -> u8 {
+    match label.as_deref() {
+        Some("high") => 3,
+        Some("medium") => 2,
+        Some("low") => 1,
+        _ => 0,
+    }
+}
+
+fn timeline_changelog(store_dir: &Path, project_path: &Path) -> Vec<ChangelogEntry> {
+    let project_path_string = project_path.display().to_string();
+    let entries = list_timeline_entries(
+        store_dir,
+        TimelineListOptions {
+            agent: None,
+            project_path: Some(project_path_string.as_str()),
+            limit: Some(10),
+            on_corrupt_entry: None,
+        },
+    )
+    .unwrap_or_default();
+
+    entries
+        .into_iter()
+        .map(|entry| ChangelogEntry {
+            id: entry.id,
+            title: entry.title,
+            time: entry.created_at,
+            source: timeline_source_label(entry.source),
+            risk: timeline_risk_label(entry.restore_readiness),
+        })
+        .collect()
+}
+
+fn timeline_source_label(source: hem_core::TimelineEntrySource) -> String {
+    match source {
+        hem_core::TimelineEntrySource::Manual => "manual".into(),
+    }
+}
+
+fn timeline_risk_label(readiness: hem_core::TimelineRestoreReadiness) -> String {
+    match readiness {
+        hem_core::TimelineRestoreReadiness::Full => "low".into(),
+        hem_core::TimelineRestoreReadiness::Partial => "medium".into(),
+        hem_core::TimelineRestoreReadiness::ObserveOnly => "high".into(),
     }
 }
 
@@ -198,128 +325,144 @@ fn request_notification_permission() -> Result<NotificationPermission, String> {
 }
 
 fn scan_inventory(project_path: &Path, home_dir: Option<&Path>) -> DesktopInventory {
+    let home = home_dir_for_scan(project_path, home_dir);
+    let store_dir = default_store_dir(&home);
+    let scan = scan_project(&ScanOptions {
+        project_path: project_path.display().to_string(),
+        home_dir: home.display().to_string(),
+        store_dir: store_dir.display().to_string(),
+        explain: None,
+        agent: None,
+        scope: None,
+    });
+
+    inventory_from_evidence(&scan.evidence)
+}
+
+fn home_dir_for_scan(project_path: &Path, home_dir: Option<&Path>) -> PathBuf {
+    home_dir
+        .map(Path::to_path_buf)
+        .or_else(|| env::var_os("HOME").map(PathBuf::from))
+        .unwrap_or_else(|| project_path.join(".hem-no-home"))
+}
+
+fn inventory_from_evidence(evidence: &[DiscoveredItem]) -> DesktopInventory {
     let mut seen = HashSet::new();
     let mut inventory = DesktopInventory::default();
 
-    scan_mcp_json(
-        &project_path.join(".mcp.json"),
-        "Claude Code",
-        "project",
-        project_path,
-        home_dir,
-        &mut inventory.mcp,
-        &mut seen,
-    );
-    scan_mcp_json(
-        &project_path.join(".cursor/mcp.json"),
-        "Cursor",
-        "project",
-        project_path,
-        home_dir,
-        &mut inventory.mcp,
-        &mut seen,
-    );
-    scan_hooks_json(
-        &project_path.join(".cursor/hooks.json"),
-        "Cursor",
-        "project",
-        project_path,
-        home_dir,
-        &mut inventory.hooks,
-        &mut seen,
-    );
-    scan_hooks_json(
-        &project_path.join(".codex/hooks.json"),
-        "Codex",
-        "project",
-        project_path,
-        home_dir,
-        &mut inventory.hooks,
-        &mut seen,
-    );
-    scan_skill_roots(
-        &[
-            project_path.join(".codex/skills"),
-            project_path.join(".cursor/skills"),
-            project_path.join(".claude/skills"),
-            project_path.join(".agents/skills"),
-            project_path.join(".pi/skills"),
-        ],
-        "Project",
-        "project",
-        project_path,
-        home_dir,
-        &mut inventory.skills,
-        &mut seen,
-    );
+    for item in evidence {
+        let bucket = match item.kind {
+            EvidenceKind::Skill => Some(&mut inventory.skills),
+            EvidenceKind::McpServer => Some(&mut inventory.mcp),
+            EvidenceKind::Hook => Some(&mut inventory.hooks),
+            _ => None,
+        };
+        let Some(bucket) = bucket else {
+            continue;
+        };
 
-    if let Some(home) = home_dir {
-        scan_mcp_json(
-            &home.join(".cursor/mcp.json"),
-            "Cursor",
-            "user",
-            project_path,
-            Some(home),
-            &mut inventory.mcp,
-            &mut seen,
-        );
-        scan_settings_json(
-            &home.join(".claude/settings.json"),
-            "Claude Code",
-            "user",
-            project_path,
-            Some(home),
-            &mut inventory,
-            &mut seen,
-        );
-        scan_codex_config_toml(
-            &home.join(".codex/config.toml"),
-            project_path,
-            Some(home),
-            &mut inventory,
-            &mut seen,
-        );
-        scan_hooks_json(
-            &home.join(".cursor/hooks.json"),
-            "Cursor",
-            "user",
-            project_path,
-            Some(home),
-            &mut inventory.hooks,
-            &mut seen,
-        );
-        scan_hooks_json(
-            &home.join(".codex/hooks.json"),
-            "Codex",
-            "user",
-            project_path,
-            Some(home),
-            &mut inventory.hooks,
-            &mut seen,
-        );
-        scan_skill_roots(
-            &[
-                home.join(".codex/skills"),
-                home.join(".codex/plugins/cache"),
-                home.join(".codex/vendor_imports/skills"),
-                home.join(".cursor/skills"),
-                home.join(".claude/skills"),
-                home.join(".agents/skills"),
-                home.join(".pi/agent/skills"),
-            ],
-            "User",
-            "user",
-            project_path,
-            Some(home),
-            &mut inventory.skills,
-            &mut seen,
-        );
+        let inventory_item = discovered_item_to_inventory_item(item);
+        if seen.insert(inventory_item.id.clone()) {
+            bucket.push(inventory_item);
+        }
     }
 
     inventory.skills.sort_by(item_order);
     inventory.mcp.sort_by(item_order);
     inventory.hooks.sort_by(item_order);
     inventory
+}
+
+fn discovered_item_to_inventory_item(item: &DiscoveredItem) -> InventoryItem {
+    let (status, detail) = match item.kind {
+        EvidenceKind::McpServer => (mcp_status(item.value.as_ref()), mcp_detail(item.value.as_ref())),
+        EvidenceKind::Hook => (hook_status(item), hook_detail(item)),
+        EvidenceKind::Skill => (skill_status(item), skill_detail(item)),
+        _ => (None, None),
+    };
+
+    InventoryItem {
+        id: item.id.clone(),
+        name: item
+            .name
+            .clone()
+            .unwrap_or_else(|| item.source_path.clone()),
+        agent: display_agent(item.agent),
+        source_path: item.source_path.clone(),
+        scope: item.scope.as_str().into(),
+        status,
+        detail,
+    }
+}
+
+fn display_agent(agent: AgentId) -> String {
+    match agent {
+        AgentId::ClaudeCode => "Claude Code".into(),
+        AgentId::Codex => "Codex".into(),
+        AgentId::Cursor => "Cursor".into(),
+        AgentId::Project => "Project".into(),
+        AgentId::Opencode => "opencode".into(),
+        AgentId::PiAgent => "pi-agent".into(),
+        AgentId::Unknown => "unknown".into(),
+    }
+}
+
+fn mcp_status(value: Option<&Value>) -> Option<String> {
+    let value = value?;
+    if value.get("disabled").and_then(Value::as_bool).unwrap_or(false) {
+        return Some("disabled".into());
+    }
+    if value.get("enabled").and_then(Value::as_bool) == Some(false) {
+        return Some("disabled".into());
+    }
+    Some("enabled".into())
+}
+
+fn mcp_detail(value: Option<&Value>) -> Option<String> {
+    let value = value?;
+    value
+        .get("command")
+        .and_then(Value::as_str)
+        .or_else(|| value.get("url").and_then(Value::as_str))
+        .map(str::to_owned)
+}
+
+fn hook_status(item: &DiscoveredItem) -> Option<String> {
+    item.metadata
+        .as_ref()
+        .or(item.value.as_ref())
+        .and_then(|value| value.get("type").and_then(Value::as_str))
+        .map(str::to_owned)
+        .or_else(|| {
+            if item.parser == EvidenceParser::Toml {
+                Some("toml".into())
+            } else {
+                None
+            }
+        })
+}
+
+fn hook_detail(item: &DiscoveredItem) -> Option<String> {
+    item.metadata
+        .as_ref()
+        .or(item.value.as_ref())
+        .and_then(|value| value.get("command").and_then(Value::as_str))
+        .map(str::to_owned)
+}
+
+fn skill_detail(item: &DiscoveredItem) -> Option<String> {
+    item.metadata
+        .as_ref()
+        .and_then(|value| value.get("description").and_then(Value::as_str))
+        .map(str::to_owned)
+}
+
+fn skill_status(item: &DiscoveredItem) -> Option<String> {
+    if skill_detail(item).is_some() {
+        None
+    } else {
+        Some("missing description".into())
+    }
 }
 
 fn surfaces_for(inventory: &DesktopInventory) -> Vec<SetupSurface> {
@@ -349,433 +492,11 @@ fn surface(id: &str, label: &str, count: usize) -> SetupSurface {
     }
 }
 
-fn scan_mcp_json(
-    path: &Path,
-    agent: &str,
-    scope: &str,
-    project_path: &Path,
-    home_dir: Option<&Path>,
-    items: &mut Vec<InventoryItem>,
-    seen: &mut HashSet<String>,
-) {
-    let Some(root) = read_json_object(path) else {
-        return;
-    };
-    let Some(servers) = root.get("mcpServers").and_then(Value::as_object) else {
-        return;
-    };
-
-    for (name, value) in servers {
-        let disabled = value
-            .get("disabled")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let detail = value
-            .get("command")
-            .and_then(Value::as_str)
-            .or_else(|| value.get("url").and_then(Value::as_str))
-            .map(str::to_owned);
-        push_item(
-            items,
-            seen,
-            InventoryItem {
-                id: format!("mcp:{agent}:{scope}:{name}:{}", path.display()),
-                name: name.clone(),
-                agent: agent.into(),
-                source_path: display_path(path, project_path, home_dir),
-                scope: scope.into(),
-                status: Some(if disabled { "disabled" } else { "enabled" }.into()),
-                detail,
-            },
-        );
-    }
-}
-
-fn scan_settings_json(
-    path: &Path,
-    agent: &str,
-    scope: &str,
-    project_path: &Path,
-    home_dir: Option<&Path>,
-    inventory: &mut DesktopInventory,
-    seen: &mut HashSet<String>,
-) {
-    let Some(root) = read_json_object(path) else {
-        return;
-    };
-    if root.get("mcpServers").is_some() {
-        scan_mcp_json(
-            path,
-            agent,
-            scope,
-            project_path,
-            home_dir,
-            &mut inventory.mcp,
-            seen,
-        );
-    }
-    collect_hooks_from_value(
-        path,
-        agent,
-        scope,
-        project_path,
-        home_dir,
-        root.get("hooks").unwrap_or(&Value::Null),
-        &mut inventory.hooks,
-        seen,
-    );
-}
-
-fn scan_hooks_json(
-    path: &Path,
-    agent: &str,
-    scope: &str,
-    project_path: &Path,
-    home_dir: Option<&Path>,
-    items: &mut Vec<InventoryItem>,
-    seen: &mut HashSet<String>,
-) {
-    let Some(root) = read_json_object(path) else {
-        return;
-    };
-    collect_hooks_from_value(
-        path,
-        agent,
-        scope,
-        project_path,
-        home_dir,
-        root.get("hooks").unwrap_or(&Value::Null),
-        items,
-        seen,
-    );
-}
-
-fn collect_hooks_from_value(
-    path: &Path,
-    agent: &str,
-    scope: &str,
-    project_path: &Path,
-    home_dir: Option<&Path>,
-    hooks: &Value,
-    items: &mut Vec<InventoryItem>,
-    seen: &mut HashSet<String>,
-) {
-    let Some(events) = hooks.as_object() else {
-        return;
-    };
-
-    for (event_name, definitions) in events {
-        let Some(groups) = definitions.as_array() else {
-            continue;
-        };
-        for (group_index, group) in groups.iter().enumerate() {
-            let matcher = group.get("matcher").and_then(Value::as_str).unwrap_or("*");
-            let nested_hooks = group
-                .get("hooks")
-                .and_then(Value::as_array)
-                .unwrap_or(groups);
-            for (hook_index, hook) in nested_hooks.iter().enumerate() {
-                let command = hook
-                    .get("command")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned);
-                push_item(
-                    items,
-                    seen,
-                    InventoryItem {
-                        id: format!(
-                            "hook:{agent}:{scope}:{event_name}:{group_index}:{hook_index}:{}",
-                            path.display()
-                        ),
-                        name: format!("{event_name}.{matcher}"),
-                        agent: agent.into(),
-                        source_path: display_path(path, project_path, home_dir),
-                        scope: scope.into(),
-                        status: hook.get("type").and_then(Value::as_str).map(str::to_owned),
-                        detail: command,
-                    },
-                );
-            }
-        }
-    }
-}
-
-fn scan_codex_config_toml(
-    path: &Path,
-    project_path: &Path,
-    home_dir: Option<&Path>,
-    inventory: &mut DesktopInventory,
-    seen: &mut HashSet<String>,
-) {
-    let Ok(text) = fs::read_to_string(path) else {
-        return;
-    };
-    let mut current_mcp: Option<String> = None;
-    let mut current_hook: Option<String> = None;
-    let mut disabled = false;
-    let mut detail: Option<String> = None;
-
-    for line in text.lines().chain([""].iter().copied()) {
-        let trimmed = line.split('#').next().unwrap_or("").trim();
-        if trimmed.starts_with("[") {
-            flush_codex_mcp(
-                path,
-                project_path,
-                home_dir,
-                inventory,
-                seen,
-                current_mcp.take(),
-                disabled,
-                detail.take(),
-            );
-            disabled = false;
-            current_hook = None;
-            current_mcp = codex_mcp_section_name(trimmed);
-            if let Some(event) = codex_hook_section_name(trimmed) {
-                current_hook = Some(event.clone());
-                push_item(
-                    &mut inventory.hooks,
-                    seen,
-                    InventoryItem {
-                        id: format!("hook:Codex:user:{event}:{}", path.display()),
-                        name: event,
-                        agent: "Codex".into(),
-                        source_path: display_path(path, project_path, home_dir),
-                        scope: "user".into(),
-                        status: Some("toml".into()),
-                        detail: None,
-                    },
-                );
-            }
-            continue;
-        }
-        if current_mcp.is_some() {
-            if let Some(value) = bool_assignment(trimmed, "disabled") {
-                disabled = value;
-            }
-            if detail.is_none() {
-                detail = string_assignment(trimmed, "command")
-                    .or_else(|| string_assignment(trimmed, "url"));
-            }
-        }
-        if current_hook.is_some() && detail.is_none() {
-            detail = string_assignment(trimmed, "command");
-        }
-    }
-}
-
-fn flush_codex_mcp(
-    path: &Path,
-    project_path: &Path,
-    home_dir: Option<&Path>,
-    inventory: &mut DesktopInventory,
-    seen: &mut HashSet<String>,
-    name: Option<String>,
-    disabled: bool,
-    detail: Option<String>,
-) {
-    let Some(name) = name else {
-        return;
-    };
-    push_item(
-        &mut inventory.mcp,
-        seen,
-        InventoryItem {
-            id: format!("mcp:Codex:user:{name}:{}", path.display()),
-            name,
-            agent: "Codex".into(),
-            source_path: display_path(path, project_path, home_dir),
-            scope: "user".into(),
-            status: Some(if disabled { "disabled" } else { "enabled" }.into()),
-            detail,
-        },
-    );
-}
-
-fn scan_skill_roots(
-    roots: &[PathBuf],
-    agent: &str,
-    scope: &str,
-    project_path: &Path,
-    home_dir: Option<&Path>,
-    items: &mut Vec<InventoryItem>,
-    seen: &mut HashSet<String>,
-) {
-    for root in roots {
-        if !root.is_dir() {
-            continue;
-        }
-        let mut stack = vec![(root.clone(), 0usize)];
-        while let Some((dir, depth)) = stack.pop() {
-            if depth > 8 {
-                continue;
-            }
-            let skill_file = dir.join("SKILL.md");
-            if skill_file.is_file() {
-                let name = skill_name(&skill_file).unwrap_or_else(|| {
-                    dir.file_name()
-                        .and_then(|part| part.to_str())
-                        .unwrap_or("skill")
-                        .to_owned()
-                });
-                push_item(
-                    items,
-                    seen,
-                    InventoryItem {
-                        id: format!("skill:{agent}:{scope}:{}", dir.display()),
-                        name,
-                        agent: agent.into(),
-                        source_path: display_path(&dir, project_path, home_dir),
-                        scope: scope.into(),
-                        status: skill_status(&skill_file),
-                        detail: skill_description(&skill_file),
-                    },
-                );
-                continue;
-            }
-            let Ok(entries) = fs::read_dir(&dir) else {
-                continue;
-            };
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    stack.push((path, depth + 1));
-                } else if depth == 0 && path.extension().and_then(|ext| ext.to_str()) == Some("md")
-                {
-                    let name = skill_name(&path).or_else(|| {
-                        path.file_stem()
-                            .and_then(|part| part.to_str())
-                            .map(str::to_owned)
-                    });
-                    if let Some(name) = name {
-                        push_item(
-                            items,
-                            seen,
-                            InventoryItem {
-                                id: format!("skill:{agent}:{scope}:{}", path.display()),
-                                name,
-                                agent: agent.into(),
-                                source_path: display_path(&path, project_path, home_dir),
-                                scope: scope.into(),
-                                status: skill_status(&path),
-                                detail: skill_description(&path),
-                            },
-                        );
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn read_json_object(path: &Path) -> Option<serde_json::Map<String, Value>> {
-    let text = fs::read_to_string(path).ok()?;
-    serde_json::from_str::<Value>(&text)
-        .ok()?
-        .as_object()
-        .cloned()
-}
-
-fn skill_name(path: &Path) -> Option<String> {
-    frontmatter_value(path, "name")
-}
-
-fn skill_description(path: &Path) -> Option<String> {
-    frontmatter_value(path, "description")
-}
-
-fn skill_status(path: &Path) -> Option<String> {
-    if skill_description(path).is_some() {
-        None
-    } else {
-        Some("missing description".into())
-    }
-}
-
-fn frontmatter_value(path: &Path, key: &str) -> Option<String> {
-    let text = fs::read_to_string(path).ok()?;
-    let mut in_frontmatter = false;
-    for (index, line) in text.lines().enumerate() {
-        let trimmed = line.trim();
-        if index == 0 && trimmed == "---" {
-            in_frontmatter = true;
-            continue;
-        }
-        if in_frontmatter && trimmed == "---" {
-            break;
-        }
-        if in_frontmatter {
-            let prefix = format!("{key}:");
-            if let Some(value) = trimmed.strip_prefix(&prefix) {
-                let value = value.trim().trim_matches('"').trim_matches('\'');
-                if !value.is_empty() {
-                    return Some(value.to_owned());
-                }
-            }
-        }
-    }
-    None
-}
-
-fn codex_mcp_section_name(line: &str) -> Option<String> {
-    let section = line.strip_prefix('[')?.strip_suffix(']')?;
-    let name = section.strip_prefix("mcp_servers.")?;
-    if name.contains('.') || name.is_empty() {
-        None
-    } else {
-        Some(name.trim_matches('"').to_owned())
-    }
-}
-
-fn codex_hook_section_name(line: &str) -> Option<String> {
-    let section = line.strip_prefix("[[")?.strip_suffix("]]")?;
-    let name = section.strip_prefix("hooks.")?;
-    let name = name.strip_suffix(".hooks").unwrap_or(name);
-    if name.is_empty() {
-        None
-    } else {
-        Some(name.trim_matches('"').to_owned())
-    }
-}
-
-fn bool_assignment(line: &str, key: &str) -> Option<bool> {
-    let value = line.strip_prefix(&format!("{key} = "))?.trim();
-    match value {
-        "true" => Some(true),
-        "false" => Some(false),
-        _ => None,
-    }
-}
-
-fn string_assignment(line: &str, key: &str) -> Option<String> {
-    let value = line.strip_prefix(&format!("{key} = "))?.trim();
-    Some(value.trim_matches('"').trim_matches('\'').to_owned()).filter(|value| !value.is_empty())
-}
-
-fn push_item(items: &mut Vec<InventoryItem>, seen: &mut HashSet<String>, item: InventoryItem) {
-    if seen.insert(item.id.clone()) {
-        items.push(item);
-    }
-}
-
 fn item_order(left: &InventoryItem, right: &InventoryItem) -> std::cmp::Ordering {
     left.agent
         .cmp(&right.agent)
         .then(left.scope.cmp(&right.scope))
         .then(left.name.cmp(&right.name))
-}
-
-fn display_path(path: &Path, project_path: &Path, home_dir: Option<&Path>) -> String {
-    if let Ok(relative) = path.strip_prefix(project_path) {
-        let value = relative.to_string_lossy().replace('\\', "/");
-        return if value.is_empty() { ".".into() } else { value };
-    }
-    if let Some(home) = home_dir {
-        if let Ok(relative) = path.strip_prefix(home) {
-            return format!("~/{}", relative.to_string_lossy().replace('\\', "/"));
-        }
-    }
-    path.to_string_lossy().replace('\\', "/")
 }
 
 fn desktop_project_path() -> PathBuf {
@@ -849,5 +570,93 @@ mod native_notifications {
 
     pub fn request_permission() -> Result<NotificationPermission, String> {
         Err("Notification permission requests are only implemented for macOS".into())
+    }
+}
+
+#[cfg(test)]
+mod desktop_home_state_tests {
+    use super::build_desktop_home_state;
+    use hem_core::{
+        capture_current_state, capture_timeline_snapshot, write_snapshot,
+        types::{AgentId, EvidenceScope, RuntimeOptions},
+        CaptureTimelineOptions, StoreSnapshot,
+    };
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn write_project_mcp(project_path: &std::path::Path, command: &str) {
+        let payload = serde_json::json!({
+            "mcpServers": {
+                "github": { "command": command }
+            }
+        });
+        fs::write(
+            project_path.join(".mcp.json"),
+            serde_json::to_string_pretty(&payload).expect("serialize mcp"),
+        )
+        .expect("write mcp");
+    }
+
+    #[test]
+    fn populates_current_snapshot_id_from_store() {
+        let root = TempDir::new().expect("temp dir");
+        let project_path = root.path().join("project");
+        let home_dir = root.path().join("home");
+        let store_dir = home_dir.join(".hem");
+        fs::create_dir_all(&project_path).expect("mkdir project");
+        fs::create_dir_all(&home_dir).expect("mkdir home");
+
+        let runtime = RuntimeOptions {
+            project_path: project_path.display().to_string(),
+            home_dir: home_dir.display().to_string(),
+            store_dir: store_dir.display().to_string(),
+            agent: Some(AgentId::Codex),
+            scope: Some(EvidenceScope::User),
+            capture_content: Some(false),
+        };
+
+        write_project_mcp(&project_path, "gh-baseline");
+        let state = capture_current_state(&runtime, "desktop-baseline").expect("capture");
+        write_snapshot(&store_dir, StoreSnapshot::from(state.snapshot), Some(AgentId::Codex))
+            .expect("write snapshot");
+
+        capture_timeline_snapshot(
+            &runtime,
+            &CaptureTimelineOptions {
+                capture_id: Some("desktop-test-capture".to_string()),
+                snapshot_name: Some("desktop-baseline".to_string()),
+                title: Some("Desktop baseline".to_string()),
+                skip_unchanged: false,
+            },
+        )
+        .expect("timeline capture");
+
+        write_project_mcp(&project_path, "gh-changed");
+
+        let home = build_desktop_home_state(&project_path, Some(&home_dir));
+        assert_eq!(
+            home.current_snapshot_id.as_deref(),
+            Some("desktop-baseline"),
+            "expected latest snapshot id, got {:?}",
+            home.current_snapshot_id
+        );
+        assert_eq!(home.protection, "on");
+        assert!(!home.surfaces.is_empty());
+        assert!(
+            home.working_changes > 0,
+            "expected drift after mcp change, got {}",
+            home.working_changes
+        );
+        assert!(
+            !home.changelog.is_empty(),
+            "expected timeline changelog entries"
+        );
+
+        if let Ok(scratch) = std::env::var("HEM_SCRATCH_DIR") {
+            let serialized =
+                serde_json::to_string_pretty(&home).expect("serialize desktop home state");
+            fs::write(format!("{scratch}/desktop-home-state.json"), serialized)
+                .expect("write desktop home state evidence");
+        }
     }
 }

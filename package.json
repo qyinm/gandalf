@@ -14,6 +14,8 @@
     "typecheck": "tsc -b && bun run --cwd apps/desktop typecheck",
     "test": "bun run --cwd packages/core test && bun run --cwd apps/tui test && bun run --cwd apps/cli test && bun run --cwd apps/desktop test",
     "check": "bun run build && bun run test",
+    "rust:test": "cargo test --workspace",
+    "rust:check": "cargo check --workspace",
     "desktop:dev": "bun run --cwd apps/desktop tauri dev",
     "desktop:build": "bun run --cwd apps/desktop tauri build",
     "prepublishOnly": "bun run check",

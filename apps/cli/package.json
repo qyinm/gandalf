@@ -1,7 +1,7 @@
 {
   "name": "@qxinm/hem",
   "version": "0.3.4",
-  "description": "Local rollback safety net for Codex setup experiments.",
+  "description": "[DEPRECATED] Use crates/hem-cli. npm package kept until Rust binary distribution ships.",
   "type": "module",
   "bin": {
     "hem": "dist/src/cli.js"

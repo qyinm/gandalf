@@ -1,0 +1,24 @@
+[package]
+name = "hem-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Hem terminal client"
+
+[[bin]]
+name = "hem"
+path = "src/main.rs"
+
+[lib]
+name = "hem_cli"
+path = "src/lib.rs"
+
+[dependencies]
+hem-core = { path = "../hem-core" }
+clap = { version = "4", features = ["derive", "env"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
