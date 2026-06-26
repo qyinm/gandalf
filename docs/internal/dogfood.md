@@ -5,19 +5,19 @@ Date: 2026-05-12
 Command shape:
 
 ```bash
-HEM_STORE=/tmp/hem-dogfood/store node dist/src/cli.js scan --project <project> --json
-HEM_STORE=/tmp/hem-dogfood/store node dist/src/cli.js report current --project <project> --out /tmp/hem-dogfood/reports/<name>-report.md
+GANDALF_STORE=/tmp/gandalf-dogfood/store node dist/src/cli.js scan --project <project> --json
+GANDALF_STORE=/tmp/gandalf-dogfood/store node dist/src/cli.js report current --project <project> --out /tmp/gandalf-dogfood/reports/<name>-report.md
 ```
 
-The store was redirected to `/tmp/hem-dogfood/store` so dogfood did not write to the user's real `~/.hem` store.
+The store was redirected to `/tmp/gandalf-dogfood/store` so dogfood did not write to the user's real `~/.gandalf` store.
 
 ## Results
 
 | Project | Scan JSON | Markdown report | Evidence | Findings | Blind spots |
 |---|---|---|---:|---:|---:|
-| Hem | `/tmp/hem-dogfood/hem-scan.json` | `/tmp/hem-dogfood/reports/hem-report.md` | 243 | 108 | 3 |
-| MirrorNote | `/tmp/hem-dogfood/mirrornote-scan.json` | `/tmp/hem-dogfood/reports/mirrornote-report.md` | 247 | 111 | 3 |
-| DuckDocs | `/tmp/hem-dogfood/duckdocs-scan.json` | `/tmp/hem-dogfood/reports/duckdocs-report.md` | 245 | 108 | 3 |
+| Gandalf | `/tmp/gandalf-dogfood/gandalf-scan.json` | `/tmp/gandalf-dogfood/reports/gandalf-report.md` | 243 | 108 | 3 |
+| MirrorNote | `/tmp/gandalf-dogfood/mirrornote-scan.json` | `/tmp/gandalf-dogfood/reports/mirrornote-report.md` | 247 | 111 | 3 |
+| DuckDocs | `/tmp/gandalf-dogfood/duckdocs-scan.json` | `/tmp/gandalf-dogfood/reports/duckdocs-report.md` | 245 | 108 | 3 |
 
 ## Observations
 

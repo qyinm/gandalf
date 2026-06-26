@@ -1,5 +1,5 @@
 /**
- * Dashboard — sidebar-driven workspace layout for hem TUI.
+ * Dashboard — sidebar-driven workspace layout for gandalf TUI.
  *
  *  ┌──────────────┬────────────────────────────────────────────┐
  *  │  Agents       │  Local setup workspace                    │
@@ -19,18 +19,18 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Text, Box, useInput, useStdout } from "ink";
 import Spinner from "ink-spinner";
 
-import { scanProject } from "@qxinm/hem-core/scan.js";
-import { buildGraph } from "@qxinm/hem-core/graph.js";
-import { auditEvidence } from "@qxinm/hem-core/audit.js";
-import { ensureStore, listSnapshots, listTimelineEntries } from "@qxinm/hem-core/store.js";
-import { diffGraphs } from "@qxinm/hem-core/diff.js";
-import type { AuditFinding } from "@qxinm/hem-core/types.js";
-import type { ScanResult } from "@qxinm/hem-core/scan.js";
-import type { RuntimeOptions } from "@qxinm/hem-core";
-import type { AgentId, DiscoveredItem, Snapshot, TimelineEntry } from "@qxinm/hem-core/types.js";
-import type { TimelineCorruptEvent } from "@qxinm/hem-core/store.js";
-import type { TimelineUndoPlan } from "@qxinm/hem-core/timeline-undo.js";
-import type { GraphDiff } from "@qxinm/hem-core/diff.js";
+import { scanProject } from "@qxinm/gandalf-core/scan.js";
+import { buildGraph } from "@qxinm/gandalf-core/graph.js";
+import { auditEvidence } from "@qxinm/gandalf-core/audit.js";
+import { ensureStore, listSnapshots, listTimelineEntries } from "@qxinm/gandalf-core/store.js";
+import { diffGraphs } from "@qxinm/gandalf-core/diff.js";
+import type { AuditFinding } from "@qxinm/gandalf-core/types.js";
+import type { ScanResult } from "@qxinm/gandalf-core/scan.js";
+import type { RuntimeOptions } from "@qxinm/gandalf-core";
+import type { AgentId, DiscoveredItem, Snapshot, TimelineEntry } from "@qxinm/gandalf-core/types.js";
+import type { TimelineCorruptEvent } from "@qxinm/gandalf-core/store.js";
+import type { TimelineUndoPlan } from "@qxinm/gandalf-core/timeline-undo.js";
+import type { GraphDiff } from "@qxinm/gandalf-core/diff.js";
 
 import Sidebar, { buildAgentEntries, buildAgentFilterEntries, agentLabelStr } from "./Sidebar.js";
 import ScanView, { DEFAULT_SCAN_WINDOW_SIZE } from "./ScanView.js";
@@ -226,7 +226,7 @@ export default function Dashboard({ options }: DashboardProps) {
           ...s,
           status: "error",
           error: {
-            code: "HEM_INIT_FAILED",
+            code: "GANDALF_INIT_FAILED",
             problem: `Initial scan failed: ${err instanceof Error ? err.message : String(err)}`,
             cause: "Could not detect agents in this project.",
             fix: "Verify the project path and try again.",
@@ -393,8 +393,8 @@ export default function Dashboard({ options }: DashboardProps) {
           saveSetupState: { type: "loading" }
         }));
         try {
-          const { captureCurrentState } = await import("@qxinm/hem-core/current-state.js");
-          const { readSnapshot } = await import("@qxinm/hem-core/store.js");
+          const { captureCurrentState } = await import("@qxinm/gandalf-core/current-state.js");
+          const { readSnapshot } = await import("@qxinm/gandalf-core/store.js");
           const current = await captureCurrentState(options);
           const snapshotNames = await listSnapshots(options.storeDir);
           const savedSnapshots = await Promise.all(
@@ -455,8 +455,8 @@ export default function Dashboard({ options }: DashboardProps) {
           notice: null
         }));
         try {
-          const { captureCurrentState } = await import("@qxinm/hem-core/current-state.js");
-          const { readSnapshot } = await import("@qxinm/hem-core/store.js");
+          const { captureCurrentState } = await import("@qxinm/gandalf-core/current-state.js");
+          const { readSnapshot } = await import("@qxinm/gandalf-core/store.js");
           const snapshotNames = await listSnapshots(options.storeDir);
           const savedSnapshots = await Promise.all(
             snapshotNames.map((name) => readSnapshot(options.storeDir, name))
@@ -519,7 +519,7 @@ export default function Dashboard({ options }: DashboardProps) {
           setState((s) => ({
             ...s,
             error: {
-              code: "HEM_SCAN_FAILED",
+              code: "GANDALF_SCAN_FAILED",
               problem: `Scan failed: ${err instanceof Error ? err.message : String(err)}`,
               cause: `Could not scan ${agentLabelStr(agent)} configuration.`,
               fix: "Check agent config paths and permissions.",
@@ -541,7 +541,7 @@ export default function Dashboard({ options }: DashboardProps) {
           setState((s) => ({
             ...s,
             error: {
-              code: "HEM_AUDIT_FAILED",
+              code: "GANDALF_AUDIT_FAILED",
               problem: `Audit failed: ${err instanceof Error ? err.message : String(err)}`,
               cause: `Could not audit ${agentLabelStr(agent)}.`,
               fix: "Check agent config paths.",
@@ -570,7 +570,7 @@ export default function Dashboard({ options }: DashboardProps) {
             setState((s) => ({
               ...s,
               error: {
-                code: "HEM_OP_FAILED",
+                code: "GANDALF_OP_FAILED",
                 problem: `${action} did not complete.`,
                 cause: "Cancelled or error.",
                 fix: "Try again.",
@@ -584,7 +584,7 @@ export default function Dashboard({ options }: DashboardProps) {
           setState((s) => ({
             ...s,
             error: {
-              code: "HEM_OP_ERROR",
+              code: "GANDALF_OP_ERROR",
               problem: `${action} error: ${err instanceof Error ? err.message : String(err)}`,
               cause: "Unexpected error.",
               fix: "Check logs and retry.",
@@ -611,7 +611,7 @@ export default function Dashboard({ options }: DashboardProps) {
     }));
 
     try {
-      const { captureTimelineSnapshot } = await import("@qxinm/hem-core/timeline.js");
+      const { captureTimelineSnapshot } = await import("@qxinm/gandalf-core/timeline.js");
       const saved = await captureTimelineSnapshot(options, {
         snapshotName: preview.snapshot.manifest.name,
         title: preview.snapshot.manifest.name
@@ -749,7 +749,7 @@ export default function Dashboard({ options }: DashboardProps) {
         }
         (async () => {
           try {
-            const { buildTimelineUndoPlan } = await import("@qxinm/hem-core/timeline-undo.js");
+            const { buildTimelineUndoPlan } = await import("@qxinm/gandalf-core/timeline-undo.js");
             const corruptEvents: TimelineCorruptEvent[] = [];
             const plan = await buildTimelineUndoPlan(options.storeDir, selected.id, {
               onCorruptEntry: (event) => corruptEvents.push(event),

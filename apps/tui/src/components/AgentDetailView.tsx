@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 
-import type { AgentId, DiscoveredItem, TimelineEntry } from "@qxinm/hem-core/types.js";
+import type { AgentId, DiscoveredItem, TimelineEntry } from "@qxinm/gandalf-core/types.js";
 import { buildAgentDetailViewModel, type AgentInventoryRow } from "./AgentDetailViewModel.js";
 import { NoDetectedAgentsEmptyState } from "./TuiEmptyStates.js";
 

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/qyinm/hem/internal/hemcore/store"
-	timelineundo "github.com/qyinm/hem/internal/hemcore/timeline_undo"
-	"github.com/qyinm/hem/internal/hemcore/types"
+	"github.com/qyinm/gandalf/internal/gandalfcore/store"
+	timelineundo "github.com/qyinm/gandalf/internal/gandalfcore/timeline_undo"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 	"github.com/spf13/cobra"
 )
 
@@ -99,7 +99,7 @@ func runTimelineList(cmd *cobra.Command, common *CommonFlags) int {
 	})
 	if err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_TIMELINE_LIST_FAILED",
+			Code:    "GANDALF_TIMELINE_LIST_FAILED",
 			Problem: "Failed to list timeline entries.",
 			Cause:   err.Error(),
 			Fix:     "Verify the store directory is readable.",
@@ -117,7 +117,7 @@ func runTimelineList(cmd *cobra.Command, common *CommonFlags) int {
 		return writeStdout(cmd.OutOrStdout(), "No timeline entries.\n")
 	}
 
-	lines := []string{"hem timeline", ""}
+	lines := []string{"gandalf timeline", ""}
 	for _, entry := range entries {
 		lines = append(lines, fmt.Sprintf(
 			"- %s %s (%s) -> %s",
@@ -146,10 +146,10 @@ func runTimelineShow(cmd *cobra.Command, common *CommonFlags, reference string) 
 	})
 	if err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_TIMELINE_LOOKUP_FAILED",
+			Code:    "GANDALF_TIMELINE_LOOKUP_FAILED",
 			Problem: "Failed to look up timeline entry.",
 			Cause:   err.Error(),
-			Fix:     "Run `hem timeline list` to see available entries.",
+			Fix:     "Run `gandalf timeline list` to see available entries.",
 		})
 	}
 	for _, event := range corruptEvents {
@@ -157,10 +157,10 @@ func runTimelineShow(cmd *cobra.Command, common *CommonFlags, reference string) 
 	}
 	if entry == nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_TIMELINE_NOT_FOUND",
+			Code:    "GANDALF_TIMELINE_NOT_FOUND",
 			Problem: fmt.Sprintf("Timeline entry not found: %q.", reference),
 			Cause:   "The reference does not match a timeline id or snapshot name.",
-			Fix:     "Run `hem timeline list` to see available entries.",
+			Fix:     "Run `gandalf timeline list` to see available entries.",
 		})
 	}
 
@@ -170,7 +170,7 @@ func runTimelineShow(cmd *cobra.Command, common *CommonFlags, reference string) 
 	data, err := json.MarshalIndent(entry, "", "  ")
 	if err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_JSON_SERIALIZE_FAILED",
+			Code:    "GANDALF_JSON_SERIALIZE_FAILED",
 			Problem: "Failed to serialize timeline entry.",
 			Cause:   err.Error(),
 			Fix:     "This is an internal error.",
@@ -182,10 +182,10 @@ func runTimelineShow(cmd *cobra.Command, common *CommonFlags, reference string) 
 func runTimelineUndo(cmd *cobra.Command, common *CommonFlags, reference string, dryRun bool) int {
 	if !dryRun {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_TIMELINE_UNDO_DRY_RUN_REQUIRED",
+			Code:    "GANDALF_TIMELINE_UNDO_DRY_RUN_REQUIRED",
 			Problem: "Timeline undo requires --dry-run.",
 			Cause:   "`timeline undo` was called without `--dry-run`.",
-			Fix:     "Run `hem timeline undo <id> --dry-run --json`.",
+			Fix:     "Run `gandalf timeline undo <id> --dry-run --json`.",
 		})
 	}
 	runtime, snapErr := resolveRuntime(common)
@@ -200,10 +200,10 @@ func runTimelineUndo(cmd *cobra.Command, common *CommonFlags, reference string, 
 	})
 	if err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_TIMELINE_UNDO_FAILED",
+			Code:    "GANDALF_TIMELINE_UNDO_FAILED",
 			Problem: "Failed to build timeline undo plan.",
 			Cause:   err.Error(),
-			Fix:     "Run `hem timeline list` to see available entries.",
+			Fix:     "Run `gandalf timeline list` to see available entries.",
 		})
 	}
 	for _, event := range corruptEvents {
@@ -215,7 +215,7 @@ func runTimelineUndo(cmd *cobra.Command, common *CommonFlags, reference string, 
 	data, err := json.MarshalIndent(plan, "", "  ")
 	if err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_JSON_SERIALIZE_FAILED",
+			Code:    "GANDALF_JSON_SERIALIZE_FAILED",
 			Problem: "Failed to serialize timeline undo plan.",
 			Cause:   err.Error(),
 			Fix:     "This is an internal error.",

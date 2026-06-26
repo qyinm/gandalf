@@ -1,4 +1,4 @@
-use hem_core::{
+use gandalf_core::{
     build_graph, default_store_dir, diff_graphs, list_agents, list_snapshots, list_timeline_entries,
     scan_project,
     types::{AgentId, DiscoveredItem, EvidenceKind, EvidenceParser, ScanOptions},
@@ -153,7 +153,7 @@ fn working_change_summary(
         scope: None,
     });
     let current_graph = build_graph(&scan.evidence);
-    let snapshot_graph = match hem_core::read_snapshot(store_dir, snapshot_name, *agent) {
+    let snapshot_graph = match gandalf_core::read_snapshot(store_dir, snapshot_name, *agent) {
         Ok(snapshot) => snapshot.graph,
         Err(_) => return (0, None),
     };
@@ -168,13 +168,13 @@ fn working_change_summary(
     (working_changes, highest_risk)
 }
 
-fn severity_label(severity: hem_core::Severity) -> Option<String> {
+fn severity_label(severity: gandalf_core::Severity) -> Option<String> {
     match severity {
-        hem_core::Severity::None => None,
-        hem_core::Severity::Low => Some("low".into()),
-        hem_core::Severity::Medium => Some("medium".into()),
-        hem_core::Severity::High => Some("high".into()),
-        hem_core::Severity::Critical => Some("high".into()),
+        gandalf_core::Severity::None => None,
+        gandalf_core::Severity::Low => Some("low".into()),
+        gandalf_core::Severity::Medium => Some("medium".into()),
+        gandalf_core::Severity::High => Some("high".into()),
+        gandalf_core::Severity::Critical => Some("high".into()),
     }
 }
 
@@ -212,17 +212,17 @@ fn timeline_changelog(store_dir: &Path, project_path: &Path) -> Vec<ChangelogEnt
         .collect()
 }
 
-fn timeline_source_label(source: hem_core::TimelineEntrySource) -> String {
+fn timeline_source_label(source: gandalf_core::TimelineEntrySource) -> String {
     match source {
-        hem_core::TimelineEntrySource::Manual => "manual".into(),
+        gandalf_core::TimelineEntrySource::Manual => "manual".into(),
     }
 }
 
-fn timeline_risk_label(readiness: hem_core::TimelineRestoreReadiness) -> String {
+fn timeline_risk_label(readiness: gandalf_core::TimelineRestoreReadiness) -> String {
     match readiness {
-        hem_core::TimelineRestoreReadiness::Full => "low".into(),
-        hem_core::TimelineRestoreReadiness::Partial => "medium".into(),
-        hem_core::TimelineRestoreReadiness::ObserveOnly => "high".into(),
+        gandalf_core::TimelineRestoreReadiness::Full => "low".into(),
+        gandalf_core::TimelineRestoreReadiness::Partial => "medium".into(),
+        gandalf_core::TimelineRestoreReadiness::ObserveOnly => "high".into(),
     }
 }
 
@@ -236,7 +236,7 @@ fn ensure_profile_state(home_dir: Option<&Path>) -> std::io::Result<ProfileState
         return Ok(default_profile_state());
     };
 
-    let store_dir = home_dir.join(".hem");
+    let store_dir = home_dir.join(".gandalf");
     let profiles_dir = store_dir.join("profiles");
     let default_profile_dir = profiles_dir.join(DEFAULT_PROFILE_NAME);
     let current_profile_path = store_dir.join("current-profile");
@@ -343,7 +343,7 @@ fn home_dir_for_scan(project_path: &Path, home_dir: Option<&Path>) -> PathBuf {
     home_dir
         .map(Path::to_path_buf)
         .or_else(|| env::var_os("HOME").map(PathBuf::from))
-        .unwrap_or_else(|| project_path.join(".hem-no-home"))
+        .unwrap_or_else(|| project_path.join(".gandalf-no-home"))
 }
 
 fn inventory_from_evidence(evidence: &[DiscoveredItem]) -> DesktopInventory {
@@ -576,7 +576,7 @@ mod native_notifications {
 #[cfg(test)]
 mod desktop_home_state_tests {
     use super::build_desktop_home_state;
-    use hem_core::{
+    use gandalf_core::{
         capture_current_state, capture_timeline_snapshot, write_snapshot,
         types::{AgentId, EvidenceScope, RuntimeOptions},
         CaptureTimelineOptions, StoreSnapshot,
@@ -602,7 +602,7 @@ mod desktop_home_state_tests {
         let root = TempDir::new().expect("temp dir");
         let project_path = root.path().join("project");
         let home_dir = root.path().join("home");
-        let store_dir = home_dir.join(".hem");
+        let store_dir = home_dir.join(".gandalf");
         fs::create_dir_all(&project_path).expect("mkdir project");
         fs::create_dir_all(&home_dir).expect("mkdir home");
 
@@ -652,7 +652,7 @@ mod desktop_home_state_tests {
             "expected timeline changelog entries"
         );
 
-        if let Ok(scratch) = std::env::var("HEM_SCRATCH_DIR") {
+        if let Ok(scratch) = std::env::var("GANDALF_SCRATCH_DIR") {
             let serialized =
                 serde_json::to_string_pretty(&home).expect("serialize desktop home state");
             fs::write(format!("{scratch}/desktop-home-state.json"), serialized)

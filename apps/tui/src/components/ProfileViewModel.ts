@@ -1,4 +1,4 @@
-import type { DiscoveredItem, TimelineEntry } from "@qxinm/hem-core/types.js";
+import type { DiscoveredItem, TimelineEntry } from "@qxinm/gandalf-core/types.js";
 import { formatAgentLabel, formatTimelineTimestamp } from "./TuiFormatters.js";
 
 export interface ProfileViewModel {

@@ -1,5 +1,5 @@
-import type { GraphDiff, SemanticChange } from "@qxinm/hem-core/diff.js";
-import type { GraphNode, Snapshot } from "@qxinm/hem-core/types.js";
+import type { GraphDiff, SemanticChange } from "@qxinm/gandalf-core/diff.js";
+import type { GraphNode, Snapshot } from "@qxinm/gandalf-core/types.js";
 import { formatAgentLabel } from "./TuiFormatters.js";
 
 export interface CompareSideBySideRow {

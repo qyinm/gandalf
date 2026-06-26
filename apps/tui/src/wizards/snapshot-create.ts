@@ -1,5 +1,5 @@
 /**
- * Clack wizard for `hem snapshot create`.
+ * Clack wizard for `gandalf snapshot create`.
  *
  * Walks the user through:
  *   1. Entering a snapshot name
@@ -9,10 +9,10 @@
 
 import * as clack from "@clack/prompts";
 
-import { ensureStore } from "@qxinm/hem-core/store.js";
-import { captureTimelineSnapshot } from "@qxinm/hem-core/timeline.js";
-import type { RuntimeOptions } from "@qxinm/hem-core";
-import { formatSnapError } from "@qxinm/hem-core/errors.js";
+import { ensureStore } from "@qxinm/gandalf-core/store.js";
+import { captureTimelineSnapshot } from "@qxinm/gandalf-core/timeline.js";
+import type { RuntimeOptions } from "@qxinm/gandalf-core";
+import { formatSnapError } from "@qxinm/gandalf-core/errors.js";
 
 /**
  * Run the snapshot create wizard interactively.
@@ -21,7 +21,7 @@ import { formatSnapError } from "@qxinm/hem-core/errors.js";
 export async function snapshotCreateWizard(
   options: RuntimeOptions
 ): Promise<number> {
-  clack.intro("hem snapshot create");
+  clack.intro("gandalf snapshot create");
 
   await ensureStore(options.storeDir);
 
@@ -114,7 +114,7 @@ export async function snapshotCreateWizard(
     spinner.stop("Snapshot creation failed");
     process.stderr.write(
       formatSnapError({
-        code: "HEM_SNAPSHOT_CREATE_FAILED",
+        code: "GANDALF_SNAPSHOT_CREATE_FAILED",
         problem: `Snapshot creation failed: ${err instanceof Error ? err.message : String(err)}`,
         cause: "An error occurred during scanning or snapshot write.",
         fix: "Check the project path and permissions, then try again.",

@@ -309,7 +309,7 @@ export async function buildRestorePlan(options: RestoreOptions): Promise<Restore
     unsupportedItems,
     planMetadata: {
       plannerVersion: "0.2.0",
-      generatedBy: "hem restore"
+      generatedBy: "gandalf restore"
     }
   };
 }

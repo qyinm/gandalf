@@ -1,14 +1,14 @@
 # Dogfood Report - main daemon/timeline
 
 > CLI/TUI QA adapted from `/ce-dogfood-beta` on 2026-06-08.
-> The beta browser workflow could not run literally because the checkout was `main`, `main...HEAD` had no diff, and Hem is a CLI/TUI package without a browser dev server.
+> The beta browser workflow could not run literally because the checkout was `main`, `main...HEAD` had no diff, and Gandalf is a CLI/TUI package without a browser dev server.
 
 ## Diff Summary
 
-- Recent daemon/timeline scope was centered on commit `f835d1c` (`fix: harden hem daemon and timeline contracts`).
-- That work added `hem daemon start/status/stop`, timeline event capture, `hem timeline list/show/undo`, TUI daemon trust status, and related tests.
+- Recent daemon/timeline scope was centered on commit `f835d1c` (`fix: harden gandalf daemon and timeline contracts`).
+- That work added `gandalf daemon start/status/stop`, timeline event capture, `gandalf timeline list/show/undo`, TUI daemon trust status, and related tests.
 - Follow-up Timeline-first work opens on `History > All changes` in the left navigation and keeps the TUI `u=preview undo` action dry-run only.
-- Dogfood used an isolated temporary `HOME`, `HEM_STORE`, and project so no real user setup or repo setup was mutated.
+- Dogfood used an isolated temporary `HOME`, `GANDALF_STORE`, and project so no real user setup or repo setup was mutated.
 - Dogfood found one user-facing status hygiene issue: stopped TUI/status could retain a raw watcher error after safe shutdown.
 - Fix committed as `b8ddd82` (`fix: clear stopped daemon runtime errors`).
 
@@ -17,13 +17,13 @@
 No `STRATEGY.md`, `VISION.md`, `PERSONAS.md`, or `docs/personas/` files were present. Personas are inferred from `README.md`.
 
 - **AI coding power user** - experiments with MCP servers and skills, and needs setup history without accidentally mutating real configuration.
-- **Hem maintainer** - needs daemon/timeline behavior to be deterministic, diagnosable, and covered by regression tests before release.
+- **Gandalf maintainer** - needs daemon/timeline behavior to be deterministic, diagnosable, and covered by regression tests before release.
 
 ## Flows Tested
 
 ```mermaid
 flowchart TD
-    A[User creates an agent setup project] --> B[Runs hem daemon start --json]
+    A[User creates an agent setup project] --> B[Runs gandalf daemon start --json]
     B --> C{First run baseline captured?}
     C -->|Yes| D[Daemon reports running with verified identity]
     C -->|No| E[Start fails and own lock is cleaned]
@@ -40,7 +40,7 @@ flowchart TD
     B --> C[Runs timeline show id --json]
     C --> D[Changed surfaces include restorable MCP and observe-only skill]
     D --> E{User runs undo without --dry-run?}
-    E -->|Yes| F[Command refuses with HEM_TIMELINE_UNDO_DRY_RUN_REQUIRED]
+    E -->|Yes| F[Command refuses with GANDALF_TIMELINE_UNDO_DRY_RUN_REQUIRED]
     E -->|No| G[Runs undo id --dry-run --json]
     G --> H[Plan reports writesFiles=false]
     H --> I[Project .mcp.json and timeline event count remain unchanged]
@@ -94,7 +94,7 @@ flowchart TD
 
 ## Console Errors
 
-Not applicable. Hem has no browser surface in this workflow.
+Not applicable. Gandalf has no browser surface in this workflow.
 
 ## Human Verifications
 

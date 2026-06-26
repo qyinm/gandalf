@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    hem_desktop_lib::run()
+    gandalf_desktop_lib::run()
 }

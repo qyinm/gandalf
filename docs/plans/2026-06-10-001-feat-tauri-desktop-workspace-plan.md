@@ -8,24 +8,24 @@ date: "2026-06-10"
 
 ## Summary
 
-Restructure Hem from a root-level mixed CLI/TUI/core package into a Bun workspace with a shared core package, dedicated CLI and TUI apps, and a new Tauri desktop app using Vite. The desktop MVP should reuse Hem's core setup model and match the existing desktop dashboard design instead of becoming a second standalone implementation.
+Restructure Gandalf from a root-level mixed CLI/TUI/core package into a Bun workspace with a shared core package, dedicated CLI and TUI apps, and a new Tauri desktop app using Vite. The desktop MVP should reuse Gandalf's core setup model and match the existing desktop dashboard design instead of becoming a second standalone implementation.
 
 ---
 
 ## Problem Frame
 
-Hem is moving from a CLI/TUI-only tool into a desktop product. The current `src/` tree mixes durable domain logic, CLI command adapters, and Ink/Clack TUI presentation, which makes a desktop app likely to import the wrong layer or duplicate behavior. Before adding Tauri, the repository needs package boundaries that make the intended dependency graph obvious: desktop and CLI depend on core, CLI can delegate rich terminal surfaces to TUI, and core remains independent from UI runtimes.
+Gandalf is moving from a CLI/TUI-only tool into a desktop product. The current `src/` tree mixes durable domain logic, CLI command adapters, and Ink/Clack TUI presentation, which makes a desktop app likely to import the wrong layer or duplicate behavior. Before adding Tauri, the repository needs package boundaries that make the intended dependency graph obvious: desktop and CLI depend on core, CLI can delegate rich terminal surfaces to TUI, and core remains independent from UI runtimes.
 
 ---
 
 ## Requirements
 
-- R1. Move durable Hem behavior into a shared core package that has no dependency on CLI parsing, Ink, Clack, React, Tauri, or Vite.
-- R2. Move the published `hem` command into its own CLI app package while preserving the current `@qxinm/hem` package name and `hem` bin behavior.
-- R3. Move terminal UI code into a dedicated TUI app/package that CLI can depend on for `hem tui` and interactive flows.
+- R1. Move durable Gandalf behavior into a shared core package that has no dependency on CLI parsing, Ink, Clack, React, Tauri, or Vite.
+- R2. Move the published `gandalf` command into its own CLI app package while preserving the current `@qxinm/gandalf` package name and `gandalf` bin behavior.
+- R3. Move terminal UI code into a dedicated TUI app/package that CLI can depend on for `gandalf tui` and interactive flows.
 - R4. Add a Tauri desktop app under the workspace using Vite, React, TypeScript, and Bun.
 - R5. Keep the desktop MVP aligned with `PRODUCT.md` and `docs/design/desktop-mvp.md`: active profile first, Home/Setup/MCP/Skills/Hooks navigation, titlebar snapshot id, Home overall state, and bottom changelog.
-- R6. Keep the first desktop integration read-first and conservative: scan/status/timeline/diff/snapshot preview may be exposed before restore/apply, and any write action must preserve Hem's existing preview and snapshot safety model.
+- R6. Keep the first desktop integration read-first and conservative: scan/status/timeline/diff/snapshot preview may be exposed before restore/apply, and any write action must preserve Gandalf's existing preview and snapshot safety model.
 - R7. Update build, test, publish, and CI workflows so the workspace layout is the default developer path.
 - R8. Keep macOS first while avoiding choices that prevent a later Windows Tauri build.
 
@@ -34,13 +34,13 @@ Hem is moving from a CLI/TUI-only tool into a desktop product. The current `src/
 ## Key Technical Decisions
 
 - **Use Bun workspaces with root orchestration:** The root `package.json` becomes a private workspace coordinator. Product code moves out of root so the repository shape reflects the product boundaries the desktop app needs.
-- **Keep `@qxinm/hem` as the CLI package:** The existing registry package name should continue to install the `hem` command. The CLI package moves to `apps/cli`, but external users should not see a package rename.
-- **Publish shared JS packages instead of relying on private workspace-only imports:** `apps/cli` should depend on versioned `@qxinm/hem-core` and `@qxinm/hem-tui` packages, or the release pipeline must bundle them. The lower-risk first plan is aligned public workspace packages with shared versioning.
+- **Keep `@qxinm/gandalf` as the CLI package:** The existing registry package name should continue to install the `gandalf` command. The CLI package moves to `apps/cli`, but external users should not see a package rename.
+- **Publish shared JS packages instead of relying on private workspace-only imports:** `apps/cli` should depend on versioned `@qxinm/gandalf-core` and `@qxinm/gandalf-tui` packages, or the release pipeline must bundle them. The lower-risk first plan is aligned public workspace packages with shared versioning.
 - **Make core the only domain authority:** Scan, graph, diff, audit, provenance, store, timeline, readiness, restore planning, bundle, policy, parsers, and shared types belong in `packages/core`. UI packages may format or present these results but should not own domain decisions.
 - **Keep TUI separate from CLI command parsing:** `apps/tui` owns Ink/Clack components and wizards. `apps/cli` owns argument parsing, command registry, help text, update checks, and command-to-core adapters.
 - **Use Tauri's standard Vite shape inside `apps/desktop`:** The desktop app should use `src-tauri/` plus a Vite frontend with fixed dev server port and `frontendDist` pointing to the Vite `dist` output.
 - **Prefer Rust commands over broad shell access:** The desktop MVP should expose narrow Tauri commands that call core-backed operations. If shell/sidecar execution is needed as a bridge, it should be explicitly scoped and treated as temporary.
-- **Capabilities are part of the safety boundary:** Tauri permissions must be narrowly granted per window. The desktop app should not enable blanket file system or shell access just because Hem is a local setup manager.
+- **Capabilities are part of the safety boundary:** Tauri permissions must be narrowly granted per window. The desktop app should not enable blanket file system or shell access just because Gandalf is a local setup manager.
 
 ---
 
@@ -131,8 +131,8 @@ The dependency direction is one-way: UI surfaces depend on stable contracts, and
 ## Acceptance Examples
 
 - AE1. Given a fresh clone, when a developer installs dependencies from the root, then Bun installs all workspace packages and no root `src/` product code remains.
-- AE2. Given the CLI package is built, when `hem --help` runs from the package bin, then the current command list and update-check behavior still work.
-- AE3. Given the TUI package is built, when `hem tui` is launched from CLI, then CLI delegates to the relocated TUI package without importing Ink on non-TUI paths.
+- AE2. Given the CLI package is built, when `gandalf --help` runs from the package bin, then the current command list and update-check behavior still work.
+- AE3. Given the TUI package is built, when `gandalf tui` is launched from CLI, then CLI delegates to the relocated TUI package without importing Ink on non-TUI paths.
 - AE4. Given the desktop app is launched in development, when the Home screen renders, then it shows the profile context, current snapshot id area, overall setup summary, and changelog area from the desktop MVP design.
 - AE5. Given Tauri capabilities are reviewed, when the main window loads, then only the permissions needed for the MVP commands are granted.
 
@@ -154,7 +154,7 @@ The dependency direction is one-way: UI surfaces depend on stable contracts, and
   - CI uses Bun install and workspace scripts without `npm` fallback commands.
 - **Verification:** A clean checkout can run the root check path and produce package build outputs without relying on root `src/`.
 
-### U2. Extract Hem Core Package
+### U2. Extract Gandalf Core Package
 
 - **Goal:** Move domain modules into `packages/core` and expose a stable TypeScript API for CLI, TUI, and desktop.
 - **Requirements:** R1, R6.
@@ -170,14 +170,14 @@ The dependency direction is one-way: UI surfaces depend on stable contracts, and
 
 ### U3. Move CLI Into `apps/cli`
 
-- **Goal:** Preserve the published `hem` binary while relocating command parsing and command adapters out of the repository root.
+- **Goal:** Preserve the published `gandalf` binary while relocating command parsing and command adapters out of the repository root.
 - **Requirements:** R2, R7.
 - **Dependencies:** U1, U2.
 - **Files:** `apps/cli/package.json`, `apps/cli/tsconfig.json`, `apps/cli/src/**`, `apps/cli/tests/**`, `src/cli.ts`, `src/cli-shared.ts`, `src/commands/**`, `tests/cli.test.ts`, `tests/doctor.test.ts`, `tests/update-check.test.ts`.
-- **Approach:** Move the CLI entrypoint, command registry, shared flag parsing, command handlers, and update notice into the CLI package. Replace relative imports to core modules with core package imports. Keep `@qxinm/hem` and the `hem` bin in `apps/cli/package.json`.
+- **Approach:** Move the CLI entrypoint, command registry, shared flag parsing, command handlers, and update notice into the CLI package. Replace relative imports to core modules with core package imports. Keep `@qxinm/gandalf` and the `gandalf` bin in `apps/cli/package.json`.
 - **Patterns to follow:** Current thin command-handler pattern in `src/commands/*`; current CLI behavior tests in `tests/cli.test.ts`.
 - **Test scenarios:**
-  - `hem --help` still includes diagnosis, timeline, restore, bundle, doctor, schema, and TUI commands.
+  - `gandalf --help` still includes diagnosis, timeline, restore, bundle, doctor, schema, and TUI commands.
   - CLI JSON output for scan/doctor/timeline remains parseable after import rewrites.
   - Unknown command and unhandled error formatting still use the shared error contract.
   - The package bin resolves to the relocated built CLI entrypoint.
@@ -194,7 +194,7 @@ The dependency direction is one-way: UI surfaces depend on stable contracts, and
 - **Test scenarios:**
   - TUI view model tests still cover timeline, agent detail, save setup, compare, profile, navigation, and formatting outputs.
   - CLI non-TUI commands do not load Ink/React modules eagerly.
-  - `hem tui` delegates to the TUI package and returns the same exit-code behavior on render errors.
+  - `gandalf tui` delegates to the TUI package and returns the same exit-code behavior on render errors.
 - **Verification:** TUI package builds independently after core and can be consumed by CLI through package exports.
 
 ### U5. Scaffold Tauri Desktop App With Vite
@@ -214,7 +214,7 @@ The dependency direction is one-way: UI surfaces depend on stable contracts, and
 
 ### U6. Add Desktop Command Boundary and Core Adapter
 
-- **Goal:** Let the Tauri frontend request Hem setup state through narrow desktop commands instead of importing Node-specific internals into the browser context.
+- **Goal:** Let the Tauri frontend request Gandalf setup state through narrow desktop commands instead of importing Node-specific internals into the browser context.
 - **Requirements:** R1, R5, R6, R8.
 - **Dependencies:** U2, U5.
 - **Files:** `apps/desktop/src-tauri/src/lib.rs`, `apps/desktop/src-tauri/src/commands.rs`, `apps/desktop/src/api/**`, `apps/desktop/src/domain/**`, `packages/core/src/**`, `packages/core/tests/**`, `apps/desktop/tests/**`.
@@ -239,7 +239,7 @@ The dependency direction is one-way: UI surfaces depend on stable contracts, and
   - Home renders overall state at the top and changelog/timeline at the bottom.
   - Sidebar shows profile picker at top and Home/Setup/MCP/Skills/Hooks only.
   - Account row stays at the bottom and settings icon switches to settings navigation.
-  - Titlebar shows Hem on the left and the current snapshot short id on the right.
+  - Titlebar shows Gandalf on the left and the current snapshot short id on the right.
   - Risk status uses iconography and text without blocking local snapshot creation.
   - Primary actions render as icon plus text for state-changing actions.
 - **Verification:** Desktop UI matches the MVP hierarchy at 1100x720 and remains usable at the minimum target size.
@@ -269,7 +269,7 @@ This plan changes the repository's build graph, release graph, and import graph.
 
 ## Risks & Dependencies
 
-- **Publish breakage:** Splitting packages can break `bun install -g @qxinm/hem` if workspace dependencies are not published or bundled. Mitigation: decide and test the publish shape before merging the package split.
+- **Publish breakage:** Splitting packages can break `bun install -g @qxinm/gandalf` if workspace dependencies are not published or bundled. Mitigation: decide and test the publish shape before merging the package split.
 - **Desktop bridge complexity:** Rust cannot import TypeScript core directly. Mitigation: keep the Tauri command API narrow and isolate any temporary CLI JSON bridge.
 - **Over-broad Tauri permissions:** Desktop access to local setup files is sensitive. Mitigation: use Tauri capabilities per window and add only permissions needed for MVP commands.
 - **Import churn hiding behavior changes:** Moving files can mask regressions. Mitigation: relocate tests with packages and keep behavior tests green at each migration step.
@@ -282,7 +282,7 @@ This plan changes the repository's build graph, release graph, and import graph.
 The README should explain the workspace roles:
 
 - `packages/core`: domain logic and durable data contracts.
-- `apps/cli`: published `hem` command.
+- `apps/cli`: published `gandalf` command.
 - `apps/tui`: terminal UI used by CLI.
 - `apps/desktop`: Tauri/Vite desktop app.
 

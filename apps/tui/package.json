@@ -1,7 +1,7 @@
 {
-  "name": "@qxinm/hem-tui",
+  "name": "@qxinm/gandalf-tui",
   "version": "0.3.4",
-  "description": "[DEPRECATED] Use crates/hem-cli. Ink TUI kept until ratatui client ships.",
+  "description": "[DEPRECATED] Use crates/gandalf-cli. Ink TUI kept until ratatui client ships.",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.4.0",
-    "@qxinm/hem-core": "0.3.4",
+    "@qxinm/gandalf-core": "0.3.4",
     "ink": "^7.0.3",
     "ink-spinner": "^5.0.0",
     "react": "^19.2.6"

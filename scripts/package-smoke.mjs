@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const binName = process.platform === "win32" ? "hem.cmd" : "hem";
+const binName = process.platform === "win32" ? "gandalf.cmd" : "gandalf";
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -47,7 +47,7 @@ async function main() {
     throw new Error("apps/cli/dist/src/cli.js is missing. Run `bun run build` before `bun run package:smoke`.");
   }
 
-  const root = await mkdtemp(path.join(tmpdir(), "hem-package-smoke-"));
+  const root = await mkdtemp(path.join(tmpdir(), "gandalf-package-smoke-"));
   try {
     const npmCache = path.join(root, "npm-cache");
     await mkdir(npmCache, { recursive: true });
@@ -79,16 +79,16 @@ async function main() {
       ...packed.map((item) => item.tarball)
     ], { cwd: installDir, env: { npm_config_cache: npmCache } });
 
-    const hem = path.join(installDir, "node_modules/.bin", binName);
-    const env = { HOME: home, HEM_STORE: store, HEM_UPDATE_CHECK: "0" };
+    const gandalf = path.join(installDir, "node_modules/.bin", binName);
+    const env = { HOME: home, GANDALF_STORE: store, GANDALF_UPDATE_CHECK: "0" };
     const originalConfig = "model = \"gpt-5\"\napproval_policy = \"on-request\"\n";
     const configPath = path.join(codexDir, "config.toml");
     await writeFile(configPath, originalConfig, "utf8");
 
-    const help = run(hem, ["--help"], { cwd: project, env });
+    const help = run(gandalf, ["--help"], { cwd: project, env });
     assert.match(help.stdout, /Save, compare, and restore Codex user-global setup experiments/);
 
-    run(hem, [
+    run(gandalf, [
       "snapshot", "create",
       "--name", "package-baseline",
       "--agent", "codex",
@@ -101,7 +101,7 @@ async function main() {
     await mkdir(path.dirname(addedSkill), { recursive: true });
     await writeFile(addedSkill, "---\nname: package-smoke\n---\n", "utf8");
 
-    const diff = run(hem, [
+    const diff = run(gandalf, [
       "diff", "package-baseline", "current",
       "--agent", "codex",
       "--scope", "user",
@@ -112,7 +112,7 @@ async function main() {
     assert.ok(diffJson.semanticChanges.some((change) => change.code === "AGENT_CONFIG_CHANGED"));
     assert.ok(diffJson.semanticChanges.some((change) => change.code === "SKILL_ADDED"));
 
-    const dryRun = run(hem, [
+    const dryRun = run(gandalf, [
       "restore",
       "--snapshot", "package-baseline",
       "--dry-run",
@@ -120,9 +120,9 @@ async function main() {
       "--scope", "user",
       "--project", project
     ], { cwd: project, env });
-    assert.match(dryRun.stdout, /hem restore dry-run/);
+    assert.match(dryRun.stdout, /gandalf restore dry-run/);
 
-    const dryRunJson = run(hem, [
+    const dryRunJson = run(gandalf, [
       "restore",
       "--snapshot", "package-baseline",
       "--dry-run",
@@ -133,7 +133,7 @@ async function main() {
     ], { cwd: project, env });
     assert.equal(JSON.parse(dryRunJson.stdout).sourceSnapshot, "package-baseline");
 
-    run(hem, [
+    run(gandalf, [
       "restore",
       "--snapshot", "package-baseline",
       "--apply",
@@ -147,7 +147,7 @@ async function main() {
 
     console.log("Package smoke passed: packed CLI installed and restored a disposable Codex setup.");
   } finally {
-    if (!process.env.HEM_KEEP_PACKAGE_SMOKE) {
+    if (!process.env.GANDALF_KEEP_PACKAGE_SMOKE) {
       await rm(root, { recursive: true, force: true });
     }
   }

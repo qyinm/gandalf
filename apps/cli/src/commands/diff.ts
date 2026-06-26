@@ -7,13 +7,13 @@
  */
 
 import React from "react";
-import { diffGraphs, type GraphDiff } from "@qxinm/hem-core/diff.js";
+import { diffGraphs, type GraphDiff } from "@qxinm/gandalf-core/diff.js";
 import { hasFlag, json, runtimeOptions } from "../cli-shared.js";
-import { isInkMode, renderComponent } from "@qxinm/hem-tui";
-import { readSnapshot } from "@qxinm/hem-core/store.js";
-import { captureCurrentState } from "@qxinm/hem-core/current-state.js";
-import { formatSnapError } from "@qxinm/hem-core/errors.js";
-import type { AuditFinding, Snapshot } from "@qxinm/hem-core/types.js";
+import { isInkMode, renderComponent } from "@qxinm/gandalf-tui";
+import { readSnapshot } from "@qxinm/gandalf-core/store.js";
+import { captureCurrentState } from "@qxinm/gandalf-core/current-state.js";
+import { formatSnapError } from "@qxinm/gandalf-core/errors.js";
+import type { AuditFinding, Snapshot } from "@qxinm/gandalf-core/types.js";
 import type { Command, CommandContext } from "./index.js";
 
 // ── Internal helpers ───────────────────────────────────────────
@@ -27,7 +27,7 @@ async function snapshotByRef(ref: string, args: string[]): Promise<Snapshot> {
 }
 
 function renderDiffText(diff: GraphDiff): string {
-  const lines = ["hem diff", "", "Semantic changes"];
+  const lines = ["gandalf diff", "", "Semantic changes"];
   if (diff.semanticChanges.length === 0) {
     lines.push("  none");
   } else {
@@ -79,10 +79,10 @@ export const diffCommand: Command = {
     if (!baseline || !target) {
       process.stderr.write(
         formatSnapError({
-          code: "HEM_DIFF_REFS_REQUIRED",
+          code: "GANDALF_DIFF_REFS_REQUIRED",
           problem: "Two snapshot references are required.",
           cause: "`diff` was called without baseline and target references.",
-          fix: "Run `hem diff baseline current --project .`."
+          fix: "Run `gandalf diff baseline current --project .`."
         })
       );
       return 1;
@@ -97,7 +97,7 @@ export const diffCommand: Command = {
       return 0;
     }
     if (isInkMode(ctx.args)) {
-      const { default: DiffView } = await import("@qxinm/hem-tui/components/DiffView.js");
+      const { default: DiffView } = await import("@qxinm/gandalf-tui/components/DiffView.js");
       return renderComponent(
         () => React.createElement(DiffView, {
           semanticChanges: diff.semanticChanges,
@@ -124,7 +124,7 @@ export const auditCommand: Command = {
       return 0;
     }
     if (isInkMode(ctx.args)) {
-      const { default: AuditView } = await import("@qxinm/hem-tui/components/AuditView.js");
+      const { default: AuditView } = await import("@qxinm/gandalf-tui/components/AuditView.js");
       return renderComponent(
         () => React.createElement(AuditView, { findings: snapshot.auditFindings })
       );

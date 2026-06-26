@@ -1,7 +1,7 @@
 /**
  * Command-pattern implementation of the `report` CLI command.
  *
- * hem report [ref] [--out <path>] [--json] --project .
+ * gandalf report [ref] [--out <path>] [--json] --project .
  *
  * Outputs a markdown report (to stdout or --out file).
  * Shows diff when comparing against a stored snapshot.
@@ -10,12 +10,12 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { captureCurrentState } from "@qxinm/hem-core/current-state.js";
-import { diffGraphs, type GraphDiff } from "@qxinm/hem-core/diff.js";
-import { renderMarkdownReport } from "@qxinm/hem-core/report.js";
-import { scanProject, type ScanResult } from "@qxinm/hem-core/scan.js";
-import { readSnapshot } from "@qxinm/hem-core/store.js";
-import type { Snapshot } from "@qxinm/hem-core/types.js";
+import { captureCurrentState } from "@qxinm/gandalf-core/current-state.js";
+import { diffGraphs, type GraphDiff } from "@qxinm/gandalf-core/diff.js";
+import { renderMarkdownReport } from "@qxinm/gandalf-core/report.js";
+import { scanProject, type ScanResult } from "@qxinm/gandalf-core/scan.js";
+import { readSnapshot } from "@qxinm/gandalf-core/store.js";
+import type { Snapshot } from "@qxinm/gandalf-core/types.js";
 import { hasFlag, json, runtimeOptions, valueAfter, type RuntimeOptions } from "../cli-shared.js";
 import type { Command, CommandContext } from "./index.js";
 
@@ -41,7 +41,7 @@ export const reportCommand: Command = {
   name: "report",
   description:
     "Generate a markdown report of agent state, findings, and (optionally) diff. " +
-    "Usage: hem report [ref] [--out <path>] [--json] --project .",
+    "Usage: gandalf report [ref] [--out <path>] [--json] --project .",
 
   async execute(ctx: CommandContext): Promise<number> {
     const { args } = ctx;

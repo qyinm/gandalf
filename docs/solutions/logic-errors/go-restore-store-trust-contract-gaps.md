@@ -2,7 +2,7 @@
 title: Go Restore/Store Trust-Contract Gaps Found in Code Review
 date: 2026-06-26
 category: logic-errors
-module: hem-go-restore-store
+module: gandalf-go-restore-store
 problem_type: logic_error
 component: tooling
 symptoms:

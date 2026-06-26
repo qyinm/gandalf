@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Execute runs the hem CLI and returns an exit code.
+// Execute runs the gandalf CLI and returns an exit code.
 func Execute() int {
 	cmd := NewRootCmd()
 	cmd.SetOut(os.Stdout)
@@ -25,7 +25,7 @@ func Execute() int {
 // NewRootCmd builds the root Cobra command tree.
 func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "hem",
+		Use:           "gandalf",
 		Short:         "Save, compare, and restore Codex user-global setup experiments.",
 		SilenceUsage:  true,
 		SilenceErrors: true,

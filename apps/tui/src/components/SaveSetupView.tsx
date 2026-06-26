@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 
-import type { GraphDiff } from "@qxinm/hem-core/diff.js";
+import type { GraphDiff } from "@qxinm/gandalf-core/diff.js";
 import { buildSaveSetupViewModel } from "./SaveSetupViewModel.js";
 
 interface SaveSetupViewProps {

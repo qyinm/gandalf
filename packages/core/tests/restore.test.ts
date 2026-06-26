@@ -39,7 +39,7 @@ import type {
 } from "../src/types.js";
 
 async function makeRestoreSandbox(): Promise<{ projectPath: string; homeDir: string; storeDir: string }> {
-  const root = await mkdtemp(path.join(tmpdir(), "hem-restore-"));
+  const root = await mkdtemp(path.join(tmpdir(), "gandalf-restore-"));
   const projectPath = path.join(root, "project");
   const homeDir = path.join(root, "home");
   const storeDir = path.join(root, "store");

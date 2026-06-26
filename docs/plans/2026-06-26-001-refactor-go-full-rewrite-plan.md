@@ -1,5 +1,5 @@
 ---
-title: "refactor: Go full rewrite of hem-core and hem-cli"
+title: "refactor: Go full rewrite of gandalf-core and gandalf-cli"
 date: 2026-06-26
 type: refactor
 depth: deep
@@ -7,26 +7,26 @@ status: draft
 origin: conversation-2026-06-26
 ---
 
-# refactor: Go full rewrite of hem-core and hem-cli
+# refactor: Go full rewrite of gandalf-core and gandalf-cli
 
 ## Summary
 
-Replace `crates/hem-core` and `crates/hem-cli` with a Go engine (`internal/hemcore`) and Cobra CLI (`cmd/hem`), using a **phased parity cutover**: Rust remains canonical until Go passes the existing Rust test contracts and Gate 2 demo. Bubble Tea + Lip Gloss + Bubbles TUI lands after engine parity. Desktop (Tauri) and npm legacy stacks stay out of v1 cutover scope.
+Replace `crates/gandalf-core` and `crates/gandalf-cli` with a Go engine (`internal/gandalfcore`) and Cobra CLI (`cmd/gandalf`), using a **phased parity cutover**: Rust remains canonical until Go passes the existing Rust test contracts and Gate 2 demo. Bubble Tea + Lip Gloss + Bubbles TUI lands after engine parity. Desktop (Tauri) and npm legacy stacks stay out of v1 cutover scope.
 
 ## Problem Frame
 
-Hem completed a TS → Rust engine migration (~12.6k LOC in `crates/hem-core`) and now targets Go for CLI/TUI velocity, single-language distribution, and Bubble Tea UX. The repo already has a minimal Go scaffold (`go.mod`, partial `internal/hemcore/types`). A third engine rewrite is expensive but intentional — the risk is repeating the Rust migration mistakes (restore handler gaps, missing path confinement at apply time) documented in `docs/solutions/logic-errors/rust-core-restore-handler-review-gaps.md`.
+Gandalf completed a TS → Rust engine migration (~12.6k LOC in `crates/gandalf-core`) and now targets Go for CLI/TUI velocity, single-language distribution, and Bubble Tea UX. The repo already has a minimal Go scaffold (`go.mod`, partial `internal/gandalfcore/types`). A third engine rewrite is expensive but intentional — the risk is repeating the Rust migration mistakes (restore handler gaps, missing path confinement at apply time) documented in `docs/solutions/logic-errors/rust-core-restore-handler-review-gaps.md`.
 
 Gate 2 (`PRODUCT.md`) is unchanged: Codex user-global `snapshot → diff → restore` must not regress during the rewrite.
 
 ## Requirements
 
 - R1. Go becomes the canonical engine and CLI after parity gate passes; until then Rust remains build-canonical in CI.
-- R2. Go engine preserves the on-disk `~/.hem` snapshot format and JSON field naming (`camelCase` serde contract) so existing snapshots remain readable.
-- R3. Gate 2 wedge passes on Go: content-backed Codex user-global snapshot, byte-exact restore of supported non-secret files, dry-run default, explicit `--apply --experimental` (or `HEM_EXPERIMENTAL=1`) for writes.
+- R2. Go engine preserves the on-disk `~/.gandalf` snapshot format and JSON field naming (`camelCase` serde contract) so existing snapshots remain readable.
+- R3. Gate 2 wedge passes on Go: content-backed Codex user-global snapshot, byte-exact restore of supported non-secret files, dry-run default, explicit `--apply --experimental` (or `GANDALF_EXPERIMENTAL=1`) for writes.
 - R4. Trust contract preserved: read-only scan (no command execution), path confinement on all write paths, symlink refusal, secret redaction, restore policy per evidence kind.
-- R5. Rust `crates/hem-core/tests/*` behavioral contracts are ported or wrapped as Go tests before Rust removal.
-- R6. CLI command surface matches `crates/hem-cli` flags and subcommands (minus `tui` until Bubble Tea ships).
+- R5. Rust `crates/gandalf-core/tests/*` behavioral contracts are ported or wrapped as Go tests before Rust removal.
+- R6. CLI command surface matches `crates/gandalf-cli` flags and subcommands (minus `tui` until Bubble Tea ships).
 - R7. Bubble Tea TUI provides timeline-first setup-history workspace equivalent to deprecated `apps/tui` (post-engine parity).
 - R8. Distribution path shifts from npm-first to Go binary (goreleaser or equivalent); npm shim deprecated after Go ships.
 - R9. `ARCHITECTURE.md` and `README.md` updated at cutover to name Go as canonical.
@@ -34,11 +34,11 @@ Gate 2 (`PRODUCT.md`) is unchanged: Codex user-global `snapshot → diff → res
 ## Key Technical Decisions
 
 - KTD1. **Phased parity cutover** — Go and Rust run in parallel; Rust is removed only when Go passes Gate 2 harness + ported Rust integration tests. Rationale: user confirmed; avoids repeating TS→Rust big-bang pain.
-- KTD2. **Module layout: `internal/hemcore` + `cmd/hem` + `internal/cli` + `internal/tui`** — standard Go layout; `github.com/qyinm/hem` module at repo root. Rationale: matches existing `go.mod`; keeps engine unexported.
-- KTD3. **Characterization-first porting** — port Rust tests as Go table tests before rewriting logic; fixtures copied from `crates/hem-core/tests/fixtures/`. Rationale: institutional learning from restore handler gaps; 84 Rust tests are the contract.
-- KTD4. **Scanner plugin interface in Go** — `ScannerPlugin` struct with `AgentID`, `Targets()`, `Scan()` mirroring `crates/hem-core/src/scan/plugins/mod.rs`. Rationale: extensibility without core special-cases.
+- KTD2. **Module layout: `internal/gandalfcore` + `cmd/gandalf` + `internal/cli` + `internal/tui`** — standard Go layout; `github.com/qyinm/gandalf` module at repo root. Rationale: matches existing `go.mod`; keeps engine unexported.
+- KTD3. **Characterization-first porting** — port Rust tests as Go table tests before rewriting logic; fixtures copied from `crates/gandalf-core/tests/fixtures/`. Rationale: institutional learning from restore handler gaps; 84 Rust tests are the contract.
+- KTD4. **Scanner plugin interface in Go** — `ScannerPlugin` struct with `AgentID`, `Targets()`, `Scan()` mirroring `crates/gandalf-core/src/scan/plugins/mod.rs`. Rationale: extensibility without core special-cases.
 - KTD5. **Bubble Tea for TUI, not engine** — TUI is presentation-only over typed engine APIs; no scan/restore logic in TUI package. Rationale: `ARCHITECTURE.md` presentation-only rule; matches Ink/Clack separation.
-- KTD6. **Desktop deferred** — `apps/desktop/src-tauri` stays on Rust `hem-core` in-process until Go cutover; then bridge via subprocess (`hem … --json`) or revisit FFI. Rationale: user deprioritized menu bar/desktop; SwiftUI/Liquid Glass is a separate track.
+- KTD6. **Desktop deferred** — `apps/desktop/src-tauri` stays on Rust `gandalf-core` in-process until Go cutover; then bridge via subprocess (`gandalf … --json`) or revisit FFI. Rationale: user deprioritized menu bar/desktop; SwiftUI/Liquid Glass is a separate track.
 - KTD7. **Gate 2 sequencing** — ship Go CLI with Codex-only content-backed restore before porting bundle/timeline/full scanner matrix. Rationale: `PRODUCT.md` explicit wedge; ~40% of LOC is non-Gate-2.
 - KTD8. **JSON as CLI interchange** — `--json` output shapes match Rust CLI for dogfood scripts (`scripts/gate2-demo.mjs` portable to Go test). Rationale: minimizes consumer churn during transition.
 
@@ -49,11 +49,11 @@ Gate 2 (`PRODUCT.md`) is unchanged: Codex user-global `snapshot → diff → res
 ```mermaid
 flowchart TB
   subgraph clients [Clients]
-    CLI[cmd/hem - Cobra]
+    CLI[cmd/gandalf - Cobra]
     TUI[internal/tui - Bubble Tea]
   end
 
-  subgraph engine [internal/hemcore]
+  subgraph engine [internal/gandalfcore]
     TYPES[types]
     POLICY[policy / pathconfinement]
     SCAN[scan + plugins]
@@ -66,7 +66,7 @@ flowchart TB
 
   CLI --> engine
   TUI --> engine
-  STORE --> DISK["~/.hem JSON store"]
+  STORE --> DISK["~/.gandalf JSON store"]
   SCAN --> FS["read-only filesystem"]
   RESTORE --> FS2["constrained writes"]
 ```
@@ -101,7 +101,7 @@ types + policy + pathconfinement + errors + parsers
   → scan/filesystem + scan/codex
   → snapshot + graph + audit + provenance + diff
   → restore/plan + restore/apply
-  → cmd/hem (Gate 2 commands)
+  → cmd/gandalf (Gate 2 commands)
   → parity tests + gate2 harness
   → remaining scanners + bundle + timeline + readiness + report
   → internal/tui
@@ -112,10 +112,10 @@ types + policy + pathconfinement + errors + parsers
 
 ```text
 go.mod
-cmd/hem/main.go
+cmd/gandalf/main.go
 internal/cli/                    # Cobra commands
-internal/hemcore/
-  hemcore.go
+internal/gandalfcore/
+  gandalfcore.go
   types/
   policy/
   pathconfinement/
@@ -153,8 +153,8 @@ internal/tui/                    # Bubble Tea (post-parity)
   tui_test.go
   views/
 testdata/
-  fixtures/evidence/             # copied from crates/hem-core/tests/fixtures
-internal/hemcore/**/*_test.go
+  fixtures/evidence/             # copied from crates/gandalf-core/tests/fixtures
+internal/gandalfcore/**/*_test.go
 scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 ```
 
@@ -162,8 +162,8 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 
 **In scope**
 
-- Go engine port of all `hem-core` modules
-- Cobra CLI parity with `hem-cli`
+- Go engine port of all `gandalf-core` modules
+- Cobra CLI parity with `gandalf-cli`
 - Bubble Tea TUI (post engine parity)
 - CI addition for `go test ./...`
 - Binary distribution scaffolding (goreleaser/Homebrew)
@@ -172,7 +172,7 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 **Deferred for later (product, not this rewrite)**
 
 - Desktop SwiftUI / Liquid Glass shell
-- Menu bar companion / Hem Protection watcher UX
+- Menu bar companion / Gandalf Protection watcher UX
 - Profiles, team/cloud sync (full `PRODUCT.md` vision)
 
 **Deferred to follow-up work (implementation sequencing)**
@@ -227,23 +227,23 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 
 **Requirements:** R2, R4
 
-**Dependencies:** none (extends existing `internal/hemcore/types`)
+**Dependencies:** none (extends existing `internal/gandalfcore/types`)
 
 **Files:**
-- `internal/hemcore/types/types.go` (extend)
-- `internal/hemcore/policy/policy.go`
-- `internal/hemcore/pathconfinement/pathconfinement.go`
-- `internal/hemcore/errors/errors.go`
-- `internal/hemcore/policy/policy_test.go`
-- `internal/hemcore/pathconfinement/pathconfinement_test.go`
-- `internal/hemcore/errors/errors_test.go`
-- `testdata/fixtures/evidence/*.json` (copy from `crates/hem-core/tests/fixtures/evidence/`)
+- `internal/gandalfcore/types/types.go` (extend)
+- `internal/gandalfcore/policy/policy.go`
+- `internal/gandalfcore/pathconfinement/pathconfinement.go`
+- `internal/gandalfcore/errors/errors.go`
+- `internal/gandalfcore/policy/policy_test.go`
+- `internal/gandalfcore/pathconfinement/pathconfinement_test.go`
+- `internal/gandalfcore/errors/errors_test.go`
+- `testdata/fixtures/evidence/*.json` (copy from `crates/gandalf-core/tests/fixtures/evidence/`)
 
 **Approach:** Port `policy.rs`, `path_confinement.rs`, `errors.rs`. Custom `AgentID` JSON unmarshaling defaults to `unknown`. `DiscoveredItem` uses `json.RawMessage` for `value`/`metadata`.
 
 **Execution note:** Port `policy_test.rs` scenarios as table tests before implementing redaction logic.
 
-**Patterns to follow:** `crates/hem-core/src/policy.rs`, `crates/hem-core/tests/policy_test.rs`
+**Patterns to follow:** `crates/gandalf-core/src/policy.rs`, `crates/gandalf-core/tests/policy_test.rs`
 
 **Test scenarios:**
 - `restore_policy_for` per evidence kind matches Rust (agent_config → full_content, mcp_server → structured_fields, env_key → key_inventory, symlink → not_supported)
@@ -256,38 +256,38 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 - Path traversal `..` rejected; writes outside home/project roots rejected
 - Blocked home prefixes (`.ssh`, `.bashrc`) rejected on constrained writes
 
-**Verification:** `go test ./internal/hemcore/policy/... ./internal/hemcore/pathconfinement/... ./internal/hemcore/errors/...` green; fixture round-trips match Rust serialized output.
+**Verification:** `go test ./internal/gandalfcore/policy/... ./internal/gandalfcore/pathconfinement/... ./internal/gandalfcore/errors/...` green; fixture round-trips match Rust serialized output.
 
 ---
 
 ### U2. Parsers and store
 
-**Goal:** Read/write `~/.hem` snapshot directories with atomic JSON writes and `0700` permissions.
+**Goal:** Read/write `~/.gandalf` snapshot directories with atomic JSON writes and `0700` permissions.
 
 **Requirements:** R2, R4
 
 **Dependencies:** U1
 
 **Files:**
-- `internal/hemcore/parsers/parsers.go`
-- `internal/hemcore/parsers/parsers_test.go`
-- `internal/hemcore/store/store.go`
-- `internal/hemcore/store/store_test.go`
+- `internal/gandalfcore/parsers/parsers.go`
+- `internal/gandalfcore/parsers/parsers_test.go`
+- `internal/gandalfcore/store/store.go`
+- `internal/gandalfcore/store/store_test.go`
 
 **Approach:** Port `parsers.rs` (JSON/TOML key-values/markdown/dotenv) and `store.rs` (ensure_store, list_snapshots, write_snapshot, read_snapshot, agent-scoped dirs, timeline entry paths). Use atomic write-via-temp-rename pattern.
 
-**Patterns to follow:** `crates/hem-core/src/store.rs`, `crates/hem-core/tests/store_test.rs`
+**Patterns to follow:** `crates/gandalf-core/src/store.rs`, `crates/gandalf-core/tests/store_test.rs`
 
 **Test scenarios:**
 - `ensure_store` creates `0700` directory; emits `WORLD_WRITABLE_STORE` audit finding when group/world writable
 - `list_snapshots` returns sorted names; rejects unsafe snapshot names (`..`, slashes)
 - `write_snapshot` + `read_snapshot` round-trip all JSON files (manifest, evidence, graph, audit-findings, provenance, checksums, redactions)
-- Agent-scoped store paths (`~/.hem/codex/<name>/`) list correctly
+- Agent-scoped store paths (`~/.gandalf/codex/<name>/`) list correctly
 - `list_agents` discovers agent subdirs with snapshot children
 - Unsafe content paths under `content/` rejected
 - TOML parser handles multi-line arrays and redacts secret keys in scalar parse
 
-**Verification:** Store tests pass; written snapshot readable by Rust `hem-cli snapshot show` (cross-engine spot check during transition).
+**Verification:** Store tests pass; written snapshot readable by Rust `gandalf-cli snapshot show` (cross-engine spot check during transition).
 
 ---
 
@@ -300,18 +300,18 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 **Dependencies:** U1, U2
 
 **Files:**
-- `internal/hemcore/scan/scan.go`
-- `internal/hemcore/scan/target.go`
-- `internal/hemcore/scan/filesystem.go`
-- `internal/hemcore/scan/plugin.go`
-- `internal/hemcore/scan/plugins/codex.go`
-- `internal/hemcore/scan/plugins/project.go`
-- `internal/hemcore/scan/scan_test.go`
-- `internal/hemcore/scan/plugins/codex_test.go`
+- `internal/gandalfcore/scan/scan.go`
+- `internal/gandalfcore/scan/target.go`
+- `internal/gandalfcore/scan/filesystem.go`
+- `internal/gandalfcore/scan/plugin.go`
+- `internal/gandalfcore/scan/plugins/codex.go`
+- `internal/gandalfcore/scan/plugins/project.go`
+- `internal/gandalfcore/scan/scan_test.go`
+- `internal/gandalfcore/scan/plugins/codex_test.go`
 
 **Approach:** Port `scan/mod.rs`, `filesystem.rs`, `plugins/codex.rs` (852 LOC — Gate 2 priority). Stub other scanners as target-only filesystem scans initially. `ScanTrust.commands_executed` always empty.
 
-**Patterns to follow:** `crates/hem-core/src/scan/plugins/codex.rs`, `crates/hem-core/tests/scan_test.rs`
+**Patterns to follow:** `crates/gandalf-core/src/scan/plugins/codex.rs`, `crates/gandalf-core/tests/scan_test.rs`
 
 **Test scenarios:**
 - `scan_project` with `--agent codex --scope user` discovers `~/.codex/config.toml`, MCP servers, skills, hooks
@@ -335,14 +335,14 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 **Dependencies:** U3
 
 **Files:**
-- `internal/hemcore/snapshot/snapshot.go`
-- `internal/hemcore/graph/graph.go`
-- `internal/hemcore/audit/audit.go`
-- `internal/hemcore/provenance/provenance.go`
-- `internal/hemcore/diff/diff.go`
-- `internal/hemcore/snapshot/snapshot_test.go`
-- `internal/hemcore/diff/diff_test.go`
-- `internal/hemcore/analysis_test.go` (port `analysis_test.rs` integration scenarios)
+- `internal/gandalfcore/snapshot/snapshot.go`
+- `internal/gandalfcore/graph/graph.go`
+- `internal/gandalfcore/audit/audit.go`
+- `internal/gandalfcore/provenance/provenance.go`
+- `internal/gandalfcore/diff/diff.go`
+- `internal/gandalfcore/snapshot/snapshot_test.go`
+- `internal/gandalfcore/diff/diff_test.go`
+- `internal/gandalfcore/analysis_test.go` (port `analysis_test.rs` integration scenarios)
 
 **Approach:** Port `snapshot.rs`, `graph.rs`, `audit.rs`, `provenance.rs`, `diff.rs`. Content-backed capture gated to `codex` + `user` scope per Gate 2.
 
@@ -367,11 +367,11 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 **Dependencies:** U4
 
 **Files:**
-- `internal/hemcore/restore/plan.go`
-- `internal/hemcore/restore/apply.go`
-- `internal/hemcore/restore/registry.go`
-- `internal/hemcore/restore/plan_test.go`
-- `internal/hemcore/restore/apply_test.go`
+- `internal/gandalfcore/restore/plan.go`
+- `internal/gandalfcore/restore/apply.go`
+- `internal/gandalfcore/restore/registry.go`
+- `internal/gandalfcore/restore/plan_test.go`
+- `internal/gandalfcore/restore/apply_test.go`
 
 **Approach:** Port `restore/plan.rs` and `restore/apply.rs`. Register apply handlers for agent_config, skill, mcp_server, permission, env_key. **Path confinement on every apply entrypoint** (lesson from `docs/solutions/logic-errors/rust-core-restore-handler-review-gaps.md`). Default dry-run; apply requires explicit experimental flag at CLI layer.
 
@@ -393,14 +393,14 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 
 ### U6. CLI — Cobra command surface
 
-**Goal:** `cmd/hem` exposes Gate 2 commands first, then full `hem-cli` parity.
+**Goal:** `cmd/gandalf` exposes Gate 2 commands first, then full `gandalf-cli` parity.
 
 **Requirements:** R3, R6, R8
 
 **Dependencies:** U5
 
 **Files:**
-- `cmd/hem/main.go`
+- `cmd/gandalf/main.go`
 - `internal/cli/root.go`
 - `internal/cli/scan.go`
 - `internal/cli/snapshot.go`
@@ -413,16 +413,16 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 - `internal/cli/shared.go`
 - `internal/cli/cli_test.go`
 
-**Approach:** Cobra mirrors clap structure from `crates/hem-cli/src/commands/mod.rs`. Shared flags: `--project`, `--home`, `--store`, `--agent`, `--scope`, `--json`. Gate 2 subset wired first; bundle/timeline/report stub to "not implemented" until U8.
+**Approach:** Cobra mirrors clap structure from `crates/gandalf-cli/src/commands/mod.rs`. Shared flags: `--project`, `--home`, `--store`, `--agent`, `--scope`, `--json`. Gate 2 subset wired first; bundle/timeline/report stub to "not implemented" until U8.
 
 **Test scenarios:**
-- `hem scan --project . --agent codex --scope user --json` exits 0 with evidence array
-- `hem snapshot create --name test --agent codex --scope user` creates content-backed snapshot
-- `hem diff <baseline> current --json` exits 0
-- `hem restore --snapshot X --dry-run` default; no filesystem mutation
-- `hem restore --apply` without `--experimental` or `HEM_EXPERIMENTAL=1` rejected
+- `gandalf scan --project . --agent codex --scope user --json` exits 0 with evidence array
+- `gandalf snapshot create --name test --agent codex --scope user` creates content-backed snapshot
+- `gandalf diff <baseline> current --json` exits 0
+- `gandalf restore --snapshot X --dry-run` default; no filesystem mutation
+- `gandalf restore --apply` without `--experimental` or `GANDALF_EXPERIMENTAL=1` rejected
 - Invalid agent/scope flags return exit code 1 with readable error
-- `hem doctor` runs readiness checks (when U8 lands)
+- `gandalf doctor` runs readiness checks (when U8 lands)
 
 **Verification:** CLI smoke test; `scripts/gate2-demo` passes against Go binary.
 
@@ -438,7 +438,7 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 
 **Files:**
 - `scripts/gate2-demo.go` (or `.mjs` retargeted)
-- `internal/hemcore/restore/gate2_test.go`
+- `internal/gandalfcore/restore/gate2_test.go`
 - `.github/workflows/ci.yml`
 - `Makefile` or `scripts/test-go.sh` (optional)
 
@@ -462,16 +462,16 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 **Dependencies:** U7
 
 **Files:**
-- `internal/hemcore/scan/plugins/claude_code.go`
-- `internal/hemcore/scan/plugins/cursor.go`
-- `internal/hemcore/scan/plugins/opencode.go`
-- `internal/hemcore/scan/plugins/pi.go`
-- `internal/hemcore/bundle/bundle.go`
-- `internal/hemcore/tar/tar.go`
-- `internal/hemcore/timeline/timeline.go`
-- `internal/hemcore/timeline_undo/timeline_undo.go`
-- `internal/hemcore/readiness/readiness.go`
-- `internal/hemcore/report/report.go`
+- `internal/gandalfcore/scan/plugins/claude_code.go`
+- `internal/gandalfcore/scan/plugins/cursor.go`
+- `internal/gandalfcore/scan/plugins/opencode.go`
+- `internal/gandalfcore/scan/plugins/pi.go`
+- `internal/gandalfcore/bundle/bundle.go`
+- `internal/gandalfcore/tar/tar.go`
+- `internal/gandalfcore/timeline/timeline.go`
+- `internal/gandalfcore/timeline_undo/timeline_undo.go`
+- `internal/gandalfcore/readiness/readiness.go`
+- `internal/gandalfcore/report/report.go`
 - Corresponding `*_test.go` files
 
 **Approach:** Port remaining modules in LOC order: bundle (1.4k), readiness (731), timeline, remaining scanners. Port `bundle_test.rs` (20 tests) with tar safety and HMAC verification.
@@ -484,7 +484,7 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 - Claude/Cursor/OpenCode/Pi scanners emit expected evidence kinds
 - Report markdown renders audit findings
 
-**Verification:** Full Rust test matrix ported; `hem bundle`, `hem timeline`, `hem report`, `hem doctor` CLI commands functional.
+**Verification:** Full Rust test matrix ported; `gandalf bundle`, `gandalf timeline`, `gandalf report`, `gandalf doctor` CLI commands functional.
 
 ---
 
@@ -537,11 +537,11 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 - `.goreleaser.yaml`
 - `ARCHITECTURE.md`
 - `README.md`
-- `Cargo.toml` (remove hem-core/hem-cli from workspace or archive `crates/`)
+- `Cargo.toml` (remove gandalf-core/gandalf-cli from workspace or archive `crates/`)
 - `apps/cli/package.json` (update description: points to Go binary)
 - `apps/desktop/src-tauri/Cargo.toml` (document interim Rust dep or switch to subprocess)
 
-**Approach:** goreleaser for macOS/linux/windows binaries + Homebrew tap. CI primary flips to `go test`. Mark `crates/hem-core` archived; stop extending. npm publish emits thin installer script downloading Go binary. Desktop remains on Rust until separate bridge plan.
+**Approach:** goreleaser for macOS/linux/windows binaries + Homebrew tap. CI primary flips to `go test`. Mark `crates/gandalf-core` archived; stop extending. npm publish emits thin installer script downloading Go binary. Desktop remains on Rust until separate bridge plan.
 
 **Test scenarios:**
 - Release workflow produces signed macOS arm64 binary
@@ -557,11 +557,11 @@ scripts/gate2-demo.go            # or gate2-demo.sh calling Go binary
 
 - `ARCHITECTURE.md` — current Rust-canonical shape, trust boundaries, store layout
 - `PRODUCT.md` — Gate 2 wedge scope (Codex user-global rollback)
-- `crates/hem-core/` — source of truth (~12.6k LOC, 84 tests)
-- `crates/hem-cli/src/commands/mod.rs` — CLI contract
+- `crates/gandalf-core/` — source of truth (~12.6k LOC, 84 tests)
+- `crates/gandalf-cli/src/commands/mod.rs` — CLI contract
 - `docs/solutions/logic-errors/rust-core-restore-handler-review-gaps.md` — restore/path confinement lessons
 - `scripts/gate2-demo.mjs` — acceptance harness
-- `internal/hemcore/types/types.go` — existing Go scaffold
+- `internal/gandalfcore/types/types.go` — existing Go scaffold
 - Conversation 2026-06-26 — Go rewrite decision, Bubble Tea TUI, phased cutover, desktop deferred
 
 ## Open Questions

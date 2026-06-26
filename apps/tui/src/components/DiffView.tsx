@@ -1,5 +1,5 @@
 /**
- * Ink component for hem diff output.
+ * Ink component for gandalf diff output.
  *
  * Renders semantic changes and raw source changes with color coding:
  * - Added = green
@@ -10,7 +10,7 @@
 import React from "react";
 import { Text, Box } from "ink";
 
-import type { SemanticChange, RawSourceChange } from "@qxinm/hem-core/diff.js";
+import type { SemanticChange, RawSourceChange } from "@qxinm/gandalf-core/diff.js";
 
 // ── Props ────────────────────────────────────────────────────
 
@@ -71,7 +71,7 @@ export default function DiffView({
   if (!hasChanges) {
     return (
       <Box flexDirection="column">
-        <Text bold color="green">hem diff</Text>
+        <Text bold color="green">gandalf diff</Text>
         <Text>No changes — baseline and current state match.</Text>
       </Box>
     );
@@ -89,7 +89,7 @@ export default function DiffView({
     <Box flexDirection="column">
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold>hem diff</Text>
+        <Text bold>gandalf diff</Text>
       </Box>
 
       {/* Summary badges */}

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qyinm/hem/internal/hemcore/diff"
-	"github.com/qyinm/hem/internal/hemcore/store"
-	timelineundo "github.com/qyinm/hem/internal/hemcore/timeline_undo"
-	"github.com/qyinm/hem/internal/hemcore/types"
+	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
+	"github.com/qyinm/gandalf/internal/gandalfcore/store"
+	timelineundo "github.com/qyinm/gandalf/internal/gandalfcore/timeline_undo"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
 // VisibleAgents is the stable sidebar agent order.
@@ -41,8 +41,8 @@ const (
 )
 
 const (
-	DefaultProfile    = "default"
-	InitialNavItemID  = "history:all-changes"
+	DefaultProfile   = "default"
+	InitialNavItemID = "history:all-changes"
 )
 
 // --- Timeline view model ---
@@ -326,8 +326,8 @@ const (
 type NavItemKind string
 
 const (
-	NavProfile NavItemKind = "profile"
-	NavAgent   NavItemKind = "agent"
+	NavProfile     NavItemKind = "profile"
+	NavAgent       NavItemKind = "agent"
 	NavHistoryItem NavItemKind = "history"
 )
 
@@ -355,8 +355,8 @@ type NavigationModel struct {
 }
 
 type NavigationSelection struct {
-	Screen         Screen
-	SelectedAgent  *types.AgentID
+	Screen          Screen
+	SelectedAgent   *types.AgentID
 	SelectedProfile string
 }
 
@@ -669,7 +669,7 @@ func BuildSaveSetupViewModel(input BuildSaveSetupViewModelInput) SaveSetupViewMo
 		DetectedChanges: changes,
 		Destinations: []SaveSetupDestination{
 			{Label: "Local history", Selected: true},
-			{Label: "Export as .hem", Selected: false},
+			{Label: "Export as .gandalf", Selected: false},
 		},
 		NoChanges: noChanges,
 	}

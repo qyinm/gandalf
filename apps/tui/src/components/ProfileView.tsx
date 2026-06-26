@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 
-import type { DiscoveredItem, TimelineEntry } from "@qxinm/hem-core/types.js";
+import type { DiscoveredItem, TimelineEntry } from "@qxinm/gandalf-core/types.js";
 import { buildProfileViewModel } from "./ProfileViewModel.js";
 
 interface ProfileViewProps {

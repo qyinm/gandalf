@@ -5,19 +5,19 @@ Date: 2026-05-12 (initial), 2026-05-15 (re-run after symlink noise fix and TOML 
 Command shape:
 
 ```bash
-HEM_STORE=/tmp/hem-dogfood/store bun dist/src/cli.js scan --project <project> --json
-HEM_STORE=/tmp/hem-dogfood/store bun dist/src/cli.js report current --project <project> --out /tmp/hem-dogfood/reports/<name>-report.md
+GANDALF_STORE=/tmp/gandalf-dogfood/store bun dist/src/cli.js scan --project <project> --json
+GANDALF_STORE=/tmp/gandalf-dogfood/store bun dist/src/cli.js report current --project <project> --out /tmp/gandalf-dogfood/reports/<name>-report.md
 ```
 
-The store was redirected to `/tmp/hem-dogfood/store` so dogfood did not write to the user's real `~/.hem` store.
+The store was redirected to `/tmp/gandalf-dogfood/store` so dogfood did not write to the user's real `~/.gandalf` store.
 
 ## Results (2026-05-15, post-fix)
 
 | Project | Scan JSON | Markdown report | Evidence | Findings | Blind spots |
 |---|---|---|---:|---:|---:|
-| Hem | `/tmp/hem-dogfood/hem-scan.json` | `/tmp/hem-dogfood/reports/hem-report.md` | 283 | 1 | 3 |
-| DuckDocs | `/tmp/hem-dogfood/duckdocs-scan.json` | `/tmp/hem-dogfood/reports/DuckDocs-report.md` | 283 | 1 | 3 |
-| HyprDuck (replaced MirrorNote — workspace no longer present) | `/tmp/hem-dogfood/hyprduck-scan.json` | `/tmp/hem-dogfood/reports/HyprDuck-report.md` | 283 | 1 | 3 |
+| Gandalf | `/tmp/gandalf-dogfood/gandalf-scan.json` | `/tmp/gandalf-dogfood/reports/gandalf-report.md` | 283 | 1 | 3 |
+| DuckDocs | `/tmp/gandalf-dogfood/duckdocs-scan.json` | `/tmp/gandalf-dogfood/reports/DuckDocs-report.md` | 283 | 1 | 3 |
+| HyprDuck (replaced MirrorNote — workspace no longer present) | `/tmp/gandalf-dogfood/hyprduck-scan.json` | `/tmp/gandalf-dogfood/reports/HyprDuck-report.md` | 283 | 1 | 3 |
 
 All three projects share the same user-level agent configuration and lack project-level agent config files, so they produce identical evidence.
 
@@ -46,7 +46,7 @@ Command:
 bun run dogfood:cross-machine
 ```
 
-This builds a disposable macOS-side snapshot/bundle, then runs `bundle import --dry-run --json` inside a Linux `node:22-bookworm` Docker container with separate `/home/hem`, `/linux/project`, and `/linux/store` paths.
+This builds a disposable macOS-side snapshot/bundle, then runs `bundle import --dry-run --json` inside a Linux `node:22-bookworm` Docker container with separate `/home/gandalf`, `/linux/project`, and `/linux/store` paths.
 
 Validation checks:
 
@@ -60,13 +60,13 @@ Validation checks:
 Command shape:
 
 ```bash
-HOME=/tmp/hem-dogfood/home \
-HEM_STORE=/tmp/hem-dogfood/store \
-bun dist/src/cli.js timeline list --project /tmp/hem-dogfood/project --json
+HOME=/tmp/gandalf-dogfood/home \
+GANDALF_STORE=/tmp/gandalf-dogfood/store \
+bun dist/src/cli.js timeline list --project /tmp/gandalf-dogfood/project --json
 
-HOME=/tmp/hem-dogfood/home \
-HEM_STORE=/tmp/hem-dogfood/store \
-bun dist/src/cli.js timeline undo <id> --project /tmp/hem-dogfood/project --dry-run --json
+HOME=/tmp/gandalf-dogfood/home \
+GANDALF_STORE=/tmp/gandalf-dogfood/store \
+bun dist/src/cli.js timeline undo <id> --project /tmp/gandalf-dogfood/project --dry-run --json
 ```
 
 Validation checks:
@@ -90,7 +90,7 @@ bun run dogfood:gate2
 
 This records the launch-path rollback story in a disposable environment:
 
-- creates separate temp `HOME`, `HEM_STORE`, and project directories
+- creates separate temp `HOME`, `GANDALF_STORE`, and project directories
 - writes a clean synthetic `~/.codex/config.toml`
 - saves a content-backed Codex user snapshot
 - simulates a bad harness install by zero-filling config and adding a synthetic Codex skill

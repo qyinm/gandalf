@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "@qxinm/hem",
+      "name": "@qxinm/gandalf",
       "devDependencies": {
         "@types/node": "^22.15.21",
         "@types/react": "^19.2.15",
@@ -11,19 +11,19 @@
       },
     },
     "apps/cli": {
-      "name": "@qxinm/hem",
+      "name": "@qxinm/gandalf",
       "version": "0.3.4",
       "bin": {
-        "hem": "dist/src/cli.js",
+        "gandalf": "dist/src/cli.js",
       },
       "dependencies": {
-        "@qxinm/hem-core": "workspace:*",
-        "@qxinm/hem-tui": "workspace:*",
+        "@qxinm/gandalf-core": "0.3.4",
+        "@qxinm/gandalf-tui": "0.3.4",
         "react": "^19.2.6",
       },
     },
     "apps/desktop": {
-      "name": "@qxinm/hem-desktop",
+      "name": "@qxinm/gandalf-desktop",
       "version": "0.3.3",
       "dependencies": {
         "@tauri-apps/api": "^2",
@@ -42,7 +42,7 @@
       },
     },
     "apps/landing": {
-      "name": "@hem/landing",
+      "name": "@gandalf/landing",
       "version": "0.1.0",
       "dependencies": {
         "@astrojs/mdx": "^4.2.0",
@@ -59,18 +59,18 @@
       },
     },
     "apps/tui": {
-      "name": "@qxinm/hem-tui",
+      "name": "@qxinm/gandalf-tui",
       "version": "0.3.4",
       "dependencies": {
         "@clack/prompts": "^1.4.0",
-        "@qxinm/hem-core": "workspace:*",
+        "@qxinm/gandalf-core": "0.3.4",
         "ink": "^7.0.3",
         "ink-spinner": "^5.0.0",
         "react": "^19.2.6",
       },
     },
     "packages/core": {
-      "name": "@qxinm/hem-core",
+      "name": "@qxinm/gandalf-core",
       "version": "0.3.4",
     },
   },
@@ -191,7 +191,7 @@
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.27.7", "", { "os": "win32", "cpu": "x64" }, "sha512-56hiAJPhwQ1R4i+21FVF7V8kSD5zZTdHcVuRFMW0hn753vVfQN8xlx4uOPT4xoGH0Z/oVATuR82AiqSTDIpaHg=="],
 
-    "@hem/landing": ["@hem/landing@workspace:apps/landing"],
+    "@gandalf/landing": ["@gandalf/landing@workspace:apps/landing"],
 
     "@img/colour": ["@img/colour@1.1.0", "", {}, "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="],
 
@@ -257,13 +257,13 @@
 
     "@oslojs/encoding": ["@oslojs/encoding@1.1.0", "", {}, "sha512-70wQhgYmndg4GCPxPPxPGevRKqTIJ2Nh4OkiMWmDAVYsTQ+Ta7Sq+rPevXyXGdzr30/qZBnyOalCszoMxlyldQ=="],
 
-    "@qxinm/hem": ["@qxinm/hem@workspace:apps/cli"],
+    "@qxinm/gandalf": ["@qxinm/gandalf@workspace:apps/cli"],
 
-    "@qxinm/hem-core": ["@qxinm/hem-core@workspace:packages/core"],
+    "@qxinm/gandalf-core": ["@qxinm/gandalf-core@workspace:packages/core"],
 
-    "@qxinm/hem-desktop": ["@qxinm/hem-desktop@workspace:apps/desktop"],
+    "@qxinm/gandalf-desktop": ["@qxinm/gandalf-desktop@workspace:apps/desktop"],
 
-    "@qxinm/hem-tui": ["@qxinm/hem-tui@workspace:apps/tui"],
+    "@qxinm/gandalf-tui": ["@qxinm/gandalf-tui@workspace:apps/tui"],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0-beta.27", "", {}, "sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA=="],
 
@@ -1063,7 +1063,7 @@
 
     "@babel/helper-compilation-targets/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 
-    "@qxinm/hem-desktop/typescript": ["typescript@5.8.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ=="],
+    "@qxinm/gandalf-desktop/typescript": ["typescript@5.8.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ=="],
 
     "@rollup/pluginutils/estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
 

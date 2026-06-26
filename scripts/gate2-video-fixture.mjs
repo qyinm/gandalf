@@ -38,15 +38,15 @@ async function setup(envPath) {
     throw new Error("apps/cli/dist/src/cli.js is missing. Run `bun run build` before recording the demo.");
   }
 
-  const root = await mkdtemp(path.join(tmpdir(), "hem-gate2-demo-"));
-  const visibleProject = path.join(homedir(), "hem-demo");
+  const root = await mkdtemp(path.join(tmpdir(), "gandalf-gate2-demo-"));
+  const visibleProject = path.join(homedir(), "gandalf-demo");
   const home = path.join(visibleProject, "home");
   const codexHome = path.join(root, "codex-home");
   const store = path.join(root, "store");
   const project = visibleProject;
   const codexDir = path.join(home, ".codex");
 
-  if (visibleProject === homedir() || visibleProject === "/" || !visibleProject.endsWith("hem-demo")) {
+  if (visibleProject === homedir() || visibleProject === "/" || !visibleProject.endsWith("gandalf-demo")) {
     throw new Error(`Refusing unsafe visible project path: ${visibleProject}`);
   }
   await rm(visibleProject, { recursive: true, force: true });
@@ -80,14 +80,14 @@ async function setup(envPath) {
 
   await writeFile(envPath, [
     `export REAL_HOME=${sh(homedir())}`,
-    `export HEM_DEMO_ROOT=${sh(root)}`,
+    `export GANDALF_DEMO_ROOT=${sh(root)}`,
     `export CODEX_HOME=${sh(codexHome)}`,
     `export HOME=${sh(home)}`,
-    `export HEM_STORE=${sh(store)}`,
-    `export HEM_PROJECT=${sh(project)}`,
-    `export HEM_VISIBLE_PROJECT=${sh(visibleProject)}`,
-    `export HEM_REPO=${sh(repo)}`,
-    "export HEM_UPDATE_CHECK=0",
+    `export GANDALF_STORE=${sh(store)}`,
+    `export GANDALF_PROJECT=${sh(project)}`,
+    `export GANDALF_VISIBLE_PROJECT=${sh(visibleProject)}`,
+    `export GANDALF_REPO=${sh(repo)}`,
+    "export GANDALF_UPDATE_CHECK=0",
     ""
   ].join("\n"), "utf8");
 }
@@ -129,11 +129,11 @@ async function verify() {
   console.log("  synthetic harness skill removed");
   console.log("  real ~/.codex was never targeted");
   console.log("");
-  console.log("Install: bun install -g @qxinm/hem");
+  console.log("Install: bun install -g @qxinm/gandalf");
 }
 
 async function cleanup() {
-  const root = requireEnv("HEM_DEMO_ROOT");
+  const root = requireEnv("GANDALF_DEMO_ROOT");
   await rm(root, { recursive: true, force: true });
 }
 

@@ -12,8 +12,8 @@
  */
 
 import { hasFlag, json, valueAfter } from "../cli-shared.js";
-import { formatSnapError } from "@qxinm/hem-core/errors.js";
-import { detectTuiMode } from "@qxinm/hem-tui";
+import { formatSnapError } from "@qxinm/gandalf-core/errors.js";
+import { detectTuiMode } from "@qxinm/gandalf-tui";
 import {
   applyWithRollback,
   buildRestorePlan,
@@ -24,9 +24,9 @@ import {
   formatApplySummary,
   formatRollbackSummary,
   parseDryRunOutput
-} from "@qxinm/hem-core/restore.js";
-import { ensureStore, snapshotExists } from "@qxinm/hem-core/store.js";
-import type { RestorePlan, RestorePlanItem, RiskSummary, UnsupportedPlanItem } from "@qxinm/hem-core/types.js";
+} from "@qxinm/gandalf-core/restore.js";
+import { ensureStore, snapshotExists } from "@qxinm/gandalf-core/store.js";
+import type { RestorePlan, RestorePlanItem, RiskSummary, UnsupportedPlanItem } from "@qxinm/gandalf-core/types.js";
 import type { Command, CommandContext } from "./index.js";
 
 // ── Command export ─────────────────────────────────────────────
@@ -40,7 +40,7 @@ export const restoreCommand: Command = {
 
     // ── --tui: interactive wizard ────────────────────────────
     if (detectTuiMode(args).mode !== "none" && !hasFlag(args, "--json")) {
-      const { restoreWizard } = await import("@qxinm/hem-tui/wizards/restore-confirm.js");
+      const { restoreWizard } = await import("@qxinm/gandalf-tui/wizards/restore-confirm.js");
       return restoreWizard(options);
     }
 
@@ -49,10 +49,10 @@ export const restoreCommand: Command = {
     if (!snapshotName) {
       process.stderr.write(
         formatSnapError({
-          code: "HEM_RESTORE_SNAPSHOT_REQUIRED",
+          code: "GANDALF_RESTORE_SNAPSHOT_REQUIRED",
           problem: "Snapshot name is required for restore.",
           cause: "`restore` was called without `--snapshot`.",
-          fix: "Run `hem restore --snapshot <name> --dry-run --project .`."
+          fix: "Run `gandalf restore --snapshot <name> --dry-run --project .`."
         })
       );
       return 1;
@@ -65,7 +65,7 @@ export const restoreCommand: Command = {
     if (!isDryRun && !isApply) {
       process.stderr.write(
         formatSnapError({
-          code: "HEM_RESTORE_MODE_REQUIRED",
+          code: "GANDALF_RESTORE_MODE_REQUIRED",
           problem: "Either --dry-run or --apply is required for restore.",
           cause: "`restore` was called without `--dry-run` or `--apply`.",
           fix: "Add `--dry-run` to generate a non-mutating restore plan, or `--apply` to execute restore items."
@@ -77,7 +77,7 @@ export const restoreCommand: Command = {
     if (isDryRun && isApply) {
       process.stderr.write(
         formatSnapError({
-          code: "HEM_RESTORE_MODE_CONFLICT",
+          code: "GANDALF_RESTORE_MODE_CONFLICT",
           problem: "--dry-run and --apply are mutually exclusive.",
           cause: "Both `--dry-run` and `--apply` were passed.",
           fix: "Use `--dry-run` to preview changes, or `--apply` to execute them."
@@ -93,10 +93,10 @@ export const restoreCommand: Command = {
     if (!exists) {
       process.stderr.write(
         formatSnapError({
-          code: "HEM_SNAPSHOT_NOT_FOUND",
+          code: "GANDALF_SNAPSHOT_NOT_FOUND",
           problem: `Snapshot "${snapshotName}" not found.`,
           cause: "The named snapshot does not exist in the store.",
-          fix: "Run `hem snapshot list` to see available snapshots."
+          fix: "Run `gandalf snapshot list` to see available snapshots."
         })
       );
       return 1;
@@ -119,13 +119,13 @@ export const restoreCommand: Command = {
     }
 
     // ── Apply mode: --experimental gate ─────────────────────
-    if (!process.env.HEM_EXPERIMENTAL && !hasFlag(args, "--experimental")) {
+    if (!process.env.GANDALF_EXPERIMENTAL && !hasFlag(args, "--experimental")) {
       process.stderr.write(
         formatSnapError({
-          code: "HEM_EXPERIMENTAL_REQUIRED",
+          code: "GANDALF_EXPERIMENTAL_REQUIRED",
           problem: "Restore --apply requires --experimental.",
-          cause: "--apply was used without HEM_EXPERIMENTAL=1 or --experimental.",
-          fix: "Set HEM_EXPERIMENTAL=1 or pass --experimental to enable experimental features."
+          cause: "--apply was used without GANDALF_EXPERIMENTAL=1 or --experimental.",
+          fix: "Set GANDALF_EXPERIMENTAL=1 or pass --experimental to enable experimental features."
         })
       );
       return 1;
@@ -148,7 +148,7 @@ export const restoreCommand: Command = {
     if (parsed.errors.length > 0) {
       process.stderr.write(
         formatSnapError({
-          code: "HEM_RESTORE_PARSE_ERROR",
+          code: "GANDALF_RESTORE_PARSE_ERROR",
           problem: "Failed to parse restore plan for execution.",
           cause: parsed.errors[0]?.message ?? "Unknown parse error",
           fix: "This is an internal error. Verify the snapshot is valid and try again."
@@ -192,7 +192,7 @@ export const restoreCommand: Command = {
 
 function formatRestorePlanPreview(plan: RestorePlan): string {
   const lines = [
-    "hem restore dry-run",
+    "gandalf restore dry-run",
     "",
     `Snapshot: ${plan.sourceSnapshot}`,
     `Target project: ${plan.targetProject}`,

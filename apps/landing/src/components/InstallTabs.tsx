@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 const tabs = [
-	{ label: "npm", cmd: "npm install -g @qxinm/hem" },
+	{ label: "npm", cmd: "npm install -g @qxinm/gandalf" },
 ] as const;
 
 export default function InstallTabs() {

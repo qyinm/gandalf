@@ -1,4 +1,4 @@
-# Hem Desktop MVP Design
+# Gandalf Desktop MVP Design
 
 Status: working design document
 Last updated: 2026-06-10
@@ -9,7 +9,7 @@ The product definition remains in `PRODUCT.md`. This file owns layout, screen hi
 
 ## Design Intent
 
-Hem Desktop should feel like a focused Git client for the user's Codex setup.
+Gandalf Desktop should feel like a focused Git client for the user's Codex setup.
 
 The UI should be organized around the active profile and its setup surfaces:
 
@@ -123,7 +123,7 @@ Recommended desktop frame:
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |--------------------------------------------------------------------------------|
 | Default <chevrons-up-down>   Main Content                                      |
 |--------------------------------------------------------------------------------|
@@ -147,7 +147,7 @@ The app uses four structural zones:
 
 ```text
 Custom window titlebar:
-Hem logo on the left
+Gandalf logo on the left
 current snapshot short id on the right
 
 Profile picker:
@@ -170,10 +170,10 @@ account user profile
 settings icon
 ```
 
-The account user profile is not a Hem setup profile.
+The account user profile is not a Gandalf setup profile.
 
 ```text
-Hem setup profile:
+Gandalf setup profile:
 Default, Frontend, qyinm-lab/frontend
 
 Account user profile:
@@ -189,7 +189,7 @@ The custom window titlebar should stay minimal.
 Left:
 
 ```text
-Hem
+Gandalf
 ```
 
 Right:
@@ -367,7 +367,7 @@ Settings as a main nav item
 
 The bottom of the sidebar should show the signed-in account user profile.
 
-This is separate from Hem setup profiles.
+This is separate from Gandalf setup profiles.
 
 Collapsed account row:
 
@@ -541,7 +541,7 @@ If skills are not supported yet:
 Skills
 No supported Codex skills found.
 
-Hem will show supported skill surfaces here when Codex support is available.
+Gandalf will show supported skill surfaces here when Codex support is available.
 ```
 
 ## Hooks Screen Contract
@@ -605,7 +605,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |--------------------------------------------------------------------------------|
 | Default <chevrons-up-down>   Home                                              |
 |--------------------------------------------------------------------------------|
@@ -644,7 +644,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |--------------------------------------------------------------------------------|
 | Default <chevrons-up-down>   Home                                              |
 | +------------------------------------------+                                   |
@@ -675,7 +675,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |                                                        +---------------------+ |
 |                                                        | Current Snapshot    | |
 |                                                        | 8f3a2c7             | |
@@ -704,7 +704,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |--------------------------------------------------------------------------------|
 | Default <chevrons-up-down>   Setup                                             |
 |--------------------------------------------------------------------------------|
@@ -741,7 +741,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |--------------------------------------------------------------------------------|
 | Default <chevrons-up-down>   MCP                                               |
 |--------------------------------------------------------------------------------|
@@ -757,7 +757,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 |                           figma                                                |
 |                           Command configured                                   |
 |                           Env key: FIGMA_TOKEN                                 |
-|                           Hem did not execute this MCP command.                |
+|                           Gandalf did not execute this MCP command.                |
 |                                                                                |
 |                           [View Diff] [Create Snapshot]                        |
 |                                                                                |
@@ -769,7 +769,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |--------------------------------------------------------------------------------|
 | Default <chevrons-up-down>   Skills                                            |
 |--------------------------------------------------------------------------------|
@@ -777,7 +777,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 |   Setup                   ---------------------------------------------------  |
 |   MCP                     No supported Codex skills found.                     |
 | > Skills                                                                       |
-|   Hooks                   Hem will show supported skill surfaces here when      |
+|   Hooks                   Gandalf will show supported skill surfaces here when      |
 |                           Codex support is available.                          |
 |                                                                                |
 |                           [Create Snapshot]                                    |
@@ -790,7 +790,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |--------------------------------------------------------------------------------|
 | Default <chevrons-up-down>   Hooks                                             |
 |--------------------------------------------------------------------------------|
@@ -804,7 +804,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 |                           ---------------------------------------------------  |
 |                           postToolUse                                          |
 |                           Can execute shell commands during Codex use.         |
-|                           Hem did not execute this hook.                       |
+|                           Gandalf did not execute this hook.                       |
 |                                                                                |
 |                           [View Diff] [Restore Previous] [Create Snapshot]     |
 |                                                                                |
@@ -816,7 +816,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |--------------------------------------------------------------------------------|
 | Default <chevrons-up-down>   Diff                                              |
 |--------------------------------------------------------------------------------|
@@ -848,7 +848,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |--------------------------------------------------------------------------------|
 | Default <chevrons-up-down>   Switch Profile                                    |
 |--------------------------------------------------------------------------------|
@@ -866,7 +866,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 |                           - MCP server: old-docs                               |
 |                                                                                |
 |                           Before Switching                                     |
-|                           Hem will create a rollback snapshot first.           |
+|                           Gandalf will create a rollback snapshot first.           |
 |                                                                                |
 |                           [Switch Profile] [Cancel]                            |
 |                                                                                |
@@ -878,7 +878,7 @@ They are not visual design. They define layout, hierarchy, and product weight.
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |--------------------------------------------------------------------------------|
 | Default <chevrons-up-down>   Restore Snapshot                                  |
 |--------------------------------------------------------------------------------|
@@ -892,11 +892,11 @@ They are not visual design. They define layout, hierarchy, and product weight.
 |                           - MCP server: old-docs                               |
 |                                                                                |
 |                           Secrets                                              |
-|                           FIGMA_TOKEN value is not stored by Hem.              |
+|                           FIGMA_TOKEN value is not stored by Gandalf.              |
 |                           Current local value will be preserved.               |
 |                                                                                |
 |                           Before Restoring                                     |
-|                           Hem will create a rollback snapshot first.           |
+|                           Gandalf will create a rollback snapshot first.           |
 |                                                                                |
 |                           [Restore Snapshot] [Cancel]                          |
 |                                                                                |
@@ -910,7 +910,7 @@ Team proposal review is opened from a team-tracking profile context, not from a 
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |--------------------------------------------------------------------------------|
 | qyinm-lab/frontend <chevrons-up-down>   Proposal #42                           |
 |--------------------------------------------------------------------------------|
@@ -945,7 +945,7 @@ Team proposal review is opened from a team-tracking profile context, not from a 
 
 ```text
 +--------------------------------------------------------------------------------+
-| Hem                                                          8f3a2c7            |
+| Gandalf                                                          8f3a2c7            |
 |--------------------------------------------------------------------------------|
 | Settings                         Account                                       |
 |--------------------------------------------------------------------------------|
@@ -981,9 +981,9 @@ Team proposal review is opened from a team-tracking profile context, not from a 
 
 ```text
 +--------------------------------------------------------------------------------+
-| Welcome to Hem                                                                |
+| Welcome to Gandalf                                                                |
 |-------------------------------------------------------------------------------|
-| Hem will scan your user-global Codex setup and create a local Default profile. |
+| Gandalf will scan your user-global Codex setup and create a local Default profile. |
 |                                                                                |
 | [Continue]                                                                     |
 +--------------------------------------------------------------------------------+
@@ -1018,7 +1018,7 @@ Team proposal review is opened from a team-tracking profile context, not from a 
 +--------------------------------------------------------------------------------+
 | Enable Protection?                                                            |
 |-------------------------------------------------------------------------------|
-| Hem can watch Codex setup changes and notify you when risky changes happen.    |
+| Gandalf can watch Codex setup changes and notify you when risky changes happen.    |
 |                                                                                |
 | [Enable Protection] [Not Now]                                                  |
 +--------------------------------------------------------------------------------+

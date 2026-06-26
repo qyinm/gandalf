@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qyinm/hem/internal/cli"
-	"github.com/qyinm/hem/internal/hemcore/store"
-	"github.com/qyinm/hem/internal/hemcore/types"
+	"github.com/qyinm/gandalf/internal/cli"
+	"github.com/qyinm/gandalf/internal/gandalfcore/store"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 
-	_ "github.com/qyinm/hem/internal/hemcore/scan/plugins"
+	_ "github.com/qyinm/gandalf/internal/gandalfcore/scan/plugins"
 )
 
 func makeSandbox(t *testing.T) (projectPath, homeDir, storeDir string) {
@@ -20,7 +20,7 @@ func makeSandbox(t *testing.T) (projectPath, homeDir, storeDir string) {
 	root := t.TempDir()
 	projectPath = filepath.Join(root, "project")
 	homeDir = filepath.Join(root, "home")
-	storeDir = filepath.Join(homeDir, ".hem")
+	storeDir = filepath.Join(homeDir, ".gandalf")
 	if err := os.MkdirAll(projectPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -87,8 +87,8 @@ func TestInvalidAgentReturnsExitOne(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
-	if !strings.Contains(stderr, "HEM_INVALID_AGENT") {
-		t.Fatalf("expected HEM_INVALID_AGENT in stderr, got %q", stderr)
+	if !strings.Contains(stderr, "GANDALF_INVALID_AGENT") {
+		t.Fatalf("expected GANDALF_INVALID_AGENT in stderr, got %q", stderr)
 	}
 }
 
@@ -105,8 +105,8 @@ func TestInvalidScopeReturnsExitOne(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
-	if !strings.Contains(stderr, "HEM_INVALID_SCOPE") {
-		t.Fatalf("expected HEM_INVALID_SCOPE in stderr, got %q", stderr)
+	if !strings.Contains(stderr, "GANDALF_INVALID_SCOPE") {
+		t.Fatalf("expected GANDALF_INVALID_SCOPE in stderr, got %q", stderr)
 	}
 }
 
@@ -152,7 +152,7 @@ func TestSnapshotCreateRequiresMetadataOnlyByDefault(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
-	if !strings.Contains(stderr, "HEM_METADATA_ONLY_REQUIRED") {
+	if !strings.Contains(stderr, "GANDALF_METADATA_ONLY_REQUIRED") {
 		t.Fatalf("expected metadata-only error, got %q", stderr)
 	}
 }
@@ -217,7 +217,7 @@ func TestRestoreDryRunDefaultWithoutApply(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, stderr)
 	}
-	if !strings.Contains(stdout, "hem restore dry-run") {
+	if !strings.Contains(stdout, "gandalf restore dry-run") {
 		t.Fatalf("expected dry-run preview, got %q", stdout)
 	}
 	if !strings.Contains(stdout, "No files were changed.") {
@@ -251,7 +251,7 @@ func TestRestoreApplyWithoutExperimentalRejected(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
-	if !strings.Contains(stderr, "HEM_EXPERIMENTAL_REQUIRED") {
+	if !strings.Contains(stderr, "GANDALF_EXPERIMENTAL_REQUIRED") {
 		t.Fatalf("expected experimental gate error, got %q", stderr)
 	}
 }
@@ -262,7 +262,7 @@ func TestRootWithoutSubcommandPrintsHelp(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
-	if !strings.Contains(stdout, "hem scan --project .") {
+	if !strings.Contains(stdout, "gandalf scan --project .") {
 		t.Fatalf("expected help text, got %q", stdout)
 	}
 }
@@ -272,12 +272,12 @@ func TestBundleExportRequiresSnapshot(t *testing.T) {
 	_, stderr, code := runCLI(t,
 		"bundle", "export",
 		"--name", "baseline",
-		"--out", "test.hem",
+		"--out", "test.gandalf",
 	)
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
-	if !strings.Contains(stderr, "HEM_BUNDLE_EXPORT_FAILED") {
+	if !strings.Contains(stderr, "GANDALF_BUNDLE_EXPORT_FAILED") {
 		t.Fatalf("expected bundle export error, got %q", stderr)
 	}
 }

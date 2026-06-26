@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qyinm/hem/internal/hemcore/agents"
-	"github.com/qyinm/hem/internal/hemcore/types"
+	"github.com/qyinm/gandalf/internal/gandalfcore/agents"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
 // FormatAgentLabel returns a human-readable agent name.

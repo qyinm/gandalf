@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/qyinm/hem/internal/hemcore/snapshot"
-	"github.com/qyinm/hem/internal/hemcore/store"
-	"github.com/qyinm/hem/internal/hemcore/types"
+	"github.com/qyinm/gandalf/internal/gandalfcore/snapshot"
+	"github.com/qyinm/gandalf/internal/gandalfcore/store"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 	"github.com/spf13/cobra"
 )
 
@@ -97,7 +97,7 @@ func runSnapshotCreate(cmd *cobra.Command, common *CommonFlags, name string, met
 
 	if !metadataOnly && !contentBackedCodexUser {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_METADATA_ONLY_REQUIRED",
+			Code:    "GANDALF_METADATA_ONLY_REQUIRED",
 			Problem: "Snapshots are metadata-only.",
 			Cause:   "`snapshot create` was called without `--metadata-only`.",
 			Fix:     "Add `--metadata-only`, or use `--agent codex --scope user` for the Codex rollback safety-net path.",
@@ -110,7 +110,7 @@ func runSnapshotCreate(cmd *cobra.Command, common *CommonFlags, name string, met
 	state, err := snapshot.CaptureCurrentState(&captureRuntime, name)
 	if err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_SNAPSHOT_CAPTURE_FAILED",
+			Code:    "GANDALF_SNAPSHOT_CAPTURE_FAILED",
 			Problem: "Failed to capture current state.",
 			Cause:   err.Error(),
 			Fix:     "Verify project and store paths are accessible.",
@@ -119,7 +119,7 @@ func runSnapshotCreate(cmd *cobra.Command, common *CommonFlags, name string, met
 
 	if err := store.WriteSnapshot(runtime.StoreDir, store.StoreSnapshotFrom(state.Snapshot), runtime.Agent); err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_SNAPSHOT_WRITE_FAILED",
+			Code:    "GANDALF_SNAPSHOT_WRITE_FAILED",
 			Problem: "Failed to write snapshot.",
 			Cause:   err.Error(),
 			Fix:     "Verify the store directory is writable.",
@@ -150,7 +150,7 @@ func runSnapshotList(cmd *cobra.Command, common *CommonFlags) int {
 	names, err := store.ListSnapshots(runtime.StoreDir, runtime.Agent)
 	if err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_SNAPSHOT_LIST_FAILED",
+			Code:    "GANDALF_SNAPSHOT_LIST_FAILED",
 			Problem: "Failed to list snapshots.",
 			Cause:   err.Error(),
 			Fix:     "Verify the store directory exists and is readable.",
@@ -176,10 +176,10 @@ func runSnapshotShow(cmd *cobra.Command, common *CommonFlags, name string) int {
 	snap, err := store.ReadSnapshot(runtime.StoreDir, name, runtime.Agent)
 	if err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_SNAPSHOT_NOT_FOUND",
+			Code:    "GANDALF_SNAPSHOT_NOT_FOUND",
 			Problem: fmt.Sprintf("Snapshot %q not found.", name),
 			Cause:   err.Error(),
-			Fix:     "Run `hem snapshot list` to see available snapshots.",
+			Fix:     "Run `gandalf snapshot list` to see available snapshots.",
 		})
 	}
 

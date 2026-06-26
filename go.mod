@@ -1,4 +1,4 @@
-module github.com/qyinm/hem
+module github.com/qyinm/gandalf
 
 go 1.24.2
 

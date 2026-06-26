@@ -1,18 +1,18 @@
 /**
  * Command-pattern implementation of the `schema` CLI command.
  *
- * Exports JSON Schema definitions for hem's core data types.
+ * Exports JSON Schema definitions for gandalf's core data types.
  * Useful for CI pipelines, editor autocompletion, and external tooling.
  */
 
 import { json, hasFlag } from "../cli-shared.js";
-import { EVIDENCE_KINDS } from "@qxinm/hem-core/types.js";
+import { EVIDENCE_KINDS } from "@qxinm/gandalf-core/types.js";
 import type { CommandContext, Command } from "./index.js";
 
 const SCHEMA = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
-  title: "hem",
-  description: "JSON Schema for hem data types",
+  title: "gandalf",
+  description: "JSON Schema for gandalf data types",
   definitions: {
     agentId: {
       type: "string",
@@ -144,7 +144,7 @@ const SCHEMA = {
 
 export const schemaCommand: Command = {
   name: "schema",
-  description: "Export JSON Schema for hem data types",
+  description: "Export JSON Schema for gandalf data types",
   async execute(ctx: CommandContext): Promise<number> {
     if (hasFlag(ctx.args, "--json") || !hasFlag(ctx.args, "--markdown")) {
       process.stdout.write(json(SCHEMA));

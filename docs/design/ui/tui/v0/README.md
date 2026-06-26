@@ -1,8 +1,8 @@
-# Hem TUI v0
+# Gandalf TUI v0
 
 ## Product Frame
 
-Hem v0 is a local Time Machine for AI coding agent setups.
+Gandalf v0 is a local Time Machine for AI coding agent setups.
 
 The TUI should help a power user answer four questions quickly:
 
@@ -23,7 +23,7 @@ The app is not primarily a marketplace, security dashboard, or brand page. It is
 | Local setup history event | log entry | Timeline event / change |
 | Change list between states | diff | Compare |
 | Revert to saved state | checkout/reset | Restore |
-| Portable bundle | archive | `.hem` file |
+| Portable bundle | archive | `.gandalf` file |
 
 ### Profile
 
@@ -107,7 +107,7 @@ The TUI uses a persistent left nav and a main workspace. The Timeline screen is 
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Do not show a large `Hem` brand header. The selected profile, selected agent, and current setup are the primary context.
+Do not show a large `Gandalf` brand header. The selected profile, selected agent, and current setup are the primary context.
 
 The nav frame, Current Setup frame, and Timeline frame should share the same overall height. The Timeline screen should not look like a loose stack of unrelated blocks.
 
@@ -238,7 +238,7 @@ Actions
 
 This should feel like `git log`, but without using `commit`, `branch`, `checkout`, or `reset` as user-facing labels.
 
-Timeline preview is non-mutating in P0: it calls the same dry-run planner as `hem timeline undo <id> --dry-run`, renders `writes files: no`, and separates MCP preview items from observe-only surfaces.
+Timeline preview is non-mutating in P0: it calls the same dry-run planner as `gandalf timeline undo <id> --dry-run`, renders `writes files: no`, and separates MCP preview items from observe-only surfaces.
 
 ### Profiles
 
@@ -266,13 +266,13 @@ Actions
   Enter switch   s save   c compare
 ```
 
-`.hem` export is not a primary global action. It lives inside Save Setup as a destination option.
+`.gandalf` export is not a primary global action. It lives inside Save Setup as a destination option.
 
 ## Actions
 
 ### Save Setup
 
-Save creates a local snapshot. Exporting `.hem` is a save destination, not a separate top-level mental model.
+Save creates a local snapshot. Exporting `.gandalf` is a save destination, not a separate top-level mental model.
 
 ```text
 Save current setup?
@@ -286,7 +286,7 @@ This will be saved as
 
 Destinations
   ✓ Local history
-  □ Export as .hem
+  □ Export as .gandalf
   □ Cloud profile        Pro
 
 [Save] [Cancel]
@@ -295,7 +295,7 @@ Destinations
 MVP only needs:
 
 - Local history
-- Export as `.hem`
+- Export as `.gandalf`
 
 Cloud profile is future Pro behavior.
 
@@ -471,7 +471,7 @@ Save a setup to start local history.
 ```text
 No supported agent setup found.
 
-Hem looks for Claude Code, Codex, Cursor, OpenCode, Pi Agent,
+Gandalf looks for Claude Code, Codex, Cursor, OpenCode, Pi Agent,
 and project instruction files.
 
 Run from a project directory or install one supported agent first.
@@ -500,7 +500,7 @@ Build now:
 - Compare with explicit From/To
 - Structured side-by-side compare
 - MCP-only dry-run timeline undo preview
-- Save Setup with local history and optional `.hem` export
+- Save Setup with local history and optional `.gandalf` export
 
 Defer:
 

@@ -1,5 +1,5 @@
 /**
- * Minimal POSIX ustar tar writer/reader for .hem bundles.
+ * Minimal POSIX ustar tar writer/reader for .gandalf bundles.
  *
  * No external dependencies. Uses only Node.js core Buffer and crypto.
  *

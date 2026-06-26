@@ -1,8 +1,8 @@
 import { hasFlag, json, valueAfter } from "../cli-shared.js";
-import { formatSnapError } from "@qxinm/hem-core/errors.js";
-import { findTimelineEntry, listTimelineEntries, type TimelineCorruptEvent } from "@qxinm/hem-core/store.js";
-import { buildTimelineUndoPlan } from "@qxinm/hem-core/timeline-undo.js";
-import type { TimelineEntry } from "@qxinm/hem-core/types.js";
+import { formatSnapError } from "@qxinm/gandalf-core/errors.js";
+import { findTimelineEntry, listTimelineEntries, type TimelineCorruptEvent } from "@qxinm/gandalf-core/store.js";
+import { buildTimelineUndoPlan } from "@qxinm/gandalf-core/timeline-undo.js";
+import type { TimelineEntry } from "@qxinm/gandalf-core/types.js";
 import type { Command, CommandContext } from "./index.js";
 
 export const timelineCommand: Command = {
@@ -37,10 +37,10 @@ export const timelineCommand: Command = {
       if (!ref) {
         process.stderr.write(
           formatSnapError({
-            code: "HEM_TIMELINE_REF_REQUIRED",
+            code: "GANDALF_TIMELINE_REF_REQUIRED",
             problem: "Timeline entry id or snapshot name is required.",
             cause: "`timeline show` was called without a reference.",
-            fix: "Run `hem timeline list` and pass an entry id or snapshot name."
+            fix: "Run `gandalf timeline list` and pass an entry id or snapshot name."
           })
         );
         return 1;
@@ -54,10 +54,10 @@ export const timelineCommand: Command = {
       if (!entry) {
         process.stderr.write(
           formatSnapError({
-            code: "HEM_TIMELINE_ENTRY_NOT_FOUND",
+            code: "GANDALF_TIMELINE_ENTRY_NOT_FOUND",
             problem: `Timeline entry "${ref}" not found.`,
             cause: "The reference does not match a timeline id or snapshot name.",
-            fix: "Run `hem timeline list` to see available entries."
+            fix: "Run `gandalf timeline list` to see available entries."
           })
         );
         return 1;
@@ -72,10 +72,10 @@ export const timelineCommand: Command = {
       if (!ref) {
         process.stderr.write(
           formatSnapError({
-            code: "HEM_TIMELINE_REF_REQUIRED",
+            code: "GANDALF_TIMELINE_REF_REQUIRED",
             problem: "Timeline entry id or snapshot name is required.",
             cause: "`timeline undo` was called without a reference.",
-            fix: "Run `hem timeline list` and pass an entry id."
+            fix: "Run `gandalf timeline list` and pass an entry id."
           })
         );
         return 1;
@@ -83,10 +83,10 @@ export const timelineCommand: Command = {
       if (!hasFlag(args, "--dry-run")) {
         process.stderr.write(
           formatSnapError({
-            code: "HEM_TIMELINE_UNDO_DRY_RUN_REQUIRED",
+            code: "GANDALF_TIMELINE_UNDO_DRY_RUN_REQUIRED",
             problem: "Timeline undo is dry-run only in P0.",
             cause: "`timeline undo` was called without `--dry-run`.",
-            fix: "Run `hem timeline undo <id> --dry-run --json`."
+            fix: "Run `gandalf timeline undo <id> --dry-run --json`."
           })
         );
         return 1;
@@ -102,10 +102,10 @@ export const timelineCommand: Command = {
         reportCorruptEvents(corruptEvents);
         process.stderr.write(
           formatSnapError({
-            code: "HEM_TIMELINE_ENTRY_NOT_FOUND",
+            code: "GANDALF_TIMELINE_ENTRY_NOT_FOUND",
             problem: `Timeline entry "${ref}" not found.`,
             cause: error instanceof Error ? error.message : "The reference does not match a readable timeline id or snapshot name.",
-            fix: "Run `hem timeline list` to see available entries and any corrupt event warnings."
+            fix: "Run `gandalf timeline list` to see available entries and any corrupt event warnings."
           })
         );
         return 1;
@@ -117,10 +117,10 @@ export const timelineCommand: Command = {
 
     process.stderr.write(
       formatSnapError({
-        code: "HEM_UNKNOWN_SUBCOMMAND",
+        code: "GANDALF_UNKNOWN_SUBCOMMAND",
         problem: `Unknown timeline subcommand: "${sub}".`,
         cause: "`timeline` was called with an unrecognized subcommand.",
-        fix: "Use `list`, `show`, or `undo`. Run `hem --help` for details."
+        fix: "Use `list`, `show`, or `undo`. Run `gandalf --help` for details."
       })
     );
     return 1;
@@ -139,7 +139,7 @@ function renderTimelineList(entries: TimelineEntry[]): string {
     return "No timeline entries.\n";
   }
 
-  const lines = ["hem timeline", ""];
+  const lines = ["gandalf timeline", ""];
   for (const entry of entries) {
     const scope = entry.agent ? ` ${entry.agent}` : "";
     lines.push(`${entry.id}  ${entry.observedAt}  ${entry.restoreReadiness}${scope}  ${entry.title}`);

@@ -9,7 +9,7 @@ date: 2026-06-08
 
 ## Summary
 
-Make daemon timeline history the first-class Hem TUI experience, document the daemon/timeline workflow in the public docs, and prepare the current main-ahead work for a clean release path. The plan keeps undo behavior conservative: P0 exposes MCP-only dry-run preview in TUI and CLI docs, while non-restorable surfaces remain observe-only.
+Make daemon timeline history the first-class Gandalf TUI experience, document the daemon/timeline workflow in the public docs, and prepare the current main-ahead work for a clean release path. The plan keeps undo behavior conservative: P0 exposes MCP-only dry-run preview in TUI and CLI docs, while non-restorable surfaces remain observe-only.
 
 Historical note: this plan predates the later v0 design-compliance refactor. References below to a `Timeline tab` should be read as the current `History > All changes` Timeline screen with Current Setup above Timeline.
 
@@ -17,7 +17,7 @@ Historical note: this plan predates the later v0 design-compliance refactor. Ref
 
 ## Problem Frame
 
-Recent work added daemon lifecycle commands, timeline event capture, `timeline list/show/undo`, and dogfood coverage, but the primary interactive surface still centers snapshots, scan, audit, and diff. That leaves the new timeline behavior discoverable only through CLI commands and a dogfood report. The next product step is to make "what changed in my agent setup, and what can I safely preview undoing?" visible in the first screen a Hem user opens.
+Recent work added daemon lifecycle commands, timeline event capture, `timeline list/show/undo`, and dogfood coverage, but the primary interactive surface still centers snapshots, scan, audit, and diff. That leaves the new timeline behavior discoverable only through CLI commands and a dogfood report. The next product step is to make "what changed in my agent setup, and what can I safely preview undoing?" visible in the first screen a Gandalf user opens.
 
 The repo is also `main...origin/main` ahead by three commits, so release prep needs an explicit path instead of treating `/ship` as a normal feature-branch workflow.
 
@@ -25,7 +25,7 @@ The repo is also `main...origin/main` ahead by three commits, so release prep ne
 
 ## Requirements
 
-- R1. `hem tui` presents timeline history as a first-class tab, preferably before snapshot-focused views.
+- R1. `gandalf tui` presents timeline history as a first-class tab, preferably before snapshot-focused views.
 - R2. The timeline view lists daemon events with enough context to identify the setup change: id, observed time, event kind, restore readiness, agent scope, and title.
 - R3. The selected timeline event has a detail view showing before/after snapshots, confidence, summary counts, highlights, and changed surfaces.
 - R4. The TUI can preview `timeline undo` for a selected event without mutating files, matching the CLI contract that undo is dry-run only in P0.
@@ -114,7 +114,7 @@ stateDiagram-v2
 - **Approach:** Define pure helpers for row formatting, selected-entry detail data, readiness color mapping, changed-surface grouping, and undo-preview summaries. Keep data inputs as `TimelineEntry[]` and `TimelineUndoPlan` so helpers stay close to the existing domain model.
 - **Patterns to follow:** `src/tui/components/SnapshotList.tsx` for simple list presentation, `src/tui/components/SimpleTable.tsx` for compact tabular output, and `daemonTrustHeaderModel` in `src/tui/components/Dashboard.tsx` for pure model helpers.
 - **Test scenarios:**
-  - Given no entries, the model returns an empty state with no selected entry and the command `hem daemon start --project .`.
+  - Given no entries, the model returns an empty state with no selected entry and the command `gandalf daemon start --project .`.
   - Given baseline and setup-changed entries, rows include id, observed date/time, event kind, readiness, agent scope, and title.
   - Given a partial-readiness event with MCP and skill surfaces, detail grouping separates restorable MCP surfaces from observe-only surfaces.
   - Given an undo plan with one writable MCP item and one observe-only skill surface, the preview model renders `writesFiles=false`, the MCP action, and the observe-only surface.
@@ -123,7 +123,7 @@ stateDiagram-v2
 
 ### U2. Dashboard Timeline tab integration
 
-- **Goal:** Wire the Timeline tab into `hem tui` as a first-class interactive surface.
+- **Goal:** Wire the Timeline tab into `gandalf tui` as a first-class interactive surface.
 - **Requirements:** R1, R2, R3, R4, R6
 - **Dependencies:** U1
 - **Files:**
@@ -192,7 +192,7 @@ stateDiagram-v2
   - `src/cli.ts` if top-level help text needs to change
   - `src/commands/daemon.ts` and `src/commands/timeline.ts` if command-local help text needs to change
 - **Approach:** Add a Local Timeline section to README that shows start, status, list, show, and dry-run undo. Update the roadmap entry from "Timeline-first TUI next" to reflect the planned or shipped state once implementation lands. Keep docs explicit that timeline undo is P0 dry-run and MCP-only.
-- **Patterns to follow:** Current README trust-contract wording and the dogfood report's isolated `HOME` / `HEM_STORE` verification framing.
+- **Patterns to follow:** Current README trust-contract wording and the dogfood report's isolated `HOME` / `GANDALF_STORE` verification framing.
 - **Test scenarios:**
   - Documentation examples use commands supported by `src/cli.ts` help.
   - Documentation describes non-mutating dry-run semantics for undo preview.
@@ -217,7 +217,7 @@ stateDiagram-v2
   - `bun run typecheck` passes.
   - `bun run build` passes.
   - `bun run test` passes with timeline/TUI coverage included.
-  - Isolated daemon/timeline CLI dogfood passes using temporary `HOME`, `HEM_STORE`, and project.
+  - Isolated daemon/timeline CLI dogfood passes using temporary `HOME`, `GANDALF_STORE`, and project.
   - PTY TUI smoke confirms Timeline tab, daemon header, and undo preview render without overlapping text.
   - `bun pm pack` or package dry-run confirms the published package includes `dist/src` and README.
 - **Verification:** Release branch has no unintended tracked artifacts, version metadata is synchronized, and release notes or a changelog, if adopted, cover daemon/timeline/TUI/docs changes.
@@ -226,7 +226,7 @@ stateDiagram-v2
 
 ## System-Wide Impact
 
-This work changes Hem's primary interactive posture from snapshot-first to timeline-first. That affects onboarding, command discoverability, docs, and release messaging. It should not change scanner trust guarantees, daemon capture semantics, or restore safety boundaries.
+This work changes Gandalf's primary interactive posture from snapshot-first to timeline-first. That affects onboarding, command discoverability, docs, and release messaging. It should not change scanner trust guarantees, daemon capture semantics, or restore safety boundaries.
 
 ---
 
@@ -246,7 +246,7 @@ This work changes Hem's primary interactive posture from snapshot-first to timel
 The release body should name the new flow in user terms:
 
 1. Start daemon.
-2. Let Hem observe setup changes.
+2. Let Gandalf observe setup changes.
 3. Open TUI to inspect timeline history.
 4. Preview MCP undo without writing files.
 

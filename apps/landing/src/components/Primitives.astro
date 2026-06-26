@@ -2,32 +2,32 @@
 const commands = [
   {
     verb: "save",
-    sig: "hem save <name>",
+    sig: "gandalf save <name>",
     desc: "Snapshot every MCP, skill, hook, permission, and env key into a named branch."
   },
   {
     verb: "diff",
-    sig: "hem diff <a> <b>",
+    sig: "gandalf diff <a> <b>",
     desc: "Side-by-side compare of two branches. Highlights added skills, removed MCPs, changed env keys."
   },
   {
     verb: "switch",
-    sig: "hem switch <name>",
+    sig: "gandalf switch <name>",
     desc: "Atomically apply a branch to your live ~/.codex setup. Survives partial failure."
   },
   {
     verb: "restore",
-    sig: "hem restore <name>",
+    sig: "gandalf restore <name>",
     desc: "One command back to a known-good state. The undo your agent setup never had."
   },
   {
     verb: "list",
-    sig: "hem list",
+    sig: "gandalf list",
     desc: "Show every branch with metadata: created, last applied, drift since save."
   },
   {
     verb: "export",
-    sig: "hem export <name>",
+    sig: "gandalf export <name>",
     desc: "Emit a portable JSON bundle. Move setups across machines or share with a team."
   }
 ];
@@ -44,7 +44,7 @@ const commands = [
     </h2>
 
     <p class="section-lede">
-      Hem doesn't introduce new concepts — it borrows the ones you already use every day.
+      Gandalf doesn't introduce new concepts — it borrows the ones you already use every day.
       Every command names what it does. Nothing else to learn.
     </p>
 

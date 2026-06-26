@@ -1,4 +1,4 @@
-import type { GraphDiff, SemanticChange } from "@qxinm/hem-core/diff.js";
+import type { GraphDiff, SemanticChange } from "@qxinm/gandalf-core/diff.js";
 
 export interface SaveSetupDestination {
   label: string;
@@ -29,7 +29,7 @@ export function buildSaveSetupViewModel(input: {
       : detectedChangeLabels(semanticChanges, rawSourceChanges.length),
     destinations: [
       { label: "Local history", selected: true },
-      { label: "Export as .hem", selected: false }
+      { label: "Export as .gandalf", selected: false }
     ],
     noChanges
   };

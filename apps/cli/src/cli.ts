@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { formatSnapError } from "@qxinm/hem-core/errors.js";
+import { formatSnapError } from "@qxinm/gandalf-core/errors.js";
 import { type CommandContext } from "./commands/index.js";
 import { scanCommand } from "./commands/scan.js";
 import { snapshotCommand } from "./commands/snapshot.js";
@@ -16,48 +16,48 @@ import { hasFlag, runtimeOptions } from "./cli-shared.js";
 import { maybePrintUpdateNotice } from "./update-check.js";
 
 const HELP = [
-  "hem",
+  "gandalf",
   "",
   "Save, compare, and restore Codex user-global setup experiments.",
   "",
   "TUI command:",
-  "  hem tui                              launch interactive TUI dashboard",
+  "  gandalf tui                              launch interactive TUI dashboard",
   "",
   "Local history commands:",
-  '  hem timeline list --project .',
-  '  hem timeline show <id>',
-  '  hem timeline undo <id> --dry-run --json',
+  '  gandalf timeline list --project .',
+  '  gandalf timeline show <id>',
+  '  gandalf timeline undo <id> --dry-run --json',
   "",
   "Diagnosis commands:",
-  '  hem scan --project .',
-  '  hem scan --project . --explain',
-  '  hem snapshot create --name baseline --agent codex --scope user --project .',
-  '  hem snapshot create --name baseline --metadata-only --project .',
-  '  hem snapshot create --name baseline --metadata-only --project . --agent claude-code',
-  '  hem snapshot list',
-  '  hem snapshot list --agent codex',
-  '  hem snapshot show baseline --json',
-  '  hem diff baseline current --agent codex --scope user --project .',
-  '  hem diff baseline current --project .',
-  '  hem audit current --project .',
-  '  hem provenance current --project . --json',
-  '  hem report current --project . --out hem-report.md',
-  '  hem doctor --project .',
+  '  gandalf scan --project .',
+  '  gandalf scan --project . --explain',
+  '  gandalf snapshot create --name baseline --agent codex --scope user --project .',
+  '  gandalf snapshot create --name baseline --metadata-only --project .',
+  '  gandalf snapshot create --name baseline --metadata-only --project . --agent claude-code',
+  '  gandalf snapshot list',
+  '  gandalf snapshot list --agent codex',
+  '  gandalf snapshot show baseline --json',
+  '  gandalf diff baseline current --agent codex --scope user --project .',
+  '  gandalf diff baseline current --project .',
+  '  gandalf audit current --project .',
+  '  gandalf provenance current --project . --json',
+  '  gandalf report current --project . --out gandalf-report.md',
+  '  gandalf doctor --project .',
   "",
   "Restore commands:",
-  '  hem restore --snapshot <name> --dry-run --agent codex --scope user --project . preview a non-mutating restore plan',
-  '  hem restore --snapshot <name> --apply --experimental --agent codex --scope user --project . apply restore items sequentially',
-  '  hem restore --snapshot <name> --apply --fail-fast --project . stop on first failure during apply',
-  '  hem restore --snapshot <name> --apply --rollback --project . apply then automatically rollback',
+  '  gandalf restore --snapshot <name> --dry-run --agent codex --scope user --project . preview a non-mutating restore plan',
+  '  gandalf restore --snapshot <name> --apply --experimental --agent codex --scope user --project . apply restore items sequentially',
+  '  gandalf restore --snapshot <name> --apply --fail-fast --project . stop on first failure during apply',
+  '  gandalf restore --snapshot <name> --apply --rollback --project . apply then automatically rollback',
   "",
   "Bundle commands:",
-  '  hem bundle export --name <snapshot> --out <file.hem> --project . export snapshot to .hem bundle (content included by default)',
-  '  hem bundle export --name <snapshot> --out <file.hem> --metadata-only --project . export metadata-only bundle',
-  '  hem bundle verify <file.hem>                             verify format, checksums, and signature metadata',
-  '  hem bundle inspect <file.hem>                            inspect bundle metadata',
-  '  hem bundle import <file.hem> --dry-run --project .       validate bundle without importing',
-  '  hem bundle import <file.hem> --apply-content --quarantine --experimental --project . inspect content without writing targets',
-  '  hem bundle import <file.hem> --apply-content --experimental --project . apply project-relative content (experimental)',
+  '  gandalf bundle export --name <snapshot> --out <file.gandalf> --project . export snapshot to .gandalf bundle (content included by default)',
+  '  gandalf bundle export --name <snapshot> --out <file.gandalf> --metadata-only --project . export metadata-only bundle',
+  '  gandalf bundle verify <file.gandalf>                             verify format, checksums, and signature metadata',
+  '  gandalf bundle inspect <file.gandalf>                            inspect bundle metadata',
+  '  gandalf bundle import <file.gandalf> --dry-run --project .       validate bundle without importing',
+  '  gandalf bundle import <file.gandalf> --apply-content --quarantine --experimental --project . inspect content without writing targets',
+  '  gandalf bundle import <file.gandalf> --apply-content --experimental --project . apply project-relative content (experimental)',
 ].join("\n");
 
 // ── Command Registry ───────────────────────────────────────────
@@ -98,10 +98,10 @@ async function run(args: string[]): Promise<number> {
 
   if (!command) {
     process.stderr.write(formatSnapError({
-      code: "HEM_UNKNOWN_COMMAND",
+      code: "GANDALF_UNKNOWN_COMMAND",
       problem: "Unknown command.",
-      cause: `hem does not recognize "${args.join(" ")}".`,
-      fix: "Run `hem --help` to see supported commands."
+      cause: `gandalf does not recognize "${args.join(" ")}".`,
+      fix: "Run `gandalf --help` to see supported commands."
     }));
     return 1;
   }
@@ -120,7 +120,7 @@ run(process.argv.slice(2))
   })
   .catch((error: unknown) => {
     process.stderr.write(formatSnapError({
-      code: "HEM_UNHANDLED_ERROR",
+      code: "GANDALF_UNHANDLED_ERROR",
       problem: "Command failed.",
       cause: error instanceof Error ? error.message : "Unknown error.",
       fix: "Rerun with `--help` to confirm command syntax, then inspect the reported path if present."

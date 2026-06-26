@@ -1,17 +1,17 @@
 ---
 title: Bundle Format
-description: Understanding the .hem bundle file format
+description: Understanding the .gandalf bundle file format
 order: 1
 category: Reference
 ---
 
 # Bundle Format
 
-Hem uses `.hem` bundles as portable profile export files.
+Gandalf uses `.gandalf` bundles as portable profile export files.
 
 ## Structure
 
-A `.hem` file is a gzipped tar archive containing:
+A `.gandalf` file is a gzipped tar archive containing:
 
 - `manifest.json` — metadata about the bundle
 - `snapshots/` — snapshot data
@@ -20,9 +20,9 @@ A `.hem` file is a gzipped tar archive containing:
 ## Usage
 
 ```bash
-hem bundle export --name baseline --out backup.hem --project .
-hem bundle inspect backup.hem
-hem bundle import backup.hem --dry-run --project .
+gandalf bundle export --name baseline --out backup.gandalf --project .
+gandalf bundle inspect backup.gandalf
+gandalf bundle import backup.gandalf --dry-run --project .
 ```
 
 ## Security

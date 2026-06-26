@@ -1,9 +1,9 @@
 import React from "react";
 import { Box, Text } from "ink";
 
-import type { TimelineUndoPlan } from "@qxinm/hem-core/timeline-undo.js";
-import type { AgentId, DiscoveredItem, TimelineChangedSurface, TimelineEntry } from "@qxinm/hem-core/types.js";
-import type { TimelineCorruptEvent } from "@qxinm/hem-core/store.js";
+import type { TimelineUndoPlan } from "@qxinm/gandalf-core/timeline-undo.js";
+import type { AgentId, DiscoveredItem, TimelineChangedSurface, TimelineEntry } from "@qxinm/gandalf-core/types.js";
+import type { TimelineCorruptEvent } from "@qxinm/gandalf-core/store.js";
 import {
   buildTimelineViewModel,
   currentSetupEmptyText,

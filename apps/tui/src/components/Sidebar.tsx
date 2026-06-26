@@ -1,12 +1,12 @@
 /**
- * Fixed left navigation for the Hem TUI setup-history workspace.
+ * Fixed left navigation for the Gandalf TUI setup-history workspace.
  *
  * Always visible on the left. Shows detected agents with evidence counts.
  * User navigates with ↑↓/jk and selects with Enter.
  */
 import React from "react";
 import { Text, Box } from "ink";
-import type { AgentId, DiscoveredItem, EvidenceKind } from "@qxinm/hem-core/types.js";
+import type { AgentId, DiscoveredItem, EvidenceKind } from "@qxinm/gandalf-core/types.js";
 import { formatAgentLabel } from "./TuiFormatters.js";
 import type { TuiNavSection } from "./TuiNavigationModel.js";
 

@@ -9,6 +9,6 @@ instructions: |
 
 # Project Context
 
-This is a sample project for hem drift detection.
+This is a sample project for gandalf drift detection.
 We have migrated to biome for all formatting.
 Standard coding conventions apply.

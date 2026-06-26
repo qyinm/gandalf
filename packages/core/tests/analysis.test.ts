@@ -351,19 +351,19 @@ describe("analysis modules", () => {
       blindSpots: ["Remote MCP server behavior cannot be captured", "Raw env values are omitted by policy"]
     });
 
-    assert.match(markdown, /^# hem report: current/m);
+    assert.match(markdown, /^# gandalf report: current/m);
     assert.match(markdown, /## Detected agents/);
     assert.match(markdown, /Codex\s+project state found/);
     assert.match(markdown, /## High-signal findings/);
     assert.match(markdown, /UNSUPPORTED_AGENT_STATE/);
-    assert.doesNotMatch(markdown, /hem v0\.1/);
-    assert.match(markdown, /cannot yet be interpreted by hem/);
+    assert.doesNotMatch(markdown, /gandalf v0\.1/);
+    assert.match(markdown, /cannot yet be interpreted by gandalf/);
     assert.match(markdown, /## Blind spots/);
     assert.match(markdown, /Remote MCP server behavior cannot be captured/);
     assert.match(markdown, /## Reproducibility gaps/);
     assert.match(markdown, /unsupported: 1/);
     assert.match(markdown, /## Provenance/);
     assert.match(markdown, /unsupported-codex/);
-    assert.match(markdown, /hem snapshot create --name baseline --agent codex --scope user --project \./);
+    assert.match(markdown, /gandalf snapshot create --name baseline --agent codex --scope user --project \./);
   });
 });

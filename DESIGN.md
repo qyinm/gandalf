@@ -1,6 +1,6 @@
-# Hem Design Theme
+# Gandalf Design Theme
 
-> Design tokens and visual identity for Hem — landing page, docs, and web dashboard.
+> Design tokens and visual identity for Gandalf — landing page, docs, and web dashboard.
 > Last updated: 2026-06-10
 
 ---

@@ -8,15 +8,15 @@
  *   snapshot show <name>  show <name> [--json]
  */
 
-import { formatSnapError } from "@qxinm/hem-core/errors.js";
-import { captureTimelineSnapshot } from "@qxinm/hem-core/timeline.js";
+import { formatSnapError } from "@qxinm/gandalf-core/errors.js";
+import { captureTimelineSnapshot } from "@qxinm/gandalf-core/timeline.js";
 import {
   listSnapshots,
   readSnapshot,
-} from "@qxinm/hem-core/store.js";
+} from "@qxinm/gandalf-core/store.js";
 import React from "react";
 import { hasFlag, json, valueAfter } from "../cli-shared.js";
-import { detectTuiMode, isInkMode, renderComponent } from "@qxinm/hem-tui";
+import { detectTuiMode, isInkMode, renderComponent } from "@qxinm/gandalf-tui";
 import type { Command, CommandContext } from "./index.js";
 
 /* ------------------------------------------------------------------ */
@@ -36,17 +36,17 @@ export const snapshotCommand: Command = {
       // --tui: interactive wizard
       const tuiOpts = detectTuiMode(args);
       if (tuiOpts.mode !== "none") {
-        const { snapshotCreateWizard } = await import("@qxinm/hem-tui/wizards/snapshot-create.js");
+        const { snapshotCreateWizard } = await import("@qxinm/gandalf-tui/wizards/snapshot-create.js");
         return snapshotCreateWizard(options);
       }
       const name = valueAfter(args, "--name");
       if (!name) {
         process.stderr.write(
           formatSnapError({
-            code: "HEM_MISSING_NAME",
+            code: "GANDALF_MISSING_NAME",
             problem: "Snapshot name is required.",
             cause: "`snapshot create` was called without `--name`.",
-            fix: "Run `hem snapshot create --name baseline --metadata-only --project .`."
+            fix: "Run `gandalf snapshot create --name baseline --metadata-only --project .`."
           })
         );
         return 1;
@@ -56,7 +56,7 @@ export const snapshotCommand: Command = {
       if (!metadataOnly && !contentBackedCodexUser) {
         process.stderr.write(
           formatSnapError({
-            code: "HEM_METADATA_ONLY_REQUIRED",
+            code: "GANDALF_METADATA_ONLY_REQUIRED",
             problem: "Snapshots are metadata-only.",
             cause: "`snapshot create` was called without `--metadata-only`.",
             fix: "Add `--metadata-only`, or use `--agent codex --scope user` for the Codex rollback safety-net path."
@@ -83,7 +83,7 @@ export const snapshotCommand: Command = {
     if (sub === "list") {
       const names = await listSnapshots(options.storeDir, options.agent);
       if (isInkMode(args)) {
-        const { default: SnapshotList } = await import("@qxinm/hem-tui/components/SnapshotList.js");
+        const { default: SnapshotList } = await import("@qxinm/gandalf-tui/components/SnapshotList.js");
         return renderComponent(
           () => React.createElement(SnapshotList, { names })
         );
@@ -100,10 +100,10 @@ export const snapshotCommand: Command = {
       if (!name) {
         process.stderr.write(
           formatSnapError({
-            code: "HEM_MISSING_NAME",
+            code: "GANDALF_MISSING_NAME",
             problem: "Snapshot name is required.",
             cause: "`snapshot show` was called without a name.",
-            fix: "Run `hem snapshot list` and pass one of the listed names."
+            fix: "Run `gandalf snapshot list` and pass one of the listed names."
           })
         );
         return 1;
@@ -116,10 +116,10 @@ export const snapshotCommand: Command = {
     /* ---------- unknown subcommand ---------- */
     process.stderr.write(
       formatSnapError({
-        code: "HEM_UNKNOWN_SUBCOMMAND",
+        code: "GANDALF_UNKNOWN_SUBCOMMAND",
         problem: `Unknown snapshot subcommand: "${sub ?? ""}".`,
         cause: "`snapshot` was called with an unrecognized subcommand.",
-        fix: "Use `create`, `list`, or `show`. Run `hem --help` for details."
+        fix: "Use `create`, `list`, or `show`. Run `gandalf --help` for details."
       })
     );
     return 1;

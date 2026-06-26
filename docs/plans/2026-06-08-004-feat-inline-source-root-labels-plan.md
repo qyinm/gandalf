@@ -13,7 +13,7 @@ Show short source-root labels beside Skills, MCP Servers, and Hooks inventory ro
 
 ## Problem Frame
 
-Users compare Hem's setup counts against agent UIs and need to see which local config surface produced each row. The current TUI shows item names and counts, but it often hides the provenance needed to explain why a row is present.
+Users compare Gandalf's setup counts against agent UIs and need to see which local config surface produced each row. The current TUI shows item names and counts, but it often hides the provenance needed to explain why a row is present.
 
 ## Requirements
 

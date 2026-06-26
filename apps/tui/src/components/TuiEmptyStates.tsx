@@ -25,7 +25,7 @@ export function NoDetectedAgentsEmptyState() {
     <Box flexDirection="column">
       <Text dimColor>No supported agent setup found.</Text>
       <Text dimColor>
-        Hem looks for Claude Code, Codex, Cursor, OpenCode, Pi Agent, and project instruction files.
+        Gandalf looks for Claude Code, Codex, Cursor, OpenCode, Pi Agent, and project instruction files.
       </Text>
     </Box>
   );

@@ -20,7 +20,7 @@ import type { Snapshot, TimelineEntry } from "../src/types.js";
 import { captureCurrentState } from "../src/current-state.js";
 
 async function tempStore(): Promise<string> {
-  return mkdtemp(path.join(tmpdir(), "hem-store-test-"));
+  return mkdtemp(path.join(tmpdir(), "gandalf-store-test-"));
 }
 
 function snapshot(name: string): Snapshot {

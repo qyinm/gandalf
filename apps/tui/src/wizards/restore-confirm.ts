@@ -1,5 +1,5 @@
 /**
- * Clack wizard for `hem restore`.
+ * Clack wizard for `gandalf restore`.
  *
  * Walks the user through:
  *   1. Selecting a snapshot
@@ -20,10 +20,10 @@ import {
   formatApplySummary,
   formatRollbackSummary,
   parseDryRunOutput,
-} from "@qxinm/hem-core/restore.js";
-import { ensureStore, listSnapshots } from "@qxinm/hem-core/store.js";
-import type { RuntimeOptions } from "@qxinm/hem-core";
-import { formatSnapError } from "@qxinm/hem-core/errors.js";
+} from "@qxinm/gandalf-core/restore.js";
+import { ensureStore, listSnapshots } from "@qxinm/gandalf-core/store.js";
+import type { RuntimeOptions } from "@qxinm/gandalf-core";
+import { formatSnapError } from "@qxinm/gandalf-core/errors.js";
 
 /**
  * Run the restore wizard interactively.
@@ -32,14 +32,14 @@ import { formatSnapError } from "@qxinm/hem-core/errors.js";
 export async function restoreWizard(
   options: RuntimeOptions
 ): Promise<number> {
-  clack.intro("hem restore");
+  clack.intro("gandalf restore");
 
   await ensureStore(options.storeDir);
   const snapshots = await listSnapshots(options.storeDir, options.agent);
 
   if (snapshots.length === 0) {
     clack.log.error(
-      "No snapshots found. Create one first with `hem snapshot create`."
+      "No snapshots found. Create one first with `gandalf snapshot create`."
     );
     clack.outro("Restore cancelled.");
     return 1;
@@ -76,7 +76,7 @@ export async function restoreWizard(
     drySpinner.stop("Plan generation failed");
     process.stderr.write(
       formatSnapError({
-        code: "HEM_RESTORE_PLAN_FAILED",
+        code: "GANDALF_RESTORE_PLAN_FAILED",
         problem: `Failed to build restore plan: ${err instanceof Error ? err.message : String(err)}`,
         cause: "The snapshot could not be compared with the current state.",
         fix: "Verify the snapshot exists and is compatible with this project.",
@@ -191,7 +191,7 @@ export async function restoreWizard(
     execSpinner.stop("Restore failed");
     process.stderr.write(
       formatSnapError({
-        code: "HEM_RESTORE_EXECUTION_FAILED",
+        code: "GANDALF_RESTORE_EXECUTION_FAILED",
         problem: `Restore execution failed: ${err instanceof Error ? err.message : String(err)}`,
         cause: "An error occurred during restore.",
         fix: "Check the logs and try again. Use --dry-run to preview before applying.",

@@ -54,7 +54,7 @@ const settingsCopy: Record<SettingsSection, SettingsModel> = {
   "local-paths": {
     title: "Local Paths",
     rows: [
-      { label: "Profile store", value: "~/.hem" },
+      { label: "Profile store", value: "~/.gandalf" },
       { label: "Agent setup", value: "User and project paths" }
     ]
   },
@@ -68,7 +68,7 @@ const settingsCopy: Record<SettingsSection, SettingsModel> = {
   about: {
     title: "About",
     rows: [
-      { label: "App", value: "Hem Desktop" },
+      { label: "App", value: "Gandalf Desktop" },
       { label: "Mode", value: "Desktop MVP" }
     ]
   }

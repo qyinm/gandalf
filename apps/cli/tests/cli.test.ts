@@ -4,14 +4,14 @@ import { describe, it } from "node:test";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { appendTimelineEntry } from "@qxinm/hem-core/store.js";
-import { writeTar } from "@qxinm/hem-core/tar.js";
-import { captureTimelineSnapshot } from "@qxinm/hem-core/timeline.js";
-import { EVIDENCE_KINDS } from "@qxinm/hem-core/types.js";
-import type { TarEntry, TimelineEntry } from "@qxinm/hem-core/types.js";
+import { appendTimelineEntry } from "@qxinm/gandalf-core/store.js";
+import { writeTar } from "@qxinm/gandalf-core/tar.js";
+import { captureTimelineSnapshot } from "@qxinm/gandalf-core/timeline.js";
+import { EVIDENCE_KINDS } from "@qxinm/gandalf-core/types.js";
+import type { TarEntry, TimelineEntry } from "@qxinm/gandalf-core/types.js";
 
 async function makeTempRoot(): Promise<string> {
-  return await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(tmpdir(), "hem-cli-")));
+  return await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(tmpdir(), "gandalf-cli-")));
 }
 
 function runCli(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}) {
@@ -62,12 +62,12 @@ function timelineEntry(projectPath: string, overrides: Partial<TimelineEntry> & 
 }
 
 async function writeCliBundle(root: string, snapshotName: string): Promise<string> {
-  const bundlePath = join(root, `${snapshotName}.hem`);
+  const bundlePath = join(root, `${snapshotName}.gandalf`);
   const entries: TarEntry[] = [
-    { path: ".hem/", content: Buffer.alloc(0), mode: 0o755, mtime: 1000000, type: "directory" },
-    { path: ".hem/format-version", content: Buffer.from("1\n", "utf8"), mode: 0o644, mtime: 1000000, type: "file" },
+    { path: ".gandalf/", content: Buffer.alloc(0), mode: 0o755, mtime: 1000000, type: "directory" },
+    { path: ".gandalf/format-version", content: Buffer.from("1\n", "utf8"), mode: 0o644, mtime: 1000000, type: "file" },
     {
-      path: ".hem/manifest.json",
+      path: ".gandalf/manifest.json",
       content: Buffer.from(JSON.stringify({
         formatVersion: 1,
         snapshotName,
@@ -100,7 +100,7 @@ async function writeCliBundle(root: string, snapshotName: string): Promise<strin
           captureStatus: "captured",
           confidence: "high",
           name: "missing",
-          value: { command: "hem-missing-mcp-binary" }
+          value: { command: "gandalf-missing-mcp-binary" }
         },
         {
           id: "env-openai",
@@ -128,23 +128,23 @@ async function writeCliBundle(root: string, snapshotName: string): Promise<strin
   return bundlePath;
 }
 
-describe("hem CLI scaffold", () => {
+describe("gandalf CLI scaffold", () => {
   it("prints help with current diagnosis, restore, and bundle safety commands", () => {
     const result = runCli(["--help"], process.cwd());
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Diagnosis commands:/);
-    assert.doesNotMatch(result.stdout, /hem daemon start/);
-    assert.match(result.stdout, /hem timeline undo <id> --dry-run --json/);
-    assert.match(result.stdout, /hem scan --project/);
+    assert.doesNotMatch(result.stdout, /gandalf daemon start/);
+    assert.match(result.stdout, /gandalf timeline undo <id> --dry-run --json/);
+    assert.match(result.stdout, /gandalf scan --project/);
     assert.match(result.stdout, /snapshot create --name baseline --metadata-only/);
     assert.match(result.stdout, /preview a non-mutating restore plan/);
     assert.match(result.stdout, /diff baseline current --project/);
     assert.match(result.stdout, /audit current --project/);
     assert.match(result.stdout, /provenance current --project/);
     assert.match(result.stdout, /report current --project/);
-    assert.match(result.stdout, /hem doctor --project/);
-    assert.match(result.stdout, /hem bundle verify <file\.hem>/);
+    assert.match(result.stdout, /gandalf doctor --project/);
+    assert.match(result.stdout, /gandalf bundle verify <file\.gandalf>/);
     assert.match(result.stdout, /--apply-content --quarantine --experimental/);
     assert.doesNotMatch(result.stdout, /v0\.1|dry-run only/);
   });
@@ -153,7 +153,7 @@ describe("hem CLI scaffold", () => {
     const result = runCli(["daemon", "status", "--json"], process.cwd());
 
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /HEM_UNKNOWN_COMMAND/);
+    assert.match(result.stderr, /GANDALF_UNKNOWN_COMMAND/);
   });
 
   it("exports a schema that covers every evidence kind currently emitted by scanners", () => {
@@ -174,7 +174,7 @@ describe("hem CLI scaffold", () => {
 
     const result = runCli(["snapshot", "create", "--name", "baseline", "--project", project], project, {
       HOME: home,
-      HEM_STORE: store
+      GANDALF_STORE: store
     });
 
     assert.equal(result.status, 1);
@@ -196,7 +196,7 @@ describe("hem CLI scaffold", () => {
       }
     }));
 
-    const env = { HOME: home, HEM_STORE: store };
+    const env = { HOME: home, GANDALF_STORE: store };
 
     const scan = runCli(["scan", "--project", project], project, env);
     assert.equal(scan.status, 0, scan.stderr);
@@ -245,10 +245,10 @@ describe("hem CLI scaffold", () => {
     assert.equal(provenance.status, 0, provenance.stderr);
     assert.ok(Array.isArray(JSON.parse(provenance.stdout)));
 
-    const reportPath = join(root, "hem-report.md");
+    const reportPath = join(root, "gandalf-report.md");
     const report = runCli(["report", "current", "--project", project, "--out", reportPath], project, env);
     assert.equal(report.status, 0, report.stderr);
-    assert.match(await readFile(reportPath, "utf8"), /# hem report: current/);
+    assert.match(await readFile(reportPath, "utf8"), /# gandalf report: current/);
 
     const reportJson = runCli(["report", "current", "--project", project, "--json"], project, env);
     assert.equal(reportJson.status, 0, reportJson.stderr);
@@ -268,7 +268,7 @@ describe("hem CLI scaffold", () => {
 
     const originalConfig = "model = \"gpt-5\"\napproval_policy = \"on-request\"\n";
     await writeFile(configPath, originalConfig, "utf8");
-    const env = { HOME: home, HEM_STORE: store };
+    const env = { HOME: home, GANDALF_STORE: store };
 
     const create = runCli([
       "snapshot", "create",
@@ -320,7 +320,7 @@ describe("hem CLI scaffold", () => {
       "--project", project
     ], project, env);
     assert.equal(dryRun.status, 0, dryRun.stderr);
-    assert.match(dryRun.stdout, /hem restore dry-run/);
+    assert.match(dryRun.stdout, /gandalf restore dry-run/);
     assert.match(dryRun.stdout, /Writable changes:/);
     assert.match(dryRun.stdout, /No files were changed\./);
     assert.throws(() => JSON.parse(dryRun.stdout));
@@ -361,19 +361,19 @@ describe("hem CLI scaffold", () => {
     await mkdir(home, { recursive: true });
     await writeFile(join(project, ".mcp.json"), JSON.stringify({
       mcpServers: {
-        missingTool: { command: "hem-missing-mcp-binary" }
+        missingTool: { command: "gandalf-missing-mcp-binary" }
       }
     }));
 
     const result = runCli(["doctor", "--project", project, "--json"], project, {
       HOME: home,
-      HEM_STORE: store
+      GANDALF_STORE: store
     });
 
     assert.equal(result.status, 0, result.stderr);
     const report = JSON.parse(result.stdout);
     assert.equal(report.summary.needs_manual_action >= 1, true);
-    assert.equal(report.items.some((item: { code: string }) => item.code === "HEM_MCP_COMMAND_MISSING"), true);
+    assert.equal(report.items.some((item: { code: string }) => item.code === "GANDALF_MCP_COMMAND_MISSING"), true);
   });
 
   it("reports corrupt timeline files on stderr while keeping JSON stdout parseable", async () => {
@@ -392,7 +392,7 @@ describe("hem CLI scaffold", () => {
 
     const list = runCli(["timeline", "list", "--project", project, "--json"], project, {
       HOME: home,
-      HEM_STORE: store
+      GANDALF_STORE: store
     });
 
     assert.equal(list.status, 0, list.stderr);
@@ -434,14 +434,14 @@ describe("hem CLI scaffold", () => {
     });
     assert.equal(changed.written, true);
 
-    const env = { HOME: home, HEM_STORE: store };
+    const env = { HOME: home, GANDALF_STORE: store };
     const id = changed.entry!.id;
     const mcpBefore = await readFile(join(project, ".mcp.json"), "utf8");
     const eventCountBefore = (await readdir(join(store, "timeline", "events"))).length;
 
     const missingDryRun = runCli(["timeline", "undo", id, "--project", project, "--json"], project, env);
     assert.equal(missingDryRun.status, 1);
-    assert.match(missingDryRun.stderr, /HEM_TIMELINE_UNDO_DRY_RUN_REQUIRED/);
+    assert.match(missingDryRun.stderr, /GANDALF_TIMELINE_UNDO_DRY_RUN_REQUIRED/);
 
     const dryRun = runCli(["timeline", "undo", id, "--project", project, "--dry-run", "--json"], project, env);
     assert.equal(dryRun.status, 0, dryRun.stderr);
@@ -463,19 +463,19 @@ describe("hem CLI scaffold", () => {
     await mkdir(home, { recursive: true });
     await writeFile(join(project, ".mcp.json"), JSON.stringify({
       mcpServers: {
-        missingTool: { command: "hem-missing-mcp-binary" }
+        missingTool: { command: "gandalf-missing-mcp-binary" }
       }
     }));
 
     const result = runCli(["doctor", "--project", project], project, {
       HOME: home,
-      HEM_STORE: store
+      GANDALF_STORE: store
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /hem doctor/);
+    assert.match(result.stdout, /gandalf doctor/);
     assert.match(result.stdout, /Readiness:/);
-    assert.match(result.stdout, /MCP command hem-missing-mcp-binary is missing/);
+    assert.match(result.stdout, /MCP command gandalf-missing-mcp-binary is missing/);
     assert.match(result.stdout, /fix:/);
   });
 
@@ -490,13 +490,13 @@ describe("hem CLI scaffold", () => {
 
     const result = runCli(["bundle", "import", bundlePath, "--dry-run", "--project", project], project, {
       HOME: home,
-      HEM_STORE: store
+      GANDALF_STORE: store
     });
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Readiness:/);
     assert.match(result.stdout, /needs manual action:/);
-    assert.match(result.stdout, /MCP command hem-missing-mcp-binary is missing/);
+    assert.match(result.stdout, /MCP command gandalf-missing-mcp-binary is missing/);
     assert.match(result.stdout, /Environment key OPENAI_API_KEY needs a value/);
   });
 });

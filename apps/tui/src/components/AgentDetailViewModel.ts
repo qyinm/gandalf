@@ -1,4 +1,4 @@
-import type { AgentId, DiscoveredItem, TimelineEntry } from "@qxinm/hem-core/types.js";
+import type { AgentId, DiscoveredItem, TimelineEntry } from "@qxinm/gandalf-core/types.js";
 import { formatAgentLabel, formatInventoryNameWithSource, formatTimelineTimestamp } from "./TuiFormatters.js";
 
 export interface AgentInventoryRow {

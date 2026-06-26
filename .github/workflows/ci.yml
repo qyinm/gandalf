@@ -35,7 +35,7 @@ jobs:
             librsvg2-dev
 
       - run: cargo test --workspace
-      - run: cargo check -p hem-desktop
+      - run: cargo check -p gandalf-desktop
 
   test:
     runs-on: ubuntu-latest
@@ -78,7 +78,7 @@ jobs:
         run: go test ./...
 
       - name: Build Go CLI
-        run: go build -o bin/hem ./cmd/hem
+        run: go build -o bin/gandalf ./cmd/gandalf
 
       - name: Gate 2 demo (Go binary)
         run: bun run dogfood:gate2

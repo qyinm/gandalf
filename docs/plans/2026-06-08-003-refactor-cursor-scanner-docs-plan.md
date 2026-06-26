@@ -9,9 +9,9 @@ date: 2026-06-08
 
 ## Summary
 
-Reimplement the Cursor scanner so Hem detects Cursor MCP servers, skills, and hooks from the official Cursor documentation instead of treating Cursor as only `.cursor/mcp.json`.
+Reimplement the Cursor scanner so Gandalf detects Cursor MCP servers, skills, and hooks from the official Cursor documentation instead of treating Cursor as only `.cursor/mcp.json`.
 
-The scanner should remain read-only. It must not execute MCP commands, hook commands, skill scripts, Cursor CLI commands, or network checks. It should emit standard Hem evidence kinds so the existing graph, audit, timeline, snapshot, and TUI flows work without a Cursor-specific display path.
+The scanner should remain read-only. It must not execute MCP commands, hook commands, skill scripts, Cursor CLI commands, or network checks. It should emit standard Gandalf evidence kinds so the existing graph, audit, timeline, snapshot, and TUI flows work without a Cursor-specific display path.
 
 ## Problem Frame
 
@@ -20,7 +20,7 @@ The scanner should remain read-only. It must not execute MCP commands, hook comm
 - project `.cursor/mcp.json`
 - user `~/.cursor/mcp.json`
 
-That was enough for early MCP-only support, but it is no longer aligned with Hem's product promise or the current TUI. The UI now has Current Setup tabs for `Skills`, `MCP Servers`, `Hooks`, and `Project`; Cursor should populate those tabs when Cursor-visible setup exists.
+That was enough for early MCP-only support, but it is no longer aligned with Gandalf's product promise or the current TUI. The UI now has Current Setup tabs for `Skills`, `MCP Servers`, `Hooks`, and `Project`; Cursor should populate those tabs when Cursor-visible setup exists.
 
 Official Cursor docs describe Cursor setup surfaces beyond the existing target-only scanner:
 
@@ -66,7 +66,7 @@ Key doc facts captured from the attachments:
 - R5. Cursor hooks from the documented config surfaces are emitted as `hook` evidence with event name, matcher/scope if present, command metadata, executable flag, source path, and safe structured fields only.
 - R6. Malformed Cursor MCP/hook/skill files emit parse-failure or omitted evidence instead of failing the whole scan.
 - R7. Duplicate Cursor-visible skills are deduped deterministically and record duplicate sources where useful.
-- R8. Project scope, user scope, and managed/built-in scope are represented consistently with existing Hem precedence semantics.
+- R8. Project scope, user scope, and managed/built-in scope are represented consistently with existing Gandalf precedence semantics.
 - R9. The scanner reports local blind spots for Cursor team/cloud/enterprise-managed hooks or skills that are not visible on disk.
 - R10. New Cursor evidence automatically appears in Current Setup, Agent Detail, Timeline, snapshots, diffs, audit, and reports through existing evidence kinds.
 - R11. Documentation updates make Cursor support accurate; it should no longer say only `.cursor/mcp.json`.
@@ -82,9 +82,9 @@ Key doc facts captured from the attachments:
 - **Make remote MCP explicit:** MCP entries with `url`/remote transports should set metadata such as `remote: true` and `transport`, but remain unverified.
 - **Redact structured config aggressively:** Keep command names, arg shapes, env key names, URL host/path if safe, and header key names where useful; redact raw secret values.
 - **Scan the documented Cursor skill roots:** Cursor loads `.agents/skills`, `.cursor/skills`, `~/.agents/skills`, `~/.cursor/skills`, and compatibility roots `.claude/skills`, `.codex/skills`, `~/.claude/skills`, and `~/.codex/skills`.
-- **Walk nested project skill roots:** Cursor discovers `.cursor/skills/` and `.agents/skills/` anywhere inside a repository and scopes discovered skills to that directory. Hem should implement a bounded repository walk that avoids ignored/heavy directories and never follows symlinks.
+- **Walk nested project skill roots:** Cursor discovers `.cursor/skills/` and `.agents/skills/` anywhere inside a repository and scopes discovered skills to that directory. Gandalf should implement a bounded repository walk that avoids ignored/heavy directories and never follows symlinks.
 - **Validate Cursor skill frontmatter:** `name` and `description` are required. `name` must match the parent folder and only use lowercase letters, numbers, and hyphens. Capture `paths`, `disable-model-invocation`, and `metadata` safely when present.
-- **Model hook source priority:** Hook evidence should preserve source scope and priority: Enterprise, Team blind spot, Project, User. Hem should not merge hook outputs, but it should make the priority visible enough for graph/audit/reporting.
+- **Model hook source priority:** Hook evidence should preserve source scope and priority: Enterprise, Team blind spot, Project, User. Gandalf should not merge hook outputs, but it should make the priority visible enough for graph/audit/reporting.
 - **Support Cursor hook fields explicitly:** Capture `type`, `command`, `timeout`, `loop_limit`, `failClosed`, and `matcher`. Mark command-based hooks executable. Mark prompt-based hooks as policy/LLM-evaluated but still sensitive.
 - **Do not scan Cursor Rules as skills:** `.cursor/rules` and `.cursorrules` are a separate Cursor concept. They are out of scope for this Skills/MCP/Hooks reimplementation unless a follow-up plan adds them as instruction/config evidence.
 - **Prefer local helpers first:** Cursor can copy small helper patterns from Codex/OpenCode initially. Extract shared scanner helpers only if the implementation would create substantial duplicated logic.
@@ -101,7 +101,7 @@ flowchart LR
   Scanner --> Hooks[Cursor hook parser]
   Scanner --> BlindSpots[Unsupported/blind spot evidence]
 
-  Mcp --> Evidence[Standard Hem evidence]
+  Mcp --> Evidence[Standard Gandalf evidence]
   Skills --> Evidence
   Hooks --> Evidence
   BlindSpots --> Evidence
@@ -207,11 +207,11 @@ flowchart LR
 - Nested repository `apps/web/.cursor/skills/<skill>/SKILL.md` emits Cursor `skill` evidence scoped to `apps/web`.
 - Nested repository `packages/api/.agents/skills/<skill>/SKILL.md` emits Cursor `skill` evidence scoped to `packages/api`.
 - Nested `SKILL.md` files are found within documented traversal bounds.
-- Missing `name` or `description` emits omitted/unsupported evidence or is skipped according to the chosen Hem convention.
+- Missing `name` or `description` emits omitted/unsupported evidence or is skipped according to the chosen Gandalf convention.
 - `name` values that do not match the parent folder emit omitted/unsupported evidence or are flagged in metadata.
 - `paths`, `disable-model-invocation`, and `metadata` are captured safely.
 - Duplicate skill names are deduped deterministically and duplicate source metadata is retained.
-- Symlinked directories/files are not followed unsafely and produce omitted evidence where existing Hem conventions require it.
+- Symlinked directories/files are not followed unsafely and produce omitted evidence where existing Gandalf conventions require it.
 
 **Verification:** Cursor skills appear in scan JSON as `agent: "cursor"` and `kind: "skill"`; TUI Current Setup counts increase without TUI-specific code changes.
 
@@ -246,7 +246,7 @@ flowchart LR
 
 ### U5. Evidence integration and docs
 
-**Goal:** Make the new Cursor evidence visible and documented through existing Hem surfaces.
+**Goal:** Make the new Cursor evidence visible and documented through existing Gandalf surfaces.
 
 **Requirements:** R10, R11
 

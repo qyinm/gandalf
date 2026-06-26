@@ -2,14 +2,14 @@
  * Command-pattern implementation of the `tui` CLI command.
  *
  * Launches the full interactive TUI dashboard when run as:
- *   hem tui
+ *   gandalf tui
  *
  * The dashboard provides keyboard-navigable menu access to all
- * hem commands without needing to remember CLI flags.
+ * gandalf commands without needing to remember CLI flags.
  */
 
 import React from "react";
-import { renderComponent } from "@qxinm/hem-tui";
+import { renderComponent } from "@qxinm/gandalf-tui";
 import { runtimeOptions } from "../cli-shared.js";
 import type { Command, CommandContext } from "./index.js";
 
@@ -23,7 +23,7 @@ export const tuiCommand: Command = {
 
     // Dynamically import Dashboard — React/Ink only paid on `tui` command
     const { default: Dashboard } = await import(
-      "@qxinm/hem-tui/components/Dashboard.js"
+      "@qxinm/gandalf-tui/components/Dashboard.js"
     );
 
     return renderComponent(() => React.createElement(Dashboard, { options }));
