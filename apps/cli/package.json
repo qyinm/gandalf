@@ -1,6 +1,6 @@
 {
   "name": "@qxinm/gandalf",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "description": "[DEPRECATED] Use the Go binary (bin/gandalf or GitHub Releases). npm package kept until Go binary distribution is primary.",
   "type": "module",
   "bin": {
@@ -40,8 +40,8 @@
   },
   "homepage": "https://github.com/qyinm/gandalf#readme",
   "dependencies": {
-    "@qxinm/gandalf-core": "0.3.4",
-    "@qxinm/gandalf-tui": "0.3.4",
+    "@qxinm/gandalf-core": "0.4.0",
+    "@qxinm/gandalf-tui": "0.4.0",
     "react": "^19.2.6"
   },
   "engines": {
