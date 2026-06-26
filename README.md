@@ -9,7 +9,10 @@ Gandalf's current wedge is narrow on purpose: save, diff, and restore your user-
 Use it before you let Codex or another agent change Codex config, install skills, or edit hooks. The broad multi-agent, profile, desktop, team, and cloud product is future direction, not the Gate 2 CLI path.
 
 ```bash
-bun install -g @qxinm/gandalf
+curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | sh
+
+# or, on macOS
+brew install qyinm/tap/gandalf
 
 # Save a Codex user-global restore point
 gandalf snapshot create --name baseline --agent codex --scope user --project .
@@ -24,7 +27,7 @@ gandalf restore --snapshot baseline --dry-run --agent codex --scope user --proje
 gandalf restore --snapshot baseline --apply --experimental --agent codex --scope user --project .
 ```
 
-Package note: `@qxinm/gandalf` is the npm package because `qxinm` is the publishing account. The source repository remains `qyinm/gandalf`.
+Distribution note: Gandalf ships as a Go binary. npm is no longer a supported install path for this repository.
 
 Gandalf also has broader experimental scan, TUI, restore, and bundle commands. Those are useful for dogfooding, but the current product test is Codex user-global rollback.
 
@@ -37,9 +40,9 @@ make gate2         # Codex user-global rollback demo
 ./bin/gandalf --help
 ```
 
-Install from source: `go install github.com/qyinm/gandalf/cmd/gandalf@latest` (after a tagged release). Prebuilt darwin/linux binaries ship via GitHub Releases on `v*` tags (GoReleaser).
+Install from source: `go install github.com/qyinm/gandalf/cmd/gandalf@latest` (after a tagged release). Prebuilt darwin/linux binaries ship via GitHub Releases on `v*` tags (GoReleaser), and are consumed by `install.sh` and the Homebrew tap.
 
-`crates/gandalf-core`, `crates/gandalf-cli`, and the Bun `packages/core` / `apps/cli` stacks are deprecated reference implementations during the phased cutover.
+`crates/gandalf-core` and `crates/gandalf-cli` are deprecated Rust reference implementations kept for the desktop transition path. The old Bun/TypeScript CLI, TUI, and core packages are no longer supported distribution paths.
 
 ```bash
 # Machine A: export your setup
@@ -90,7 +93,7 @@ By default Gandalf:
 - creates rollback paths for restore operations where supported
 - reports missing local tools and env keys without installing packages or restoring secret values
 
-Update notices are off by default. To run a one-off npm registry check, use `GANDALF_UPDATE_CHECK=1 gandalf --help`.
+Update notices are off by default.
 
 ---
 
@@ -220,13 +223,13 @@ make gate2           # Gate 2 acceptance demo
 ./bin/gandalf scan --project .
 ```
 
-### Legacy Bun / TypeScript
+### Frontend and Desktop
 
 ```bash
 bun install
-bun run check        # build + test
-bun run typecheck    # TypeScript only, no emit
-bun run test         # run tests (requires build first)
+bun run check        # landing + desktop checks
+bun run typecheck    # landing + desktop type checks
+bun run test         # desktop tests
 bun run desktop:dev  # run the Tauri desktop app in development
 ```
 
@@ -244,9 +247,8 @@ cargo run -p gandalf-cli -- snapshot list
 | `cmd/gandalf` | Go CLI entrypoint (`bin/gandalf`) |
 | `internal/gandalfcore` | Canonical Go engine: scan, store, snapshot, diff, restore, bundle, timeline |
 | `internal/cli` | Cobra command handlers |
+| `internal/tui` | Bubble Tea terminal workspace |
 | `crates/gandalf-core` | **Deprecated** Rust engine (desktop transition) |
 | `crates/gandalf-cli` | **Deprecated** Rust CLI |
-| `packages/core` | **Deprecated** TypeScript engine reference |
-| `apps/cli` | **Deprecated** npm `gandalf` shim (`@qxinm/gandalf`) |
-| `apps/tui` | **Deprecated** Ink/Clack terminal workspace |
 | `apps/desktop` | Tauri v2 + Vite desktop dashboard shell |
+| `apps/landing` | Astro landing and docs site |

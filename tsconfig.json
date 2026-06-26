@@ -1,8 +1,4 @@
 {
   "files": [],
-  "references": [
-    { "path": "packages/core" },
-    { "path": "apps/tui" },
-    { "path": "apps/cli" }
-  ]
+  "references": []
 }

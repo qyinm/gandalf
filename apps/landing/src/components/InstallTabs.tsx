@@ -1,12 +1,16 @@
-import { useState } from "react";
+import * as React from "react";
 
 const tabs = [
-	{ label: "npm", cmd: "npm install -g @qxinm/gandalf" },
+	{
+		label: "install.sh",
+		cmd: "curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | sh",
+	},
+	{ label: "Homebrew", cmd: "brew install qyinm/tap/gandalf" },
 ] as const;
 
 export default function InstallTabs() {
-	const [active, setActive] = useState(0);
-	const [copied, setCopied] = useState(false);
+	const [active, setActive] = React.useState(0);
+	const [copied, setCopied] = React.useState(false);
 
 	const onCopy = async () => {
 		try {

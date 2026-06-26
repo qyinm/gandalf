@@ -5,8 +5,9 @@ Date: 2026-05-12 (initial), 2026-05-15 (re-run after symlink noise fix and TOML 
 Command shape:
 
 ```bash
-GANDALF_STORE=/tmp/gandalf-dogfood/store bun dist/src/cli.js scan --project <project> --json
-GANDALF_STORE=/tmp/gandalf-dogfood/store bun dist/src/cli.js report current --project <project> --out /tmp/gandalf-dogfood/reports/<name>-report.md
+make build
+GANDALF_STORE=/tmp/gandalf-dogfood/store ./bin/gandalf scan --project <project> --json
+GANDALF_STORE=/tmp/gandalf-dogfood/store ./bin/gandalf report current --project <project> --out /tmp/gandalf-dogfood/reports/<name>-report.md
 ```
 
 The store was redirected to `/tmp/gandalf-dogfood/store` so dogfood did not write to the user's real `~/.gandalf` store.
@@ -62,11 +63,11 @@ Command shape:
 ```bash
 HOME=/tmp/gandalf-dogfood/home \
 GANDALF_STORE=/tmp/gandalf-dogfood/store \
-bun dist/src/cli.js timeline list --project /tmp/gandalf-dogfood/project --json
+./bin/gandalf timeline list --project /tmp/gandalf-dogfood/project --json
 
 HOME=/tmp/gandalf-dogfood/home \
 GANDALF_STORE=/tmp/gandalf-dogfood/store \
-bun dist/src/cli.js timeline undo <id> --project /tmp/gandalf-dogfood/project --dry-run --json
+./bin/gandalf timeline undo <id> --project /tmp/gandalf-dogfood/project --dry-run --json
 ```
 
 Validation checks:

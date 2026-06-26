@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const cli = path.join(repo, "apps/cli/dist/src/cli.js");
+const gandalf = path.join(repo, "bin", "gandalf");
 
 const cleanConfig = [
   "model = \"gpt-5\"",
@@ -34,8 +34,8 @@ function requireEnv(name) {
 }
 
 async function setup(envPath) {
-  if (!existsSync(cli)) {
-    throw new Error("apps/cli/dist/src/cli.js is missing. Run `bun run build` before recording the demo.");
+  if (!existsSync(gandalf)) {
+    throw new Error("bin/gandalf is missing. Run `make build` before recording the demo.");
   }
 
   const root = await mkdtemp(path.join(tmpdir(), "gandalf-gate2-demo-"));
@@ -129,7 +129,7 @@ async function verify() {
   console.log("  synthetic harness skill removed");
   console.log("  real ~/.codex was never targeted");
   console.log("");
-  console.log("Install: bun install -g @qxinm/gandalf");
+  console.log("Install: curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | sh");
 }
 
 async function cleanup() {

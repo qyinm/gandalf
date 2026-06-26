@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const repo = path.resolve(new URL("..", import.meta.url).pathname);
-const node = process.execPath;
-const cli = path.join(repo, "dist/src/cli.js");
+const gandalf = path.join(repo, "bin", "gandalf");
+const linuxGandalf = path.join(repo, "bin", "gandalf-linux-amd64");
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -35,8 +35,14 @@ function requireDocker() {
 }
 
 async function main() {
-  if (!existsSync(cli)) {
-    run("npm", ["run", "build"], { stdio: "inherit" });
+  if (!existsSync(gandalf)) {
+    run("go", ["build", "-o", gandalf, "./cmd/gandalf"], { stdio: "inherit" });
+  }
+  if (!existsSync(linuxGandalf)) {
+    run("go", ["build", "-o", linuxGandalf, "./cmd/gandalf"], {
+      env: { GOOS: "linux", GOARCH: "amd64", CGO_ENABLED: "0" },
+      stdio: "inherit"
+    });
   }
   requireDocker();
 
@@ -59,13 +65,13 @@ async function main() {
     }, null, 2));
 
     const env = { HOME: macHome, GANDALF_STORE: macStore };
-    run(node, [cli, "snapshot", "create", "--name", "mac-baseline", "--metadata-only", "--project", macProject], { cwd: macProject, env });
-    run(node, [cli, "bundle", "export", "--name", "mac-baseline", "--out", out, "--project", macProject], { cwd: macProject, env });
+    run(gandalf, ["snapshot", "create", "--name", "mac-baseline", "--metadata-only", "--project", macProject], { cwd: macProject, env });
+    run(gandalf, ["bundle", "export", "--name", "mac-baseline", "--out", out, "--project", macProject], { cwd: macProject, env });
 
     const linuxScript = [
       "set -euo pipefail",
       "mkdir -p /home/gandalf /linux/project /linux/store",
-      "HOME=/home/gandalf GANDALF_STORE=/linux/store node /repo/dist/src/cli.js bundle import /work/mac-export.gandalf --dry-run --project /linux/project --json > /work/import.json"
+      "HOME=/home/gandalf GANDALF_STORE=/linux/store /repo/bin/gandalf-linux-amd64 bundle import /work/mac-export.gandalf --dry-run --project /linux/project --json > /work/import.json"
     ].join(" && ");
     run("docker", [
       "run", "--rm",
