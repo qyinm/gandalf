@@ -145,6 +145,38 @@ func TestAppliesMCPServerToProjectMCPJSON(t *testing.T) {
 	}
 }
 
+func TestApplyMCPServerIgnoresMetadataPathOverride(t *testing.T) {
+	t.Parallel()
+	projectPath, _, _ := makeRestoreSandbox(t)
+	mcpPath := filepath.Join(projectPath, ".mcp.json")
+	if err := os.WriteFile(mcpPath, []byte("{\n  \"mcpServers\": {}\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outsidePath := filepath.Join(projectPath, "nested", "override", ".mcp.json")
+	item := makeItem(
+		"mcp_server:docs:abcd1234",
+		"mcp_server",
+		mcpPath,
+		types.RestoreActionUpdate,
+		json.RawMessage(`{"command":"docs-old","args":[]}`),
+		json.RawMessage(`{"serverName":"docs","mcpPath":"`+outsidePath+`"}`),
+	)
+	if err := restore.ApplyMCPServer(&item); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(outsidePath); !os.IsNotExist(err) {
+		t.Fatalf("override path should stay untouched, got %v", err)
+	}
+	written, err := os.ReadFile(mcpPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(written), "docs-old") {
+		t.Fatalf("mcp = %s", string(written))
+	}
+}
+
 func TestAppliesPermissionRuleToSettingsJSON(t *testing.T) {
 	t.Parallel()
 	_, homeDir, _ := makeRestoreSandbox(t)
@@ -279,7 +311,7 @@ func TestMCPApplySetsMCPConfigForUndo(t *testing.T) {
 
 func TestApplyWithRollbackRestoresMCPJSONAfterApply(t *testing.T) {
 	t.Parallel()
-	projectPath, _, _ := makeRestoreSandbox(t)
+	projectPath, homeDir, _ := makeRestoreSandbox(t)
 	mcpPath := filepath.Join(projectPath, ".mcp.json")
 	baseline := "{\n  \"mcpServers\": {\n    \"docs\": { \"command\": \"baseline\" }\n  }\n}\n"
 	if err := os.WriteFile(mcpPath, []byte(baseline), 0o644); err != nil {
@@ -300,8 +332,10 @@ func TestApplyWithRollbackRestoresMCPJSONAfterApply(t *testing.T) {
 		restore.CreateDefaultApplyExecutor(),
 		restore.CreateDefaultUndoExecutor(),
 		&types.ApplyOptions{
-			FailFast: true,
-			Rollback: &rollback,
+			FailFast:    true,
+			Rollback:    &rollback,
+			HomeDir:     &homeDir,
+			ProjectPath: &projectPath,
 		},
 	)
 	if result.ApplySummary.Successful != 1 {
@@ -326,6 +360,71 @@ func TestApplyWithRollbackRestoresMCPJSONAfterApply(t *testing.T) {
 	expectedJSON, _ := json.Marshal(expected)
 	if string(restoredJSON) != string(expectedJSON) {
 		t.Fatalf("restored = %s", string(restoredJSON))
+	}
+}
+
+func TestRollbackMCPUsesAppliedPathInsteadOfMetadataOverride(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, _ := makeRestoreSandbox(t)
+	mcpPath := filepath.Join(projectPath, ".mcp.json")
+	outsidePath := filepath.Join(projectPath, "nested", "override", ".mcp.json")
+	baseline := "{\n  \"mcpServers\": {\n    \"docs\": { \"command\": \"baseline\" }\n  }\n}\n"
+	if err := os.WriteFile(mcpPath, []byte(baseline), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(outsidePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outsidePath, []byte("{\"mcpServers\":{\"docs\":{\"command\":\"outside\"}}}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item := makeItem(
+		"mcp_server:docs:abcd1234",
+		"mcp_server",
+		mcpPath,
+		types.RestoreActionUpdate,
+		json.RawMessage(`{"command":"changed"}`),
+		json.RawMessage(`{"serverName":"docs","mcpPath":"`+outsidePath+`"}`),
+	)
+	rollback := true
+	result := restore.ApplyWithRollback(
+		[]types.RestoreItem{item},
+		restore.CreateDefaultApplyExecutor(),
+		restore.CreateDefaultUndoExecutor(),
+		&types.ApplyOptions{
+			FailFast:    true,
+			Rollback:    &rollback,
+			HomeDir:     &homeDir,
+			ProjectPath: &projectPath,
+		},
+	)
+	if result.RollbackSummary == nil || result.RollbackSummary.Failed != 0 {
+		t.Fatalf("rollback summary = %+v", result.RollbackSummary)
+	}
+
+	restoredRaw, err := os.ReadFile(mcpPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored, expected map[string]any
+	if err := json.Unmarshal(restoredRaw, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(baseline), &expected); err != nil {
+		t.Fatal(err)
+	}
+	restoredJSON, _ := json.Marshal(restored)
+	expectedJSON, _ := json.Marshal(expected)
+	if string(restoredJSON) != string(expectedJSON) {
+		t.Fatalf("restored = %s", string(restoredRaw))
+	}
+	outsideRaw, err := os.ReadFile(outsidePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(outsideRaw), "outside") {
+		t.Fatalf("override path was modified: %s", string(outsideRaw))
 	}
 }
 

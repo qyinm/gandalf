@@ -51,15 +51,22 @@ func ApplyRestoreItems(
 			continue
 		}
 
-		if roots := pathconfinement.RootsFromPaths(options.HomeDir, options.ProjectPath); roots != nil {
-			if _, err := pathconfinement.ValidateConstrainedWritePath(item.Dest, roots); err != nil {
-				recordApplyFailure(item, &summary, err.Error())
-				if options.FailFast {
-					stoppedEarly = true
-					break
-				}
-				continue
+		roots := pathconfinement.RootsFromPaths(options.HomeDir, options.ProjectPath)
+		if roots == nil {
+			recordApplyFailure(item, &summary, "restore apply requires home and project roots for path confinement")
+			if options.FailFast {
+				stoppedEarly = true
+				break
 			}
+			continue
+		}
+		if _, err := pathconfinement.ValidateConstrainedWritePath(item.Dest, roots); err != nil {
+			recordApplyFailure(item, &summary, err.Error())
+			if options.FailFast {
+				stoppedEarly = true
+				break
+			}
+			continue
 		}
 
 		if err := executor(item); err != nil {
@@ -169,6 +176,9 @@ func applyFileMutation(
 	if content == nil {
 		return fmt.Errorf("Missing target content for %s", item.ItemID)
 	}
+	if info, err := os.Lstat(filePath); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to write through symlink destination: %s", filePath)
+	}
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		return err
 	}
@@ -241,14 +251,6 @@ func ApplySkill(item *types.RestoreItem) error {
 }
 
 func mcpConfigPathForItem(item *types.RestoreItem) string {
-	if len(item.Metadata) > 0 {
-		var metadata map[string]any
-		if json.Unmarshal(item.Metadata, &metadata) == nil {
-			if path, ok := metadata["mcpPath"].(string); ok && path != "" && filepath.IsAbs(path) {
-				return path
-			}
-		}
-	}
 	dest := item.Dest
 	if filepath.Base(dest) == ".mcp.json" {
 		return dest
@@ -509,7 +511,10 @@ func RestorePreviousContentUndoHandler(item *types.RestoreItem) error {
 	prevContent := state["previousContent"]
 
 	if item.ItemType == "mcp_server" {
-		mcpPath, _ := state["mcpPath"].(string)
+		mcpPath, _ := state["filePath"].(string)
+		if mcpPath == "" {
+			mcpPath, _ = state["mcpPath"].(string)
+		}
 		savedConfig := state["mcpConfig"]
 		if mcpPath != "" && savedConfig != nil {
 			serialized, err := json.MarshalIndent(savedConfig, "", "  ")
