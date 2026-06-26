@@ -1,6 +1,8 @@
 use hem_core::{
-    default_store_dir, scan_project,
+    build_graph, default_store_dir, diff_graphs, list_agents, list_snapshots, list_timeline_entries,
+    scan_project,
     types::{AgentId, DiscoveredItem, EvidenceKind, EvidenceParser, ScanOptions},
+    TimelineListOptions,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -85,21 +87,142 @@ struct NotificationPermission {
 
 #[tauri::command]
 fn desktop_home_state() -> DesktopHomeState {
-    let project_path = desktop_project_path();
-    let home_dir = home_dir();
-    let profile_state = ensure_profile_state(home_dir.as_deref()).unwrap_or_else(|_| default_profile_state());
-    let inventory = scan_inventory(&project_path, home_dir.as_deref());
+    build_desktop_home_state(&desktop_project_path(), home_dir().as_deref())
+}
+
+fn build_desktop_home_state(project_path: &Path, home_dir: Option<&Path>) -> DesktopHomeState {
+    let home = home_dir_for_scan(project_path, home_dir);
+    let store_dir = default_store_dir(&home);
+    let profile_state =
+        ensure_profile_state(Some(&home)).unwrap_or_else(|_| default_profile_state());
+    let inventory = scan_inventory(project_path, Some(&home));
+    let latest_snapshot = latest_snapshot_reference(&store_dir);
+    let current_snapshot_id = latest_snapshot.as_ref().map(|(name, _)| name.clone());
+    let protection = if current_snapshot_id.is_some() {
+        "on".into()
+    } else {
+        "off".into()
+    };
+
+    let (working_changes, highest_risk) =
+        working_change_summary(project_path, &home, &store_dir, latest_snapshot.as_ref());
+    let changelog = timeline_changelog(&store_dir, project_path);
 
     DesktopHomeState {
         active_profile: profile_state.active,
         profiles: profile_state.profiles,
-        current_snapshot_id: None,
-        protection: "off".into(),
-        highest_risk: None,
-        working_changes: 0,
+        current_snapshot_id,
+        protection,
+        highest_risk,
+        working_changes,
         surfaces: surfaces_for(&inventory),
-        changelog: Vec::new(),
+        changelog,
         inventory,
+    }
+}
+
+fn latest_snapshot_reference(store_dir: &Path) -> Option<(String, Option<AgentId>)> {
+    let mut snapshots = Vec::new();
+    for agent in list_agents(store_dir).unwrap_or_default() {
+        for name in list_snapshots(store_dir, Some(agent)).unwrap_or_default() {
+            snapshots.push((name, Some(agent)));
+        }
+    }
+    for name in list_snapshots(store_dir, None).unwrap_or_default() {
+        snapshots.push((name, None));
+    }
+    snapshots.sort_by(|left, right| left.0.cmp(&right.0));
+    snapshots.pop()
+}
+
+fn working_change_summary(
+    project_path: &Path,
+    home_dir: &Path,
+    store_dir: &Path,
+    latest_snapshot: Option<&(String, Option<AgentId>)>,
+) -> (u32, Option<String>) {
+    let Some((snapshot_name, agent)) = latest_snapshot else {
+        return (0, None);
+    };
+    let scan = scan_project(&ScanOptions {
+        project_path: project_path.display().to_string(),
+        home_dir: home_dir.display().to_string(),
+        store_dir: store_dir.display().to_string(),
+        explain: None,
+        agent: None,
+        scope: None,
+    });
+    let current_graph = build_graph(&scan.evidence);
+    let snapshot_graph = match hem_core::read_snapshot(store_dir, snapshot_name, *agent) {
+        Ok(snapshot) => snapshot.graph,
+        Err(_) => return (0, None),
+    };
+    let diff = diff_graphs(&snapshot_graph, &current_graph);
+    let working_changes = diff.semantic_changes.len() as u32;
+    let highest_risk = diff
+        .semantic_changes
+        .iter()
+        .map(|change| severity_label(change.severity))
+        .max_by_key(severity_rank)
+        .flatten();
+    (working_changes, highest_risk)
+}
+
+fn severity_label(severity: hem_core::Severity) -> Option<String> {
+    match severity {
+        hem_core::Severity::None => None,
+        hem_core::Severity::Low => Some("low".into()),
+        hem_core::Severity::Medium => Some("medium".into()),
+        hem_core::Severity::High => Some("high".into()),
+        hem_core::Severity::Critical => Some("high".into()),
+    }
+}
+
+fn severity_rank(label: &Option<String>) -> u8 {
+    match label.as_deref() {
+        Some("high") => 3,
+        Some("medium") => 2,
+        Some("low") => 1,
+        _ => 0,
+    }
+}
+
+fn timeline_changelog(store_dir: &Path, project_path: &Path) -> Vec<ChangelogEntry> {
+    let project_path_string = project_path.display().to_string();
+    let entries = list_timeline_entries(
+        store_dir,
+        TimelineListOptions {
+            agent: None,
+            project_path: Some(project_path_string.as_str()),
+            limit: Some(10),
+            on_corrupt_entry: None,
+        },
+    )
+    .unwrap_or_default();
+
+    entries
+        .into_iter()
+        .map(|entry| ChangelogEntry {
+            id: entry.id,
+            title: entry.title,
+            time: entry.created_at,
+            source: timeline_source_label(entry.source),
+            risk: timeline_risk_label(entry.restore_readiness),
+        })
+        .collect()
+}
+
+fn timeline_source_label(source: hem_core::TimelineEntrySource) -> String {
+    match source {
+        hem_core::TimelineEntrySource::Manual => "manual".into(),
+    }
+}
+
+fn timeline_risk_label(readiness: hem_core::TimelineRestoreReadiness) -> String {
+    match readiness {
+        hem_core::TimelineRestoreReadiness::Full => "low".into(),
+        hem_core::TimelineRestoreReadiness::Partial => "medium".into(),
+        hem_core::TimelineRestoreReadiness::ObserveOnly => "high".into(),
     }
 }
 
@@ -447,5 +570,52 @@ mod native_notifications {
 
     pub fn request_permission() -> Result<NotificationPermission, String> {
         Err("Notification permission requests are only implemented for macOS".into())
+    }
+}
+
+#[cfg(test)]
+mod desktop_home_state_tests {
+    use super::build_desktop_home_state;
+    use hem_core::{
+        capture_current_state, write_snapshot,
+        types::{AgentId, EvidenceScope, RuntimeOptions},
+        StoreSnapshot,
+    };
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn populates_current_snapshot_id_from_store() {
+        let root = TempDir::new().expect("temp dir");
+        let project_path = root.path().join("project");
+        let home_dir = root.path().join("home");
+        let store_dir = home_dir.join(".hem");
+        fs::create_dir_all(&project_path).expect("mkdir project");
+        fs::create_dir_all(&home_dir).expect("mkdir home");
+
+        let state = capture_current_state(
+            &RuntimeOptions {
+                project_path: project_path.display().to_string(),
+                home_dir: home_dir.display().to_string(),
+                store_dir: store_dir.display().to_string(),
+                agent: Some(AgentId::Codex),
+                scope: Some(EvidenceScope::User),
+                capture_content: Some(false),
+            },
+            "desktop-baseline",
+        )
+        .expect("capture");
+        write_snapshot(&store_dir, StoreSnapshot::from(state.snapshot), Some(AgentId::Codex))
+            .expect("write snapshot");
+
+        let home = build_desktop_home_state(&project_path, Some(&home_dir));
+        assert_eq!(
+            home.current_snapshot_id.as_deref(),
+            Some("desktop-baseline"),
+            "expected latest snapshot id, got {:?}",
+            home.current_snapshot_id
+        );
+        assert_eq!(home.protection, "on");
+        assert!(!home.surfaces.is_empty());
     }
 }
