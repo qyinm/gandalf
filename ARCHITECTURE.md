@@ -4,42 +4,45 @@ Hem is a local-first workspace for inspecting, packaging, and restoring AI codin
 
 The core architectural rule is simple: scan paths are read-only and policy-aware; write paths are explicit, narrow, and reversible where possible.
 
-**Canonical engine (2026-06):** `crates/hem-core` is the Rust port of `packages/core`. New feature work lands in `hem-core` first; the TypeScript core remains as a parity reference until client cutover completes.
+**Canonical engine (2026-06, U10 cutover):** `internal/hemcore` is the Go engine. New feature work lands in Go first. `crates/hem-core` and `crates/hem-cli` are **deprecated** — kept for desktop parity and transition tests only; do not extend. `packages/core`, `apps/cli`, and `apps/tui` are deprecated Bun/TypeScript reference stacks.
 
 ## System Shape
 
 ```text
                 +----------------------+
-                | hem-cli (Rust)       |
-                | crates/hem-cli       |
+                | hem (Go CLI)         |
+                | cmd/hem              |
+                | internal/cli         |
                 +----------+-----------+
                            |
                            v
                 +----------------------+
-                | hem-core             |
-                | crates/hem-core      |
+                | hemcore (Go)         |
+                | internal/hemcore     |
                 | scan/store/restore/  |
                 | bundle/timeline/...  |
                 +----------+-----------+
                            |
         +------------------+------------------+
-        |                                     |
-        v                                     v
-+-------------------+              +-------------------+
-| Desktop Tauri     |              | Legacy TS CLI/TUI |
-| apps/desktop      |              | apps/cli, apps/tui|
-| src-tauri -> core |              | packages/core (*) |
-+-------------------+              +-------------------+
+        |                  |                  |
+        v                  v                  v
++-------------------+ +-------------------+ +-------------------+
+| Desktop Tauri     | | Legacy Rust (*)   | | Legacy TS (*)     |
+| apps/desktop      | | crates/hem-core   | | apps/cli, apps/tui|
+| src-tauri -> core | | crates/hem-cli    | | packages/core     |
++-------------------+ +-------------------+ +-------------------+
 
-(*) Deprecated reference implementation — do not extend for new engine behavior.
+(*) Deprecated — do not extend for new engine behavior.
 ```
 
 ## Runtime Entry Points
 
-- `crates/hem-cli` is the primary Rust CLI (`cargo run -p hem-cli -- …`). It exposes scan, snapshot, diff, restore, doctor, report, timeline, and bundle subcommands.
-- `crates/hem-core` holds all engine logic: scanners, store, snapshot, graph, diff, audit, provenance, restore, bundle, timeline, readiness, and report rendering.
-- `apps/desktop/src-tauri` depends on `hem-core` in-process. Tauri commands are thin adapters over the Rust engine; bespoke scan parsers in `lib.rs` are removed.
-- `apps/cli` and `packages/core` are deprecated Bun/TypeScript stacks kept for parity tests and npm publish continuity until M4 cleanup.
+- `cmd/hem` is the primary CLI (`go build -o bin/hem ./cmd/hem`). Command wiring lives in `internal/cli`; it exposes scan, snapshot, diff, restore, doctor, report, timeline, and bundle subcommands.
+- `internal/hemcore` holds all engine logic: scanners, store, snapshot, graph, diff, audit, provenance, restore, bundle, timeline, readiness, and report rendering.
+- Release binaries for darwin/linux (amd64, arm64) are built with GoReleaser (`.goreleaser.yaml`) on `v*` tags via `.github/workflows/release.yml`.
+- `crates/hem-cli` and `crates/hem-core` are **deprecated** Rust stacks. `cargo run -p hem-cli -- …` remains available during transition; do not add new engine behavior here.
+- `apps/desktop/src-tauri` still depends on `hem-core` in-process until a desktop bridge plan lands. Tauri commands are thin adapters over the Rust engine.
+- `apps/cli` and `packages/core` are deprecated Bun/TypeScript stacks kept for parity tests and npm publish continuity.
 - `apps/tui` is a deprecated Ink presentation layer over the TS core.
 
 ## Core Data Model
@@ -194,10 +197,27 @@ Avoid coupling new features directly to CLI output. The durable contract should 
 
 ## Development Checks
 
-Use the standard verification path before shipping architecture-sensitive changes:
+Use the Go verification path before shipping engine or CLI changes:
+
+```bash
+make test          # go test ./...
+make build         # go build -o bin/hem ./cmd/hem
+make gate2         # Gate 2 Codex rollback demo against bin/hem
+```
+
+Or directly:
+
+```bash
+go test ./...
+go build -o bin/hem ./cmd/hem
+./bin/hem snapshot list
+```
+
+Legacy TypeScript and Rust suites remain during transition:
 
 ```bash
 bun run check
+cargo test --workspace
 ```
 
-This runs the TypeScript build and Bun test suites for the workspace. For CLI behavior changes, add a focused test under `apps/cli/tests/*.test.ts` and keep command output compatible with `--json` where applicable.
+For CLI behavior changes, add focused tests under `internal/cli/*_test.go` and `internal/hemcore/**/*_test.go`. Keep command output compatible with `--json` where applicable. Gate 2 acceptance is `scripts/gate2-demo.mjs` (retargeted to `bin/hem`).
