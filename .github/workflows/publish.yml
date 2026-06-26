@@ -76,8 +76,6 @@ jobs:
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          bun publish --cwd packages/core --access public --tolerate-republish
-          bun publish --cwd apps/tui --access public --tolerate-republish
           bun publish --cwd apps/cli --access public --tolerate-republish
 
       - name: Check GitHub Release
