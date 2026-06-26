@@ -256,6 +256,10 @@ pub fn apply_hook(item: &mut RestoreItem) -> Result<(), String> {
 }
 
 pub fn apply_skill(item: &mut RestoreItem) -> Result<(), String> {
+    let dest = item.dest.clone();
+    if item.action == Some(RestoreAction::Delete) {
+        return apply_file_mutation(item, Path::new(&dest), None, None, false);
+    }
     let content = match &item.target_content {
         Some(Value::String(text)) => text.clone(),
         Some(value) => serde_json::to_string_pretty(value).map_err(|e| e.to_string())?,
@@ -263,7 +267,6 @@ pub fn apply_skill(item: &mut RestoreItem) -> Result<(), String> {
             return Err(format!("Missing target content for {}", item.item_id));
         }
     };
-    let dest = item.dest.clone();
     apply_file_mutation(item, Path::new(&dest), Some(&content), None, false)
 }
 
