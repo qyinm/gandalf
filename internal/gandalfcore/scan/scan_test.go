@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 
@@ -133,6 +134,7 @@ OPENAI_API_KEY = "secret"
 			names = append(names, *item.Name)
 		}
 	}
+	sort.Strings(names)
 	if len(names) != 2 || names[0] != "context7" || names[1] != "node_repl" {
 		t.Fatalf("mcp names = %#v", names)
 	}

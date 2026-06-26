@@ -60,7 +60,7 @@ await mkdir(bin, { recursive: true });
 
 await writeExecutable(path.join(bin, "gandalf"), [
   "#!/bin/sh",
-  `exec node "${repo}/apps/cli/dist/src/cli.js" "$@"`,
+  `exec "${repo}/bin/gandalf" "$@"`,
   ""
 ].join("\n"));
 

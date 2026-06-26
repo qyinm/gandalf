@@ -13,14 +13,6 @@
     "declarationMap": true,
     "sourceMap": true,
     "baseUrl": ".",
-    "paths": {
-      "@qxinm/gandalf-core": ["packages/core/src/index.ts"],
-      "@qxinm/gandalf-core/*.js": ["packages/core/src/*.ts"],
-      "@qxinm/gandalf-core/scanners/*.js": ["packages/core/src/scanners/*.ts"],
-      "@qxinm/gandalf-tui": ["apps/tui/src/index.ts"],
-      "@qxinm/gandalf-tui/*.js": ["apps/tui/src/*.ts"],
-      "@qxinm/gandalf-tui/components/*.js": ["apps/tui/src/components/*.tsx", "apps/tui/src/components/*.ts"],
-      "@qxinm/gandalf-tui/wizards/*.js": ["apps/tui/src/wizards/*.ts"]
-    }
+    "paths": {}
   }
 }

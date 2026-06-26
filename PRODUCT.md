@@ -14,11 +14,11 @@ snapshot -> diff -> restore
 scope: --agent codex --scope user
 surface: ~/.codex/ user-global setup only
 distribution: CLI first
-public npm package: @qxinm/gandalf
+public install paths: install.sh and Homebrew tap
 source repository: qyinm/gandalf
 ```
 
-The npm package intentionally uses the `qxinm` account because that is the publishing identity. GitHub source and issue tracking stay under `qyinm/gandalf`.
+Gandalf is distributed as a Go binary. The supported install paths are the latest-release `install.sh` flow and the personal Homebrew tap command `brew install qyinm/tap/gandalf`. npm is no longer a supported product distribution channel; external package deletion is handled outside this repository.
 
 In scope now:
 
