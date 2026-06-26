@@ -47,7 +47,9 @@ jobs:
         run: go test ./...
 
       - name: Build Go CLI
-        run: go build -o bin/gandalf ./cmd/gandalf
+        run: |
+          mkdir -p bin
+          go build -o bin/gandalf ./cmd/gandalf
 
       - name: Install script smoke
         run: ./scripts/install-smoke.sh
