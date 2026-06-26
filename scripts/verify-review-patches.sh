@@ -42,9 +42,9 @@ go build -o "$GANDALF_BIN" ./cmd/gandalf
 
 # --- Step 1: restore tests (twice) + Go summary ---
 log "step 1: restore tests x2"
-go test ./internal/gandalfcore/restore >"$SCRATCH/restore-test-1.log" 2>&1 &
+go test -count=1 ./internal/gandalfcore/restore >"$SCRATCH/restore-test-1.log" 2>&1 &
 RESTORE_1_PID=$!
-go test ./internal/gandalfcore/restore >"$SCRATCH/restore-test-2.log" 2>&1 &
+go test -count=1 ./internal/gandalfcore/restore >"$SCRATCH/restore-test-2.log" 2>&1 &
 RESTORE_2_PID=$!
 
 if ! wait "$RESTORE_1_PID"; then
