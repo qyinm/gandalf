@@ -21,8 +21,6 @@ use super::{
 pub struct DoctorArgs {
     #[command(flatten)]
     common: CommonOptions,
-    #[arg(long)]
-    json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -34,8 +32,6 @@ pub struct ReportArgs {
     reference: String,
     #[arg(long)]
     out: Option<String>,
-    #[arg(long)]
-    json: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -52,8 +48,6 @@ pub enum TimelineCommand {
 pub struct TimelineListArgs {
     #[command(flatten)]
     common: CommonOptions,
-    #[arg(long)]
-    json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -61,8 +55,6 @@ pub struct TimelineRefArgs {
     #[command(flatten)]
     common: CommonOptions,
     reference: String,
-    #[arg(long)]
-    json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -72,8 +64,6 @@ pub struct TimelineUndoArgs {
     reference: String,
     #[arg(long)]
     dry_run: bool,
-    #[arg(long)]
-    json: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -98,8 +88,6 @@ pub struct BundleExportArgs {
     out: String,
     #[arg(long)]
     metadata_only: bool,
-    #[arg(long)]
-    json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -117,8 +105,6 @@ pub struct BundleImportArgs {
     experimental: bool,
     #[arg(long)]
     trust: bool,
-    #[arg(long)]
-    json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -159,7 +145,7 @@ pub fn execute_doctor(args: DoctorArgs) -> i32 {
             path_env: None,
         },
     );
-    if args.json {
+    if args.common.json {
         return write_json(&report);
     }
     let mut lines = vec![
@@ -254,7 +240,7 @@ pub fn execute_report(args: ReportArgs) -> i32 {
         blind_spots: &scan.blind_spots,
         diffs: diff.as_ref(),
     });
-    if args.json {
+    if args.common.json {
         return write_json(&serde_json::json!({
             "snapshot": snapshot,
             "markdown": markdown,
@@ -318,7 +304,7 @@ fn execute_timeline_list(args: TimelineListArgs) -> i32 {
             event.error
         );
     }
-    if args.json {
+    if args.common.json {
         return write_json(&entries);
     }
     if entries.is_empty() {
@@ -355,7 +341,7 @@ fn execute_timeline_show(args: TimelineRefArgs) -> i32 {
         }
         Err(error) => return write_error(&error),
     };
-    if args.json {
+    if args.common.json {
         write_json(&entry)
     } else {
         write_stdout(&format!("{}\n", serde_json::to_string_pretty(&entry).unwrap_or_default()))
@@ -403,7 +389,7 @@ fn execute_timeline_undo(args: TimelineUndoArgs) -> i32 {
             event.error
         );
     }
-    if args.json {
+    if args.common.json {
         write_json(&plan)
     } else {
         write_stdout(&render_timeline_undo_text(&plan))
@@ -445,7 +431,7 @@ fn execute_bundle_export(args: BundleExportArgs) -> i32 {
             });
         }
     };
-    if args.json {
+    if args.common.json {
         write_json(&result)
     } else {
         write_stdout(&format!("Exported {} to {}\n", args.name, result.bundle_path))
@@ -490,7 +476,7 @@ fn execute_bundle_import(args: BundleImportArgs) -> i32 {
             });
         }
     };
-    if args.json {
+    if args.common.json {
         write_json(&result)
     } else {
         write_stdout(&format!(
@@ -539,12 +525,18 @@ fn execute_bundle_verify(args: BundleVerifyArgs) -> i32 {
             });
         }
     };
+    let exit = if result.valid { 0 } else { 1 };
     if args.json {
-        write_json(&result)
+        if write_json(&result) != 0 {
+            return 1;
+        }
     } else {
         let status = if result.valid { "passed" } else { "failed" };
-        write_stdout(&format!("Bundle verification {status}: {}\n", result.bundle_path))
+        if write_stdout(&format!("Bundle verification {status}: {}\n", result.bundle_path)) != 0 {
+            return 1;
+        }
     }
+    exit
 }
 
 fn find_timeline_entry_for_ref(
