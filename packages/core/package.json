@@ -1,6 +1,6 @@
 {
   "name": "@qxinm/gandalf-core",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "description": "[DEPRECATED] Use crates/gandalf-core. TS core kept for parity reference until Rust client cutover.",
   "type": "module",
   "main": "dist/src/index.js",

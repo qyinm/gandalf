@@ -1,6 +1,6 @@
 dist/
 /bin/
-/hem
+/gandalf
 node_modules/
 /target/
 *.log
