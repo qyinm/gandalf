@@ -359,13 +359,18 @@ fn snapshot_content_by_evidence_id(
 }
 
 fn target_content_for_plan_item(plan_item: &RestorePlanItem) -> Option<Value> {
-    match plan_item
+    let value = plan_item
         .target_state
         .as_ref()
-        .and_then(|state| state.value.as_ref())
-    {
-        Some(Value::String(_)) => plan_item.target_state.as_ref()?.value.clone(),
-        _ => None,
+        .and_then(|state| state.value.as_ref())?;
+    match plan_item.kind {
+        EvidenceKind::McpServer | EvidenceKind::Permission | EvidenceKind::EnvKey => {
+            Some(value.clone())
+        }
+        _ => match value {
+            Value::String(_) => plan_item.target_state.as_ref()?.value.clone(),
+            _ => None,
+        },
     }
 }
 

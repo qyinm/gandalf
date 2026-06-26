@@ -3,11 +3,12 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use crate::path_confinement::{validate_constrained_write_path, ConfinementRoots};
 use crate::types::{
     ApplyFailure, ApplyOptions, ApplySummary, ApplyWithRollbackResult, RestoreAction,
     RestoreItem, RestoreItemStatus, RollbackSummary, UndoResult, UndoStatus,
@@ -58,6 +59,32 @@ pub fn apply_restore_items(
             summary.status_registry.insert(item.item_id.clone(), item.status);
             summary.skipped += 1;
             continue;
+        }
+
+        if let (Some(home_dir), Some(project_path)) =
+            (&options.home_dir, &options.project_path)
+        {
+            let roots = ConfinementRoots {
+                home_dir: Path::new(home_dir).to_path_buf(),
+                project_path: Path::new(project_path).to_path_buf(),
+            };
+            if let Err(reason) =
+                validate_constrained_write_path(Path::new(&item.dest), &roots)
+            {
+                item.status = RestoreItemStatus::Failed;
+                item.error_message = Some(reason.clone());
+                summary.status_registry.insert(item.item_id.clone(), item.status);
+                summary.failed += 1;
+                summary.failures.push(ApplyFailure {
+                    item_id: item.item_id.clone(),
+                    reason,
+                });
+                if options.fail_fast {
+                    stopped_early = true;
+                    break;
+                }
+                continue;
+            }
         }
 
         match executor(item) {
@@ -232,10 +259,199 @@ pub fn apply_skill(item: &mut RestoreItem) -> Result<(), String> {
     let content = match &item.target_content {
         Some(Value::String(text)) => text.clone(),
         Some(value) => serde_json::to_string_pretty(value).map_err(|e| e.to_string())?,
-        None => String::new(),
+        None => {
+            return Err(format!("Missing target content for {}", item.item_id));
+        }
     };
     let dest = item.dest.clone();
     apply_file_mutation(item, Path::new(&dest), Some(&content), None, false)
+}
+
+fn mcp_config_path_for_item(item: &RestoreItem) -> String {
+    if let Some(path) = item
+        .metadata
+        .as_ref()
+        .and_then(|m| m.get("mcpPath"))
+        .and_then(|v| v.as_str())
+    {
+        if !path.is_empty() && Path::new(path).is_absolute() {
+            return path.to_string();
+        }
+    }
+    let dest = Path::new(&item.dest);
+    if dest.file_name().and_then(|n| n.to_str()) == Some(".mcp.json") {
+        return item.dest.clone();
+    }
+    dest.parent()
+        .map(|parent| parent.join(".mcp.json").to_string_lossy().to_string())
+        .unwrap_or_else(|| item.dest.clone())
+}
+
+fn mcp_server_name_for_item(item: &RestoreItem) -> String {
+    if let Some(name) = item
+        .metadata
+        .as_ref()
+        .and_then(|m| m.get("serverName"))
+        .and_then(|v| v.as_str())
+    {
+        if !name.is_empty() {
+            return name.to_string();
+        }
+    }
+    let parts: Vec<&str> = item.item_id.split(':').collect();
+    if parts.len() >= 2 && !parts[1].is_empty() {
+        return parts[1].to_string();
+    }
+    item.item_id
+        .split('.')
+        .next_back()
+        .unwrap_or("unknown")
+        .to_string()
+}
+
+pub fn apply_mcp_server(item: &mut RestoreItem) -> Result<(), String> {
+    let mcp_path = mcp_config_path_for_item(item);
+    let server_name = mcp_server_name_for_item(item);
+
+    let mut mcp_config: Map<String, Value> = Map::new();
+    mcp_config.insert("mcpServers".to_string(), json!({}));
+
+    if let Some(existing) = read_current_content(Path::new(&mcp_path)) {
+        if let Ok(parsed) = serde_json::from_str::<Value>(&existing) {
+            if let Some(obj) = parsed.as_object() {
+                for (key, value) in obj {
+                    mcp_config.insert(key.clone(), value.clone());
+                }
+            }
+        }
+    }
+    if !mcp_config.contains_key("mcpServers") || !mcp_config["mcpServers"].is_object() {
+        mcp_config.insert("mcpServers".to_string(), json!({}));
+    }
+
+    let servers = mcp_config
+        .get_mut("mcpServers")
+        .and_then(|v| v.as_object_mut())
+        .ok_or_else(|| "Invalid mcpServers object".to_string())?;
+
+    let prev_entry = servers.get(&server_name).cloned();
+
+    if item.action == Some(RestoreAction::Delete) {
+        servers.remove(&server_name);
+    } else {
+        let content = item
+            .target_content
+            .clone()
+            .ok_or_else(|| format!("Missing target MCP server content for {server_name}"))?;
+        servers.insert(server_name, content);
+    }
+
+    let serialized =
+        serde_json::to_string_pretty(&Value::Object(mcp_config)).map_err(|e| e.to_string())?
+            + "\n";
+    apply_file_mutation(
+        item,
+        Path::new(&mcp_path),
+        Some(&serialized),
+        None,
+        true,
+    )?;
+    if let Some(state) = item.rollback_state.as_mut().and_then(|v| v.as_object_mut()) {
+        state.insert("mcpPath".to_string(), json!(mcp_path));
+        state.insert("previousEntry".to_string(), json!(prev_entry));
+    }
+    Ok(())
+}
+
+pub fn apply_permission(item: &mut RestoreItem) -> Result<(), String> {
+    let file_path = item.dest.clone();
+    let mut settings: Map<String, Value> = Map::new();
+    if let Some(existing) = read_current_content(Path::new(&file_path)) {
+        if let Ok(parsed) = serde_json::from_str::<Value>(&existing) {
+            if let Some(obj) = parsed.as_object() {
+                for (key, value) in obj {
+                    settings.insert(key.clone(), value.clone());
+                }
+            }
+        }
+    }
+    if !settings.contains_key("permissions") || !settings["permissions"].is_object() {
+        settings.insert("permissions".to_string(), json!({}));
+    }
+    let perm_name = item.item_id.split('.').next_back().unwrap_or("permission");
+    let permissions = settings
+        .get_mut("permissions")
+        .and_then(|v| v.as_object_mut())
+        .ok_or_else(|| "Invalid permissions object".to_string())?;
+
+    if item.action == Some(RestoreAction::Delete) {
+        permissions.remove(perm_name);
+    } else {
+        let perm_value = item
+            .target_content
+            .clone()
+            .ok_or_else(|| format!("Missing target permission content for {perm_name}"))?;
+        permissions.insert(perm_name.to_string(), perm_value);
+    }
+
+    let serialized =
+        serde_json::to_string_pretty(&Value::Object(settings)).map_err(|e| e.to_string())?
+            + "\n";
+    apply_file_mutation(
+        item,
+        Path::new(&file_path),
+        Some(&serialized),
+        None,
+        true,
+    )
+}
+
+pub fn apply_env_key(item: &mut RestoreItem) -> Result<(), String> {
+    let env_path = Path::new(&item.dest)
+        .parent()
+        .map(|parent| parent.join(".env"))
+        .ok_or_else(|| format!("Invalid env destination for {}", item.item_id))?;
+    let key_name = item.item_id.split('.').next_back().unwrap_or("VAR");
+    let value = item
+        .target_content
+        .as_ref()
+        .map(|content| match content {
+            Value::String(text) => text.clone(),
+            other => other.to_string(),
+        })
+        .unwrap_or_default();
+
+    let existing = read_current_content(&env_path);
+    let mut lines: Vec<String> = existing
+        .as_deref()
+        .map(|text| text.split('\n').map(str::to_string).collect())
+        .unwrap_or_default();
+    let key_index = lines
+        .iter()
+        .position(|line| line.trim().starts_with(&format!("{key_name}=")));
+
+    if item.action == Some(RestoreAction::Delete) {
+        if let Some(index) = key_index {
+            lines.remove(index);
+        }
+    } else {
+        let new_line = format!("{key_name}={value}");
+        if let Some(index) = key_index {
+            lines[index] = new_line;
+        } else {
+            lines.push(new_line);
+        }
+    }
+
+    let mut content = lines.join("\n");
+    if !content.is_empty() && !content.ends_with('\n') {
+        content.push('\n');
+    }
+    apply_file_mutation(item, &env_path, Some(&content), None, true)
+}
+
+pub fn apply_env(item: &mut RestoreItem) -> Result<(), String> {
+    apply_env_key(item)
 }
 
 pub fn default_apply_handler_registry() -> ApplyHandlerRegistry {
@@ -250,6 +466,19 @@ pub fn default_apply_handler_registry() -> ApplyHandlerRegistry {
     );
     handlers.insert("hook".to_string(), Box::new(|item| apply_hook(item)));
     handlers.insert("skill".to_string(), Box::new(|item| apply_skill(item)));
+    handlers.insert(
+        "mcp_server".to_string(),
+        Box::new(|item| apply_mcp_server(item)),
+    );
+    handlers.insert(
+        "permission".to_string(),
+        Box::new(|item| apply_permission(item)),
+    );
+    handlers.insert(
+        "env_key".to_string(),
+        Box::new(|item| apply_env_key(item)),
+    );
+    handlers.insert("env".to_string(), Box::new(|item| apply_env(item)));
     ApplyHandlerRegistry { handlers }
 }
 
@@ -285,6 +514,28 @@ pub fn restore_previous_content_undo_handler(item: &mut RestoreItem) -> Result<(
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
             write_file_atomically(file_path, &content).map_err(|e| e.to_string())?;
+        }
+        return Ok(());
+    }
+    if let Some(mcp_path) = state.get("mcpPath").and_then(|v| v.as_str()) {
+        if let Some(Value::Object(saved_config)) = state.get("mcpConfig") {
+            let serialized = serde_json::to_string_pretty(saved_config).map_err(|e| e.to_string())?
+                + "\n";
+            if let Some(parent) = Path::new(mcp_path).parent() {
+                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            write_file_atomically(Path::new(mcp_path), &serialized).map_err(|e| e.to_string())?;
+        }
+        return Ok(());
+    }
+    if let Some(env_path) = state.get("envPath").and_then(|v| v.as_str()) {
+        if prev_content.is_none() || prev_content == Some(Value::Null) {
+            let _ = fs::remove_file(env_path);
+        } else if let Some(Value::String(content)) = prev_content {
+            if let Some(parent) = Path::new(env_path).parent() {
+                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            write_file_atomically(Path::new(env_path), &content).map_err(|e| e.to_string())?;
         }
     }
     Ok(())

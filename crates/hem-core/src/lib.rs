@@ -6,6 +6,7 @@ pub mod diff;
 pub mod errors;
 pub mod graph;
 pub mod parsers;
+pub mod path_confinement;
 pub mod policy;
 pub mod provenance;
 pub mod readiness;
@@ -36,9 +37,13 @@ pub use policy::{
 pub use parsers::{
     parse_dotenv_keys, parse_json, parse_markdown, parse_toml_key_values, DotenvEntry, ParseResult,
 };
+pub use path_confinement::{
+    validate_constrained_write_path, validate_home_relative_import_segment, ConfinementRoots,
+};
 pub use provenance::build_provenance;
 pub use restore::{
-    apply_agent_config, apply_restore_items, apply_with_rollback, build_restore_plan,
+    apply_agent_config, apply_env, apply_env_key, apply_mcp_server, apply_permission,
+    apply_restore_items, apply_with_rollback, build_restore_plan,
     clear_applied_items, create_default_apply_executor, create_default_undo_executor,
     default_apply_handler_registry, default_undo_handler_registry, dispatch_default_apply,
     dispatch_default_undo, format_apply_summary, get_applied_items, get_successful_items,
