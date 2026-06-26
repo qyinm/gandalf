@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	contentDir         = "content"
-	timelineEventsDir  = "timeline/events"
-	storeMode          = 0o700
+	contentDir        = "content"
+	timelineEventsDir = "timeline/events"
+	storeMode         = 0o700
 )
 
 var agentStoreDirs = []types.AgentID{
@@ -63,10 +63,10 @@ func StoreSnapshotFrom(snapshot types.Snapshot) StoreSnapshot {
 }
 
 type TimelineListOptions struct {
-	Agent            *types.AgentID
-	ProjectPath      string
-	Limit            *int
-	OnCorruptEntry   func(TimelineCorruptEvent)
+	Agent          *types.AgentID
+	ProjectPath    string
+	Limit          *int
+	OnCorruptEntry func(TimelineCorruptEvent)
 }
 
 type TimelineCorruptEvent struct {
@@ -206,6 +206,7 @@ func WriteSnapshot(storeDir string, snapshot StoreSnapshot, agent *types.AgentID
 		return err
 	}
 	dir := snapshotDir(storeDir, name, agent)
+	parentDir := AgentStoreDir(storeDir, agent)
 
 	if _, err := EnsureStore(storeDir); err != nil {
 		return err
@@ -221,6 +222,14 @@ func WriteSnapshot(storeDir string, snapshot StoreSnapshot, agent *types.AgentID
 	if err := setMode(dir, storeMode); err != nil {
 		return err
 	}
+	tempDir, err := os.MkdirTemp(parentDir, "."+name+".tmp-")
+	if err != nil {
+		return &StoreError{IO: err}
+	}
+	defer os.RemoveAll(tempDir)
+	if err := setMode(tempDir, storeMode); err != nil {
+		return err
+	}
 
 	checksums := snapshot.Checksums
 	if checksums == nil {
@@ -231,35 +240,31 @@ func WriteSnapshot(storeDir string, snapshot StoreSnapshot, agent *types.AgentID
 		redactions = []json.RawMessage{}
 	}
 
-	if err := writeJSONAtomic(filepath.Join(dir, "manifest.json"), snapshot.Manifest); err != nil {
+	if err := writeJSONAtomic(filepath.Join(tempDir, "manifest.json"), snapshot.Manifest); err != nil {
 		return err
 	}
-	if err := writeJSONAtomic(filepath.Join(dir, "evidence.json"), snapshot.Evidence); err != nil {
+	if err := writeJSONAtomic(filepath.Join(tempDir, "evidence.json"), snapshot.Evidence); err != nil {
 		return err
 	}
-	if err := writeJSONAtomic(filepath.Join(dir, "graph.json"), snapshot.Graph); err != nil {
+	if err := writeJSONAtomic(filepath.Join(tempDir, "graph.json"), snapshot.Graph); err != nil {
 		return err
 	}
-	if err := writeJSONAtomic(filepath.Join(dir, "audit-findings.json"), snapshot.AuditFindings); err != nil {
+	if err := writeJSONAtomic(filepath.Join(tempDir, "audit-findings.json"), snapshot.AuditFindings); err != nil {
 		return err
 	}
-	if err := writeJSONAtomic(filepath.Join(dir, "provenance.json"), snapshot.Provenance); err != nil {
+	if err := writeJSONAtomic(filepath.Join(tempDir, "provenance.json"), snapshot.Provenance); err != nil {
 		return err
 	}
-	if err := writeJSONAtomic(filepath.Join(dir, "checksums.json"), checksums); err != nil {
+	if err := writeJSONAtomic(filepath.Join(tempDir, "checksums.json"), checksums); err != nil {
 		return err
 	}
-	if err := writeJSONAtomic(filepath.Join(dir, "redactions.json"), redactions); err != nil {
+	if err := writeJSONAtomic(filepath.Join(tempDir, "redactions.json"), redactions); err != nil {
 		return err
 	}
 
-	if len(snapshot.Content) > 0 {
-		contentPath := filepath.Join(dir, contentDir)
-		if pathExistsBool(contentPath) {
-			if err := os.RemoveAll(contentPath); err != nil {
-				return &StoreError{IO: err}
-			}
-		}
+	if len(snapshot.Content) == 0 {
+	} else if len(snapshot.Content) > 0 {
+		contentPath := filepath.Join(tempDir, contentDir)
 		if err := os.MkdirAll(contentPath, storeMode); err != nil {
 			return &StoreError{IO: err}
 		}
@@ -279,7 +284,7 @@ func WriteSnapshot(storeDir string, snapshot StoreSnapshot, agent *types.AgentID
 				unsafePath := entry.StoragePath
 				return &StoreError{UnsafeContentPath: &unsafePath}
 			}
-			target := filepath.Join(dir, filepath.FromSlash(entry.StoragePath))
+			target := filepath.Join(tempDir, filepath.FromSlash(entry.StoragePath))
 			if err := os.MkdirAll(filepath.Dir(target), storeMode); err != nil {
 				return &StoreError{IO: err}
 			}
@@ -293,11 +298,37 @@ func WriteSnapshot(storeDir string, snapshot StoreSnapshot, agent *types.AgentID
 			index[i] = entry
 			index[i].Content = nil
 		}
-		if err := writeJSONAtomic(filepath.Join(dir, "content-index.json"), index); err != nil {
+		if err := writeJSONAtomic(filepath.Join(tempDir, "content-index.json"), index); err != nil {
 			return err
 		}
 	}
 
+	return replaceSnapshotDir(tempDir, dir)
+}
+
+func replaceSnapshotDir(tempDir, targetDir string) error {
+	backupDir := targetDir + ".bak"
+	if pathExistsBool(backupDir) {
+		if err := os.RemoveAll(backupDir); err != nil {
+			return &StoreError{IO: err}
+		}
+	}
+	if pathExistsBool(targetDir) {
+		if err := os.Rename(targetDir, backupDir); err != nil {
+			return &StoreError{IO: err}
+		}
+		if err := os.Rename(tempDir, targetDir); err != nil {
+			_ = os.Rename(backupDir, targetDir)
+			return &StoreError{IO: err}
+		}
+		if err := os.RemoveAll(backupDir); err != nil {
+			return &StoreError{IO: err}
+		}
+		return nil
+	}
+	if err := os.Rename(tempDir, targetDir); err != nil {
+		return &StoreError{IO: err}
+	}
 	return nil
 }
 
@@ -502,10 +533,10 @@ func FindTimelineEntry(storeDir, reference string, options TimelineListOptions) 
 
 func StateHash(snapshot types.Snapshot) string {
 	payload := map[string]any{
-		"evidence":       snapshot.Evidence,
-		"graph":          snapshot.Graph,
-		"auditFindings":  snapshot.AuditFindings,
-		"provenance":     snapshot.Provenance,
+		"evidence":      snapshot.Evidence,
+		"graph":         snapshot.Graph,
+		"auditFindings": snapshot.AuditFindings,
+		"provenance":    snapshot.Provenance,
 	}
 	serialized, err := json.Marshal(payload)
 	if err != nil {

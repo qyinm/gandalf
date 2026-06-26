@@ -62,12 +62,12 @@ func testSnapshot(name string) types.Snapshot {
 			EvidenceID:     evidenceID,
 		}},
 		AuditFindings: []types.AuditFinding{{
-			Code:     "EXECUTABLE_CONFIG_ADDED",
-			Severity: types.SeverityMedium,
-			Problem:  "Project config allows an executable command.",
-			Cause:    ".claude/settings.json allows Bash(bun test).",
-			Fix:      "Review the allowed command before sharing the project config.",
-			Path:     &path,
+			Code:       "EXECUTABLE_CONFIG_ADDED",
+			Severity:   types.SeverityMedium,
+			Problem:    "Project config allows an executable command.",
+			Cause:      ".claude/settings.json allows Bash(bun test).",
+			Fix:        "Review the allowed command before sharing the project config.",
+			Path:       &path,
 			EvidenceID: &evidenceID,
 		}},
 		Provenance: []types.ProvenanceEntry{{
@@ -420,6 +420,59 @@ func TestWritesAndReadsContentBackedSnapshotEntries(t *testing.T) {
 	_, err = ReadSnapshotContent(root, "codex-baseline", badEntry, &agent)
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "unsafe snapshot content path") {
 		t.Fatalf("ReadSnapshotContent bad path err = %v, want unsafe snapshot content path", err)
+	}
+}
+
+func TestWriteSnapshotKeepsPreviousVersionWhenReplacementFails(t *testing.T) {
+	root := tempStore(t)
+	agent := types.AgentCodex
+
+	baseline := StoreSnapshotFrom(testSnapshot("codex-baseline"))
+	content := "model = \"gpt-5\""
+	baseline.Content = []types.SnapshotContentEntry{{
+		EvidenceID:    "claude.project.settings",
+		SourcePath:    "~/.codex/config.toml",
+		RestorePath:   "~/.codex/config.toml",
+		Checksum:      "sha256:codex-config",
+		ByteLength:    14,
+		Encoding:      "utf8",
+		StoragePath:   "content/claude.project.settings.txt",
+		CaptureStatus: "captured",
+		Content:       &content,
+	}}
+	if err := WriteSnapshot(root, baseline, &agent); err != nil {
+		t.Fatalf("WriteSnapshot baseline: %v", err)
+	}
+
+	broken := baseline
+	broken.Content = []types.SnapshotContentEntry{{
+		EvidenceID:    "claude.project.settings",
+		SourcePath:    "~/.codex/config.toml",
+		RestorePath:   "~/.codex/config.toml",
+		Checksum:      "sha256:codex-config-broken",
+		ByteLength:    14,
+		Encoding:      "utf8",
+		StoragePath:   "../escape",
+		CaptureStatus: "captured",
+		Content:       &content,
+	}}
+	if err := WriteSnapshot(root, broken, &agent); err == nil {
+		t.Fatal("expected replacement to fail")
+	}
+
+	read, err := ReadSnapshot(root, "codex-baseline", &agent)
+	if err != nil {
+		t.Fatalf("ReadSnapshot after failed replacement: %v", err)
+	}
+	if len(read.Content) != 1 || read.Content[0].StoragePath != "content/claude.project.settings.txt" {
+		t.Fatalf("content index = %#v", read.Content)
+	}
+	text, err := ReadSnapshotContent(root, "codex-baseline", read.Content[0], &agent)
+	if err != nil {
+		t.Fatalf("ReadSnapshotContent after failed replacement: %v", err)
+	}
+	if text != content {
+		t.Fatalf("content = %q, want %q", text, content)
 	}
 }
 
