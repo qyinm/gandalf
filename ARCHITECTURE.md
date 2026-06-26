@@ -103,6 +103,6 @@ CI must keep the supported runtime green:
 - Go tests: `go test ./...`
 - Go build: `go build -o bin/gandalf ./cmd/gandalf`
 - install script smoke: `./scripts/install-smoke.sh`
-- Gate 2 demo: `node scripts/gate2-demo.mjs`
+- Gate 2 acceptance: `node scripts/gate2-acceptance.mjs`
 
 Frontend and desktop checks remain for `apps/landing` and `apps/desktop`, but they are not CLI distribution paths.

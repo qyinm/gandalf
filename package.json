@@ -21,10 +21,7 @@
     "desktop:build": "bun run --cwd apps/desktop tauri build",
     "install:smoke": "./scripts/install-smoke.sh",
     "dogfood:cross-machine": "bun scripts/cross-machine-dogfood.mjs",
-    "dogfood:gate2": "bun scripts/gate2-demo.mjs",
-    "demo:pain:vhs": "node scripts/run-gate2-vhs.mjs demo/pain.tape",
-    "demo:fix:vhs": "node scripts/run-gate2-vhs.mjs demo/fix.tape",
-    "demo:gate2:vhs": "bun run demo:pain:vhs && bun run demo:fix:vhs"
+    "dogfood:gate2": "bun scripts/gate2-acceptance.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",

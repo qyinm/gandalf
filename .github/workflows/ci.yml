@@ -82,5 +82,5 @@ jobs:
       - name: Install script smoke
         run: ./scripts/install-smoke.sh
 
-      - name: Gate 2 demo (Go binary)
-        run: node scripts/gate2-demo.mjs
+      - name: Gate 2 acceptance (Go binary)
+        run: node scripts/gate2-acceptance.mjs

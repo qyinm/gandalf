@@ -2,8 +2,6 @@
 
 Rollback safety net for Codex setup experiments.
 
-![Gandalf product demo](demo/product-demo/product-demo.gif)
-
 Gandalf's current wedge is narrow on purpose: save, diff, and restore your user-global Codex setup under `~/.codex/` after an agent, MCP, hook, or skill experiment goes wrong.
 
 Use it before you let Codex or another agent change Codex config, install skills, or edit hooks. The broad multi-agent, profile, desktop, team, and cloud product is future direction, not the Gate 2 CLI path.
@@ -36,7 +34,7 @@ Gandalf also has broader experimental scan, TUI, restore, and bundle commands. T
 ```bash
 make build         # produces bin/gandalf
 make test          # go test ./...
-make gate2         # Codex user-global rollback demo
+make gate2         # Codex user-global rollback acceptance check
 ./bin/gandalf --help
 ```
 
@@ -219,7 +217,7 @@ git clone git@github.com:qyinm/gandalf.git
 cd gandalf
 make test            # go test ./...
 make build           # bin/gandalf
-make gate2           # Gate 2 acceptance demo
+make gate2           # Gate 2 acceptance check
 ./bin/gandalf scan --project .
 ```
 
