@@ -2,8 +2,8 @@
  * Shared helpers extracted from cli.ts for use across command modules.
  */
 import path from "node:path";
-import type { AgentId, EvidenceScope, RuntimeOptions } from "@qxinm/hem-core";
-import { defaultStoreDir } from "@qxinm/hem-core";
+import type { AgentId, EvidenceScope, RuntimeOptions } from "@qxinm/gandalf-core";
+import { defaultStoreDir } from "@qxinm/gandalf-core";
 
 export type { RuntimeOptions };
 
@@ -46,7 +46,7 @@ export function runtimeOptions(args: string[]): RuntimeOptions {
   return {
     projectPath: path.resolve(valueAfter(args, "--project") ?? process.cwd()),
     homeDir,
-    storeDir: process.env.HEM_STORE ?? defaultStoreDir(homeDir),
+    storeDir: process.env.GANDALF_STORE ?? defaultStoreDir(homeDir),
     agent,
     scope
   };

@@ -1,4 +1,4 @@
-import type { AgentId, DiscoveredItem } from "@qxinm/hem-core/types.js";
+import type { AgentId, DiscoveredItem } from "@qxinm/gandalf-core/types.js";
 import { buildAgentEntries } from "./Sidebar.js";
 import { formatAgentLabel } from "./TuiFormatters.js";
 

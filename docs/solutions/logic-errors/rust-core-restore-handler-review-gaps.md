@@ -2,7 +2,7 @@
 title: Rust Core Restore Handler Gaps Found in Migration Code Review
 date: 2026-06-26
 category: logic-errors
-module: hem-core-restore
+module: gandalf-core-restore
 problem_type: logic_error
 component: tooling
 symptoms:
@@ -18,7 +18,7 @@ tags:
   - rust-core-migration
   - restore-handlers
   - path-confinement
-  - hem-core
+  - gandalf-core
   - code-review
 related_components:
   - testing_framework
@@ -31,7 +31,7 @@ related_components:
 
 The Rust-core migration landed restore/apply, bundle import, CLI restore, and desktop home state, but a code review found gaps between plan generation and execution: structured evidence kinds (MCP servers, permissions, env keys) were planned correctly yet could not be applied or rolled back; path confinement was absent at apply time in some entrypoints; the desktop UI showed placeholder home state instead of store-backed snapshots; and there was no repeatable verification harness for reviewers.
 
-Without these fixes, `hem restore --dry-run` and real apply would emit handler errors, permission restores would write malformed JSON, undo would corrupt MCP/env files, and out-of-root writes were possible.
+Without these fixes, `gandalf restore --dry-run` and real apply would emit handler errors, permission restores would write malformed JSON, undo would corrupt MCP/env files, and out-of-root writes were possible.
 
 ## Symptoms
 
@@ -48,7 +48,7 @@ Without these fixes, `hem restore --dry-run` and real apply would emit handler e
 ## What Didn't Work
 
 - **Filtering the e2e test to only three item types** proved handlers in isolation but hid full-plan regressions. The accepted test applies all parsed plan items and allows only expected `agent_config` metadata-only failures. (session history)
-- **`cargo run` redirect for CLI evidence** mixed compiler warnings with stdout. Fix: build once, then invoke `target/debug/hem` directly in `scripts/verify-review-patches.sh`. (session history)
+- **`cargo run` redirect for CLI evidence** mixed compiler warnings with stdout. Fix: build once, then invoke `target/debug/gandalf` directly in `scripts/verify-review-patches.sh`. (session history)
 - **`item.item_id.split('.').next_back()` for permission names** produced wrong keys on real scan ids. Replaced with metadata-first resolution and `.perm-` marker parsing.
 
 ## Solution
@@ -102,7 +102,7 @@ Registry completeness closes the plan→apply dispatch gap. Structured `target_c
 
 | Guard | Location |
 |-------|----------|
-| Handler smoke + structured apply tests | `crates/hem-core/tests/restore_test.rs` |
+| Handler smoke + structured apply tests | `crates/gandalf-core/tests/restore_test.rs` |
 | Full-plan pipeline test | `restore_plan_pipeline_applies_mcp_permission_and_env_with_confinement` |
 | Desktop snapshot integration test | `populates_current_snapshot_id_from_store` |
 | Review verification driver | `scripts/verify-review-patches.sh` |
@@ -116,7 +116,7 @@ assert!(bash_rule.get("rule").is_none(), "permission apply must unwrap rule wrap
 Run before merge:
 
 ```bash
-HEM_SCRATCH_DIR=/tmp/hem-review-verify ./scripts/verify-review-patches.sh
+GANDALF_SCRATCH_DIR=/tmp/gandalf-review-verify ./scripts/verify-review-patches.sh
 ```
 
 ### Code review checklist for new restore kinds

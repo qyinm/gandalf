@@ -10,7 +10,7 @@ import {
 } from "../src/update-check.js";
 
 async function makeHome(): Promise<string> {
-  return await mkdtemp(join(tmpdir(), "hem-update-check-"));
+  return await mkdtemp(join(tmpdir(), "gandalf-update-check-"));
 }
 
 describe("update check", () => {
@@ -19,8 +19,8 @@ describe("update check", () => {
 
     assert.ok(notice);
     assert.equal(notice.latestVersion, "99.0.0");
-    assert.match(notice.message, /^✨ hem 99\.0\.0 is available\./);
-    assert.match(notice.message, /bun install -g @qxinm\/hem/);
+    assert.match(notice.message, /^✨ gandalf 99\.0\.0 is available\./);
+    assert.match(notice.message, /bun install -g @qxinm\/gandalf/);
   });
 
   it("requires explicit opt-in before any network update check", () => {
@@ -32,7 +32,7 @@ describe("update check", () => {
     assert.equal(shouldCheckForUpdates({
       args: ["scan"],
       homeDir: "/tmp/home",
-      env: { HEM_UPDATE_CHECK: "1" },
+      env: { GANDALF_UPDATE_CHECK: "1" },
       stderrIsTty: true
     }), true);
   });
@@ -41,25 +41,25 @@ describe("update check", () => {
     assert.equal(shouldCheckForUpdates({
       args: ["scan", "--json"],
       homeDir: "/tmp/home",
-      env: { HEM_UPDATE_CHECK: "1" },
+      env: { GANDALF_UPDATE_CHECK: "1" },
       stderrIsTty: true
     }), false);
     assert.equal(shouldCheckForUpdates({
       args: ["scan"],
       homeDir: "/tmp/home",
-      env: { HEM_UPDATE_CHECK: "1" },
+      env: { GANDALF_UPDATE_CHECK: "1" },
       stderrIsTty: false
     }), false);
     assert.equal(shouldCheckForUpdates({
       args: ["scan"],
       homeDir: "/tmp/home",
-      env: { CI: "true", HEM_UPDATE_CHECK: "1" },
+      env: { CI: "true", GANDALF_UPDATE_CHECK: "1" },
       stderrIsTty: true
     }), false);
     assert.equal(shouldCheckForUpdates({
       args: ["scan"],
       homeDir: "/tmp/home",
-      env: { HEM_UPDATE_CHECK: "0" },
+      env: { GANDALF_UPDATE_CHECK: "0" },
       stderrIsTty: true
     }), false);
   });
@@ -91,7 +91,7 @@ describe("update check", () => {
     assert.equal(first?.latestVersion, "99.0.0");
     assert.equal(second?.latestVersion, "99.0.0");
 
-    const cache = JSON.parse(await readFile(join(homeDir, ".hem", "update-check.json"), "utf8"));
+    const cache = JSON.parse(await readFile(join(homeDir, ".gandalf", "update-check.json"), "utf8"));
     assert.equal(cache.latestVersion, "99.0.0");
   });
 });

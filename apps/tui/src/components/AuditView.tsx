@@ -1,5 +1,5 @@
 /**
- * Ink component for hem audit report.
+ * Ink component for gandalf audit report.
  *
  * Renders audit findings grouped by severity with color coding.
  * Uses ink-markdown for section rendering.
@@ -8,7 +8,7 @@
 import React from "react";
 import { Text, Box } from "ink";
 
-import type { AuditFinding } from "@qxinm/hem-core/types.js";
+import type { AuditFinding } from "@qxinm/gandalf-core/types.js";
 
 // ── Props ────────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ export default function AuditView({ findings }: AuditViewProps) {
   if (findings.length === 0) {
     return (
       <Box flexDirection="column">
-        <Text bold color="green">hem audit</Text>
+        <Text bold color="green">gandalf audit</Text>
         <Text>No findings — everything looks clean.</Text>
       </Box>
     );
@@ -59,7 +59,7 @@ export default function AuditView({ findings }: AuditViewProps) {
     <Box flexDirection="column">
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold>hem audit — {sorted.length} findings</Text>
+        <Text bold>gandalf audit — {sorted.length} findings</Text>
       </Box>
 
       {/* Summary badges */}

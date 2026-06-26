@@ -6,27 +6,27 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qyinm/hem/internal/hemcore/diff"
-	"github.com/qyinm/hem/internal/hemcore/store"
-	timelineundo "github.com/qyinm/hem/internal/hemcore/timeline_undo"
-	"github.com/qyinm/hem/internal/hemcore/types"
-	"github.com/qyinm/hem/internal/tui"
+	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
+	"github.com/qyinm/gandalf/internal/gandalfcore/store"
+	timelineundo "github.com/qyinm/gandalf/internal/gandalfcore/timeline_undo"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
+	"github.com/qyinm/gandalf/internal/tui"
 )
 
 func timelineEntry(overrides map[string]any) types.TimelineEntry {
 	entry := types.TimelineEntry{
-		SchemaVersion:     "0.1",
-		ID:                "changed-entry",
-		Source:            types.TimelineSourceManual,
-		EventKind:         types.TimelineEventSetupChanged,
-		Title:             "MCP server changed",
-		ProjectPath:       "/project",
-		Agents:            []types.AgentID{types.AgentClaudeCode},
+		SchemaVersion:      "0.1",
+		ID:                 "changed-entry",
+		Source:             types.TimelineSourceManual,
+		EventKind:          types.TimelineEventSetupChanged,
+		Title:              "MCP server changed",
+		ProjectPath:        "/project",
+		Agents:             []types.AgentID{types.AgentClaudeCode},
 		BeforeSnapshotName: strPtr("before"),
-		AfterSnapshotName: "changed-snapshot",
-		CaptureID:         "capture-test",
-		CreatedAt:         "2026-06-08T00:01:00.000Z",
-		ObservedAt:        "2026-06-08T00:01:00.000Z",
+		AfterSnapshotName:  "changed-snapshot",
+		CaptureID:          "capture-test",
+		CreatedAt:          "2026-06-08T00:01:00.000Z",
+		ObservedAt:         "2026-06-08T00:01:00.000Z",
 		ChangedSurfaces: []types.TimelineChangedSurface{
 			{
 				Kind:        "mcp_server",

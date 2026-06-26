@@ -1,4 +1,4 @@
-import type { AgentId, DiscoveredItem } from "@qxinm/hem-core/types.js";
+import type { AgentId, DiscoveredItem } from "@qxinm/gandalf-core/types.js";
 
 const AGENT_LABELS: Record<string, string> = {
   "claude-code": "Claude Code",

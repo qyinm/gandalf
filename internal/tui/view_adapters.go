@@ -1,6 +1,6 @@
 package tui
 
-import "github.com/qyinm/hem/internal/tui/views"
+import "github.com/qyinm/gandalf/internal/tui/views"
 
 func historyViewFromModel(model TimelineViewModel) views.HistoryView {
 	view := views.HistoryView{

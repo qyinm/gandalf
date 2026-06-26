@@ -1,4 +1,4 @@
-# Hem Product Definition
+# Gandalf Product Definition
 
 Status: working product document
 Last updated: 2026-06-12
@@ -14,17 +14,17 @@ snapshot -> diff -> restore
 scope: --agent codex --scope user
 surface: ~/.codex/ user-global setup only
 distribution: CLI first
-public npm package: @qxinm/hem
-source repository: qyinm/hem
+public npm package: @qxinm/gandalf
+source repository: qyinm/gandalf
 ```
 
-The npm package intentionally uses the `qxinm` account because that is the publishing identity. GitHub source and issue tracking stay under `qyinm/hem`.
+The npm package intentionally uses the `qxinm` account because that is the publishing identity. GitHub source and issue tracking stay under `qyinm/gandalf`.
 
 In scope now:
 
 - content-backed snapshots for supported Codex user-global files
 - byte-exact restore for supported non-secret content
-- explicit unsupported reasons for surfaces Hem cannot safely restore yet
+- explicit unsupported reasons for surfaces Gandalf cannot safely restore yet
 - tests that prove rollback from a damaged `~/.codex/config.toml`
 
 Not in scope now:
@@ -39,7 +39,7 @@ The larger "Git branches for Codex setups" product direction remains useful, but
 
 ## One-Line Definition
 
-Hem lets developers snapshot, diff, and roll back their user-global Codex setup after risky setup experiments.
+Gandalf lets developers snapshot, diff, and roll back their user-global Codex setup after risky setup experiments.
 
 Korean:
 
@@ -47,7 +47,7 @@ Korean:
 
 ## Product Thesis
 
-AI coding agents are becoming part of a developer's local operating environment. For MVP, Hem focuses on Codex: global config, MCP setup, instructions, permissions, and env key inventory together form a real setup layer.
+AI coding agents are becoming part of a developer's local operating environment. For MVP, Gandalf focuses on Codex: global config, MCP setup, instructions, permissions, and env key inventory together form a real setup layer.
 
 That setup layer is powerful, but it is easy to lose control of:
 
@@ -58,7 +58,7 @@ That setup layer is powerful, but it is easy to lose control of:
 - new machines require setup reconstruction
 - team onboarding requires a consistent agent environment
 
-Hem exists because this layer needs the same basic safety primitive developers already expect from source code:
+Gandalf exists because this layer needs the same basic safety primitive developers already expect from source code:
 
 ```text
 branch
@@ -69,7 +69,7 @@ rollback
 remote/team profile
 ```
 
-Hem's core product idea is:
+Gandalf's core product idea is:
 
 > Git branches for Codex setups.
 
@@ -81,7 +81,7 @@ The product should not be understood as a scanner, backup tool, audit dashboard,
 
 The MVP manages user-global agent setup only.
 
-Hem should not manage, scan, diff, risk-score, switch, or restore repo-local setup files in the MVP.
+Gandalf should not manage, scan, diff, risk-score, switch, or restore repo-local setup files in the MVP.
 
 Out of scope for MVP:
 
@@ -105,7 +105,7 @@ other supported Codex user-global config
 
 Product implication:
 
-> Hem profile switch should feel like changing the Codex environment on this Mac.
+> Gandalf profile switch should feel like changing the Codex environment on this Mac.
 
 Safety implication:
 
@@ -113,7 +113,7 @@ Safety implication:
 
 Rationale:
 
-> Git already owns repo-local files. Hem should not duplicate Git's responsibility in the MVP.
+> Git already owns repo-local files. Gandalf should not duplicate Git's responsibility in the MVP.
 
 This makes the product simpler, safer, and easier to understand. Repo-local support can become a later explicit feature only if users strongly need it.
 
@@ -121,7 +121,7 @@ This makes the product simpler, safer, and easier to understand. Repo-local supp
 
 Because MVP is global-only, Active Profile is machine-wide.
 
-Hem should not support project-specific active profiles or machine profile + project overlay in the MVP.
+Gandalf should not support project-specific active profiles or machine profile + project overlay in the MVP.
 
 User-facing language:
 
@@ -162,7 +162,7 @@ Publish new team profile snapshot
 Git analogy:
 
 ```text
-git branch  = Hem profile
+git branch  = Gandalf profile
 git commit  = Snapshot / Create Snapshot
 git push    = Push profile changes
 proposal    = lightweight request to publish a team profile snapshot
@@ -179,7 +179,7 @@ Normal team members can propose, review, approve, and publish by default unless 
 
 Using a team profile should feel like checking out a remote branch locally.
 
-The user is not editing the remote team profile directly. Hem creates or updates a local tracking profile based on the team profile.
+The user is not editing the remote team profile directly. Gandalf creates or updates a local tracking profile based on the team profile.
 
 ```text
 Remote team profile
@@ -189,12 +189,12 @@ Local tracking profile
 = alice/frontend tracking qyinm-lab/frontend
 ```
 
-When the local agent environment changes while the user is on that profile, Hem should create snapshots in the local tracking profile.
+When the local agent environment changes while the user is on that profile, Gandalf should create snapshots in the local tracking profile.
 
 ```text
 Team profile selected
 Agent environment changes
-Hem creates local snapshot
+Gandalf creates local snapshot
 Local profile is now ahead of team profile
 ```
 
@@ -227,7 +227,7 @@ Product implication:
 
 Snapshot and restore are enough for MVP.
 
-Hem should not add a separate stash feature in the first product model.
+Gandalf should not add a separate stash feature in the first product model.
 
 Rationale:
 
@@ -269,7 +269,7 @@ Snapshot
 Git analogy:
 
 ```text
-git branch = Hem profile
+git branch = Gandalf profile
 git commit = Snapshot / Create Snapshot
 ```
 
@@ -281,7 +281,7 @@ Create Snapshot, Save Profile, Save Setup, and Snapshot all refer to committing 
 
 Rollback uses older snapshots from the profile history.
 
-Before risky operations, Hem can create an automatic snapshot in the current profile so the user can return to it later. That automatic snapshot is still a profile save, not a separate storage model.
+Before risky operations, Gandalf can create an automatic snapshot in the current profile so the user can return to it later. That automatic snapshot is still a profile save, not a separate storage model.
 
 ### D7. Desktop MVP Is Dashboard Plus Lightweight Menu Bar
 
@@ -313,7 +313,7 @@ Menu bar
 
 Product implication:
 
-> Hem desktop is not just a background watcher. It is a global AI agent setup branch manager with a lightweight always-on status surface.
+> Gandalf desktop is not just a background watcher. It is a global AI agent setup branch manager with a lightweight always-on status surface.
 
 ### D8. High-Risk Changes Warn, But Do Not Block Snapshot
 
@@ -324,10 +324,10 @@ Rationale:
 ```text
 Snapshot = history
 History must not have gaps
-High-risk changes are exactly the changes Hem must preserve
+High-risk changes are exactly the changes Gandalf must preserve
 ```
 
-If Hem blocks high-risk snapshots, the user loses the audit trail for the most important moments.
+If Gandalf blocks high-risk snapshots, the user loses the audit trail for the most important moments.
 
 Product behavior:
 
@@ -360,7 +360,7 @@ Team profile
 = team's shared remote branch
 ```
 
-When a local profile tracks a cloud profile, Hem should show Git-like sync status:
+When a local profile tracks a cloud profile, Gandalf should show Git-like sync status:
 
 ```text
 up to date
@@ -394,7 +394,7 @@ Status: behind by 1 snapshot
 
 ### D10. No Version Or Release Labels In MVP
 
-Hem should not assign or ask for human-facing version numbers or release labels in MVP.
+Gandalf should not assign or ask for human-facing version numbers or release labels in MVP.
 
 Git analogy:
 
@@ -457,11 +457,11 @@ Recommended primary actions:
 
 Product implication:
 
-> Hem should teach users that profiles are branches and snapshots are commits.
+> Gandalf should teach users that profiles are branches and snapshots are commits.
 
 ### D12. Cloud Divergence Uses Pull-Rebase By Default
 
-When a local profile is both ahead and behind its cloud remote, Hem should use a pull-rebase model by default.
+When a local profile is both ahead and behind its cloud remote, Gandalf should use a pull-rebase model by default.
 
 Git analogy:
 
@@ -613,7 +613,7 @@ OPENAI_API_KEY=<redacted>
 
 Future option:
 
-> Hem may later support end-to-end encrypted secret sync, similar in spirit to 1Password, where Hem's cloud cannot read the secret values.
+> Gandalf may later support end-to-end encrypted secret sync, similar in spirit to 1Password, where Gandalf's cloud cannot read the secret values.
 
 That future feature should be explicit, opt-in, and separate from default profile sync.
 
@@ -673,7 +673,7 @@ Maximum group window: 2 minutes after first change
 High-risk change: shorten quiet period to 5 seconds
 ```
 
-Hem must flush pending snapshot groups before important actions:
+Gandalf must flush pending snapshot groups before important actions:
 
 ```text
 before switch
@@ -794,12 +794,12 @@ email invite
 invite link
 ```
 
-Hem should not use GitHub organization mapping in the MVP.
+Gandalf should not use GitHub organization mapping in the MVP.
 
 Reason:
 
 ```text
-Hem's team model is about shared Codex setup profiles.
+Gandalf's team model is about shared Codex setup profiles.
 It is not primarily about repositories, GitHub organizations, or source control permissions.
 GitHub org mapping would add unnecessary identity and organization complexity.
 Invite-based access is enough to share team profile remotes.
@@ -877,7 +877,7 @@ teammate@example.com
 [Send Invite]
 
 Invite Link
-hem.dev/join/qyinm-lab/7k3f...
+gandalf.dev/join/qyinm-lab/7k3f...
 
 Expires in: 7 days
 Role: Member
@@ -920,17 +920,17 @@ This invite was sent to a different email address.
 
 ### D21. Cloud Login Uses Browser Device Code
 
-MVP Hem Cloud login should use browser-based device code approval.
+MVP Gandalf Cloud login should use browser-based device code approval.
 
 Core model:
 
 ```text
 Desktop or CLI requests device login.
-Hem shows a short device code.
-User opens Hem Cloud in the browser.
+Gandalf shows a short device code.
+User opens Gandalf Cloud in the browser.
 User signs in with email code.
 User approves this Mac or CLI session.
-Hem desktop/CLI receives a device session token.
+Gandalf desktop/CLI receives a device session token.
 ```
 
 This should be the default for:
@@ -947,13 +947,13 @@ subscription ownership
 Desktop UI:
 
 ```text
-Sign in to Hem Cloud
+Sign in to Gandalf Cloud
 
 Code:
 K7Q9-L2
 
 Open in your browser:
-hem.dev/activate
+gandalf.dev/activate
 
 [Open Browser]
 
@@ -963,10 +963,10 @@ Waiting for approval...
 CLI UI:
 
 ```text
-$ hem login
+$ gandalf login
 
 Open this URL in your browser:
-https://hem.dev/activate
+https://gandalf.dev/activate
 
 Enter code:
 K7Q9-L2
@@ -978,13 +978,13 @@ Signed in as hippoo@example.com
 Browser UI:
 
 ```text
-Activate Hem on this device
+Activate Gandalf on this device
 
 Device:
 MacBook Pro
 
 Requested by:
-Hem Desktop
+Gandalf Desktop
 
 Signed in as:
 hippoo@example.com
@@ -1038,7 +1038,7 @@ Core policy:
 
 ```text
 Device session remains valid until sign out or revoke.
-Hem periodically rechecks the session with the server.
+Gandalf periodically rechecks the session with the server.
 Server can revoke a device immediately.
 Normal cloud sync should not require repeated login.
 Sensitive cloud/account actions can require browser reapproval.
@@ -1081,8 +1081,8 @@ Device management UI:
 Account Settings
 
 Devices
-- MacBook Pro        Active now        Hem Desktop
-- Mac Studio         Last seen 2d ago  Hem CLI
+- MacBook Pro        Active now        Gandalf Desktop
+- Mac Studio         Last seen 2d ago  Gandalf CLI
 
 [Revoke Device]
 ```
@@ -1123,7 +1123,7 @@ User control:
 Allow rename in Account Settings.
 ```
 
-Device naming should be display-only. Renaming a Hem device should not rename the actual Mac.
+Device naming should be display-only. Renaming a Gandalf device should not rename the actual Mac.
 
 Device record:
 
@@ -1144,19 +1144,19 @@ Examples:
 display_name: Work Mac
 system_name: Hippoo's MacBook Pro
 platform: macOS
-client_type: Hem Desktop
+client_type: Gandalf Desktop
 ```
 
 Approval UI:
 
 ```text
-Activate Hem on this device
+Activate Gandalf on this device
 
 Device:
 Hippoo's MacBook Pro
 
 App:
-Hem Desktop
+Gandalf Desktop
 
 [Approve Device]
 ```
@@ -1166,9 +1166,9 @@ Account settings UI:
 ```text
 Devices
 
-Work Mac              Active now        Hem Desktop
-Home Mac              Last seen 3d ago  Hem CLI
-Hippoo's Mac Studio   Last seen 12d ago Hem Desktop
+Work Mac              Active now        Gandalf Desktop
+Home Mac              Last seen 3d ago  Gandalf CLI
+Hippoo's Mac Studio   Last seen 12d ago Gandalf Desktop
 
 [Rename] [Revoke]
 ```
@@ -1205,7 +1205,7 @@ UI state after revoke:
 ```text
 Cloud disconnected
 
-This device was revoked from Hem Cloud.
+This device was revoked from Gandalf Cloud.
 Local profiles and snapshots are still available.
 Sign in again to use cloud remotes and Team Spaces.
 
@@ -1231,15 +1231,15 @@ Disabled until sign-in
 Important product constraint:
 
 ```text
-Hem must not promise remote wipe.
-If a Mac is offline, Hem cannot remove local data from it.
+Gandalf must not promise remote wipe.
+If a Mac is offline, Gandalf cannot remove local data from it.
 Remote revoke means cloud access is revoked.
 ```
 
 Reason:
 
 ```text
-Hem is local-first.
+Gandalf is local-first.
 Remote revoke should not destroy local work.
 Accidental revoke should be recoverable.
 Offline devices make reliable wipe impossible.
@@ -1288,7 +1288,7 @@ Restore policy:
 ```text
 Restore recreates the config structure.
 Restore does not silently write raw secret values from history.
-If a restored snapshot needs secret values, Hem prompts the user.
+If a restored snapshot needs secret values, Gandalf prompts the user.
 User can enter values for this restore.
 User can restore without secrets.
 Entered values are written to the target config only if the user confirms.
@@ -1301,7 +1301,7 @@ Restore UI:
 Restore needs secrets
 
 This snapshot contains redacted secret fields.
-Hem did not store their values.
+Gandalf did not store their values.
 
 Required:
 - FIGMA_TOKEN
@@ -1361,7 +1361,7 @@ If restoring a team profile:
   show an explicit secret review step before apply.
 ```
 
-Hem should never treat a redacted snapshot value as a secret source.
+Gandalf should never treat a redacted snapshot value as a secret source.
 
 Preserve-current example:
 
@@ -1408,7 +1408,7 @@ Team profile restore UI:
 ```text
 Secret review
 
-This team profile references secrets that Hem does not store.
+This team profile references secrets that Gandalf does not store.
 
 FIGMA_TOKEN       current value found
 OPENAI_API_KEY   missing
@@ -1429,7 +1429,7 @@ Makes team profile restore explicit when secrets are involved.
 
 MVP product scope should use Config Plus Extensions.
 
-Hem should manage supported user-global Codex setup surfaces including:
+Gandalf should manage supported user-global Codex setup surfaces including:
 
 ```text
 Codex global config
@@ -1442,14 +1442,14 @@ prompt/template directories if Codex exposes them globally
 other supported Codex extension surfaces
 ```
 
-This makes Hem a real Codex setup branch manager, not just a `config.toml` backup tool.
+This makes Gandalf a real Codex setup branch manager, not just a `config.toml` backup tool.
 
 However, implementation must separate storage from apply.
 
 Recommended implementation model:
 
 ```text
-~/.hem/
+~/.gandalf/
   store.git
   manifests/
   profiles/
@@ -1469,13 +1469,13 @@ Flow:
 scan ~/.codex
 normalize supported surfaces
 redact secrets
-commit snapshot into ~/.hem/store.git
-move profile branches inside ~/.hem store
+commit snapshot into ~/.gandalf/store.git
+move profile branches inside ~/.gandalf store
 generate restore/switch preview
-apply changes to ~/.codex through Hem safe apply engine
+apply changes to ~/.codex through Gandalf safe apply engine
 ```
 
-Hem may use Git-like storage internally for:
+Gandalf may use Git-like storage internally for:
 
 ```text
 snapshot hashes
@@ -1486,7 +1486,7 @@ ahead/behind
 pull-rebase mental model
 ```
 
-Hem must not treat `~/.codex` itself as a raw Git working tree for profile switching.
+Gandalf must not treat `~/.codex` itself as a raw Git working tree for profile switching.
 
 Do not:
 
@@ -1498,7 +1498,7 @@ git checkout profile/frontend
 Reason:
 
 ```text
-Git does not know Hem's secret redaction policy.
+Git does not know Gandalf's secret redaction policy.
 Git does not know supported vs unsafe executable surfaces.
 Git checkout can silently restore hooks, skills, symlinks, permissions, or unknown files.
 Git does not provide Codex-aware semantic merge/conflict UI.
@@ -1532,10 +1532,10 @@ Managed:
 - skills
 
 Storage:
-Hem snapshots are stored in ~/.hem
+Gandalf snapshots are stored in ~/.gandalf
 
 Apply:
-Changes are previewed and written by Hem
+Changes are previewed and written by Gandalf
 ```
 
 ### D28. Executable Surface Changes Are Warn-Only In MVP
@@ -1693,12 +1693,12 @@ User control is necessary because teams and individuals have different tolerance
 
 ### D30. Background Watching Starts Through Menu Bar Protection
 
-MVP should start background watching through an onboarding opt-in to Hem Protection.
+MVP should start background watching through an onboarding opt-in to Gandalf Protection.
 
 User-facing model:
 
 ```text
-Hem Protection
+Gandalf Protection
 = menu bar app watches Codex setup changes
 = automatic snapshots
 = macOS notifications
@@ -1716,14 +1716,14 @@ agent process
 Onboarding UI:
 
 ```text
-Keep Hem Protection running?
+Keep Gandalf Protection running?
 
-Hem can watch your Codex setup, create snapshots when it changes,
+Gandalf can watch your Codex setup, create snapshots when it changes,
 and notify you about risky changes.
 
 [Enable Protection] [Not Now]
 
-[x] Launch Hem at login
+[x] Launch Gandalf at login
 ```
 
 Default behavior:
@@ -1732,7 +1732,7 @@ Default behavior:
 User must explicitly choose Enable Protection during onboarding.
 If enabled, the menu bar app runs the watcher.
 If Launch at Login is enabled, the menu bar app starts after login.
-If not enabled, watcher runs only when Hem is open.
+If not enabled, watcher runs only when Gandalf is open.
 ```
 
 Settings UI:
@@ -1755,7 +1755,7 @@ Medium + High
 Menu bar UI:
 
 ```text
-Hem: Protected
+Gandalf: Protected
 Active Profile: Default
 Last snapshot: 12 min ago
 Watching: Codex setup
@@ -1775,7 +1775,7 @@ Daemon must not be the product concept or main user-facing feature.
 Reason:
 
 ```text
-Hem needs always-on protection to deliver desktop value.
+Gandalf needs always-on protection to deliver desktop value.
 Opt-in onboarding avoids silently installing background behavior.
 Menu bar presence makes the watcher visible and controllable.
 Launch at Login gives always-on protection without daemon-first UX.
@@ -1793,8 +1793,8 @@ Default first-run order:
 3. Create Default profile from current setup
 4. Create first snapshot in Default
 5. Show dashboard with active profile, snapshot, risk, and covered surfaces
-6. Ask whether to enable Hem Protection
-7. Offer optional Hem Cloud sign-in
+6. Ask whether to enable Gandalf Protection
+7. Offer optional Gandalf Cloud sign-in
 8. Offer optional Team Space join if user has an invite
 ```
 
@@ -1802,12 +1802,12 @@ First-run must not require cloud sign-in.
 
 First-run must not require enabling Protection.
 
-First-run must not modify current Codex setup. It should only read Codex setup and write Hem's local profile store.
+First-run must not modify current Codex setup. It should only read Codex setup and write Gandalf's local profile store.
 
 Onboarding UI:
 
 ```text
-Hem found your Codex setup
+Gandalf found your Codex setup
 
 Default profile created.
 First snapshot created.
@@ -1845,7 +1845,7 @@ Cloud sign-in should be offered after local value is clear:
 ```text
 Sync profiles across devices?
 
-Sign in to Hem Cloud to push/pull personal profile snapshots
+Sign in to Gandalf Cloud to push/pull personal profile snapshots
 across your own devices and use team profile remotes.
 
 [Sign In] [Not Now]
@@ -1854,7 +1854,7 @@ across your own devices and use team profile remotes.
 Reason:
 
 ```text
-The user should see Hem understand their existing Codex setup first.
+The user should see Gandalf understand their existing Codex setup first.
 Local-first builds trust before asking for account, team, or launch-at-login permissions.
 Default profile and first snapshot teach the profile/snapshot model immediately.
 Cloud and team become upgrades to an already useful local product.
@@ -1862,7 +1862,7 @@ Cloud and team become upgrades to an already useful local product.
 
 ### D32. Team Invite First-Run Is Invite-Aware Local-First
 
-If a user opens Hem from a Team Space invite before they have a local Default profile, Hem should keep the invite context but still protect the local setup first.
+If a user opens Gandalf from a Team Space invite before they have a local Default profile, Gandalf should keep the invite context but still protect the local setup first.
 
 Invite-aware first-run order:
 
@@ -1882,7 +1882,7 @@ Invite context UI:
 ```text
 You were invited to qyinm-lab
 
-Before joining, Hem will save your current Codex setup
+Before joining, Gandalf will save your current Codex setup
 as a local Default profile.
 
 [Continue]
@@ -1907,12 +1907,12 @@ Reason:
 Team onboarding should not overwrite or confuse the user's existing Codex setup.
 Invite context should not be lost.
 Local rollback point must exist before applying any team profile.
-This keeps team onboarding fast while preserving Hem's safety promise.
+This keeps team onboarding fast while preserving Gandalf's safety promise.
 ```
 
 ### D33. Local-First Still Allows Cloud Sign-In
 
-Local-first means Hem is useful without an account. It does not mean local users cannot sign in.
+Local-first means Gandalf is useful without an account. It does not mean local users cannot sign in.
 
 Users should be able to sign in from:
 
@@ -1921,7 +1921,7 @@ first-run onboarding after local setup is saved
 dashboard cloud status
 settings
 team invite flow
-CLI via hem login
+CLI via gandalf login
 ```
 
 Personal cloud profile behavior for subscribed users:
@@ -1974,7 +1974,7 @@ Free local functionality should not require sign-in.
 
 ### D34. Cloud Sign-In Auto-Attaches Personal Profiles
 
-After a user signs in to Hem Cloud, Hem should automatically attach local personal profiles to personal cloud remotes.
+After a user signs in to Gandalf Cloud, Gandalf should automatically attach local personal profiles to personal cloud remotes.
 
 This applies to:
 
@@ -2010,7 +2010,7 @@ cloud/hippoo/frontend
 After sign-in UI:
 
 ```text
-Hem Cloud connected
+Gandalf Cloud connected
 
 Personal profiles attached:
 - Default          cloud/hippoo/default
@@ -2068,7 +2068,7 @@ Visible sync status is enough for the normal no-conflict path.
 
 ### D35. First Personal Cloud Sync Bootstraps Automatically
 
-After sign-in auto-attaches personal profiles to cloud remotes, Hem should run an initial sync bootstrap automatically when the remote state is empty or non-conflicting.
+After sign-in auto-attaches personal profiles to cloud remotes, Gandalf should run an initial sync bootstrap automatically when the remote state is empty or non-conflicting.
 
 MVP should not block the initial sign-in bootstrap with a summary confirmation screen.
 
@@ -2079,7 +2079,7 @@ Default behavior:
 ```text
 Sign in succeeds.
 Personal profiles attach to cloud remotes.
-Hem runs initial cloud sync bootstrap automatically.
+Gandalf runs initial cloud sync bootstrap automatically.
 UI shows a spinning refresh-ccw sync indicator.
 Timeline records sync events.
 User can open sync activity details if they want.
@@ -2143,7 +2143,7 @@ After initial bootstrap:
 New local snapshots stay local.
 Profile shows ahead by N snapshots.
 User clicks Push to upload.
-Hem does not continuously auto-push future snapshots.
+Gandalf does not continuously auto-push future snapshots.
 ```
 
 Post-bootstrap UI:
@@ -2165,7 +2165,7 @@ Needs review UI:
 Cloud sync needs review
 
 Default is ahead 2 and behind 1.
-Hem needs to update from remote before pushing.
+Gandalf needs to update from remote before pushing.
 
 [Review] [Later]
 ```
@@ -2182,7 +2182,7 @@ After bootstrap, manual Push preserves the Git-like profile workflow.
 
 ### D36. Existing Personal Remotes Use Auto Pull-Rebase
 
-When a signed-in user already has a personal cloud remote with the same profile name, Hem should auto pull-rebase if it can do so cleanly.
+When a signed-in user already has a personal cloud remote with the same profile name, Gandalf should auto pull-rebase if it can do so cleanly.
 
 Example:
 
@@ -2261,7 +2261,7 @@ Reason:
 
 ```text
 Users expect second-machine sign-in to sync automatically.
-Auto pull-rebase matches Hem's Git-like profile model.
+Auto pull-rebase matches Gandalf's Git-like profile model.
 Local setup is still protected by snapshots and conflict stop.
 Prefer-cloud would be too destructive.
 Ask-every-time would make sync feel fragile.
@@ -2271,7 +2271,7 @@ Ask-every-time would make sync feel fragile.
 
 MVP conflict resolution should not expose file-level or semantic field-level merge UI.
 
-When sync, switch, restore, or pull-rebase hits a conflict, Hem should show the conflict summary and offer simple whole-profile choices.
+When sync, switch, restore, or pull-rebase hits a conflict, Gandalf should show the conflict summary and offer simple whole-profile choices.
 
 Conflict UI:
 
@@ -2352,7 +2352,7 @@ manual TOML/editor-assisted merge
 
 ### D38. Auto-Created Profile Names Are Reason-Based And Editable
 
-When Hem creates a new profile automatically, it should use a readable reason-based name and allow the user to edit it before creation when the flow is interactive.
+When Gandalf creates a new profile automatically, it should use a readable reason-based name and allow the user to edit it before creation when the flow is interactive.
 
 Default naming pattern:
 
@@ -2416,7 +2416,7 @@ Reason:
 Users need to understand profile lists later.
 Reason-based names explain why the profile exists.
 Numeric suffixes are simpler than timestamp noise.
-Editable names avoid forcing Hem's generated name on the user.
+Editable names avoid forcing Gandalf's generated name on the user.
 Detailed metadata can still preserve precise provenance.
 ```
 
@@ -2552,12 +2552,12 @@ Archive adds product state without enough MVP value.
 
 ### D41. Cloud-Only Personal Profiles Are Managed In Web Dashboard
 
-If a local profile is deleted but its personal cloud remote remains, recovery and reattach should be managed primarily from the Hem web dashboard.
+If a local profile is deleted but its personal cloud remote remains, recovery and reattach should be managed primarily from the Gandalf web dashboard.
 
 Web dashboard behavior:
 
 ```text
-Hem Web Dashboard
+Gandalf Web Dashboard
 
 Personal Cloud Profiles
 - Default
@@ -2586,16 +2586,16 @@ Attach flow:
 ```text
 User clicks [Attach to This Mac] in web dashboard.
 Browser device approval confirms the Mac.
-Hem desktop receives attach request.
-Hem creates local personal profile tracking the cloud remote.
-Hem fetches remote snapshots.
-Hem shows preview before applying the profile to current Codex setup.
+Gandalf desktop receives attach request.
+Gandalf creates local personal profile tracking the cloud remote.
+Gandalf fetches remote snapshots.
+Gandalf shows preview before applying the profile to current Codex setup.
 ```
 
 CLI can still expose an explicit attach command for power users:
 
 ```bash
-hem profile attach cloud/hippoo/frontend
+gandalf profile attach cloud/hippoo/frontend
 ```
 
 Do not put cloud-only deleted profiles in the primary desktop profile picker by default.
@@ -2641,7 +2641,7 @@ field-level diff/merge
 Web dashboard UI:
 
 ```text
-Hem Cloud
+Gandalf Cloud
 
 Account
 Billing
@@ -2993,7 +2993,7 @@ Reason:
 ```text
 Semantic diff explains product meaning faster than raw file changes.
 The MVP proposal should answer what changed, why it matters, and whether it is risky.
-Raw file diff is useful later, but it pulls Hem toward code-review complexity too early.
+Raw file diff is useful later, but it pulls Gandalf toward code-review complexity too early.
 ```
 
 ### D47. Inline Review Features Are Later
@@ -3026,7 +3026,7 @@ Reason:
 ```text
 The MVP should prove that teams need proposal-based profile publishing.
 Inline review is a second product surface.
-If teams start using comments heavily, Hem can graduate to PR-lite later.
+If teams start using comments heavily, Gandalf can graduate to PR-lite later.
 ```
 
 ### D48. Published Proposals Keep Lightweight Audit History
@@ -3248,7 +3248,7 @@ Reason:
 ```text
 Proposal creation should stay lightweight.
 Readable titles make proposal history useful.
-Users should be able to correct Hem's generated wording.
+Users should be able to correct Gandalf's generated wording.
 Description can stay optional because diff/comments carry most context.
 ```
 
@@ -3290,7 +3290,7 @@ Rich text editing is too much UI for MVP.
 ### Primary Positioning
 
 ```text
-Hem is the branch manager for your Codex setup.
+Gandalf is the branch manager for your Codex setup.
 ```
 
 ### Secondary Positioning
@@ -3306,10 +3306,10 @@ Sync approved profiles with your team.
 ### Safety Positioning
 
 ```text
-Hem watches your AI agent setup and gives you an undo button.
+Gandalf watches your AI agent setup and gives you an undo button.
 ```
 
-### What Hem Is
+### What Gandalf Is
 
 - A local-first agent setup manager.
 - A profile switcher for Codex setup in the MVP.
@@ -3318,7 +3318,7 @@ Hem watches your AI agent setup and gives you an undo button.
 - A future desktop dashboard for profile state, drift, risk, timeline, and restore.
 - For MVP, a user-global setup manager, not a repo-local config manager.
 
-### What Hem Is Not
+### What Gandalf Is Not
 
 - Not primarily a marketplace.
 - Not primarily a security dashboard.
@@ -3330,7 +3330,7 @@ Hem watches your AI agent setup and gives you an undo button.
 
 ## Core Product Model
 
-Hem should be modeled around these objects:
+Gandalf should be modeled around these objects:
 
 ```text
 Space
@@ -3421,7 +3421,7 @@ Last Snapshot: 12 min ago
 The user should always start inside a profile. On first run:
 
 ```text
-Hem found your current setup.
+Gandalf found your current setup.
 Default profile created from your current setup.
 ```
 
@@ -3472,7 +3472,7 @@ cloud/hippoo/default
 qyinm-lab/frontend
 ```
 
-When a local profile has a cloud remote, Hem should show sync status:
+When a local profile has a cloud remote, Gandalf should show sync status:
 
 ```text
 up to date
@@ -3505,9 +3505,9 @@ Changes since last snapshot:
 
 Working Changes are the explanatory state between "files changed" and "snapshot recorded."
 
-In the ideal desktop/guard experience, Hem should automatically create snapshots when it detects environment changes. Automatic snapshotting records what happened; it does not mean the change is trusted, pushed, or published.
+In the ideal desktop/guard experience, Gandalf should automatically create snapshots when it detects environment changes. Automatic snapshotting records what happened; it does not mean the change is trusted, pushed, or published.
 
-When the user has working changes, Hem should offer:
+When the user has working changes, Gandalf should offer:
 
 ```text
 [Create Snapshot]
@@ -3528,7 +3528,7 @@ The user can create snapshots manually:
 Create Snapshot
 ```
 
-Hem can also create snapshots automatically before risky operations:
+Gandalf can also create snapshots automatically before risky operations:
 
 - before switching profiles
 - before restoring
@@ -3540,7 +3540,7 @@ Example:
 
 ```text
 Before switching from Default to Frontend,
-Hem saved a snapshot in Default.
+Gandalf saved a snapshot in Default.
 ```
 
 Snapshots are the restore points in profile history.
@@ -3632,7 +3632,7 @@ Manual snapshot
 = user clicks Create Snapshot
 
 Automatic snapshot
-= Hem detects agent setup changed and records a snapshot
+= Gandalf detects agent setup changed and records a snapshot
 ```
 
 Automatic snapshot does not push to a team, approve the change, or mark it trusted. It only records local history.
@@ -3797,7 +3797,7 @@ Move setup to another Mac
 Implementation language:
 
 ```text
-.hem bundle
+.gandalf bundle
 bundle verify
 bundle inspect
 bundle import
@@ -3831,7 +3831,7 @@ Codex added a hook that can execute shell commands:
 
 ## Git Analogy
 
-| Git Concept | Hem Concept | Meaning |
+| Git Concept | Gandalf Concept | Meaning |
 |---|---|---|
 | repository | local profile store | saved profile history for global agent setup |
 | branch | profile | selectable setup state |
@@ -3927,7 +3927,7 @@ User state:
 I use Codex and my setup is getting messy.
 ```
 
-Hem job:
+Gandalf job:
 
 ```text
 Show what exists.
@@ -3938,7 +3938,7 @@ Make the user feel safe.
 Ideal first screen:
 
 ```text
-Hem found your Codex setup
+Gandalf found your Codex setup
 
 Codex config   3 items
 MCP servers    7 items
@@ -3957,7 +3957,7 @@ User state:
 This setup works. I want to save it.
 ```
 
-Hem job:
+Gandalf job:
 
 ```text
 Turn current setup into a snapshot in the active profile.
@@ -3991,7 +3991,7 @@ User state:
 I asked Codex to install or configure something.
 ```
 
-Hem job:
+Gandalf job:
 
 ```text
 Detect and explain working changes.
@@ -4017,7 +4017,7 @@ User state:
 Is this safe?
 ```
 
-Hem job:
+Gandalf job:
 
 ```text
 Explain the risk in simple language.
@@ -4064,7 +4064,7 @@ User state:
 What exactly changed?
 ```
 
-Hem job:
+Gandalf job:
 
 ```text
 Show domain-level diff first, raw file diff second.
@@ -4093,7 +4093,7 @@ User state:
 Do I keep this setup change?
 ```
 
-Hem job:
+Gandalf job:
 
 ```text
 Offer safe choices based on profile model.
@@ -4123,7 +4123,7 @@ User state:
 I want a different agent setup for this work mode.
 ```
 
-Hem job:
+Gandalf job:
 
 ```text
 Preview, snapshot, apply, rollback if needed.
@@ -4143,7 +4143,7 @@ Will change:
 - Old backend MCP
 
 Before switching:
-Hem will create a snapshot in Default.
+Gandalf will create a snapshot in Default.
 
 [Review & Switch]
 ```
@@ -4156,7 +4156,7 @@ User state:
 I have local changes but want to switch profile.
 ```
 
-Hem job:
+Gandalf job:
 
 ```text
 Prevent accidental loss.
@@ -4179,7 +4179,7 @@ Before switching to Backend:
 [Cancel]
 ```
 
-This is a critical trust moment. Hem must not silently overwrite local setup.
+This is a critical trust moment. Gandalf must not silently overwrite local setup.
 
 ### 9. Restore / Rollback
 
@@ -4189,7 +4189,7 @@ User state:
 Something broke. Take me back.
 ```
 
-Hem job:
+Gandalf job:
 
 ```text
 Restore the whole snapshot safely and explain what will happen.
@@ -4228,7 +4228,7 @@ User state:
 My team published an approved setup.
 ```
 
-Hem job:
+Gandalf job:
 
 ```text
 Make adoption feel like switching branches, not downloading files.
@@ -4261,7 +4261,7 @@ User state:
 I improved this profile and want my team to use it.
 ```
 
-Hem job:
+Gandalf job:
 
 ```text
 Make sharing feel like pushing a branch and opening a lightweight proposal.
@@ -4327,7 +4327,7 @@ User state:
 I bought a new Mac.
 ```
 
-Hem job:
+Gandalf job:
 
 ```text
 Apply profile with readiness checks.
@@ -4355,13 +4355,13 @@ Needs action:
 
 ## Desktop Product Direction
 
-Hem should become a desktop app, but not by simply porting the TUI.
+Gandalf should become a desktop app, but not by simply porting the TUI.
 
 The desktop app should be dashboard-first with a lightweight menu bar companion.
 
 ### Desktop Role
 
-Desktop Hem should answer:
+Desktop Gandalf should answer:
 
 ```text
 Which profile is active?
@@ -4437,7 +4437,7 @@ Team profiles are grouped by team space inside the profile picker, not from a pe
 
 Timeline appears as the Home changelog and the snapshot dropdown from the custom window titlebar.
 
-The sidebar bottom should show the account user profile, not Protection/Cloud/Device status. This account user profile is different from Hem setup profiles.
+The sidebar bottom should show the account user profile, not Protection/Cloud/Device status. This account user profile is different from Gandalf setup profiles.
 
 Clicking the account row settings icon should switch the sidebar into settings mode with Account, Cloud, Device, Protection, Notifications, Local Paths, Privacy, and About.
 
@@ -4473,7 +4473,7 @@ This product document keeps only the desktop product direction and menu bar/prot
 Desktop MVP should include lightweight menu bar status.
 
 ```text
-Hem: Protected
+Gandalf: Protected
 Active Profile: Default
 2 changes since last snapshot
 1 high-risk change
@@ -4488,15 +4488,15 @@ Protection should be started through onboarding and controlled through the menu 
 Commands should eventually be:
 
 ```bash
-hem guard enable
-hem guard status
-hem guard disable
+gandalf guard enable
+gandalf guard status
+gandalf guard disable
 ```
 
 not:
 
 ```bash
-hem daemon start
+gandalf daemon start
 ```
 
 ## CLI Product Direction
@@ -4508,34 +4508,34 @@ Current CLI language can use snapshot because snapshot and profile save are the 
 Current:
 
 ```bash
-hem snapshot create --name baseline --agent codex --scope user --project .
-hem diff baseline current --agent codex --scope user --project .
-hem restore --snapshot baseline --dry-run --agent codex --scope user --project .
+gandalf snapshot create --name baseline --agent codex --scope user --project .
+gandalf diff baseline current --agent codex --scope user --project .
+gandalf restore --snapshot baseline --dry-run --agent codex --scope user --project .
 ```
 
 Future:
 
 ```bash
-hem profile init
-hem profile save
-hem profile status
-hem profile switch frontend --dry-run
-hem profile switch frontend --apply
-hem profile fork team/frontend personal/frontend-custom
-hem profile push team/frontend
-hem profile update team/frontend
-hem profile proposal create team/frontend
-hem profile review team/frontend/proposals/42
-hem profile publish team/frontend 8f3a2c7
+gandalf profile init
+gandalf profile save
+gandalf profile status
+gandalf profile switch frontend --dry-run
+gandalf profile switch frontend --apply
+gandalf profile fork team/frontend personal/frontend-custom
+gandalf profile push team/frontend
+gandalf profile update team/frontend
+gandalf profile proposal create team/frontend
+gandalf profile review team/frontend/proposals/42
+gandalf profile publish team/frontend 8f3a2c7
 ```
 
 Compatibility commands can remain aliases.
 
 ## Trust Contract
 
-Hem's trust contract is a core product feature.
+Gandalf's trust contract is a core product feature.
 
-By default Hem:
+By default Gandalf:
 
 - reads local user-global agent configuration only
 - does not execute MCP commands
@@ -4590,11 +4590,11 @@ Included examples:
 supported Codex global config
 ```
 
-This is what makes Hem a global AI agent environment switcher.
+This is what makes Gandalf a global AI agent environment switcher.
 
 The product must treat user-global writes as first-class supported behavior, but never casual behavior. A global write needs a preview, an automatic snapshot, parser confidence, and an obvious rollback path.
 
-Repo-local setup files are out of scope for MVP and should not be scanned, diffed, risk-scored, switched, or restored by Hem.
+Repo-local setup files are out of scope for MVP and should not be scanned, diffed, risk-scored, switched, or restored by Gandalf.
 
 Examples of out-of-scope repo-local files:
 
@@ -4681,7 +4681,7 @@ For local usage, risk is a warning and explanation layer. For team usage, risk b
 - personal profiles
 - create snapshot/switch/compare/restore
 - local snapshots
-- manual `.hem` export/import
+- manual `.gandalf` export/import
 - local guard for personal setup
 
 ### Pro
@@ -4764,7 +4764,7 @@ Any operation that writes user-global local agent setup files must have a previe
 
 ### 3. Snapshot Before Risk
 
-Before switch, restore, import, or high-risk apply, Hem creates an automatic snapshot in the current profile.
+Before switch, restore, import, or high-risk apply, Gandalf creates an automatic snapshot in the current profile.
 
 ### 4. Domain Language First
 
@@ -4802,7 +4802,7 @@ Desktop should center active profile, working changes, risk, timeline, switch, s
 
 ### 10. Cloud Sync Uses Pull-Rebase
 
-When a profile is ahead and behind its cloud remote, Hem should update from remote by replaying local snapshots on top of the latest remote snapshot. Conflicts stop for explicit review.
+When a profile is ahead and behind its cloud remote, Gandalf should update from remote by replaying local snapshots on top of the latest remote snapshot. Conflicts stop for explicit review.
 
 ### 11. Restore Whole Snapshots First
 
@@ -4822,7 +4822,7 @@ MVP should expose only `Member` as a visible team role. Internally, permissions 
 
 ### 15. Team Access Starts With Invites
 
-MVP Team Space access should be based on email invites and revocable invite links. Hem should not depend on GitHub organizations, repository ownership, or enterprise identity systems in the first version.
+MVP Team Space access should be based on email invites and revocable invite links. Gandalf should not depend on GitHub organizations, repository ownership, or enterprise identity systems in the first version.
 
 ### 16. Invite Links Are Lightweight But Bounded
 
@@ -4830,7 +4830,7 @@ Generic invite links are allowed for easy onboarding, but they should expire, be
 
 ### 17. Cloud Login Is Device Approval
 
-Hem Cloud login should treat each Mac or CLI installation as an approved device session. The browser owns account sign-in; desktop and CLI receive approved device access.
+Gandalf Cloud login should treat each Mac or CLI installation as an approved device session. The browser owns account sign-in; desktop and CLI receive approved device access.
 
 ### 18. Device Sessions Are Server-Revocable
 
@@ -4838,23 +4838,23 @@ MVP should store an opaque device session token locally and keep server-side dev
 
 ### 19. Device Names Should Be Recognizable
 
-Hem should default to the macOS system name for approved devices and allow users to rename devices later. Device naming should optimize approval, audit, and revoke clarity.
+Gandalf should default to the macOS system name for approved devices and allow users to rename devices later. Device naming should optimize approval, audit, and revoke clarity.
 
 ### 20. Remote Revoke Does Not Mean Local Wipe
 
-Remote device revoke should stop cloud access but preserve local profiles, snapshots, and the current Codex setup. Hem should not promise remote wipe in the MVP.
+Remote device revoke should stop cloud access but preserve local profiles, snapshots, and the current Codex setup. Gandalf should not promise remote wipe in the MVP.
 
 ### 21. Local Snapshot History Must Be Secret-Safe
 
-MVP local snapshots should redact secret-like values and prompt for missing values during restore. Hem should not store raw secrets in snapshot history by default.
+MVP local snapshots should redact secret-like values and prompt for missing values during restore. Gandalf should not store raw secrets in snapshot history by default.
 
 ### 22. Preserve Current Secrets Only When Confident
 
-When restoring redacted secrets, Hem may preserve the current local secret value only when the key, field path, and parser confidence match. Otherwise it should prompt the user.
+When restoring redacted secrets, Gandalf may preserve the current local secret value only when the key, field path, and parser confidence match. Otherwise it should prompt the user.
 
 ### 23. Manage The Full Codex Setup, Apply Safely
 
-MVP should manage Codex config plus supported extension surfaces such as instructions, MCP, tools, hooks, and skills. Hem may use Git-like storage inside `~/.hem`, but must apply changes to `~/.codex` through a safe apply engine rather than raw Git checkout.
+MVP should manage Codex config plus supported extension surfaces such as instructions, MCP, tools, hooks, and skills. Gandalf may use Git-like storage inside `~/.gandalf`, but must apply changes to `~/.codex` through a safe apply engine rather than raw Git checkout.
 
 ### 24. Warn, Record, And Make Restore Easy
 
@@ -4866,7 +4866,7 @@ MVP should notify by default for medium and high risk changes, but record every 
 
 ### 26. Protection Is Opt-In And Visible
 
-Background watching should start through onboarding opt-in and be visible through the menu bar app. Hem should say Protection, not daemon, in user-facing UI.
+Background watching should start through onboarding opt-in and be visible through the menu bar app. Gandalf should say Protection, not daemon, in user-facing UI.
 
 ### 27. Onboarding Proves Local Value First
 
@@ -4874,11 +4874,11 @@ MVP onboarding should scan the current Codex setup, create the Default profile, 
 
 ### 28. Team Invites Preserve Local Safety
 
-If first launch comes from a Team Space invite, Hem should show the invite context but still create the local Default profile and first snapshot before joining the team or applying team profiles.
+If first launch comes from a Team Space invite, Gandalf should show the invite context but still create the local Default profile and first snapshot before joining the team or applying team profiles.
 
 ### 29. Local-First Does Not Block Sign-In
 
-Hem should be usable without an account, but local users can sign in at any time to enable personal cloud remotes, multi-device sync, personal cloud backup, and Team Spaces.
+Gandalf should be usable without an account, but local users can sign in at any time to enable personal cloud remotes, multi-device sync, personal cloud backup, and Team Spaces.
 
 ### 30. Sharing Between People Uses Team Spaces
 
@@ -4886,7 +4886,7 @@ Personal cloud profiles are for one user's own devices. Sharing profiles with ot
 
 ### 31. Sign-In Attaches Personal Cloud Remotes
 
-When a user signs in, Hem should automatically attach local personal profiles to personal cloud remotes. This enables sync state immediately without making personal profile sharing a product concept.
+When a user signs in, Gandalf should automatically attach local personal profiles to personal cloud remotes. This enables sync state immediately without making personal profile sharing a product concept.
 
 ### 32. Initial Personal Cloud Sync Should Feel Automatic
 
@@ -4894,7 +4894,7 @@ After sign-in, personal profiles should run an automatic initial bootstrap sync 
 
 ### 33. Personal Sync Rebases Local Work On Cloud History
 
-When local and personal cloud profiles share a name, Hem should fetch remote history and replay local snapshots on top when it can do so cleanly. Conflicts stop for review.
+When local and personal cloud profiles share a name, Gandalf should fetch remote history and replay local snapshots on top when it can do so cleanly. Conflicts stop for review.
 
 ### 34. MVP Conflicts Resolve At Profile Level
 
@@ -4902,7 +4902,7 @@ MVP should resolve conflicts with whole-profile choices: use local, use cloud, k
 
 ### 35. Auto-Created Profiles Need Human Names
 
-When Hem creates profiles during conflict resolution, names should be reason-based and editable, while precise timestamps, devices, and snapshot ids live in metadata.
+When Gandalf creates profiles during conflict resolution, names should be reason-based and editable, while precise timestamps, devices, and snapshot ids live in metadata.
 
 ### 36. Profile Names Are Display Labels
 
@@ -4914,7 +4914,7 @@ Deleting a local personal profile should delete local state only and preserve cl
 
 ### 38. Cloud-Only Profiles Live In Web Dashboard
 
-When a personal cloud remote exists without a local profile, users should recover or attach it from the Hem web dashboard, not from the primary desktop profile picker.
+When a personal cloud remote exists without a local profile, users should recover or attach it from the Gandalf web dashboard, not from the primary desktop profile picker.
 
 ### 39. Web Owns Cloud State, Desktop Owns Local Apply
 
@@ -4958,7 +4958,7 @@ MVP team proposals should not have draft state. Creating a proposal opens it for
 
 ### 49. Proposal Titles Are Generated But Editable
 
-Hem should generate proposal titles from semantic diff, allow editing before creation, and keep description optional.
+Gandalf should generate proposal titles from semantic diff, allow editing before creation, and keep description optional.
 
 ### 50. Proposal Text Uses Markdown
 
@@ -4970,7 +4970,7 @@ These remaining product decisions are not MVP blockers unless explicitly promote
 
 ### Q51. Later Team Review Expansion
 
-If teams heavily use proposal comments, should Hem expand lightweight proposals into PR-lite review later?
+If teams heavily use proposal comments, should Gandalf expand lightweight proposals into PR-lite review later?
 
 MVP decision:
 

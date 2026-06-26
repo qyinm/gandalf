@@ -1,24 +1,24 @@
-# Hem Architecture
+# Gandalf Architecture
 
-Hem is a local-first workspace for inspecting, packaging, and restoring AI coding agent environments. It captures agent configuration surfaces such as MCP servers, skills, hooks, permissions, instructions, and project-local agent files into a normalized evidence model, then uses that model for snapshots, diffs, audits, reports, `.hem` bundles, terminal UI, and the desktop dashboard shell.
+Gandalf is a local-first workspace for inspecting, packaging, and restoring AI coding agent environments. It captures agent configuration surfaces such as MCP servers, skills, hooks, permissions, instructions, and project-local agent files into a normalized evidence model, then uses that model for snapshots, diffs, audits, reports, `.gandalf` bundles, terminal UI, and the desktop dashboard shell.
 
 The core architectural rule is simple: scan paths are read-only and policy-aware; write paths are explicit, narrow, and reversible where possible.
 
-**Canonical engine (2026-06, U10 cutover):** `internal/hemcore` is the Go engine. New feature work lands in Go first. `crates/hem-core` and `crates/hem-cli` are **deprecated** — kept for desktop parity and transition tests only; do not extend. `packages/core`, `apps/cli`, and `apps/tui` are deprecated Bun/TypeScript reference stacks.
+**Canonical engine (2026-06, U10 cutover):** `internal/gandalfcore` is the Go engine. New feature work lands in Go first. `crates/gandalf-core` and `crates/gandalf-cli` are **deprecated** — kept for desktop parity and transition tests only; do not extend. `packages/core`, `apps/cli`, and `apps/tui` are deprecated Bun/TypeScript reference stacks.
 
 ## System Shape
 
 ```text
                 +----------------------+
-                | hem (Go CLI)         |
-                | cmd/hem              |
+                | gandalf (Go CLI)         |
+                | cmd/gandalf              |
                 | internal/cli         |
                 +----------+-----------+
                            |
                            v
                 +----------------------+
-                | hemcore (Go)         |
-                | internal/hemcore     |
+                | gandalfcore (Go)         |
+                | internal/gandalfcore     |
                 | scan/store/restore/  |
                 | bundle/timeline/...  |
                 +----------+-----------+
@@ -28,8 +28,8 @@ The core architectural rule is simple: scan paths are read-only and policy-aware
         v                  v                  v
 +-------------------+ +-------------------+ +-------------------+
 | Desktop Tauri     | | Legacy Rust (*)   | | Legacy TS (*)     |
-| apps/desktop      | | crates/hem-core   | | apps/cli, apps/tui|
-| src-tauri -> core | | crates/hem-cli    | | packages/core     |
+| apps/desktop      | | crates/gandalf-core   | | apps/cli, apps/tui|
+| src-tauri -> core | | crates/gandalf-cli    | | packages/core     |
 +-------------------+ +-------------------+ +-------------------+
 
 (*) Deprecated — do not extend for new engine behavior.
@@ -37,11 +37,11 @@ The core architectural rule is simple: scan paths are read-only and policy-aware
 
 ## Runtime Entry Points
 
-- `cmd/hem` is the primary CLI (`go build -o bin/hem ./cmd/hem`). Command wiring lives in `internal/cli`; it exposes scan, snapshot, diff, restore, doctor, report, timeline, and bundle subcommands.
-- `internal/hemcore` holds all engine logic: scanners, store, snapshot, graph, diff, audit, provenance, restore, bundle, timeline, readiness, and report rendering.
+- `cmd/gandalf` is the primary CLI (`go build -o bin/gandalf ./cmd/gandalf`). Command wiring lives in `internal/cli`; it exposes scan, snapshot, diff, restore, doctor, report, timeline, and bundle subcommands.
+- `internal/gandalfcore` holds all engine logic: scanners, store, snapshot, graph, diff, audit, provenance, restore, bundle, timeline, readiness, and report rendering.
 - Release binaries for darwin/linux (amd64, arm64) are built with GoReleaser (`.goreleaser.yaml`) on `v*` tags via `.github/workflows/release.yml`.
-- `crates/hem-cli` and `crates/hem-core` are **deprecated** Rust stacks. `cargo run -p hem-cli -- …` remains available during transition; do not add new engine behavior here.
-- `apps/desktop/src-tauri` still depends on `hem-core` in-process until a desktop bridge plan lands. Tauri commands are thin adapters over the Rust engine.
+- `crates/gandalf-cli` and `crates/gandalf-core` are **deprecated** Rust stacks. `cargo run -p gandalf-cli -- …` remains available during transition; do not add new engine behavior here.
+- `apps/desktop/src-tauri` still depends on `gandalf-core` in-process until a desktop bridge plan lands. Tauri commands are thin adapters over the Rust engine.
 - `apps/cli` and `packages/core` are deprecated Bun/TypeScript stacks kept for parity tests and npm publish continuity.
 - `apps/tui` is a deprecated Ink presentation layer over the TS core.
 
@@ -61,7 +61,7 @@ The rest of the system derives from that inventory:
 - `GraphNode[]` is built from evidence in `packages/core/src/graph.ts`.
 - `AuditFinding[]` is produced from evidence plus graph context in `packages/core/src/audit.ts`.
 - `ProvenanceEntry[]` records source, scope, precedence, confidence, and capture status in `packages/core/src/provenance.ts`.
-- Snapshots persist all of the above as JSON files under `~/.hem` through `packages/core/src/store.ts`.
+- Snapshots persist all of the above as JSON files under `~/.gandalf` through `packages/core/src/store.ts`.
 
 ## Scan Pipeline
 
@@ -102,7 +102,7 @@ This policy layer is intentionally separate from scanners so every feature downs
 
 ## Snapshot Store
 
-`packages/core/src/store.ts` owns the local snapshot store. The default store path is `~/.hem`, created with `0700` permissions.
+`packages/core/src/store.ts` owns the local snapshot store. The default store path is `~/.gandalf`, created with `0700` permissions.
 
 A snapshot directory contains:
 
@@ -133,9 +133,9 @@ This path should remain non-mutating except for explicit snapshot/report output.
 
 ## Bundle Architecture
 
-`packages/core/src/bundle.ts` implements `.hem` export, import, inspect, and verify.
+`packages/core/src/bundle.ts` implements `.gandalf` export, import, inspect, and verify.
 
-A `.hem` file is a tar archive with metadata under `.hem/`, normalized snapshot JSON under `snapshot/`, and optional captured file content under `content/`.
+A `.gandalf` file is a tar archive with metadata under `.gandalf/`, normalized snapshot JSON under `snapshot/`, and optional captured file content under `content/`.
 
 Bundle responsibilities include:
 
@@ -145,7 +145,7 @@ Bundle responsibilities include:
 - Detecting cross-OS differences and MCP binary availability on import.
 - Enforcing size limits for bundle and content entries.
 - Computing SHA-256 checksums for archive entries.
-- Supporting optional HMAC-SHA256 signatures via `HEM_BUNDLE_KEY` or an explicit key.
+- Supporting optional HMAC-SHA256 signatures via `GANDALF_BUNDLE_KEY` or an explicit key.
 - Supporting quarantine import so content can be staged for inspection before writing target files.
 
 Bundle import is not the same as blind restore. Dry-run, verification, quarantine, explicit content apply flags, and experimental gates are part of the trust boundary.
@@ -173,13 +173,13 @@ Command handlers decide whether to render text/JSON or delegate to the TUI layer
 
 ## Trust Boundaries
 
-Hem's safety model depends on keeping these boundaries intact:
+Gandalf's safety model depends on keeping these boundaries intact:
 
 - Scanning reads known local paths and does not execute MCP commands, hooks, scripts, plugins, or agent tools.
 - Scanning does not use the network.
 - Symlinks are detected but not followed.
 - Raw secrets are not stored; secret-like values are redacted or omitted.
-- Snapshot store writes are confined to `~/.hem` unless the user gives an explicit output path.
+- Snapshot store writes are confined to `~/.gandalf` unless the user gives an explicit output path.
 - Content application requires explicit import/restore flags and is constrained by restore policy.
 - Restore and bundle import paths must remain project-relative or home-token-aware; path traversal and home-relative bundle writes should be rejected.
 
@@ -201,16 +201,16 @@ Use the Go verification path before shipping engine or CLI changes:
 
 ```bash
 make test          # go test ./...
-make build         # go build -o bin/hem ./cmd/hem
-make gate2         # Gate 2 Codex rollback demo against bin/hem
+make build         # go build -o bin/gandalf ./cmd/gandalf
+make gate2         # Gate 2 Codex rollback demo against bin/gandalf
 ```
 
 Or directly:
 
 ```bash
 go test ./...
-go build -o bin/hem ./cmd/hem
-./bin/hem snapshot list
+go build -o bin/gandalf ./cmd/gandalf
+./bin/gandalf snapshot list
 ```
 
 Legacy TypeScript and Rust suites remain during transition:
@@ -220,4 +220,4 @@ bun run check
 cargo test --workspace
 ```
 
-For CLI behavior changes, add focused tests under `internal/cli/*_test.go` and `internal/hemcore/**/*_test.go`. Keep command output compatible with `--json` where applicable. Gate 2 acceptance is `scripts/gate2-demo.mjs` (retargeted to `bin/hem`).
+For CLI behavior changes, add focused tests under `internal/cli/*_test.go` and `internal/gandalfcore/**/*_test.go`. Keep command output compatible with `--json` where applicable. Gate 2 acceptance is `scripts/gate2-demo.mjs` (retargeted to `bin/gandalf`).

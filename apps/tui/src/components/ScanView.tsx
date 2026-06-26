@@ -1,5 +1,5 @@
 /**
- * Ink component for hem scan results.
+ * Ink component for gandalf scan results.
  *
  * Renders a rich terminal view of scan output including:
  * - Trust badges
@@ -13,7 +13,7 @@ import React from "react";
 import { Text, Box } from "ink";
 import SimpleTable from "./SimpleTable.js";
 
-import type { AuditFinding, DiscoveredItem } from "@qxinm/hem-core/types.js";
+import type { AuditFinding, DiscoveredItem } from "@qxinm/gandalf-core/types.js";
 
 export const DEFAULT_SCAN_WINDOW_SIZE = 10;
 
@@ -86,7 +86,7 @@ export default function ScanView({
     <Box flexDirection="column" paddingX={0}>
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold>hem scan</Text>
+        <Text bold>gandalf scan</Text>
       </Box>
 
       {/* Trust badge */}

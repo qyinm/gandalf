@@ -3,9 +3,9 @@ package cli
 import (
 	"strings"
 
-	"github.com/qyinm/hem/internal/hemcore/readiness"
-	"github.com/qyinm/hem/internal/hemcore/scan"
-	"github.com/qyinm/hem/internal/hemcore/types"
+	"github.com/qyinm/gandalf/internal/gandalfcore/readiness"
+	"github.com/qyinm/gandalf/internal/gandalfcore/scan"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 	"github.com/spf13/cobra"
 )
 
@@ -51,7 +51,7 @@ func runDoctor(cmd *cobra.Command, common *CommonFlags) int {
 	}
 
 	lines := []string{
-		"hem doctor",
+		"gandalf doctor",
 		"",
 		"Target platform: " + report.TargetPlatform,
 		"",

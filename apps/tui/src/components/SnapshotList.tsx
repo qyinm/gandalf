@@ -1,5 +1,5 @@
 /**
- * Ink component for hem snapshot list.
+ * Ink component for gandalf snapshot list.
  *
  * Paginated table of snapshots with name, date, and metadata.
  */
@@ -10,7 +10,7 @@ import SimpleTable from "./SimpleTable.js";
 import { buildSnapshotListViewModel } from "./SnapshotListViewModel.js";
 import { NoSnapshotsEmptyState } from "./TuiEmptyStates.js";
 
-import type { Snapshot } from "@qxinm/hem-core/types.js";
+import type { Snapshot } from "@qxinm/gandalf-core/types.js";
 
 // ── Props ────────────────────────────────────────────────────
 

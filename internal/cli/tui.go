@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/qyinm/hem/internal/tui"
+	"github.com/qyinm/gandalf/internal/tui"
 	"github.com/spf13/cobra"
 )
 

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/qyinm/hem/internal/hemcore/restore"
-	"github.com/qyinm/hem/internal/hemcore/store"
-	"github.com/qyinm/hem/internal/hemcore/types"
+	"github.com/qyinm/gandalf/internal/gandalfcore/restore"
+	"github.com/qyinm/gandalf/internal/gandalfcore/store"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 	"github.com/spf13/cobra"
 )
 
@@ -67,7 +67,7 @@ func runRestore(cmd *cobra.Command, common *CommonFlags, flags restoreFlags) int
 
 	if _, err := store.EnsureStore(runtime.StoreDir); err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_STORE_INIT_FAILED",
+			Code:    "GANDALF_STORE_INIT_FAILED",
 			Problem: "Failed to initialize store.",
 			Cause:   err.Error(),
 			Fix:     "Verify the store directory is writable.",
@@ -77,18 +77,18 @@ func runRestore(cmd *cobra.Command, common *CommonFlags, flags restoreFlags) int
 	exists, err := store.SnapshotExists(runtime.StoreDir, flags.Snapshot, runtime.Agent)
 	if err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_SNAPSHOT_LOOKUP_FAILED",
+			Code:    "GANDALF_SNAPSHOT_LOOKUP_FAILED",
 			Problem: fmt.Sprintf("Failed to look up snapshot %q.", flags.Snapshot),
 			Cause:   err.Error(),
-			Fix:     "Run `hem snapshot list` to see available snapshots.",
+			Fix:     "Run `gandalf snapshot list` to see available snapshots.",
 		})
 	}
 	if !exists {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_SNAPSHOT_NOT_FOUND",
+			Code:    "GANDALF_SNAPSHOT_NOT_FOUND",
 			Problem: fmt.Sprintf("Snapshot %q not found.", flags.Snapshot),
 			Cause:   "The named snapshot does not exist in the store.",
-			Fix:     "Run `hem snapshot list` to see available snapshots.",
+			Fix:     "Run `gandalf snapshot list` to see available snapshots.",
 		})
 	}
 
@@ -103,7 +103,7 @@ func runRestore(cmd *cobra.Command, common *CommonFlags, flags restoreFlags) int
 	})
 	if err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_RESTORE_PLAN_FAILED",
+			Code:    "GANDALF_RESTORE_PLAN_FAILED",
 			Problem: "Failed to build restore plan.",
 			Cause:   err.Error(),
 			Fix:     "Verify snapshot, project, and scope options.",
@@ -117,20 +117,20 @@ func runRestore(cmd *cobra.Command, common *CommonFlags, flags restoreFlags) int
 		return writeStdout(cmd.OutOrStdout(), formatRestorePlanPreview(plan))
 	}
 
-	experimental := flags.Experimental || os.Getenv("HEM_EXPERIMENTAL") != ""
+	experimental := flags.Experimental || os.Getenv("GANDALF_EXPERIMENTAL") != ""
 	if !experimental {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_EXPERIMENTAL_REQUIRED",
+			Code:    "GANDALF_EXPERIMENTAL_REQUIRED",
 			Problem: "Restore --apply requires --experimental.",
-			Cause:   "--apply was used without HEM_EXPERIMENTAL=1 or --experimental.",
-			Fix:     "Set HEM_EXPERIMENTAL=1 or pass --experimental to enable experimental features.",
+			Cause:   "--apply was used without GANDALF_EXPERIMENTAL=1 or --experimental.",
+			Fix:     "Set GANDALF_EXPERIMENTAL=1 or pass --experimental to enable experimental features.",
 		})
 	}
 
 	parsed := restore.RestoreItemsFromPlan(plan)
 	if len(parsed.Errors) > 0 {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_RESTORE_PARSE_ERROR",
+			Code:    "GANDALF_RESTORE_PARSE_ERROR",
 			Problem: "Failed to parse restore plan for execution.",
 			Cause:   parsed.Errors[0].Message,
 			Fix:     "This is an internal error. Verify the snapshot is valid and try again.",

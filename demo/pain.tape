@@ -15,7 +15,7 @@ Set Margin 22
 Set MarginFill "#ff6b5f"
 Set BorderRadius 8
 Set WindowBar Colorful
-Set Theme { "name": "Hem Coral Dark", "black": "#17181c", "red": "#ff6b5f", "green": "#a7c080", "yellow": "#ffd166", "blue": "#7aa2f7", "magenta": "#f08bb4", "cyan": "#73daca", "white": "#f7f1ed", "brightBlack": "#4b4f58", "brightRed": "#ff8a7f", "brightGreen": "#c3d99b", "brightYellow": "#ffe08a", "brightBlue": "#9bbcff", "brightMagenta": "#ffabc8", "brightCyan": "#9be9dc", "brightWhite": "#ffffff", "background": "#111217", "foreground": "#f7f1ed", "selection": "#3b2b2d", "cursor": "#ff6b5f" }
+Set Theme { "name": "Gandalf Coral Dark", "black": "#17181c", "red": "#ff6b5f", "green": "#a7c080", "yellow": "#ffd166", "blue": "#7aa2f7", "magenta": "#f08bb4", "cyan": "#73daca", "white": "#f7f1ed", "brightBlack": "#4b4f58", "brightRed": "#ff8a7f", "brightGreen": "#c3d99b", "brightYellow": "#ffe08a", "brightBlue": "#9bbcff", "brightMagenta": "#ffabc8", "brightCyan": "#9be9dc", "brightWhite": "#ffffff", "background": "#111217", "foreground": "#f7f1ed", "selection": "#3b2b2d", "cursor": "#ff6b5f" }
 
 Type "npx experimental-codex-harness install"
 Enter
@@ -25,11 +25,11 @@ Type "find ~/.codex -maxdepth 3 -type f | sort | sed s#$HOME#~#"
 Enter
 Sleep 3s
 
-Type "cd __HEM_VISIBLE_PROJECT__"
+Type "cd __GANDALF_VISIBLE_PROJECT__"
 Enter
 Sleep 1s
 
-Type "codex -C __HEM_VISIBLE_PROJECT__"
+Type "codex -C __GANDALF_VISIBLE_PROJECT__"
 Enter
 Sleep 3s
 

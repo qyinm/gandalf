@@ -9,13 +9,13 @@ date: "2026-06-08"
 
 ## Summary
 
-Refactor `DiscoveredItem` from one flat interface with `unknown` payloads into a `kind`-discriminated TypeScript union. The runtime JSON shape stays compatible with existing scans, snapshots, bundles, CLI JSON, and `hem schema`.
+Refactor `DiscoveredItem` from one flat interface with `unknown` payloads into a `kind`-discriminated TypeScript union. The runtime JSON shape stays compatible with existing scans, snapshots, bundles, CLI JSON, and `gandalf schema`.
 
 ---
 
 ## Problem Frame
 
-`DiscoveredItem` is the durable evidence contract that scanners emit and the rest of Hem consumes. It currently carries precise common fields, but `value?: unknown` and `metadata?: Record<string, unknown>` force audit, readiness, restore, graph, and TUI consumers to repeat ad hoc shape checks. That weakens type safety around the highest-traffic data contract without changing the fact that imported snapshots and bundles remain untrusted JSON at runtime.
+`DiscoveredItem` is the durable evidence contract that scanners emit and the rest of Gandalf consumes. It currently carries precise common fields, but `value?: unknown` and `metadata?: Record<string, unknown>` force audit, readiness, restore, graph, and TUI consumers to repeat ad hoc shape checks. That weakens type safety around the highest-traffic data contract without changing the fact that imported snapshots and bundles remain untrusted JSON at runtime.
 
 ---
 
@@ -24,8 +24,8 @@ Refactor `DiscoveredItem` from one flat interface with `unknown` payloads into a
 - R1. Keep `DiscoveredItem` as the exported shared evidence contract used by scanners, snapshots, bundles, graph, audit, restore, readiness, report, and TUI flows.
 - R2. Preserve the existing serialized evidence shape: no new runtime discriminants, no renamed fields, and no empty `value` or `metadata` objects added when the current code omits them.
 - R3. Model each `EvidenceKind` as a TypeScript union variant with typed `value` and `metadata` where the repo already relies on known shapes.
-- R4. Keep imported or legacy evidence defensive at JSON boundaries; stricter TypeScript types must not make old snapshots or `.hem` bundles crash because optional payload fields are absent.
-- R5. Fix the existing `hem schema` evidence-kind drift so `extension` is represented wherever `EvidenceKind` is externally described.
+- R4. Keep imported or legacy evidence defensive at JSON boundaries; stricter TypeScript types must not make old snapshots or `.gandalf` bundles crash because optional payload fields are absent.
+- R5. Fix the existing `gandalf schema` evidence-kind drift so `extension` is represented wherever `EvidenceKind` is externally described.
 - R6. Preserve current graph, diff, timeline, readiness, restore, audit, and TUI behavior while reducing casts and repeated `Record<string, unknown>` probing.
 
 ---
@@ -37,7 +37,7 @@ Refactor `DiscoveredItem` from one flat interface with `unknown` payloads into a
 - **Do not over-tighten raw config:** Keep `agent_config.value` broad because agent config files can be arbitrary JSON/TOML and are not a stable domain payload.
 - **Separate public evidence from construction evidence:** Keep shared aliases for common fields such as parser, capture status, and common metadata, then use typed factories for known evidence kinds. Dynamic scanner paths may use a deliberately named loose construction type before returning the public `DiscoveredItem` union.
 - **Preserve defensive external boundaries:** `src/store.ts`, `src/bundle.ts`, and `src/restore.ts` read serialized JSON from disk or archives, so they should validate or defensively inspect data instead of trusting the union blindly.
-- **Keep `hem schema` compatible first:** Fix enum drift and document payload object shapes without switching to a breaking `oneOf` schema unless implementation proves external consumers can tolerate it.
+- **Keep `gandalf schema` compatible first:** Fix enum drift and document payload object shapes without switching to a breaking `oneOf` schema unless implementation proves external consumers can tolerate it.
 
 ---
 
@@ -52,7 +52,7 @@ flowchart TB
   evidence --> readiness[Readiness and restore]
   evidence --> tui[TUI view models]
   store --> bundle[Bundle export/import]
-  schema[hem schema] -.describes.-> evidence
+  schema[gandalf schema] -.describes.-> evidence
 
   legacy[Legacy JSON evidence] --> store
   legacy --> bundle
@@ -80,7 +80,7 @@ The refactor changes the TypeScript shape of `DiscoveredItem`, not the serialize
 
 ## System-Wide Impact
 
-This refactor touches a shared contract with external consumers. The affected surfaces include scanner output, snapshot `evidence.json`, `.hem` bundle `snapshot/evidence.json`, CLI JSON output, `hem schema`, graph/diff semantics, restore dry-run JSON, and TUI inventory rendering.
+This refactor touches a shared contract with external consumers. The affected surfaces include scanner output, snapshot `evidence.json`, `.gandalf` bundle `snapshot/evidence.json`, CLI JSON output, `gandalf schema`, graph/diff semantics, restore dry-run JSON, and TUI inventory rendering.
 
 ---
 
@@ -98,8 +98,8 @@ This refactor touches a shared contract with external consumers. The affected su
 - **Test scenarios:**
   - A scanner result with an env key that intentionally omits raw secret values still has no `value` field.
   - A skill item with known metadata keeps current metadata keys and does not gain empty payload fields.
-  - A representative `.hem` bundle still contains `snapshot/evidence.json` as an array of evidence objects with existing field names.
-  - `hem schema` includes every `EvidenceKind`, including `extension`.
+  - A representative `.gandalf` bundle still contains `snapshot/evidence.json` as an array of evidence objects with existing field names.
+  - `gandalf schema` includes every `EvidenceKind`, including `extension`.
 - **Verification:** Existing behavior is pinned before the union refactor and failing tests identify accidental runtime shape drift.
 
 ### U2. Discriminated union and payload type aliases
@@ -155,13 +155,13 @@ This refactor touches a shared contract with external consumers. The affected su
 - **Requirements:** R2, R4, R5, R6
 - **Dependencies:** U2, U3, U4
 - **Files:** `src/store.ts`, `src/bundle.ts`, `src/restore.ts`, `src/commands/schema.ts`, `tests/store.test.ts`, `tests/bundle.test.ts`, `tests/restore.test.ts`, `tests/cli.test.ts`
-- **Approach:** Treat store reads, bundle imports, and restore dry-run parsing as JSON boundaries. Keep tolerant parsing and validation where required fields are checked separately. Update `hem schema` to include `extension` and to describe current payload object compatibility without making a breaking schema-form change.
+- **Approach:** Treat store reads, bundle imports, and restore dry-run parsing as JSON boundaries. Keep tolerant parsing and validation where required fields are checked separately. Update `gandalf schema` to include `extension` and to describe current payload object compatibility without making a breaking schema-form change.
 - **Patterns to follow:** Existing bundle import and readiness flow in `src/bundle.ts`; existing restore plan parsing in `src/restore.ts`.
 - **Test scenarios:**
   - Existing-style snapshot evidence JSON can still be read and used after the refactor.
   - Bundle import of loose legacy evidence still produces readiness output instead of trusting payload fields blindly.
   - Restore dry-run parsing accepts current `currentState` and `targetState` evidence payloads.
-  - `hem schema` emits the corrected evidence kind enum and remains compatible with existing object-shaped `value` and `metadata`.
+  - `gandalf schema` emits the corrected evidence kind enum and remains compatible with existing object-shaped `value` and `metadata`.
 - **Verification:** Store, bundle, restore, and CLI tests cover persisted JSON, archive JSON, dry-run JSON, and schema JSON.
 
 ### U6. TUI model cleanup and documentation
@@ -185,8 +185,8 @@ This refactor touches a shared contract with external consumers. The affected su
 
 - AE1. Given a Cursor MCP server item with a command and args, when readiness analyzes evidence, then it reads typed optional MCP fields and emits the same availability report as before.
 - AE2. Given a `.env` key evidence item with no raw secret value, when the scanner serializes evidence, then `value` remains absent and audit/readiness still identify the key by `name` or safe metadata.
-- AE3. Given an old `.hem` bundle whose MCP evidence lacks a typed payload, when import or dry-run reads it, then Hem handles it defensively instead of assuming the stricter union shape.
-- AE4. Given `hem schema`, when an external consumer reads the evidence kind enum, then `extension` is present and the schema remains compatible with object-shaped `value` and `metadata`.
+- AE3. Given an old `.gandalf` bundle whose MCP evidence lacks a typed payload, when import or dry-run reads it, then Gandalf handles it defensively instead of assuming the stricter union shape.
+- AE4. Given `gandalf schema`, when an external consumer reads the evidence kind enum, then `extension` is present and the schema remains compatible with object-shaped `value` and `metadata`.
 
 ---
 

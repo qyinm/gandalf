@@ -19,16 +19,16 @@ type TimelineRow struct {
 
 // TimelineDetail is selected-entry detail for rendering.
 type TimelineDetail struct {
-	Title               string
-	EventKind           string
-	Readiness           string
-	Confidence          string
-	BeforeSnapshotName  string
-	AfterSnapshotName   string
-	Counts              string
-	Highlights          []string
-	WritableCount       int
-	ObserveOnlyCount    int
+	Title              string
+	EventKind          string
+	Readiness          string
+	Confidence         string
+	BeforeSnapshotName string
+	AfterSnapshotName  string
+	Counts             string
+	Highlights         []string
+	WritableCount      int
+	ObserveOnlyCount   int
 }
 
 // UndoWritableItem is a dry-run undo item row.
@@ -168,7 +168,7 @@ func RenderSidebar(nav SidebarView, width, height int) string {
 		width = 20
 	}
 	var lines []string
-	lines = append(lines, titleStyle.Render("Hem"))
+	lines = append(lines, titleStyle.Render("Gandalf"))
 	lines = append(lines, "")
 
 	selectedID := ""

@@ -1,5 +1,5 @@
 /**
- * Tests for .hem bundle export, import, and inspect.
+ * Tests for .gandalf bundle export, import, and inspect.
  *
  * Covers:
  * - Export -> Import roundtrip (snapshot fidelity)
@@ -32,7 +32,7 @@ interface Sandbox {
 }
 
 async function makeSandbox(): Promise<Sandbox> {
-  const root = await mkdtemp(path.join(tmpdir(), "hem-bundle-"));
+  const root = await mkdtemp(path.join(tmpdir(), "gandalf-bundle-"));
   const storeDir = path.join(root, "store");
   const projectPath = path.join(root, "project");
   const homeDir = path.join(root, "home");
@@ -113,7 +113,7 @@ function sampleSnapshot(name: string): Snapshot {
 }
 
 function bundlePath(box: Sandbox, name: string): string {
-  return path.join(box.root, name + ".hem");
+  return path.join(box.root, name + ".gandalf");
 }
 
 function makeMinimalBundle(
@@ -122,14 +122,14 @@ function makeMinimalBundle(
   contentEntries: TarEntry[]
 ): TarEntry[] {
   return [
-    { path: ".hem/", content: Buffer.alloc(0), mode: 0o755, mtime: 1000000, type: "directory" },
+    { path: ".gandalf/", content: Buffer.alloc(0), mode: 0o755, mtime: 1000000, type: "directory" },
     {
-      path: ".hem/format-version",
+      path: ".gandalf/format-version",
       content: Buffer.from("1\n", "utf-8"),
       mode: 0o644, mtime: 1000000, type: "file"
     },
     {
-      path: ".hem/manifest.json",
+      path: ".gandalf/manifest.json",
       content: Buffer.from(JSON.stringify({
         formatVersion: 1,
         snapshotName,
@@ -163,7 +163,7 @@ describe("bundle export/import roundtrip", () => {
     });
 
     assert.ok(exportResult.checksum.length > 0);
-    assert.ok(exportResult.bundlePath.endsWith(".hem"));
+    assert.ok(exportResult.bundlePath.endsWith(".gandalf"));
 
     const importResult = await bundleImport({
       bundlePath: exportResult.bundlePath,
@@ -300,7 +300,7 @@ describe("bundle signatures", () => {
     assert.equal(inspectResult.signatureAlgorithm, "HMAC-SHA256");
 
     const { entries } = await readTar(exportResult.bundlePath);
-    const manifest = JSON.parse(entries.find((entry) => entry.path === ".hem/manifest.json")!.content.toString("utf-8"));
+    const manifest = JSON.parse(entries.find((entry) => entry.path === ".gandalf/manifest.json")!.content.toString("utf-8"));
     assert.match(manifest.security.signature, /^[a-f0-9]{64}$/);
   });
 
@@ -504,14 +504,14 @@ describe("bundle import security -- content path validation", () => {
   it("blocks absolute content paths", async () => {
     const box = await makeSandbox();
     const entries = [
-      { path: ".hem/", content: Buffer.alloc(0), mode: 0o755, mtime: 1000000, type: "directory" },
+      { path: ".gandalf/", content: Buffer.alloc(0), mode: 0o755, mtime: 1000000, type: "directory" },
       {
-        path: ".hem/format-version",
+        path: ".gandalf/format-version",
         content: Buffer.from("1\n", "utf-8"),
         mode: 0o644, mtime: 1000000, type: "file"
       },
       {
-        path: ".hem/manifest.json",
+        path: ".gandalf/manifest.json",
         content: Buffer.from(JSON.stringify({
           formatVersion: 1, snapshotName: "abs",
           createdAt: "2026-05-12T00:00:00.000Z",
@@ -547,14 +547,14 @@ describe("bundle import -- format version", () => {
   it("rejects unsupported format version", async () => {
     const box = await makeSandbox();
     const entries: TarEntry[] = [
-      { path: ".hem/", content: Buffer.alloc(0), mode: 0o755, mtime: 1000000, type: "directory" },
+      { path: ".gandalf/", content: Buffer.alloc(0), mode: 0o755, mtime: 1000000, type: "directory" },
       {
-        path: ".hem/format-version",
+        path: ".gandalf/format-version",
         content: Buffer.from("999\n", "utf-8"),
         mode: 0o644, mtime: 1000000, type: "file"
       },
       {
-        path: ".hem/manifest.json",
+        path: ".gandalf/manifest.json",
         content: Buffer.from(JSON.stringify({
           formatVersion: 999, snapshotName: "bad",
           createdAt: "2026-05-12T00:00:00.000Z",
@@ -623,7 +623,7 @@ describe("bundle import -- dry-run", () => {
         type: "file"
       }
     ]);
-    const manifestEntry = entries.find((entry) => entry.path === ".hem/manifest.json");
+    const manifestEntry = entries.find((entry) => entry.path === ".gandalf/manifest.json");
     assert.ok(manifestEntry);
     const manifest = JSON.parse(manifestEntry.content.toString("utf-8"));
     manifest.sourceMachine = {
@@ -656,7 +656,7 @@ describe("bundle import -- dry-run", () => {
   it("classifies MCP package runners and source-local binary mismatches", async () => {
     const box = await makeSandbox();
     const entries = makeMinimalBundle(box, "mcp-binaries", []);
-    const manifestEntry = entries.find((entry) => entry.path === ".hem/manifest.json");
+    const manifestEntry = entries.find((entry) => entry.path === ".gandalf/manifest.json");
     assert.ok(manifestEntry);
     const manifest = JSON.parse(manifestEntry.content.toString("utf-8"));
     manifest.sourceMachine = {
@@ -723,7 +723,7 @@ describe("bundle import -- dry-run", () => {
     assert.equal(result.readiness.summary.needs_manual_action >= 2, true);
     assert.equal(result.readiness.summary.unverified, 1);
     assert.equal(
-      result.readiness.items.some((item) => item.code === "HEM_ENV_VALUE_REQUIRED" && item.problem.includes("OPENAI_API_KEY")),
+      result.readiness.items.some((item) => item.code === "GANDALF_ENV_VALUE_REQUIRED" && item.problem.includes("OPENAI_API_KEY")),
       true
     );
     assert.equal(JSON.stringify(result.readiness).includes("sk-real-secret"), false);
@@ -786,7 +786,7 @@ describe("bundle import -- dry-run", () => {
         applyContent: true,
         targetPlatform: "linux"
       }),
-      /HEM_MACOS_APPLY_ONLY/
+      /GANDALF_MACOS_APPLY_ONLY/
     );
     await assert.rejects(readFile(path.join(box.projectPath, "config", "tool.json"), "utf-8"), /ENOENT/);
   });
@@ -808,7 +808,7 @@ describe("bundle import -- dry-run", () => {
     });
 
     assert.equal(result.readiness.summary.blocked, 1);
-    assert.equal(result.readiness.items[0]?.code, "HEM_MACOS_APPLY_ONLY");
+    assert.equal(result.readiness.items[0]?.code, "GANDALF_MACOS_APPLY_ONLY");
     await assert.rejects(readSnapshot(box.storeDir, "mac-dry-run-blocker"), /ENOENT/);
   });
 
@@ -828,6 +828,6 @@ describe("bundle import -- dry-run", () => {
     });
 
     assert.equal(result.readiness.summary.unsupported, 1);
-    assert.equal(result.readiness.items[0]?.code, "HEM_MACOS_APPLY_ONLY");
+    assert.equal(result.readiness.items[0]?.code, "GANDALF_MACOS_APPLY_ONLY");
   });
 });

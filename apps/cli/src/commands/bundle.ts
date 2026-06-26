@@ -2,20 +2,20 @@
  * Command-pattern implementation of the `bundle` CLI command.
  *
  * Subcommands:
- *   bundle export --name <snapshot> --out <file.hem> [--metadata-only] [--json]
- *   bundle import <file.hem> [--apply-content] [--dry-run] [--quarantine] [--experimental] [--trust] [--json]
- *   bundle inspect <file.hem> [--json]
- *   bundle verify <file.hem> [--json]
+ *   bundle export --name <snapshot> --out <file.gandalf> [--metadata-only] [--json]
+ *   bundle import <file.gandalf> [--apply-content] [--dry-run] [--quarantine] [--experimental] [--trust] [--json]
+ *   bundle inspect <file.gandalf> [--json]
+ *   bundle verify <file.gandalf> [--json]
  */
 
 import path from "node:path";
 
-import { bundleExport, bundleImport, bundleInspect, bundleVerify } from "@qxinm/hem-core/bundle.js";
+import { bundleExport, bundleImport, bundleInspect, bundleVerify } from "@qxinm/gandalf-core/bundle.js";
 import { hasFlag, json, runtimeOptions, valueAfter } from "../cli-shared.js";
-import { formatSnapError } from "@qxinm/hem-core/errors.js";
-import { formatReadinessSummaryLines } from "@qxinm/hem-core/readiness.js";
-import { ensureStore } from "@qxinm/hem-core/store.js";
-import { detectTuiMode } from "@qxinm/hem-tui";
+import { formatSnapError } from "@qxinm/gandalf-core/errors.js";
+import { formatReadinessSummaryLines } from "@qxinm/gandalf-core/readiness.js";
+import { ensureStore } from "@qxinm/gandalf-core/store.js";
+import { detectTuiMode } from "@qxinm/gandalf-tui";
 import type { Command, CommandContext } from "./index.js";
 
 // ── Command definition ─────────────────────────────────────────
@@ -23,11 +23,11 @@ import type { Command, CommandContext } from "./index.js";
 export const bundleCommand: Command = {
   name: "bundle",
   description:
-    "Export, import, inspect, and verify .hem bundle archives. " +
-    "Usage: hem bundle export --name <snapshot> --out <file> [--metadata-only], " +
-    "hem bundle import <file> [--dry-run] [--apply-content] [--quarantine] [--experimental] [--trust], " +
-    "hem bundle inspect <file>, " +
-    "hem bundle verify <file>",
+    "Export, import, inspect, and verify .gandalf bundle archives. " +
+    "Usage: gandalf bundle export --name <snapshot> --out <file> [--metadata-only], " +
+    "gandalf bundle import <file> [--dry-run] [--apply-content] [--quarantine] [--experimental] [--trust], " +
+    "gandalf bundle inspect <file>, " +
+    "gandalf bundle verify <file>",
 
   async execute(ctx: CommandContext): Promise<number> {
     const { args } = ctx;
@@ -38,7 +38,7 @@ export const bundleCommand: Command = {
     if (sub === "export") {
       // --tui: interactive wizard
       if (detectTuiMode(args).mode !== "none") {
-        const { bundleExportWizard } = await import("@qxinm/hem-tui/wizards/bundle-export.js");
+        const { bundleExportWizard } = await import("@qxinm/gandalf-tui/wizards/bundle-export.js");
         return bundleExportWizard(options);
       }
       const snapshotName = valueAfter(args, "--name");
@@ -47,10 +47,10 @@ export const bundleCommand: Command = {
       if (!snapshotName || !outputPath) {
         process.stderr.write(
           formatSnapError({
-            code: "HEM_BUNDLE_MISSING_ARGS",
+            code: "GANDALF_BUNDLE_MISSING_ARGS",
             problem: "Bundle export requires --name and --out.",
             cause: "`bundle export` was called without required flags.",
-            fix: "Run `hem bundle export --name <snapshot> --out <file.hem> --project .`."
+            fix: "Run `gandalf bundle export --name <snapshot> --out <file.gandalf> --project .`."
           })
         );
         return 1;
@@ -91,17 +91,17 @@ export const bundleCommand: Command = {
     if (sub === "import") {
       // --tui: interactive wizard
       if (detectTuiMode(args).mode !== "none") {
-        const { bundleImportWizard } = await import("@qxinm/hem-tui/wizards/bundle-import.js");
+        const { bundleImportWizard } = await import("@qxinm/gandalf-tui/wizards/bundle-import.js");
         return bundleImportWizard(options);
       }
       const bundlePath = args[2];
       if (!bundlePath) {
         process.stderr.write(
           formatSnapError({
-            code: "HEM_BUNDLE_MISSING_ARGS",
-            problem: "Bundle import requires a .hem file path.",
+            code: "GANDALF_BUNDLE_MISSING_ARGS",
+            problem: "Bundle import requires a .gandalf file path.",
             cause: "`bundle import` was called without a bundle path.",
-            fix: "Run `hem bundle import <file.hem> --project .`."
+            fix: "Run `gandalf bundle import <file.gandalf> --project .`."
           })
         );
         return 1;
@@ -113,13 +113,13 @@ export const bundleCommand: Command = {
       const isDryRun = hasFlag(args, "--dry-run");
       if (applyContent) {
         const experimental = hasFlag(args, "--experimental");
-        if (!process.env.HEM_EXPERIMENTAL && !experimental) {
+        if (!process.env.GANDALF_EXPERIMENTAL && !experimental) {
           process.stderr.write(
             formatSnapError({
-              code: "HEM_EXPERIMENTAL_REQUIRED",
+              code: "GANDALF_EXPERIMENTAL_REQUIRED",
               problem: "Bundle import --apply-content requires --experimental.",
-              cause: "--apply-content was used without HEM_EXPERIMENTAL=1 or --experimental.",
-              fix: "Set HEM_EXPERIMENTAL=1 or pass --experimental to enable experimental features."
+              cause: "--apply-content was used without GANDALF_EXPERIMENTAL=1 or --experimental.",
+              fix: "Set GANDALF_EXPERIMENTAL=1 or pass --experimental to enable experimental features."
             })
           );
           return 1;
@@ -200,10 +200,10 @@ export const bundleCommand: Command = {
       if (!bundlePath) {
         process.stderr.write(
           formatSnapError({
-            code: "HEM_BUNDLE_MISSING_ARGS",
-            problem: "Bundle inspect requires a .hem file path.",
+            code: "GANDALF_BUNDLE_MISSING_ARGS",
+            problem: "Bundle inspect requires a .gandalf file path.",
             cause: "`bundle inspect` was called without a bundle path.",
-            fix: "Run `hem bundle inspect <file.hem>`."
+            fix: "Run `gandalf bundle inspect <file.gandalf>`."
           })
         );
         return 1;
@@ -239,10 +239,10 @@ export const bundleCommand: Command = {
       if (!bundlePath) {
         process.stderr.write(
           formatSnapError({
-            code: "HEM_BUNDLE_MISSING_ARGS",
-            problem: "Bundle verify requires a .hem file path.",
+            code: "GANDALF_BUNDLE_MISSING_ARGS",
+            problem: "Bundle verify requires a .gandalf file path.",
             cause: "`bundle verify` was called without a bundle path.",
-            fix: "Run `hem bundle verify <file.hem>`."
+            fix: "Run `gandalf bundle verify <file.gandalf>`."
           })
         );
         return 1;
@@ -271,10 +271,10 @@ export const bundleCommand: Command = {
     /* ---------- unknown subcommand ---------- */
     process.stderr.write(
       formatSnapError({
-        code: "HEM_UNKNOWN_SUBCOMMAND",
+        code: "GANDALF_UNKNOWN_SUBCOMMAND",
         problem: `Unknown bundle subcommand: "${sub ?? ""}".`,
         cause: "`bundle` was called with an unrecognized subcommand.",
-        fix: "Use `export`, `import`, or `inspect`. Run `hem --help` for details."
+        fix: "Use `export`, `import`, or `inspect`. Run `gandalf --help` for details."
       })
     );
     return 1;

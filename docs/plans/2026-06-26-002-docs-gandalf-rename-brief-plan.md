@@ -15,15 +15,15 @@ Document the Gandalf rename decision and make the new product vocabulary discove
 
 ## Problem Frame
 
-The service is moving from Hem toward Gandalf as a wizard-first product identity. The decision needs a durable requirements brief and glossary entries before implementation planning or code rename work begins.
+The service is moving from Gandalf toward Gandalf as a wizard-first product identity. The decision needs a durable requirements brief and glossary entries before implementation planning or code rename work begins.
 
 ---
 
 ## Requirements
 
-- R1. The requirements brief must capture the full product rename from Hem to Gandalf.
-- R2. The brief must preserve the clean-break decision for the old Hem command and brand.
-- R3. The brief must require intentional migration or clear rejection for old Hem state and bundles.
+- R1. The requirements brief must capture the full product rename from Gandalf to Gandalf.
+- R2. The brief must preserve the clean-break decision for the old Gandalf command and brand.
+- R3. The brief must require intentional migration or clear rejection for old Gandalf state and bundles.
 - R4. The glossary must define Gandalf and Setup Container in product terms.
 - R5. The PR body for this change must use only `Summary`, `Why`, and `Changes` sections and must not mention the engineering pipeline by name.
 
@@ -64,7 +64,7 @@ The service is moving from Hem toward Gandalf as a wizard-first product identity
 ## Scope Boundaries
 
 - Do not rename CLI commands, modules, packages, desktop identifiers, store paths, or bundle extensions in this change.
-- Do not keep Hem as a long-term compatibility brand.
+- Do not keep Gandalf as a long-term compatibility brand.
 - Do not perform trademark or domain availability research in this change.
 
 ---

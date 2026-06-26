@@ -8,13 +8,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/qyinm/hem/internal/hemcore/diff"
-	"github.com/qyinm/hem/internal/hemcore/scan"
-	"github.com/qyinm/hem/internal/hemcore/snapshot"
-	"github.com/qyinm/hem/internal/hemcore/store"
-	timelineundo "github.com/qyinm/hem/internal/hemcore/timeline_undo"
-	"github.com/qyinm/hem/internal/hemcore/types"
-	"github.com/qyinm/hem/internal/tui/views"
+	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
+	"github.com/qyinm/gandalf/internal/gandalfcore/scan"
+	"github.com/qyinm/gandalf/internal/gandalfcore/snapshot"
+	"github.com/qyinm/gandalf/internal/gandalfcore/store"
+	timelineundo "github.com/qyinm/gandalf/internal/gandalfcore/timeline_undo"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
+	"github.com/qyinm/gandalf/internal/tui/views"
 )
 
 type bootMsg struct {
@@ -32,7 +32,7 @@ type undoPreviewMsg struct {
 	err  error
 }
 
-// App is the Bubble Tea root model for the Hem setup-history workspace.
+// App is the Bubble Tea root model for the Gandalf setup-history workspace.
 type App struct {
 	runtime types.RuntimeOptions
 	width   int
@@ -161,14 +161,14 @@ func (a *App) View() string {
 				EmptyCommand: a.errText,
 			}, contentWidth, contentHeight)
 		}
-		return "Loading Hem setup-history workspace..."
+		return "Loading Gandalf setup-history workspace..."
 	}
 
 	nav := a.navigationModel()
 	sidebar := views.RenderSidebar(sidebarViewFromModel(nav), sidebarWidth, contentHeight)
 	content := a.renderContent(contentWidth, contentHeight)
 
-	header := lipgloss.NewStyle().Bold(true).Render("hem tui · setup-history workspace")
+	header := lipgloss.NewStyle().Bold(true).Render("gandalf tui · setup-history workspace")
 	if a.notice != "" {
 		header += "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(a.notice)
 	}
@@ -425,7 +425,7 @@ func (a *App) fetchWorkspaceData() bootMsg {
 func Run(runtime types.RuntimeOptions) int {
 	app := NewApp(runtime)
 	if _, err := tea.NewProgram(app, tea.WithAltScreen()).Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "hem tui failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "gandalf tui failed: %v\n", err)
 		return 1
 	}
 	return 0

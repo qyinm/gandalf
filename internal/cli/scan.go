@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"github.com/qyinm/hem/internal/hemcore/scan"
-	"github.com/qyinm/hem/internal/hemcore/types"
+	"github.com/qyinm/gandalf/internal/gandalfcore/scan"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 	"github.com/spf13/cobra"
 )
 

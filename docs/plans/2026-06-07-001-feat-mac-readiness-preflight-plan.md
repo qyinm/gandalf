@@ -9,13 +9,13 @@ date: "2026-06-07"
 
 ## Summary
 
-Add a Mac-first readiness layer for hem bundle import and local setup checks. The work makes restore blockers visible before users apply content, gives manual install hints without running installers, reports missing env/secret values without storing them, and aligns docs around the current Mac-first product promise.
+Add a Mac-first readiness layer for gandalf bundle import and local setup checks. The work makes restore blockers visible before users apply content, gives manual install hints without running installers, reports missing env/secret values without storing them, and aligns docs around the current Mac-first product promise.
 
 ---
 
 ## Problem Frame
 
-Hem already scans, bundles, imports, and checks MCP command availability during bundle dry-run, but the user experience still reads like a low-level machine diff. The next product step is not cross-OS support or a numeric score; it is a clear Mac readiness report that tells a developer what will restore, what needs manual setup, and what is unsupported before they trust the bundle.
+Gandalf already scans, bundles, imports, and checks MCP command availability during bundle dry-run, but the user experience still reads like a low-level machine diff. The next product step is not cross-OS support or a numeric score; it is a clear Mac readiness report that tells a developer what will restore, what needs manual setup, and what is unsupported before they trust the bundle.
 
 Validation incidents show that many real reproducibility failures come from runtime state outside static config: missing env vars, sandbox/cache permissions, missing local tools, and auth/session state. This phase reports local env/tool/path readiness gaps while leaving provider-side auth and session reproduction for future work.
 
@@ -39,7 +39,7 @@ Validation incidents show that many real reproducibility failures come from runt
 **Env and secret handling**
 
 - R8. Env keys discovered in bundle evidence must be reported as required values when absent from the target environment or target project env inventory.
-- R9. Hem must not bundle, print, or write raw secret values as part of this work.
+- R9. Gandalf must not bundle, print, or write raw secret values as part of this work.
 - R10. Import must not create placeholder `.env` values for missing secrets.
 
 **UX and documentation**
@@ -53,7 +53,7 @@ Validation incidents show that many real reproducibility failures come from runt
 
 - KTD1. Use a shared readiness model: Add typed readiness result objects and have `doctor`, bundle dry-run, CLI text, JSON, and TUI render from that model. Bundle import exposes this as top-level `readiness: ReadinessReport` on `BundleImportResult`, while `machineDiff` remains for backward compatibility.
 - KTD2. Keep `doctor` separate from `scan` and `audit`: `scan` remains static evidence capture, and `audit` remains risk/security analysis. Readiness is a local machine compatibility check with a different user intent.
-- KTD3. Keep install hints manual: The plan may suggest commands like Homebrew/npm/uv remediation, but Hem never runs them. This preserves the current no-network and no-command-execution trust posture.
+- KTD3. Keep install hints manual: The plan may suggest commands like Homebrew/npm/uv remediation, but Gandalf never runs them. This preserves the current no-network and no-command-execution trust posture.
 - KTD4. Report env gaps, do not repair them: Missing env keys appear as manual actions. Writing empty placeholders would create false confidence and could break projects.
 - KTD5. Mac-first means apply-only platform enforcement: `inspect` and `dry-run` stay available for visibility, while `--apply-content` fails outside macOS with a stable error code.
 - KTD6. Reuse existing MCP extraction and binary classification: Move or wrap the existing logic in `src/bundle.ts` rather than duplicating parser behavior in the new doctor path.
@@ -65,7 +65,7 @@ Validation incidents show that many real reproducibility failures come from runt
 ```mermaid
 flowchart TB
   A[scanProject evidence] --> B[readiness analyzer]
-  C[.hem evidence] --> B
+  C[.gandalf evidence] --> B
   B --> D[ReadinessReport]
   D --> E[doctor command]
   D --> F[bundle import dry-run]
@@ -142,7 +142,7 @@ flowchart TB
 - **Requirements:** R2, R3, R5, R8, R9, R11.
 - **Dependencies:** U1, U2.
 - **Files:** `src/commands/doctor.ts`, `src/cli.ts`, `src/commands/index.ts`, `src/cli-shared.ts`, `tests/cli.test.ts`, `tests/doctor.test.ts`.
-- **Approach:** Register `hem doctor --project .` with `--json` support. The command should run scan evidence through the readiness analyzer and render grouped text output for manual actions, warnings, unverified items, unsupported items, and blocked items.
+- **Approach:** Register `gandalf doctor --project .` with `--json` support. The command should run scan evidence through the readiness analyzer and render grouped text output for manual actions, warnings, unverified items, unsupported items, and blocked items.
 - **Patterns to follow:** Command modules in `src/commands/scan.ts` and `src/commands/bundle.ts`; JSON helper in `src/cli-shared.ts`; error formatting via `formatSnapError`.
 - **Test scenarios:** Help lists `doctor`; plain output groups missing tools and env gaps; `--json` returns the readiness report; command remains successful when only warnings/manual actions exist; command returns failure only when blocked items exist.
 - **Verification:** CLI tests show doctor is read-only and produces useful text without requiring a bundle file.
@@ -154,7 +154,7 @@ flowchart TB
 - **Dependencies:** U1, U2.
 - **Files:** `src/bundle.ts`, `src/commands/bundle.ts`, `tests/bundle.test.ts`, `tests/cli.test.ts`.
 - **Approach:** Add top-level `readiness: ReadinessReport` to `BundleImportResult`. In dry-run, return the full report. In apply mode, block non-macOS content apply and hard blockers before writes. Plain CLI output should show categories and top manual actions before legacy warnings.
-- **Patterns to follow:** Existing dry-run branch in `bundleImport()`; existing `HEM_EXPERIMENTAL_REQUIRED` error style; existing bundle tests for MCP binary checks and shell-injection safety.
+- **Patterns to follow:** Existing dry-run branch in `bundleImport()`; existing `GANDALF_EXPERIMENTAL_REQUIRED` error style; existing bundle tests for MCP binary checks and shell-injection safety.
 - **Test scenarios:** Dry-run JSON includes readiness categories; unavailable MCP binary shows both legacy warning and readiness item; remote URL is unverified; non-darwin `--apply-content` fails before writing; blocked readiness items prevent content apply.
 - **Verification:** Bundle import tests assert no content files are written when blocked.
 
@@ -175,7 +175,7 @@ flowchart TB
 - **Requirements:** R12.
 - **Dependencies:** U3, U4.
 - **Files:** `README.md`, `PRODUCT.md`, `PLAN.md`, `ARCHITECTURE.md`, `docs/bundle-format.md`, `docs/index.html`, `tests/cli.test.ts`.
-- **Approach:** Update docs to say Hem is Mac-first for this release, content bundles are included by default with `--metadata-only` opt-out if that remains current behavior, apply remains experimental, and install hints are manual. Mark cross-OS restore, automatic installation, encrypted secrets, and team/CI validation as future work.
+- **Approach:** Update docs to say Gandalf is Mac-first for this release, content bundles are included by default with `--metadata-only` opt-out if that remains current behavior, apply remains experimental, and install hints are manual. Mark cross-OS restore, automatic installation, encrypted secrets, and team/CI validation as future work.
 - **Patterns to follow:** README trust contract and command examples; architecture trust-boundary language; existing CLI help assertions in `tests/cli.test.ts`.
 - **Test scenarios:** CLI help includes doctor; tests no longer assert stale `--include-content` guidance; docs do not contradict content default or Mac-only scope in user-facing sections.
 - **Verification:** A reader can follow README commands without encountering a different contract in PRODUCT or bundle-format docs.
@@ -186,8 +186,8 @@ flowchart TB
 
 - AE1. Given a bundle with MCP commands `npx`, `uvx`, a source-home absolute binary, a remote URL, and env key evidence, when the user runs `bundle import --dry-run --json` on a Mac missing `uvx`, then the JSON includes ready or manual-action categories for each local command, an unverified item for the remote URL, and env key names without values.
 - AE2. Given a non-macOS target, when the user runs `bundle import --dry-run`, then the command succeeds and reports Mac-only apply limitations; when the user runs `--apply-content`, then the command fails before writing content.
-- AE3. Given missing env keys, when the user imports a bundle, then hem reports required manual input and does not create placeholder secret values.
-- AE4. Given a user runs `hem doctor --project .`, then the command scans local evidence and prints grouped readiness results without requiring a bundle or installing anything.
+- AE3. Given missing env keys, when the user imports a bundle, then gandalf reports required manual input and does not create placeholder secret values.
+- AE4. Given a user runs `gandalf doctor --project .`, then the command scans local evidence and prints grouped readiness results without requiring a bundle or installing anything.
 
 ---
 
@@ -202,7 +202,7 @@ The main compatibility risk is JSON shape expansion for `bundle import --dry-run
 ## Risks & Dependencies
 
 - **Docs drift risk:** Several docs currently disagree about content defaults and cross-OS aspirations. U6 should land with the feature so users do not see conflicting product promises.
-- **False confidence risk:** Install hints and env reports must never imply Hem installed dependencies or restored secret values.
+- **False confidence risk:** Install hints and env reports must never imply Gandalf installed dependencies or restored secret values.
 - **Shell safety risk:** Existing tests prove command checks avoid shell execution. Preserve that invariant when extracting shared readiness logic.
 - **Platform risk:** Mac-only apply gating must not break dry-run/inspect workflows used for visibility in other environments.
 
@@ -213,12 +213,12 @@ The main compatibility risk is JSON shape expansion for `bundle import --dry-run
 Update the README first-run path to show `doctor` before import/apply:
 
 ```bash
-hem doctor --project .
-hem bundle import my-setup.hem --dry-run --project .
-hem bundle import my-setup.hem --apply-content --quarantine --experimental --project .
+gandalf doctor --project .
+gandalf bundle import my-setup.gandalf --dry-run --project .
+gandalf bundle import my-setup.gandalf --apply-content --quarantine --experimental --project .
 ```
 
-The docs should state that Hem gives manual setup guidance and never runs package-manager installs or secret prompts in this phase.
+The docs should state that Gandalf gives manual setup guidance and never runs package-manager installs or secret prompts in this phase.
 
 ---
 

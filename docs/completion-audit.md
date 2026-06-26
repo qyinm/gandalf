@@ -24,7 +24,7 @@ Objective:
 | Audit and provenance | `packages/core/src/audit.ts`, `packages/core/src/provenance.ts`, `packages/core/tests/analysis.test.ts` | Done |
 | Markdown/JSON report path | `packages/core/src/report.ts`, `apps/cli/src/cli.ts`, `apps/cli/tests/cli.test.ts` | Done |
 | Copy-paste workflows | `README.md` | Done |
-| Dogfood on three real project directories | `docs/dogfood.md`; scans/reports written under `/tmp/hem-dogfood` | Done |
+| Dogfood on three real project directories | `docs/dogfood.md`; scans/reports written under `/tmp/gandalf-dogfood` | Done |
 | Replace seed incident patterns with 10 real target-operator incidents | `docs/validation-incidents.md` contains 10 memory-derived real operator incidents with source pointers | Done |
 
 ## Verification Commands

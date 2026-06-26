@@ -1,7 +1,7 @@
 [package]
-name = "hem-desktop"
+name = "gandalf-desktop"
 version = "0.3.3"
-description = "Hem desktop dashboard"
+description = "Gandalf desktop dashboard"
 authors = ["qyinm"]
 edition = "2021"
 
@@ -11,14 +11,14 @@ edition = "2021"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "hem_desktop_lib"
+name = "gandalf_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-hem-core = { path = "../../../crates/hem-core" }
+gandalf-core = { path = "../../../crates/gandalf-core" }
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }

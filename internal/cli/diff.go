@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/qyinm/hem/internal/hemcore/diff"
+	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
 	"github.com/spf13/cobra"
 )
 

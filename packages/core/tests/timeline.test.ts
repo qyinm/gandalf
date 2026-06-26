@@ -10,7 +10,7 @@ import { buildTimelineUndoPlan } from "../src/timeline-undo.js";
 import type { RuntimeOptions } from "../src/runtime-options.js";
 
 async function makeRuntime(): Promise<RuntimeOptions> {
-  const root = await mkdtemp(path.join(tmpdir(), "hem-timeline-test-"));
+  const root = await mkdtemp(path.join(tmpdir(), "gandalf-timeline-test-"));
   const projectPath = path.join(root, "project");
   const homeDir = path.join(root, "home");
   const storeDir = path.join(root, "store");

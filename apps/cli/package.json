@@ -1,10 +1,10 @@
 {
-  "name": "@qxinm/hem",
+  "name": "@qxinm/gandalf",
   "version": "0.3.4",
-  "description": "[DEPRECATED] Use the Go binary (bin/hem or GitHub Releases). npm package kept until Go binary distribution is primary.",
+  "description": "[DEPRECATED] Use the Go binary (bin/gandalf or GitHub Releases). npm package kept until Go binary distribution is primary.",
   "type": "module",
   "bin": {
-    "hem": "dist/src/cli.js"
+    "gandalf": "dist/src/cli.js"
   },
   "files": [
     "dist/src",
@@ -33,15 +33,15 @@
   "author": "qxinm",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/qyinm/hem.git"
+    "url": "git+https://github.com/qyinm/gandalf.git"
   },
   "bugs": {
-    "url": "https://github.com/qyinm/hem/issues"
+    "url": "https://github.com/qyinm/gandalf/issues"
   },
-  "homepage": "https://github.com/qyinm/hem#readme",
+  "homepage": "https://github.com/qyinm/gandalf#readme",
   "dependencies": {
-    "@qxinm/hem-core": "0.3.4",
-    "@qxinm/hem-tui": "0.3.4",
+    "@qxinm/gandalf-core": "0.3.4",
+    "@qxinm/gandalf-tui": "0.3.4",
     "react": "^19.2.6"
   },
   "engines": {

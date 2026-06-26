@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const envPath = "/tmp/hem-gate2-video-env.sh";
+const envPath = "/tmp/gandalf-gate2-video-env.sh";
 process.env.TMPDIR = "/tmp";
 const tape = path.resolve(repo, process.argv[2] ?? "demo/fix.tape");
 
@@ -44,10 +44,10 @@ if (setup.status !== 0) {
 }
 
 const demoEnv = parseEnvFile(await readFile(envPath, "utf8"));
-const renderedTape = path.join(demoEnv.HEM_DEMO_ROOT, path.basename(tape));
+const renderedTape = path.join(demoEnv.GANDALF_DEMO_ROOT, path.basename(tape));
 await writeFile(
   renderedTape,
-  (await readFile(tape, "utf8")).replaceAll("__HEM_VISIBLE_PROJECT__", demoEnv.HEM_VISIBLE_PROJECT),
+  (await readFile(tape, "utf8")).replaceAll("__GANDALF_VISIBLE_PROJECT__", demoEnv.GANDALF_VISIBLE_PROJECT),
   "utf8"
 );
 
@@ -55,10 +55,10 @@ const realCodexHome = process.env.CODEX_HOME;
 if (realCodexHome) {
   await copyFile(path.join(realCodexHome, "auth.json"), path.join(demoEnv.CODEX_HOME, "auth.json"));
 }
-const bin = path.join(demoEnv.HEM_DEMO_ROOT, "bin");
+const bin = path.join(demoEnv.GANDALF_DEMO_ROOT, "bin");
 await mkdir(bin, { recursive: true });
 
-await writeExecutable(path.join(bin, "hem"), [
+await writeExecutable(path.join(bin, "gandalf"), [
   "#!/bin/sh",
   `exec node "${repo}/apps/cli/dist/src/cli.js" "$@"`,
   ""
@@ -88,11 +88,11 @@ const env = {
 };
 
 async function cleanupDemoPaths() {
-  if (demoEnv.HEM_VISIBLE_PROJECT?.endsWith("/hem-demo")) {
-    await rm(demoEnv.HEM_VISIBLE_PROJECT, { recursive: true, force: true });
+  if (demoEnv.GANDALF_VISIBLE_PROJECT?.endsWith("/gandalf-demo")) {
+    await rm(demoEnv.GANDALF_VISIBLE_PROJECT, { recursive: true, force: true });
   }
-  if (demoEnv.HEM_DEMO_ROOT?.startsWith("/tmp/hem-gate2-demo-")) {
-    await rm(demoEnv.HEM_DEMO_ROOT, { recursive: true, force: true });
+  if (demoEnv.GANDALF_DEMO_ROOT?.startsWith("/tmp/gandalf-gate2-demo-")) {
+    await rm(demoEnv.GANDALF_DEMO_ROOT, { recursive: true, force: true });
   }
 }
 
