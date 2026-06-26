@@ -128,7 +128,9 @@ func TestRestoresCodexConfigByteForByteThroughTargetHome(t *testing.T) {
 
 	items := parsed.Items
 	summary := restore.ApplyRestoreItems(items, restore.CreateDefaultApplyExecutor(), &types.ApplyOptions{
-		FailFast: true,
+		FailFast:    true,
+		HomeDir:     &homeDir,
+		ProjectPath: &projectPath,
 	})
 	if summary.Failed != 0 {
 		t.Fatalf("apply failed: %#v", summary.Failures)
@@ -212,7 +214,9 @@ func TestDeletesCodexUserSkillAddedAfterBaseline(t *testing.T) {
 	planJSON, _ := json.Marshal(plan)
 	items := restore.ParseDryRunOutput(string(planJSON)).Items
 	summary := restore.ApplyRestoreItems(items, restore.CreateDefaultApplyExecutor(), &types.ApplyOptions{
-		FailFast: true,
+		FailFast:    true,
+		HomeDir:     &homeDir,
+		ProjectPath: &projectPath,
 	})
 	if summary.Failed != 0 {
 		t.Fatalf("apply failed: %#v", summary.Failures)
@@ -367,7 +371,9 @@ func TestMetadataOnlySnapshotRefusesAgentConfigApplyWithoutContentBacking(t *tes
 
 	items := parsed.Items
 	summary := restore.ApplyRestoreItems(items, restore.CreateDefaultApplyExecutor(), &types.ApplyOptions{
-		FailFast: true,
+		FailFast:    true,
+		HomeDir:     &homeDir,
+		ProjectPath: &projectPath,
 	})
 	if summary.Successful != 0 || summary.Failed != 1 {
 		t.Fatalf("summary = %+v", summary)
