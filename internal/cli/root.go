@@ -42,6 +42,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newReportCmd())
 	root.AddCommand(newTimelineCmd())
 	root.AddCommand(newBundleCmd())
+	root.AddCommand(newTuiCmd())
 
 	return root
 }

@@ -538,6 +538,9 @@ func printRootHelp(w io.Writer) {
 		"  hem bundle export --name <snapshot> --out file.hem --project .",
 		"  hem bundle import file.hem --dry-run --project . [--json]",
 		"  hem bundle verify file.hem",
+		"",
+		"Interactive workspace:",
+		"  hem tui --project .",
 	}
 	_, _ = io.WriteString(w, strings.Join(help, "\n")+"\n")
 }
