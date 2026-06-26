@@ -2,7 +2,6 @@ package bundle
 
 import (
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/qyinm/hem/internal/hemcore/fsutil"
 	"github.com/qyinm/hem/internal/hemcore/pathconfinement"
 	"github.com/qyinm/hem/internal/hemcore/policy"
 	"github.com/qyinm/hem/internal/hemcore/readiness"
@@ -595,7 +595,7 @@ func Import(options *types.BundleImportOptions) (*types.BundleImportResult, erro
 				if err := os.MkdirAll(filepath.Dir(resolved), 0o755); err != nil {
 					return nil, &Error{Message: "create parent dir", Cause: err}
 				}
-				if err := writeFileAtomically(resolved, string(entry.Content)); err != nil {
+				if err := fsutil.WriteTextAtomically(resolved, string(entry.Content), 0o644); err != nil {
 					return nil, &Error{Message: "write content file", Cause: err}
 				}
 			}
@@ -1132,18 +1132,5 @@ func truncate(value string, max int) string {
 	return value[:max]
 }
 
-func writeFileAtomically(filePath, content string) error {
-	var suffix [8]byte
-	_, _ = rand.Read(suffix[:])
-	tempPath := fmt.Sprintf("%s.%d.%s.tmp", filePath, os.Getpid(), hex.EncodeToString(suffix[:]))
-	if err := os.WriteFile(tempPath, []byte(content), 0o644); err != nil {
-		_ = os.Remove(tempPath)
-		return err
-	}
-	if err := os.Rename(tempPath, filePath); err != nil {
-		_ = os.Remove(tempPath)
-		return err
-	}
-	return nil
-}
+
 

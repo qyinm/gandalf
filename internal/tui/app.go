@@ -60,6 +60,9 @@ type App struct {
 
 	compareModel   *CompareViewModel
 	saveSetupModel *SaveSetupViewModel
+
+	cachedNav    *NavigationModel
+	cachedNavKey string
 }
 
 // NewApp creates a TUI app bound to engine runtime options.
@@ -289,11 +292,18 @@ func (a *App) navigationModel() NavigationModel {
 		SelectedAgent:   a.selectedAgent,
 		SelectedProfile: a.selectedProfile,
 	})
-	return BuildNavigationModel(BuildNavigationModelInput{
+	key := fmt.Sprintf("%s:%d:%d", selectedID, a.navCursor, len(a.evidence))
+	if a.cachedNav != nil && a.cachedNavKey == key {
+		return *a.cachedNav
+	}
+	nav := BuildNavigationModel(BuildNavigationModelInput{
 		Evidence:       a.evidence,
 		SelectedItemID: selectedID,
 		Cursor:         a.navCursor,
 	})
+	a.cachedNav = &nav
+	a.cachedNavKey = key
+	return nav
 }
 
 func (a *App) filteredTimeline() []types.TimelineEntry {

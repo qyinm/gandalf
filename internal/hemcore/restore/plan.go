@@ -33,8 +33,6 @@ type ParseDryRunResult struct {
 // ParseDryRunOutput parses planner JSON into executable restore items.
 func ParseDryRunOutput(input string) ParseDryRunResult {
 	var errors []ParseDryRunError
-	seenIDs := make(map[string]struct{})
-	var result []types.RestoreItem
 
 	var cleanedLines []string
 	for _, line := range strings.Split(input, "\n") {
@@ -89,14 +87,9 @@ func ParseDryRunOutput(input string) ParseDryRunResult {
 		return ParseDryRunResult{Items: nil, Errors: errors}
 	}
 
-	orderLookup := make(map[string]uint32)
 	var executionOrder []string
 	if raw, ok := parsed["executionOrder"]; ok {
-		if err := json.Unmarshal(raw, &executionOrder); err == nil {
-			for index, itemID := range executionOrder {
-				orderLookup[itemID] = uint32(index + 1)
-			}
-		}
+		_ = json.Unmarshal(raw, &executionOrder)
 	}
 
 	var unsupportedItems []types.UnsupportedPlanItem
@@ -104,9 +97,7 @@ func ParseDryRunOutput(input string) ParseDryRunResult {
 		_ = json.Unmarshal(raw, &unsupportedItems)
 	}
 
-	itemsItemIDs := make(map[string]struct{})
-	nextAppendOrder := uint32(len(executionOrder) + 1)
-
+	var planItemsList []types.RestorePlanItem
 	for _, rawItem := range planItems {
 		var planItem types.RestorePlanItem
 		if err := json.Unmarshal(rawItem, &planItem); err != nil {
@@ -115,7 +106,46 @@ func ParseDryRunOutput(input string) ParseDryRunResult {
 			})
 			continue
 		}
+		planItemsList = append(planItemsList, planItem)
+	}
 
+	return buildRestoreItems(targetProject, targetHome, planItemsList, executionOrder, unsupportedItems, errors)
+}
+
+// RestoreItemsFromPlan converts a structured restore plan into executable items.
+func RestoreItemsFromPlan(plan *types.RestorePlan) ParseDryRunResult {
+	return buildRestoreItems(
+		&plan.TargetProject,
+		&plan.TargetHome,
+		plan.Items,
+		plan.ExecutionOrder,
+		plan.UnsupportedItems,
+		nil,
+	)
+}
+
+func buildRestoreItems(
+	targetProject, targetHome *string,
+	planItems []types.RestorePlanItem,
+	executionOrder []string,
+	unsupportedItems []types.UnsupportedPlanItem,
+	errors []ParseDryRunError,
+) ParseDryRunResult {
+	if errors == nil {
+		errors = []ParseDryRunError{}
+	}
+
+	orderLookup := make(map[string]uint32)
+	for index, itemID := range executionOrder {
+		orderLookup[itemID] = uint32(index + 1)
+	}
+
+	seenIDs := make(map[string]struct{})
+	itemsItemIDs := make(map[string]struct{})
+	nextAppendOrder := uint32(len(executionOrder) + 1)
+	var result []types.RestoreItem
+
+	for _, planItem := range planItems {
 		if _, dup := seenIDs[planItem.ItemID]; dup {
 			errors = append(errors, ParseDryRunError{
 				Message: fmt.Sprintf("Duplicate itemId %q skipped", planItem.ItemID),

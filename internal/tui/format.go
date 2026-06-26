@@ -6,25 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/qyinm/hem/internal/hemcore/agents"
 	"github.com/qyinm/hem/internal/hemcore/types"
 )
 
-var agentLabels = map[types.AgentID]string{
-	types.AgentClaudeCode: "Claude Code",
-	types.AgentCodex:      "Codex",
-	types.AgentCursor:     "Cursor",
-	types.AgentOpencode:   "OpenCode",
-	types.AgentPiAgent:    "Pi Agent",
-	types.AgentProject:    "Project",
-	types.AgentUnknown:    "Unknown",
-}
-
 // FormatAgentLabel returns a human-readable agent name.
 func FormatAgentLabel(id types.AgentID) string {
-	if label, ok := agentLabels[id]; ok {
-		return label
-	}
-	return id.String()
+	return agents.DisplayName(id)
 }
 
 // FormatAgentScope formats timeline agent scope for list rows.

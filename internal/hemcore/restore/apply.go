@@ -1,15 +1,15 @@
 package restore
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/qyinm/hem/internal/hemcore/fsutil"
 	"github.com/qyinm/hem/internal/hemcore/pathconfinement"
 	"github.com/qyinm/hem/internal/hemcore/types"
 )
@@ -53,15 +53,7 @@ func ApplyRestoreItems(
 
 		if roots := pathconfinement.RootsFromPaths(options.HomeDir, options.ProjectPath); roots != nil {
 			if _, err := pathconfinement.ValidateConstrainedWritePath(item.Dest, roots); err != nil {
-				reason := err.Error()
-				item.Status = types.RestoreItemStatusFailed
-				item.ErrorMessage = &reason
-				summary.StatusRegistry[item.ItemID] = item.Status
-				summary.Failed++
-				summary.Failures = append(summary.Failures, types.ApplyFailure{
-					ItemID: item.ItemID,
-					Reason: reason,
-				})
+				recordApplyFailure(item, &summary, err.Error())
 				if options.FailFast {
 					stoppedEarly = true
 					break
@@ -71,15 +63,7 @@ func ApplyRestoreItems(
 		}
 
 		if err := executor(item); err != nil {
-			reason := err.Error()
-			item.Status = types.RestoreItemStatusFailed
-			item.ErrorMessage = &reason
-			summary.StatusRegistry[item.ItemID] = item.Status
-			summary.Failed++
-			summary.Failures = append(summary.Failures, types.ApplyFailure{
-				ItemID: item.ItemID,
-				Reason: reason,
-			})
+			recordApplyFailure(item, &summary, err.Error())
 			if options.FailFast {
 				stoppedEarly = true
 				break
@@ -138,18 +122,18 @@ func FormatApplySummary(summary *types.ApplySummary) string {
 }
 
 func writeFileAtomically(filePath, content string) error {
-	var suffix [8]byte
-	_, _ = rand.Read(suffix[:])
-	tempPath := fmt.Sprintf("%s.%d.%s.tmp", filePath, os.Getpid(), hex.EncodeToString(suffix[:]))
-	if err := os.WriteFile(tempPath, []byte(content), 0o644); err != nil {
-		_ = os.Remove(tempPath)
-		return err
-	}
-	if err := os.Rename(tempPath, filePath); err != nil {
-		_ = os.Remove(tempPath)
-		return err
-	}
-	return nil
+	return fsutil.WriteTextAtomically(filePath, content, 0o644)
+}
+
+func recordApplyFailure(item *types.RestoreItem, summary *types.ApplySummary, reason string) {
+	item.Status = types.RestoreItemStatusFailed
+	item.ErrorMessage = &reason
+	summary.StatusRegistry[item.ItemID] = item.Status
+	summary.Failed++
+	summary.Failures = append(summary.Failures, types.ApplyFailure{
+		ItemID: item.ItemID,
+		Reason: reason,
+	})
 }
 
 func readCurrentContent(filePath string) *string {
@@ -629,17 +613,25 @@ func RollbackAppliedItems(
 	}
 
 	if stopped {
+		hasResult := make(map[string]struct{}, len(summary.Results))
+		for _, result := range summary.Results {
+			hasResult[result.ItemID] = struct{}{}
+		}
 		for i := range items {
 			item := &items[i]
-			if item.Status == types.RestoreItemStatusApplied {
-				summary.Skipped++
-				reason := "Rollback stopped before this item"
-				summary.Results = append(summary.Results, types.UndoResult{
-					ItemID: item.ItemID,
-					Status: types.UndoStatusSkipped,
-					Reason: &reason,
-				})
+			if item.Status != types.RestoreItemStatusApplied {
+				continue
 			}
+			if _, already := hasResult[item.ItemID]; already {
+				continue
+			}
+			summary.Skipped++
+			reason := "Rollback stopped before this item"
+			summary.Results = append(summary.Results, types.UndoResult{
+				ItemID: item.ItemID,
+				Status: types.UndoStatusSkipped,
+				Reason: &reason,
+			})
 		}
 	}
 
@@ -685,23 +677,15 @@ func ApplyWithRollback(
 }
 
 func sortIndicesByOrder(indices []int, items []types.RestoreItem) {
-	for i := 0; i < len(indices); i++ {
-		for j := i + 1; j < len(indices); j++ {
-			if items[indices[j]].ExecutionOrder < items[indices[i]].ExecutionOrder {
-				indices[i], indices[j] = indices[j], indices[i]
-			}
-		}
-	}
+	sort.Slice(indices, func(i, j int) bool {
+		return items[indices[i]].ExecutionOrder < items[indices[j]].ExecutionOrder
+	})
 }
 
 func sortIndicesByDescendingOrder(indices []int, items []types.RestoreItem) {
-	for i := 0; i < len(indices); i++ {
-		for j := i + 1; j < len(indices); j++ {
-			if items[indices[j]].ExecutionOrder > items[indices[i]].ExecutionOrder {
-				indices[i], indices[j] = indices[j], indices[i]
-			}
-		}
-	}
+	sort.Slice(indices, func(i, j int) bool {
+		return items[indices[i]].ExecutionOrder > items[indices[j]].ExecutionOrder
+	})
 }
 
 func cloneJSONValue(value any) any {

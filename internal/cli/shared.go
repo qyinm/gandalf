@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/qyinm/hem/internal/hemcore/agents"
 	"github.com/qyinm/hem/internal/hemcore/diff"
 	hemerrors "github.com/qyinm/hem/internal/hemcore/errors"
 	"github.com/qyinm/hem/internal/hemcore/snapshot"
@@ -218,18 +219,7 @@ func notImplementedError(feature string) *types.SnapError {
 }
 
 func displayAgent(agent types.AgentID) string {
-	switch agent {
-	case types.AgentClaudeCode:
-		return "Claude Code"
-	case types.AgentCodex:
-		return "Codex"
-	case types.AgentCursor:
-		return "Cursor"
-	case types.AgentProject:
-		return "Project"
-	default:
-		return agent.String()
-	}
+	return agents.DisplayName(agent)
 }
 
 func renderScanText(scan *types.ScanResult) string {

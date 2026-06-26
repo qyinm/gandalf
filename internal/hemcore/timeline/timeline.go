@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/qyinm/hem/internal/hemcore/agents"
 	"github.com/qyinm/hem/internal/hemcore/diff"
 	"github.com/qyinm/hem/internal/hemcore/snapshot"
 	"github.com/qyinm/hem/internal/hemcore/store"
@@ -377,26 +378,7 @@ func scopedTitle(title string, agent *types.AgentID) string {
 	if agent == nil {
 		return title
 	}
-	return fmt.Sprintf("%s for %s", title, agentLabel(*agent))
-}
-
-func agentLabel(agent types.AgentID) string {
-	switch agent {
-	case types.AgentClaudeCode:
-		return "Claude Code"
-	case types.AgentCodex:
-		return "Codex"
-	case types.AgentCursor:
-		return "Cursor"
-	case types.AgentOpencode:
-		return "OpenCode"
-	case types.AgentPiAgent:
-		return "Pi Agent"
-	case types.AgentProject:
-		return "Project"
-	default:
-		return agent.String()
-	}
+	return fmt.Sprintf("%s for %s", title, agents.DisplayName(*agent))
 }
 
 func highlightsForDiff(graphDiff *diff.GraphDiff) []string {

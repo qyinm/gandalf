@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -128,17 +127,7 @@ func runRestore(cmd *cobra.Command, common *CommonFlags, flags restoreFlags) int
 		})
 	}
 
-	planJSON, err := json.MarshalIndent(plan, "", "  ")
-	if err != nil {
-		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_RESTORE_SERIALIZE_FAILED",
-			Problem: "Failed to serialize restore plan.",
-			Cause:   err.Error(),
-			Fix:     "This is an internal error. Verify the snapshot is valid and try again.",
-		})
-	}
-
-	parsed := restore.ParseDryRunOutput(string(planJSON))
+	parsed := restore.RestoreItemsFromPlan(plan)
 	if len(parsed.Errors) > 0 {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
 			Code:    "HEM_RESTORE_PARSE_ERROR",

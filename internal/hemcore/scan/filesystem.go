@@ -33,21 +33,7 @@ func ScanOneTarget(target ScanTarget) []types.DiscoveredItem {
 	}
 
 	if metadata.Mode()&os.ModeSymlink != 0 {
-		return []types.DiscoveredItem{{
-			ID:            itemID(target, "symlink"),
-			Agent:         target.Agent,
-			Kind:          types.KindSymlink,
-			SourcePath:    target.SourcePath,
-			Scope:         target.Scope,
-			Precedence:    target.Precedence,
-			Parser:        types.ParserFilesystem,
-			Sensitivity:   target.Sensitivity,
-			ContentPolicy: "metadata_only",
-			RestorePolicy: policy.RestorePolicyFor(types.KindSymlink),
-			CaptureStatus: types.CaptureOmitted,
-			Confidence:    types.ConfidenceHigh,
-			Metadata:      marshalRaw(map[string]any{"reason": "symlink_not_followed"}),
-		}}
+		return []types.DiscoveredItem{symlinkDiscoveredItem(target, types.KindSymlink, "metadata_only")}
 	}
 
 	if target.Directory {
@@ -251,21 +237,7 @@ func scanDirectoryEntries(
 		}
 
 		if childMeta.Mode()&os.ModeSymlink != 0 {
-			*evidence = append(*evidence, types.DiscoveredItem{
-				ID:            itemID(childTarget, "symlink"),
-				Agent:         childTarget.Agent,
-				Kind:          types.KindSymlink,
-				SourcePath:    childTarget.SourcePath,
-				Scope:         childTarget.Scope,
-				Precedence:    childTarget.Precedence,
-				Parser:        types.ParserFilesystem,
-				Sensitivity:   childTarget.Sensitivity,
-				ContentPolicy: childTarget.ContentPolicy,
-				RestorePolicy: policy.RestorePolicyFor(types.KindSymlink),
-				CaptureStatus: types.CaptureOmitted,
-				Confidence:    types.ConfidenceHigh,
-				Metadata:      marshalRaw(map[string]any{"reason": "symlink_not_followed"}),
-			})
+			*evidence = append(*evidence, symlinkDiscoveredItem(childTarget, childTarget.Kind, childTarget.ContentPolicy))
 			continue
 		}
 
@@ -403,6 +375,15 @@ func mcpServers(value any) map[string]any {
 		return nil
 	}
 	return servers
+}
+
+func symlinkDiscoveredItem(target ScanTarget, kind types.EvidenceKind, contentPolicy string) types.DiscoveredItem {
+	item := baseItem(target, types.CaptureOmitted, map[string]any{"reason": "symlink_not_followed"}, nil)
+	item.ID = itemID(target, "symlink")
+	item.Kind = kind
+	item.ContentPolicy = contentPolicy
+	item.RestorePolicy = policy.RestorePolicyFor(types.KindSymlink)
+	return item
 }
 
 func baseItem(

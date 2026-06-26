@@ -1,13 +1,10 @@
 package store
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -16,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/qyinm/hem/internal/hemcore/fsutil"
 	"github.com/qyinm/hem/internal/hemcore/types"
 )
 
@@ -270,7 +268,7 @@ func WriteSnapshot(storeDir string, snapshot StoreSnapshot, agent *types.AgentID
 		}
 
 		for _, entry := range snapshot.Content {
-			if entry.CaptureStatus != "captured" {
+			if entry.CaptureStatus != string(types.CaptureCaptured) {
 				continue
 			}
 			if entry.Content == nil {
@@ -563,13 +561,7 @@ func writeJSONAtomic(filePath string, value any) error {
 }
 
 func writeTextAtomic(filePath, value string) error {
-	tempPath := fmt.Sprintf("%s.%d.%s.tmp", filePath, os.Getpid(), randomSuffix())
-	if err := os.WriteFile(tempPath, []byte(value), 0o600); err != nil {
-		_ = os.Remove(tempPath)
-		return &StoreError{IO: err}
-	}
-	if err := os.Rename(tempPath, filePath); err != nil {
-		_ = os.Remove(tempPath)
+	if err := fsutil.WriteTextAtomically(filePath, value, 0o600); err != nil {
 		return &StoreError{IO: err}
 	}
 	return nil
@@ -747,14 +739,6 @@ func fileMode(path string) (uint32, error) {
 		return 0, &StoreError{IO: err}
 	}
 	return uint32(info.Mode().Perm()), nil
-}
-
-func randomSuffix() string {
-	var b [8]byte
-	if _, err := io.ReadFull(rand.Reader, b[:]); err != nil {
-		return fmt.Sprintf("%d", os.Getpid())
-	}
-	return hex.EncodeToString(b[:])
 }
 
 func containsAgent(agents []types.AgentID, target types.AgentID) bool {

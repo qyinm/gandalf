@@ -43,13 +43,28 @@ func runReport(cmd *cobra.Command, common *CommonFlags, reference, out string) i
 		return writeError(cmd.ErrOrStderr(), snapErr)
 	}
 
-	snap, snapErr := snapshotByRef(reference, &runtime)
-	if snapErr != nil {
-		return writeError(cmd.ErrOrStderr(), snapErr)
-	}
-
+	var snap types.Snapshot
+	var scanResult types.ScanResult
 	var graphDiff *diff.GraphDiff
-	if reference != "current" {
+
+	if reference == "current" {
+		current, err := snapshot.CaptureCurrentState(&runtime, "current")
+		if err != nil {
+			return writeError(cmd.ErrOrStderr(), &types.SnapError{
+				Code:    "HEM_CURRENT_STATE_FAILED",
+				Problem: "Failed to capture current state.",
+				Cause:   err.Error(),
+				Fix:     "Verify project and store paths are accessible.",
+			})
+		}
+		snap = current.Snapshot
+		scanResult = current.Scan
+	} else {
+		var snapErr *types.SnapError
+		snap, snapErr = snapshotByRef(reference, &runtime)
+		if snapErr != nil {
+			return writeError(cmd.ErrOrStderr(), snapErr)
+		}
 		current, err := snapshot.CaptureCurrentState(&runtime, "current")
 		if err != nil {
 			return writeError(cmd.ErrOrStderr(), &types.SnapError{
@@ -61,21 +76,6 @@ func runReport(cmd *cobra.Command, common *CommonFlags, reference, out string) i
 		}
 		d := diff.DiffGraphs(snap.Graph, current.Snapshot.Graph)
 		graphDiff = &d
-	}
-
-	var scanResult types.ScanResult
-	if reference == "current" {
-		current, err := snapshot.CaptureCurrentState(&runtime, "current")
-		if err != nil {
-			return writeError(cmd.ErrOrStderr(), &types.SnapError{
-				Code:    "HEM_CURRENT_STATE_FAILED",
-				Problem: "Failed to capture current state.",
-				Cause:   err.Error(),
-				Fix:     "Verify project and store paths are accessible.",
-			})
-		}
-		scanResult = current.Scan
-	} else {
 		scanResult = scan.ScanProject(&types.ScanOptions{
 			ProjectPath: runtime.ProjectPath,
 			HomeDir:     runtime.HomeDir,

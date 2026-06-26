@@ -22,9 +22,8 @@ type UndoHandlerRegistry struct {
 	Handlers map[string]UndoHandler
 }
 
-// DefaultApplyHandlerRegistry returns the standard apply handler registry.
-func DefaultApplyHandlerRegistry() ApplyHandlerRegistry {
-	return ApplyHandlerRegistry{
+var (
+	defaultApplyRegistry = ApplyHandlerRegistry{
 		Handlers: map[string]ApplyHandler{
 			"agent_config":       ApplyAgentConfig,
 			"agent_instruction":  ApplyAgentInstruction,
@@ -36,12 +35,30 @@ func DefaultApplyHandlerRegistry() ApplyHandlerRegistry {
 			"env":                ApplyEnv,
 		},
 	}
+	defaultUndoRegistry = UndoHandlerRegistry{
+		Handlers: map[string]UndoHandler{
+			"agent_config":      RestorePreviousContentUndoHandler,
+			"agent_instruction": RestorePreviousContentUndoHandler,
+			"mcp_server":        RestorePreviousContentUndoHandler,
+			"permission":        RestorePreviousContentUndoHandler,
+			"hook":              RestorePreviousContentUndoHandler,
+			"skill":             RestorePreviousContentUndoHandler,
+			"env_key":           RestorePreviousContentUndoHandler,
+			"env":               RestorePreviousContentUndoHandler,
+			"symlink":           RestorePreviousContentUndoHandler,
+			"unsupported":       NoopUndoHandler,
+		},
+	}
+)
+
+// DefaultApplyHandlerRegistry returns the standard apply handler registry.
+func DefaultApplyHandlerRegistry() ApplyHandlerRegistry {
+	return defaultApplyRegistry
 }
 
 // DispatchDefaultApply routes an item to its registered apply handler.
 func DispatchDefaultApply(item *types.RestoreItem) error {
-	registry := DefaultApplyHandlerRegistry()
-	handler, ok := registry.Handlers[item.ItemType]
+	handler, ok := defaultApplyRegistry.Handlers[item.ItemType]
 	if !ok {
 		message := fmt.Sprintf("No apply handler for type %q", item.ItemType)
 		item.SkipReason = &message
@@ -57,19 +74,7 @@ func CreateDefaultApplyExecutor() RestoreExecutor {
 
 // DefaultUndoHandlerRegistry returns the standard undo handler registry.
 func DefaultUndoHandlerRegistry() UndoHandlerRegistry {
-	handlers := map[string]UndoHandler{
-		"agent_config":      RestorePreviousContentUndoHandler,
-		"agent_instruction": RestorePreviousContentUndoHandler,
-		"mcp_server":        RestorePreviousContentUndoHandler,
-		"permission":        RestorePreviousContentUndoHandler,
-		"hook":              RestorePreviousContentUndoHandler,
-		"skill":             RestorePreviousContentUndoHandler,
-		"env_key":           RestorePreviousContentUndoHandler,
-		"env":               RestorePreviousContentUndoHandler,
-		"symlink":           RestorePreviousContentUndoHandler,
-		"unsupported":       NoopUndoHandler,
-	}
-	return UndoHandlerRegistry{Handlers: handlers}
+	return defaultUndoRegistry
 }
 
 // DispatchDefaultUndo routes an item to its registered undo handler.
@@ -77,8 +82,7 @@ func DispatchDefaultUndo(item *types.RestoreItem) error {
 	if !item.CanRollback || item.ItemType == "unsupported" {
 		return nil
 	}
-	registry := DefaultUndoHandlerRegistry()
-	handler, ok := registry.Handlers[item.ItemType]
+	handler, ok := defaultUndoRegistry.Handlers[item.ItemType]
 	if !ok {
 		return NoopUndoHandler(item)
 	}
