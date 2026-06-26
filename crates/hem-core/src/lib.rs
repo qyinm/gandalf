@@ -38,7 +38,8 @@ pub use parsers::{
     parse_dotenv_keys, parse_json, parse_markdown, parse_toml_key_values, DotenvEntry, ParseResult,
 };
 pub use path_confinement::{
-    validate_constrained_write_path, validate_home_relative_import_segment, ConfinementRoots,
+    confinement_roots_from_paths, validate_constrained_write_path,
+    validate_home_relative_import_segment, ConfinementRoots,
 };
 pub use provenance::build_provenance;
 pub use restore::{

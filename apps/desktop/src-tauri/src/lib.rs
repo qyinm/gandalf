@@ -577,12 +577,25 @@ mod native_notifications {
 mod desktop_home_state_tests {
     use super::build_desktop_home_state;
     use hem_core::{
-        capture_current_state, write_snapshot,
+        capture_current_state, capture_timeline_snapshot, write_snapshot,
         types::{AgentId, EvidenceScope, RuntimeOptions},
-        StoreSnapshot,
+        CaptureTimelineOptions, StoreSnapshot,
     };
     use std::fs;
     use tempfile::TempDir;
+
+    fn write_project_mcp(project_path: &std::path::Path, command: &str) {
+        let payload = serde_json::json!({
+            "mcpServers": {
+                "github": { "command": command }
+            }
+        });
+        fs::write(
+            project_path.join(".mcp.json"),
+            serde_json::to_string_pretty(&payload).expect("serialize mcp"),
+        )
+        .expect("write mcp");
+    }
 
     #[test]
     fn populates_current_snapshot_id_from_store() {
@@ -593,20 +606,32 @@ mod desktop_home_state_tests {
         fs::create_dir_all(&project_path).expect("mkdir project");
         fs::create_dir_all(&home_dir).expect("mkdir home");
 
-        let state = capture_current_state(
-            &RuntimeOptions {
-                project_path: project_path.display().to_string(),
-                home_dir: home_dir.display().to_string(),
-                store_dir: store_dir.display().to_string(),
-                agent: Some(AgentId::Codex),
-                scope: Some(EvidenceScope::User),
-                capture_content: Some(false),
-            },
-            "desktop-baseline",
-        )
-        .expect("capture");
+        let runtime = RuntimeOptions {
+            project_path: project_path.display().to_string(),
+            home_dir: home_dir.display().to_string(),
+            store_dir: store_dir.display().to_string(),
+            agent: Some(AgentId::Codex),
+            scope: Some(EvidenceScope::User),
+            capture_content: Some(false),
+        };
+
+        write_project_mcp(&project_path, "gh-baseline");
+        let state = capture_current_state(&runtime, "desktop-baseline").expect("capture");
         write_snapshot(&store_dir, StoreSnapshot::from(state.snapshot), Some(AgentId::Codex))
             .expect("write snapshot");
+
+        capture_timeline_snapshot(
+            &runtime,
+            &CaptureTimelineOptions {
+                capture_id: Some("desktop-test-capture".to_string()),
+                snapshot_name: Some("desktop-baseline".to_string()),
+                title: Some("Desktop baseline".to_string()),
+                skip_unchanged: false,
+            },
+        )
+        .expect("timeline capture");
+
+        write_project_mcp(&project_path, "gh-changed");
 
         let home = build_desktop_home_state(&project_path, Some(&home_dir));
         assert_eq!(
@@ -617,5 +642,21 @@ mod desktop_home_state_tests {
         );
         assert_eq!(home.protection, "on");
         assert!(!home.surfaces.is_empty());
+        assert!(
+            home.working_changes > 0,
+            "expected drift after mcp change, got {}",
+            home.working_changes
+        );
+        assert!(
+            !home.changelog.is_empty(),
+            "expected timeline changelog entries"
+        );
+
+        if let Ok(scratch) = std::env::var("HEM_SCRATCH_DIR") {
+            let serialized =
+                serde_json::to_string_pretty(&home).expect("serialize desktop home state");
+            fs::write(format!("{scratch}/desktop-home-state.json"), serialized)
+                .expect("write desktop home state evidence");
+        }
     }
 }

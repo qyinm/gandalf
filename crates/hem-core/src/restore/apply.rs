@@ -8,7 +8,7 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use crate::path_confinement::{validate_constrained_write_path, ConfinementRoots};
+use crate::path_confinement::{confinement_roots_from_paths, validate_constrained_write_path};
 use crate::types::{
     ApplyFailure, ApplyOptions, ApplySummary, ApplyWithRollbackResult, RestoreAction,
     RestoreItem, RestoreItemStatus, RollbackSummary, UndoResult, UndoStatus,
@@ -61,13 +61,10 @@ pub fn apply_restore_items(
             continue;
         }
 
-        if let (Some(home_dir), Some(project_path)) =
-            (&options.home_dir, &options.project_path)
-        {
-            let roots = ConfinementRoots {
-                home_dir: Path::new(home_dir).to_path_buf(),
-                project_path: Path::new(project_path).to_path_buf(),
-            };
+        if let Some(roots) = confinement_roots_from_paths(
+            options.home_dir.as_deref(),
+            options.project_path.as_deref(),
+        ) {
             if let Err(reason) =
                 validate_constrained_write_path(Path::new(&item.dest), &roots)
             {
@@ -332,6 +329,7 @@ pub fn apply_mcp_server(item: &mut RestoreItem) -> Result<(), String> {
         mcp_config.insert("mcpServers".to_string(), json!({}));
     }
 
+    let prev_config = Value::Object(mcp_config.clone());
     let servers = mcp_config
         .get_mut("mcpServers")
         .and_then(|v| v.as_object_mut())
@@ -361,6 +359,7 @@ pub fn apply_mcp_server(item: &mut RestoreItem) -> Result<(), String> {
     )?;
     if let Some(state) = item.rollback_state.as_mut().and_then(|v| v.as_object_mut()) {
         state.insert("mcpPath".to_string(), json!(mcp_path));
+        state.insert("mcpConfig".to_string(), prev_config);
         state.insert("previousEntry".to_string(), json!(prev_entry));
     }
     Ok(())
@@ -409,12 +408,24 @@ pub fn apply_permission(item: &mut RestoreItem) -> Result<(), String> {
     )
 }
 
+fn env_key_name_for_item(item: &RestoreItem) -> String {
+    let parts: Vec<&str> = item.item_id.split(':').collect();
+    if parts.len() >= 2 && !parts[1].is_empty() {
+        return parts[1].to_string();
+    }
+    item.item_id
+        .split('.')
+        .next_back()
+        .unwrap_or("VAR")
+        .to_string()
+}
+
 pub fn apply_env_key(item: &mut RestoreItem) -> Result<(), String> {
     let env_path = Path::new(&item.dest)
         .parent()
         .map(|parent| parent.join(".env"))
         .ok_or_else(|| format!("Invalid env destination for {}", item.item_id))?;
-    let key_name = item.item_id.split('.').next_back().unwrap_or("VAR");
+    let key_name = env_key_name_for_item(item);
     let value = item
         .target_content
         .as_ref()
@@ -450,7 +461,14 @@ pub fn apply_env_key(item: &mut RestoreItem) -> Result<(), String> {
     if !content.is_empty() && !content.ends_with('\n') {
         content.push('\n');
     }
-    apply_file_mutation(item, &env_path, Some(&content), None, true)
+    apply_file_mutation(item, &env_path, Some(&content), None, true)?;
+    if let Some(state) = item.rollback_state.as_mut().and_then(|v| v.as_object_mut()) {
+        state.insert(
+            "envPath".to_string(),
+            json!(env_path.to_string_lossy()),
+        );
+    }
+    Ok(())
 }
 
 pub fn apply_env(item: &mut RestoreItem) -> Result<(), String> {

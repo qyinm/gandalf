@@ -7,7 +7,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::diff::{diff_graphs, SemanticChange};
-use crate::path_confinement::path_has_traversal;
+use crate::path_confinement::{confinement_roots_from_paths, validate_constrained_write_path};
 use crate::graph::build_graph;
 use crate::scan::scan_project;
 use crate::store::{read_snapshot, read_snapshot_content};
@@ -152,14 +152,18 @@ pub fn parse_dry_run_output(input: &str) -> ParseDryRunResult {
             target_project.as_deref(),
             target_home.as_deref(),
         );
-        if path_has_traversal(Path::new(&dest)) {
-            errors.push(ParseDryRunError {
-                message: format!(
-                    "Skipping item \"{}\": destination path contains traversal components",
-                    plan_item.item_id
-                ),
-            });
-            continue;
+        if let Some(roots) =
+            confinement_roots_from_paths(target_home.as_deref(), target_project.as_deref())
+        {
+            if let Err(reason) = validate_constrained_write_path(Path::new(&dest), &roots) {
+                errors.push(ParseDryRunError {
+                    message: format!(
+                        "Skipping item \"{}\": {reason}",
+                        plan_item.item_id
+                    ),
+                });
+                continue;
+            }
         }
 
         result.push(RestoreItem {

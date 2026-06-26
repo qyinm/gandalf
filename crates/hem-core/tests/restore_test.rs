@@ -550,7 +550,185 @@ fn parse_dry_run_skips_destinations_with_traversal() {
     });
     let parsed = parse_dry_run_output(&plan_json.to_string());
     assert!(parsed.items.is_empty());
-    assert!(parsed.errors.iter().any(|error| error.message.contains("traversal")));
+    assert!(
+        parsed.errors.iter().any(|error| {
+            error.message.contains("traversal")
+                || error.message.contains("outside home and project")
+        }),
+        "errors: {:?}",
+        parsed.errors
+    );
+}
+
+fn write_project_mcp(project_path: &str, command: &str) {
+    let payload = serde_json::json!({
+        "mcpServers": {
+            "github": {
+                "command": command
+            }
+        }
+    });
+    fs::write(
+        format!("{project_path}/.mcp.json"),
+        serde_json::to_string_pretty(&payload).expect("serialize mcp"),
+    )
+    .expect("write mcp");
+}
+
+#[test]
+fn restore_plan_pipeline_applies_mcp_permission_and_env_with_confinement() {
+    let (_root, project_path, home_dir, store_dir) = make_restore_sandbox();
+    write_project_mcp(&project_path, "gh-baseline");
+    fs::create_dir_all(format!("{home_dir}/.claude")).expect("mkdir claude");
+    fs::write(
+        format!("{home_dir}/.claude/settings.json"),
+        "{\n  \"permissions\": {\n    \"bash\": { \"allow\": [] }\n  }\n}\n",
+    )
+    .expect("write settings");
+
+    let state = capture_current_state(
+        &RuntimeOptions {
+            project_path: project_path.clone(),
+            home_dir: home_dir.clone(),
+            store_dir: store_dir.clone(),
+            agent: None,
+            scope: None,
+            capture_content: Some(false),
+        },
+        "baseline",
+    )
+    .expect("capture baseline");
+    write_snapshot(
+        std::path::Path::new(&store_dir),
+        StoreSnapshot::from(state.snapshot),
+        None,
+    )
+    .expect("write snapshot");
+
+    write_project_mcp(&project_path, "gh-changed");
+    fs::write(
+        format!("{home_dir}/.claude/settings.json"),
+        "{\n  \"permissions\": {\n    \"bash\": { \"allow\": [\"Bash(npm)\"] }\n  }\n}\n",
+    )
+    .expect("write changed settings");
+    fs::write(format!("{project_path}/.env"), "NEW_KEY=added\n").expect("write env");
+
+    let plan = build_restore_plan(&RestoreOptions {
+        source_snapshot: "baseline".to_string(),
+        project_path: project_path.clone(),
+        home_dir: home_dir.clone(),
+        store_dir: store_dir.clone(),
+        dry_run: true,
+        agent: None,
+        scope: None,
+    })
+    .expect("build plan");
+
+    let mcp_item = plan
+        .items
+        .iter()
+        .find(|item| item.kind == hem_core::EvidenceKind::McpServer)
+        .expect("mcp plan item");
+    assert_eq!(mcp_item.action, RestoreAction::Update);
+
+    let permission_item = plan
+        .items
+        .iter()
+        .find(|item| item.kind == hem_core::EvidenceKind::Permission)
+        .expect("permission plan item");
+    assert_eq!(permission_item.action, RestoreAction::Update);
+
+    let env_item = plan
+        .items
+        .iter()
+        .find(|item| item.kind == hem_core::EvidenceKind::EnvKey)
+        .expect("env plan item");
+    assert_eq!(env_item.action, RestoreAction::Delete);
+
+    let plan_json = serde_json::to_string(&plan).expect("serialize plan");
+    let parsed = parse_dry_run_output(&plan_json);
+    assert!(
+        parsed.errors.is_empty(),
+        "parse errors: {:?}",
+        parsed.errors
+    );
+
+    let mut items: Vec<RestoreItem> = parsed
+        .items
+        .into_iter()
+        .filter(|item| {
+            matches!(
+                item.item_type.as_str(),
+                "mcp_server" | "permission" | "env_key"
+            )
+        })
+        .collect();
+    assert_eq!(items.len(), 3, "expected structured handler items");
+
+    let mut executor = create_default_apply_executor();
+    let summary = apply_restore_items(
+        &mut items,
+        &mut executor,
+        &ApplyOptions {
+            fail_fast: true,
+            rollback: None,
+            home_dir: Some(home_dir.clone()),
+            project_path: Some(project_path.clone()),
+        },
+    );
+
+    assert_eq!(
+        summary.successful, 3,
+        "apply summary: {:?}",
+        summary
+    );
+    assert_eq!(summary.failed, 0);
+
+    let mcp_written = fs::read_to_string(format!("{project_path}/.mcp.json")).expect("read mcp");
+    assert!(mcp_written.contains("gh-baseline"));
+
+    let settings_written =
+        fs::read_to_string(format!("{home_dir}/.claude/settings.json")).expect("read settings");
+    assert!(settings_written.contains("\"allow\": []"));
+
+    let env_written = fs::read_to_string(format!("{project_path}/.env")).expect("read env");
+    assert!(!env_written.contains("NEW_KEY="));
+
+    if let Ok(scratch) = std::env::var("HEM_SCRATCH_DIR") {
+        let evidence = serde_json::json!({
+            "plan": plan,
+            "summary": summary,
+            "items": items,
+        });
+        fs::write(
+            format!("{scratch}/review-restore-apply.json"),
+            serde_json::to_string_pretty(&evidence).expect("serialize evidence"),
+        )
+        .expect("write evidence");
+    }
+}
+
+#[test]
+fn mcp_apply_sets_mcp_config_for_undo() {
+    let (_root, project_path, _home_dir, _store_dir) = make_restore_sandbox();
+    let mcp_path = format!("{project_path}/.mcp.json");
+    fs::write(&mcp_path, "{\n  \"mcpServers\": {}\n}\n").expect("seed mcp");
+
+    let mut item = make_item(
+        "mcp_server:docs:abcd1234",
+        "mcp_server",
+        &mcp_path,
+        RestoreAction::Update,
+        Some(serde_json::json!({ "command": "x" })),
+        Some(serde_json::json!({
+            "serverName": "docs",
+            "mcpPath": mcp_path
+        })),
+    );
+    apply_mcp_server(&mut item).expect("apply");
+    let state = item.rollback_state.expect("rollback state");
+    assert!(state.get("mcpConfig").is_some());
+    assert!(state.get("envPath").is_none());
 }
 
 #[test]

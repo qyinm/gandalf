@@ -46,6 +46,36 @@ pub fn is_strictly_under(resolved: &Path, root: &Path) -> bool {
         ))
 }
 
+/// Build confinement roots from optional home/project strings.
+/// When only one root is provided it is used for both axes so partial options
+/// still enforce confinement.
+pub fn confinement_roots_from_paths(
+    home_dir: Option<&str>,
+    project_path: Option<&str>,
+) -> Option<ConfinementRoots> {
+    match (home_dir, project_path) {
+        (None, None) => None,
+        (Some(home), Some(project)) => Some(ConfinementRoots {
+            home_dir: PathBuf::from(home),
+            project_path: PathBuf::from(project),
+        }),
+        (Some(home), None) => {
+            let path = PathBuf::from(home);
+            Some(ConfinementRoots {
+                home_dir: path.clone(),
+                project_path: path,
+            })
+        }
+        (None, Some(project)) => {
+            let path = PathBuf::from(project);
+            Some(ConfinementRoots {
+                home_dir: path.clone(),
+                project_path: path,
+            })
+        }
+    }
+}
+
 /// Reject traversal, out-of-root absolute paths, and blocked home prefixes.
 pub fn validate_constrained_write_path(
     dest: &Path,
