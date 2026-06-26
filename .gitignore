@@ -1,4 +1,5 @@
 dist/
+apps/landing/.astro/
 /bin/
 /gandalf
 node_modules/
