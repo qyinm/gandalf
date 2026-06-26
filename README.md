@@ -1,106 +1,136 @@
-# Gandalf
+<h1 align="center">Gandalf</h1>
 
-Rollback safety net for Codex setup experiments.
+<p align="center">
+  <img alt="Gandalf - AI agent environment management" src="https://shieldcn.dev/header/surface.svg?title=Gandalf&subtitle=AI%20agent%20environment%20management&align=center">
+</p>
 
-Gandalf's current wedge is narrow on purpose: save, diff, and restore your user-global Codex setup under `~/.codex/` after an agent, MCP, hook, or skill experiment goes wrong.
+<p align="center">
+  <strong>AI agent environment management.</strong>
+</p>
 
-Use it before you let Codex or another agent change Codex config, install skills, or edit hooks. The broad multi-agent, profile, desktop, team, and cloud product is future direction, not the Gate 2 CLI path.
+<p align="center">
+  Manage the local setup layer Git does not track:
+  MCP servers, skills, hooks, prompts, permissions, and agent config.
+</p>
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | sh
-
-# or, on macOS
-brew install qyinm/tap/gandalf
-
-# Save a Codex user-global restore point
-gandalf snapshot create --name baseline --agent codex --scope user --project .
-
-# See what changed after installing skills/MCPs
-gandalf diff baseline current --agent codex --scope user --project .
-
-# Preview a restore before applying it
-gandalf restore --snapshot baseline --dry-run --agent codex --scope user --project .
-
-# Apply the rollback when the plan looks right
-gandalf restore --snapshot baseline --apply --experimental --agent codex --scope user --project .
-```
-
-Distribution note: Gandalf ships as a Go binary. npm is no longer a supported install path for this repository.
-
-Gandalf also has broader experimental scan, TUI, restore, and bundle commands. Those are useful for dogfooding, but the current product test is Codex user-global rollback.
-
-**Go engine:** The canonical engine lives in `internal/gandalfcore` with `cmd/gandalf` as the CLI. Build, test, and run Gate 2 with:
-
-```bash
-make build         # produces bin/gandalf
-make test          # go test ./...
-make gate2         # Codex user-global rollback acceptance check
-./bin/gandalf --help
-```
-
-Install from source: `go install github.com/qyinm/gandalf/cmd/gandalf@latest` (after a tagged release). Prebuilt darwin/linux binaries ship via GitHub Releases on `v*` tags (GoReleaser), and are consumed by `install.sh` and the Homebrew tap.
-
-`crates/gandalf-core` and `crates/gandalf-cli` are deprecated Rust reference implementations kept for the desktop transition path. The old Bun/TypeScript CLI, TUI, and core packages are no longer supported distribution paths.
-
-```bash
-# Machine A: export your setup
-gandalf bundle export --name baseline --out daily.gandalf --project .
-
-# Machine B: verify, inspect, and preview it safely
-gandalf bundle verify daily.gandalf
-gandalf bundle inspect daily.gandalf
-gandalf doctor --project .
-gandalf bundle import daily.gandalf --dry-run --project .
-```
+<p align="center">
+  <a href="https://github.com/qyinm/gandalf/actions/workflows/ci.yml"><img alt="CI" src="https://shieldcn.dev/github/qyinm/gandalf/ci.svg"></a>
+  <a href="https://github.com/qyinm/gandalf/releases"><img alt="Release" src="https://shieldcn.dev/github/qyinm/gandalf/release.svg"></a>
+  <a href="https://github.com/qyinm/gandalf/blob/main/LICENSE"><img alt="License" src="https://shieldcn.dev/github/qyinm/gandalf/license.svg"></a>
+  <a href="https://github.com/qyinm/homebrew-tap/blob/main/Formula/gandalf.rb"><img alt="Homebrew tap" src="https://shieldcn.dev/badge/homebrew-qyinm%2Ftap%2Fgandalf-2ea44f.svg"></a>
+</p>
 
 ---
+
+## Contents
+
+- [Why Gandalf](#why-gandalf)
+- [Highlights](#highlights)
+- [Install](#install)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+- [Trust Contract](#trust-contract)
+- [Development](#development)
 
 ## Why Gandalf
 
-AI coding power users constantly change their agent environment:
+Agent power users constantly change their local environment:
 
-- adding MCP servers
-- installing skills
-- editing prompts and instructions
-- changing hooks and permissions
-- asking agents to modify the setup for them
+- add MCP servers
+- install skills and plugins
+- edit prompts, instructions, hooks, and permissions
+- let an agent modify the setup on their behalf
 
-The problem is that agent setup changes usually have no history. After a few experiments, it is hard to know what was original, what changed, and what can be safely removed.
+Those changes usually have no clean management layer. Gandalf gives agent environments a local save point, diff, bundle, and restore loop:
 
-Gandalf gives the supported Codex setup a local rollback history:
+```bash
+gandalf snapshot create --name baseline --agent codex --scope user --project .
+gandalf diff baseline current --agent codex --scope user --project .
+gandalf restore --snapshot baseline --dry-run --agent codex --scope user --project .
+gandalf restore --snapshot baseline --apply --experimental --agent codex --scope user --project .
+```
 
-- **Current setup**: what is installed right now
-- **Snapshot**: a saved point in time
-- **Compare**: what changed between two points
-- **Restore**: go back to a saved setup
-Profiles, bundles, desktop UI, team sync, and cloud sync are future product direction, not the current demand-test wedge.
+Use it before you let an agent change config, install skills, edit hooks, or rewrite setup instructions. Codex user-global setup is the first fully supported path; Gandalf is built for AI agent environment management.
 
----
+## Highlights
 
-## Trust Contract
+- **Local history** for AI agent environment experiments.
+- **Human-readable diffs** for config, skills, hooks, MCP servers, and project setup files.
+- **Dry-run first restores** with explicit apply flags before writing content.
+- **Content-backed snapshots** for the current Codex user-global launch path.
+- **Portable bundles** for exporting, verifying, inspecting, and previewing setup state on another machine.
+- **Go CLI and Bubble Tea TUI** shipped as a single binary.
+- **No npm distribution path**. Gandalf ships through GitHub Releases, `install.sh`, and Homebrew.
 
-By default Gandalf:
+## Install
 
-- reads local user and project agent configuration **only**
-- does **not** execute MCP commands, hooks, scripts, plugins, or agent tools
-- does **not** use the network unless you explicitly opt into an update check with `GANDALF_UPDATE_CHECK=1`
-- writes **only** to `~/.gandalf`, unless `--out` is explicit
-- omits raw secrets and raw `.env` values
-- does **not** follow symlinks
-- requires explicit apply flags before restoring content
-- creates rollback paths for restore operations where supported
-- reports missing local tools and env keys without installing packages or restoring secret values
+### Homebrew
 
-Update notices are off by default.
+```bash
+brew install qyinm/tap/gandalf
+gandalf --help
+```
 
----
+### install.sh
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | sh
+gandalf --help
+```
+
+### From Source
+
+```bash
+go install github.com/qyinm/gandalf/cmd/gandalf@latest
+```
+
+Prebuilt darwin/linux binaries are published on `v*` tags with GoReleaser. The npm package path is no longer supported for this repository.
+
+## Quick Start
+
+Create a safe baseline before changing your agent environment. The current launch path uses Codex user-global setup:
+
+```bash
+gandalf snapshot create --name clean-codex --agent codex --scope user --project .
+```
+
+Compare the baseline with your current setup:
+
+```bash
+gandalf diff clean-codex current --agent codex --scope user --project .
+```
+
+Preview the rollback plan:
+
+```bash
+gandalf restore --snapshot clean-codex --dry-run --agent codex --scope user --project .
+```
+
+Apply only after the plan is correct:
+
+```bash
+gandalf restore --snapshot clean-codex --apply --experimental --agent codex --scope user --project .
+```
+
+## What Gandalf Tracks
+
+| Surface | Supported setup inventory |
+|---|---|
+| Codex | user-global `~/.codex/config.toml`, user hooks, user skills, managed plugin skill inventory |
+| Claude Code | `settings.json`, `.mcp.json`, `CLAUDE.md`, skills, hooks, agents |
+| Cursor | `.cursor/mcp.json`, skills, hooks |
+| OpenCode | config, skills |
+| Pi Agent | settings, extensions, skills, themes, prompts, agents, models |
+| Project | `AGENTS.md`, `CLAUDE.md`, `CODE.md`, `.mcp.json`, `.env` keys |
+
+Codex user-global restore is the current launch path. Broader multi-agent profile management, team sync, and cloud workflows are future direction.
 
 ## Commands
 
-### Local Setup History
+### Setup History
 
 ```bash
-# Discover agents and config files
+# Discover agent environment files
 gandalf scan --project .
 gandalf scan --project . --explain
 gandalf scan --project . --json
@@ -121,32 +151,25 @@ gandalf restore --snapshot baseline --apply --experimental --agent codex --scope
 gandalf restore --snapshot baseline --apply --rollback --experimental --agent codex --scope user --project .
 ```
 
-### Local Setup Workspace
+### Terminal Workspace
 
 ```bash
-# Inspect local setup history entries, when present
 gandalf timeline list --project .
 gandalf timeline show <id>
-
-# Preview undo for a timeline event without writing files
 gandalf timeline undo <id> --dry-run --json
-
-# Open the local setup workspace
 gandalf tui --project .
 ```
 
-Timeline undo is P0 dry-run preview only for stored history entries. It reports `writesFiles=false`, shows MCP changes that could be reversed, and keeps skills, hooks, permissions, env keys, and unsupported surfaces as observe-only.
+`gandalf tui` opens a local setup-history workspace with `Profiles`, `Agents`, and `History` navigation. Timeline undo is dry-run preview only for stored history entries and reports `writesFiles=false`.
 
-`gandalf tui` opens a local setup-history workspace with persistent `Profiles`, `Agents`, and `History` navigation. The first screen is `History > All changes` with Current Setup above local history and an `All agents` filter. The `Agents` nav lists detected agents only. Project-scoped evidence appears in Current Setup as `Project` or `(project)`, not as an agent. Agent screens show current setup inventory, snapshots are full setup save points, Save Setup previews deterministic titles before writing, and Compare shows explicit From / To / Scope before side-by-side setup changes.
-
-### Bundle And Move Setups
+### Bundles
 
 ```bash
 # Export current environment to a portable .gandalf bundle
 gandalf bundle export --name baseline --out daily.gandalf --project .
 gandalf bundle export --name baseline --out daily.gandalf --metadata-only --project .
 
-# Safe preview and verification before importing
+# Verify and preview before importing
 gandalf bundle verify daily.gandalf
 gandalf bundle inspect daily.gandalf
 gandalf doctor --project .
@@ -162,73 +185,62 @@ Destructive operations require either `--experimental` or `GANDALF_EXPERIMENTAL=
 ### Diagnosis
 
 ```bash
-# Security/risk notes
 gandalf audit current --project .
 gandalf audit baseline --json
-
-# Trace evidence to source
 gandalf provenance current --project .
-
-# Export human-readable report
 gandalf report current --project . --out gandalf-report.md
 ```
 
 Every command supports `--json` where structured output is useful.
 
----
+## Trust Contract
 
-## Supported Setup Surfaces
+By default Gandalf:
 
-| Surface | Config surface |
+- reads local user and project agent configuration only
+- does not execute MCP commands, hooks, scripts, plugins, or agent tools
+- does not use the network unless `GANDALF_UPDATE_CHECK=1` is set
+- writes only to `~/.gandalf`, unless `--out` is explicit
+- omits raw secrets and raw `.env` values
+- does not follow symlinks
+- requires explicit apply flags before restoring content
+- creates rollback paths for restore operations where supported
+- reports missing local tools and env keys without installing packages or restoring secret values
+
+Update notices are off by default.
+
+## Tech Stack
+
+| Area | Stack |
 |---|---|
-| Claude Code | settings.json, .mcp.json, CLAUDE.md, skills, hooks, agents |
-| Codex | Current Gate 2 path: user-global `~/.codex/config.toml`, user hooks, user skills, managed plugin skill inventory |
-| Cursor | .cursor/mcp.json, skills, hooks |
-| OpenCode | config, skills |
-| Pi Agent | settings, extensions, skills, themes, prompts, agents, models |
-| Project | AGENTS.md, CLAUDE.md, CODE.md, .mcp.json, .env keys |
-
-Scanner plugin interface: add new agents by implementing `ScannerPlugin`. `Project` is a shared setup surface, not an agent in the TUI navigation.
-
----
-
-## Roadmap
-
-| Milestone | Status |
-|---|---|
-| Read-only scan, diff, audit, provenance, report | ✅ v0.1 |
-| Bundle export/import (`.gandalf` format) | ✅ v0.2 experimental |
-| Restore engine (dry-run, apply, rollback) | ✅ v0.2 experimental |
-| TUI setup-history workspace | ✅ v0.3 preview |
-| Codex user-global content-backed rollback | current Gate 2 wedge |
-| Local multi-profile persistence | future |
-| MCP/skills add-remove manager | future |
-| Background setup-change daemon | future |
-| Cloud profiles and multi-machine sync | future |
-
----
+| CLI | Go, Cobra |
+| TUI | Bubble Tea, Bubbles, Lip Gloss |
+| Engine | Go packages under `internal/gandalfcore` |
+| Landing | Astro, React islands |
+| Desktop | Tauri v2, Vite |
+| Release | GoReleaser, GitHub Releases, Homebrew tap |
 
 ## Development
 
-### Go (canonical)
+### Go
 
 ```bash
 git clone git@github.com:qyinm/gandalf.git
 cd gandalf
-make test            # go test ./...
-make build           # bin/gandalf
-make gate2           # Gate 2 acceptance check
+make test
+make build
+make gate2
 ./bin/gandalf scan --project .
 ```
 
-### Frontend and Desktop
+### Frontend And Desktop
 
 ```bash
 bun install
-bun run check        # landing + desktop checks
-bun run typecheck    # landing + desktop type checks
-bun run test         # desktop tests
-bun run desktop:dev  # run the Tauri desktop app in development
+bun run check
+bun run typecheck
+bun run test
+bun run desktop:dev
 ```
 
 ### Legacy Rust
@@ -238,15 +250,53 @@ cargo test --workspace
 cargo run -p gandalf-cli -- snapshot list
 ```
 
+The Rust crates are deprecated reference implementations kept for the desktop transition path. The Go CLI is canonical.
+
 ## Repository Layout
 
 | Path | Purpose |
 |---|---|
-| `cmd/gandalf` | Go CLI entrypoint (`bin/gandalf`) |
-| `internal/gandalfcore` | Canonical Go engine: scan, store, snapshot, diff, restore, bundle, timeline |
+| `cmd/gandalf` | Go CLI entrypoint |
 | `internal/cli` | Cobra command handlers |
+| `internal/gandalfcore` | Canonical Go engine: scan, store, snapshot, diff, restore, bundle, timeline |
 | `internal/tui` | Bubble Tea terminal workspace |
-| `crates/gandalf-core` | **Deprecated** Rust engine (desktop transition) |
-| `crates/gandalf-cli` | **Deprecated** Rust CLI |
-| `apps/desktop` | Tauri v2 + Vite desktop dashboard shell |
 | `apps/landing` | Astro landing and docs site |
+| `apps/desktop` | Tauri desktop app shell |
+| `install.sh` | Latest GitHub Release binary installer |
+| `.goreleaser.yaml` | Release assets and Homebrew tap formula generation |
+| `crates/gandalf-core` | Deprecated Rust engine |
+| `crates/gandalf-cli` | Deprecated Rust CLI |
+
+## Roadmap
+
+| Milestone | Status |
+|---|---|
+| Read-only scan, diff, audit, provenance, report | v0.1 |
+| Bundle export/import (`.gandalf` format) | v0.2 experimental |
+| Restore engine: dry-run, apply, rollback | v0.2 experimental |
+| TUI setup-history workspace | v0.3 preview |
+| Codex user-global content-backed restore | current launch path |
+| Local multi-profile persistence | future |
+| MCP/skills add-remove manager | future |
+| Background setup-change daemon | future |
+| Cloud profiles and multi-machine sync | future |
+
+## Contributing
+
+Issues and focused pull requests are welcome. For code changes, run the checks that match the surface you touched:
+
+```bash
+make test
+make gate2
+bun run check
+```
+
+For release or installer changes, also run:
+
+```bash
+./scripts/install-smoke.sh
+```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
