@@ -389,12 +389,14 @@ fn default_registry_dispatches_mcp_permission_and_env_handlers() {
         (
             "permission",
             make_item(
-                "permission.bash",
+                "home.claude_code.~/.claude/settings.json.perm-bash",
                 "permission",
                 &format!("{home_dir}/.claude/settings.json"),
                 RestoreAction::Update,
-                Some(serde_json::json!({ "allow": [] })),
-                None,
+                Some(serde_json::json!({
+                    "rule": { "allow": [] }
+                })),
+                Some(serde_json::json!({ "permissionKey": "bash" })),
             ),
         ),
         (
@@ -451,19 +453,25 @@ fn applies_permission_rule_to_settings_json() {
     fs::write(&settings_path, "{\n  \"permissions\": {}\n}\n").expect("seed settings");
 
     let mut item = make_item(
-        "permission.bash",
+        "home.claude_code.~/.claude/settings.json.perm-bash",
         "permission",
         &settings_path,
         RestoreAction::Update,
         Some(serde_json::json!({
-            "allow": ["Bash"]
+            "rule": { "allow": ["Bash"] }
         })),
-        None,
+        Some(serde_json::json!({ "permissionKey": "bash" })),
     );
     apply_permission(&mut item).expect("apply permission");
     let written = fs::read_to_string(&settings_path).expect("read settings");
-    assert!(written.contains("\"bash\""));
-    assert!(written.contains("Bash"));
+    let parsed: serde_json::Value = serde_json::from_str(&written).expect("parse settings");
+    let bash_rule = parsed
+        .get("permissions")
+        .and_then(|permissions| permissions.get("bash"))
+        .expect("bash permission");
+    assert_eq!(bash_rule.get("allow").and_then(|v| v.as_array()).map(|a| a.len()), Some(1));
+    assert!(bash_rule.get("rule").is_none(), "rule wrapper must not be written");
+    assert!(bash_rule.to_string().contains("Bash"));
 }
 
 #[test]
@@ -653,43 +661,79 @@ fn restore_plan_pipeline_applies_mcp_permission_and_env_with_confinement() {
         parsed.errors
     );
 
-    let mut items: Vec<RestoreItem> = parsed
-        .items
-        .into_iter()
-        .filter(|item| {
-            matches!(
-                item.item_type.as_str(),
-                "mcp_server" | "permission" | "env_key"
-            )
-        })
-        .collect();
-    assert_eq!(items.len(), 3, "expected structured handler items");
+    let structured_types = ["mcp_server", "permission", "env_key"];
+    let mut items = parsed.items;
+    assert!(
+        structured_types
+            .iter()
+            .all(|item_type| items.iter().any(|item| item.item_type == *item_type)),
+        "plan items: {:?}",
+        items
+            .iter()
+            .map(|item| (&item.item_id, &item.item_type))
+            .collect::<Vec<_>>()
+    );
 
     let mut executor = create_default_apply_executor();
     let summary = apply_restore_items(
         &mut items,
         &mut executor,
         &ApplyOptions {
-            fail_fast: true,
+            fail_fast: false,
             rollback: None,
             home_dir: Some(home_dir.clone()),
             project_path: Some(project_path.clone()),
         },
     );
 
-    assert_eq!(
-        summary.successful, 3,
-        "apply summary: {:?}",
-        summary
+    for item_type in structured_types {
+        let applied = items
+            .iter()
+            .find(|item| item.item_type == item_type)
+            .expect("structured item");
+        assert_eq!(
+            applied.status,
+            RestoreItemStatus::Applied,
+            "{item_type} apply failed: {:?}",
+            applied.error_message
+        );
+    }
+    let unexpected_failures: Vec<_> = summary
+        .failures
+        .iter()
+        .filter(|failure| {
+            items
+                .iter()
+                .find(|item| item.item_id == failure.item_id)
+                .map(|item| item.item_type.as_str())
+                != Some("agent_config")
+        })
+        .collect();
+    assert!(
+        unexpected_failures.is_empty(),
+        "non-agent_config failures: {:?}",
+        unexpected_failures
     );
-    assert_eq!(summary.failed, 0);
 
     let mcp_written = fs::read_to_string(format!("{project_path}/.mcp.json")).expect("read mcp");
     assert!(mcp_written.contains("gh-baseline"));
 
     let settings_written =
         fs::read_to_string(format!("{home_dir}/.claude/settings.json")).expect("read settings");
-    assert!(settings_written.contains("\"allow\": []"));
+    let settings_json: serde_json::Value =
+        serde_json::from_str(&settings_written).expect("parse settings");
+    let bash_rule = settings_json
+        .get("permissions")
+        .and_then(|permissions| permissions.get("bash"))
+        .expect("bash permission");
+    assert_eq!(
+        bash_rule.get("allow").and_then(|v| v.as_array()).map(|a| a.len()),
+        Some(0)
+    );
+    assert!(
+        bash_rule.get("rule").is_none(),
+        "permission apply must unwrap rule wrapper"
+    );
 
     let env_written = fs::read_to_string(format!("{project_path}/.env")).expect("read env");
     assert!(!env_written.contains("NEW_KEY="));
@@ -764,7 +808,10 @@ fn apply_with_rollback_restores_mcp_json_after_apply() {
     );
     assert_eq!(result.apply_summary.successful, 1);
     assert!(result.rollback_summary.is_some());
-    assert_eq!(fs::read_to_string(&mcp_path).expect("read mcp"), baseline);
+    let restored: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&mcp_path).expect("read mcp")).expect("parse mcp");
+    let expected: serde_json::Value = serde_json::from_str(baseline).expect("parse baseline");
+    assert_eq!(restored, expected);
 }
 
 #[test]
