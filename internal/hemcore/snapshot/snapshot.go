@@ -15,6 +15,7 @@ import (
 	"github.com/qyinm/hem/internal/hemcore/graph"
 	"github.com/qyinm/hem/internal/hemcore/provenance"
 	"github.com/qyinm/hem/internal/hemcore/scan"
+	_ "github.com/qyinm/hem/internal/hemcore/scan/plugins"
 	"github.com/qyinm/hem/internal/hemcore/store"
 	"github.com/qyinm/hem/internal/hemcore/types"
 )

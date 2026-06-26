@@ -138,6 +138,31 @@ func AsRecord(value any) (map[string]any, bool) {
 	}
 }
 
+// MetadataStringArray extracts string values from optional JSON metadata.
+func MetadataStringArray(raw json.RawMessage, key string) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return nil
+	}
+	return ArrayOfStrings(metadata[key])
+}
+
+// IsObject reports whether a JSON value is an object.
+func IsObject(value any) bool {
+	switch v := value.(type) {
+	case map[string]any:
+		return true
+	case json.RawMessage:
+		var obj map[string]any
+		return json.Unmarshal(v, &obj) == nil
+	default:
+		return false
+	}
+}
+
 // ArrayOfStrings extracts string values from a JSON array.
 func ArrayOfStrings(value any) []string {
 	switch v := value.(type) {

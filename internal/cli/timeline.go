@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/qyinm/hem/internal/hemcore/store"
+	timelineundo "github.com/qyinm/hem/internal/hemcore/timeline_undo"
 	"github.com/qyinm/hem/internal/hemcore/types"
 	"github.com/spf13/cobra"
 )
@@ -178,7 +179,7 @@ func runTimelineShow(cmd *cobra.Command, common *CommonFlags, reference string) 
 	return writeStdout(cmd.OutOrStdout(), string(data)+"\n")
 }
 
-func runTimelineUndo(cmd *cobra.Command, _ *CommonFlags, _ string, dryRun bool) int {
+func runTimelineUndo(cmd *cobra.Command, common *CommonFlags, reference string, dryRun bool) int {
 	if !dryRun {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
 			Code:    "HEM_TIMELINE_UNDO_DRY_RUN_REQUIRED",
@@ -187,5 +188,38 @@ func runTimelineUndo(cmd *cobra.Command, _ *CommonFlags, _ string, dryRun bool) 
 			Fix:     "Run `hem timeline undo <id> --dry-run --json`.",
 		})
 	}
-	return writeError(cmd.ErrOrStderr(), notImplementedError("hem timeline undo"))
+	runtime, snapErr := resolveRuntime(common)
+	if snapErr != nil {
+		return writeError(cmd.ErrOrStderr(), snapErr)
+	}
+	var corruptEvents []store.TimelineCorruptEvent
+	plan, err := timelineundo.BuildPlan(runtime.StoreDir, reference, timelineundo.BuildOptions{
+		OnCorruptEntry: func(event store.TimelineCorruptEvent) {
+			corruptEvents = append(corruptEvents, event)
+		},
+	})
+	if err != nil {
+		return writeError(cmd.ErrOrStderr(), &types.SnapError{
+			Code:    "HEM_TIMELINE_UNDO_FAILED",
+			Problem: "Failed to build timeline undo plan.",
+			Cause:   err.Error(),
+			Fix:     "Run `hem timeline list` to see available entries.",
+		})
+	}
+	for _, event := range corruptEvents {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Skipped corrupt timeline event: %s (%s)\n", event.FilePath, event.Error)
+	}
+	if common.JSON {
+		return writeJSON(cmd.OutOrStdout(), plan)
+	}
+	data, err := json.MarshalIndent(plan, "", "  ")
+	if err != nil {
+		return writeError(cmd.ErrOrStderr(), &types.SnapError{
+			Code:    "HEM_JSON_SERIALIZE_FAILED",
+			Problem: "Failed to serialize timeline undo plan.",
+			Cause:   err.Error(),
+			Fix:     "This is an internal error.",
+		})
+	}
+	return writeStdout(cmd.OutOrStdout(), string(data)+"\n")
 }

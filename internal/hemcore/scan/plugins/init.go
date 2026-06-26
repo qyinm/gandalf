@@ -5,11 +5,11 @@ import "github.com/qyinm/hem/internal/hemcore/scan"
 func init() {
 	scan.SetDefaultPluginFactory(func() []scan.ScannerPlugin {
 		return []scan.ScannerPlugin{
-			scan.ClaudeCodeScanner{},
+			ClaudeCodeScanner{},
 			CodexScanner{},
-			scan.CursorScanner{},
-			scan.OpenCodeScanner{},
-			scan.PiAgentScanner{},
+			CursorScanner{},
+			OpenCodeScanner{},
+			PiAgentScanner{},
 			ProjectScanner{},
 		}
 	})

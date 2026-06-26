@@ -267,7 +267,7 @@ func TestRootWithoutSubcommandPrintsHelp(t *testing.T) {
 	}
 }
 
-func TestBundleExportNotImplemented(t *testing.T) {
+func TestBundleExportRequiresSnapshot(t *testing.T) {
 	t.Parallel()
 	_, stderr, code := runCLI(t,
 		"bundle", "export",
@@ -277,7 +277,7 @@ func TestBundleExportNotImplemented(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
-	if !strings.Contains(stderr, "HEM_NOT_IMPLEMENTED") {
-		t.Fatalf("expected not implemented error, got %q", stderr)
+	if !strings.Contains(stderr, "HEM_BUNDLE_EXPORT_FAILED") {
+		t.Fatalf("expected bundle export error, got %q", stderr)
 	}
 }
