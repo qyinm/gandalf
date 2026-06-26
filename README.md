@@ -217,7 +217,6 @@ Update notices are off by default.
 | TUI | Bubble Tea, Bubbles, Lip Gloss |
 | Engine | Go packages under `internal/gandalfcore` |
 | Landing | Astro, React islands |
-| Desktop | Tauri v2, Vite |
 | Release | GoReleaser, GitHub Releases, Homebrew tap |
 
 ## Development
@@ -233,24 +232,13 @@ make gate2
 ./bin/gandalf scan --project .
 ```
 
-### Frontend And Desktop
+### Landing Site
 
 ```bash
 bun install
-bun run check
 bun run typecheck
-bun run test
-bun run desktop:dev
+bun run build
 ```
-
-### Legacy Rust
-
-```bash
-cargo test --workspace
-cargo run -p gandalf-cli -- snapshot list
-```
-
-The Rust crates are deprecated reference implementations kept for the desktop transition path. The Go CLI is canonical.
 
 ## Repository Layout
 
@@ -261,11 +249,8 @@ The Rust crates are deprecated reference implementations kept for the desktop tr
 | `internal/gandalfcore` | Canonical Go engine: scan, store, snapshot, diff, restore, bundle, timeline |
 | `internal/tui` | Bubble Tea terminal workspace |
 | `apps/landing` | Astro landing and docs site |
-| `apps/desktop` | Tauri desktop app shell |
 | `install.sh` | Latest GitHub Release binary installer |
 | `.goreleaser.yaml` | Release assets and Homebrew tap formula generation |
-| `crates/gandalf-core` | Deprecated Rust engine |
-| `crates/gandalf-cli` | Deprecated Rust CLI |
 
 ## Roadmap
 

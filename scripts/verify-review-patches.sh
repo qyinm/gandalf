@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Capture all verification-plan artifacts for code-review patch acceptance.
+# Capture verification artifacts for code-review patch acceptance.
 # Usage: scripts/verify-review-patches.sh [SCRATCH_DIR]
 #        GANDALF_SCRATCH_DIR is used when SCRATCH_DIR is omitted.
 
@@ -16,7 +16,7 @@ fi
 mkdir -p "$SCRATCH"
 export GANDALF_SCRATCH_DIR="$SCRATCH"
 
-GANDALF_BIN="${GANDALF_BIN:-$REPO_ROOT/target/debug/gandalf}"
+GANDALF_BIN="${GANDALF_BIN:-$REPO_ROOT/bin/gandalf}"
 FAILED=0
 
 log() { printf '==> %s\n' "$*"; }
@@ -36,14 +36,25 @@ require_file() {
   echo "CHECK OK: $path"
 }
 
-log "build gandalf-cli"
-cargo build -p gandalf-cli -q
+log "build Go gandalf"
+mkdir -p bin
+go build -o "$GANDALF_BIN" ./cmd/gandalf
 
-# --- Step 1: restore tests (twice) + gandalf-core summary ---
-log "step 1: restore_test x2"
-cargo test -p gandalf-core --test restore_test >"$SCRATCH/restore-test-1.log" 2>&1
-cargo test -p gandalf-core --test restore_test >"$SCRATCH/restore-test-2.log" 2>&1
-cargo test -p gandalf-core -- --test-threads=1 2>&1 | tail -20 >"$SCRATCH/gandalf-core-summary.log"
+# --- Step 1: restore tests (twice) + Go summary ---
+log "step 1: restore tests x2"
+go test -count=1 ./internal/gandalfcore/restore >"$SCRATCH/restore-test-1.log" 2>&1 &
+RESTORE_1_PID=$!
+go test -count=1 ./internal/gandalfcore/restore >"$SCRATCH/restore-test-2.log" 2>&1 &
+RESTORE_2_PID=$!
+
+if ! wait "$RESTORE_1_PID"; then
+  echo "CHECK FAIL: restore test run 1 failed" >&2
+  FAILED=1
+fi
+if ! wait "$RESTORE_2_PID"; then
+  echo "CHECK FAIL: restore test run 2 failed" >&2
+  FAILED=1
+fi
 
 # --- Step 2: CLI restore help/dry-run + bundle verify ---
 log "step 2: CLI restore dry-run and bundle verify"
@@ -97,38 +108,30 @@ printf '%s\n' '{"mcpServers":{"github":{"command":"gh"}}}' >"$BUNDLE_SANDBOX/pro
   set -e
 } >"$SCRATCH/bundle-verify-invalid.out" 2>&1
 
-# --- Step 3: restore pipeline evidence JSON ---
-log "step 3: restore pipeline evidence"
-cargo test -p gandalf-core --test restore_test restore_plan_pipeline_applies_mcp_permission_and_env_with_confinement \
-  >>"$SCRATCH/restore-test-1.log" 2>&1
-
-# --- Step 4: desktop home state evidence ---
-log "step 4: desktop home state"
-cargo check -p gandalf-desktop -q
-cargo test -p gandalf-desktop --lib populates_current_snapshot_id_from_store >>"$SCRATCH/desktop-home-state.log" 2>&1
-
-# --- Step 5: review commits log ---
-log "step 5: review commits"
-git log --oneline -12 >"$SCRATCH/review-commits.log"
-
-# --- Step 6: workspace tests ---
-log "step 6: workspace tests"
+# --- Step 3: full workspace tests ---
+log "step 3: full Go tests"
 set +e
-cargo test --workspace >"$SCRATCH/workspace-tests-full.log" 2>&1
-WORKSPACE_EXIT=$?
+go test ./... >"$SCRATCH/go-tests-full.log" 2>&1
+GO_TEST_EXIT=$?
 set -e
-tail -30 "$SCRATCH/workspace-tests-full.log" >"$SCRATCH/workspace-tests.log"
-echo "workspace_exit=$WORKSPACE_EXIT" >>"$SCRATCH/workspace-tests.log"
-if [[ "$WORKSPACE_EXIT" -ne 0 ]]; then
-  echo "CHECK FAIL: cargo test --workspace exited $WORKSPACE_EXIT" >&2
+tail -30 "$SCRATCH/go-tests-full.log" >"$SCRATCH/go-tests.log"
+grep -E 'github.com/qyinm/gandalf/internal/gandalfcore' "$SCRATCH/go-tests-full.log" >"$SCRATCH/gandalfcore-summary-full.log" || true
+tail -30 "$SCRATCH/gandalfcore-summary-full.log" >"$SCRATCH/gandalfcore-summary.log"
+echo "go_test_exit=$GO_TEST_EXIT" >>"$SCRATCH/go-tests.log"
+if [[ "$GO_TEST_EXIT" -ne 0 ]]; then
+  echo "CHECK FAIL: go test ./... exited $GO_TEST_EXIT" >&2
   FAILED=1
 fi
 
+# --- Step 4: review commits log ---
+log "step 4: review commits"
+git log --oneline -12 >"$SCRATCH/review-commits.log"
+
 # --- Checklist ---
 log "artifact checklist"
-require_file "$SCRATCH/restore-test-1.log" "test result: ok"
-require_file "$SCRATCH/restore-test-2.log" "test result: ok"
-require_file "$SCRATCH/gandalf-core-summary.log"
+require_file "$SCRATCH/restore-test-1.log" "ok"
+require_file "$SCRATCH/restore-test-2.log" "ok"
+require_file "$SCRATCH/gandalfcore-summary.log"
 require_file "$SCRATCH/cli-restore-dryrun.out" "--help"
 require_file "$SCRATCH/cli-restore-dryrun.out" "gandalf restore dry-run"
 require_file "$SCRATCH/cli-restore-dryrun.out" "mcp_server"
@@ -138,19 +141,17 @@ if grep -F -- "No apply handler" "$SCRATCH/cli-restore-dryrun.out" >/dev/null; t
 else
   echo "CHECK OK: no handler errors in cli-restore-dryrun.out"
 fi
-require_file "$SCRATCH/bundle-verify-valid.out" "Bundle verification passed"
+require_file "$SCRATCH/bundle-verify-valid.out" "Status: valid"
 require_file "$SCRATCH/bundle-verify-valid.out" "exit_code=0"
 require_file "$SCRATCH/bundle-verify-invalid.out" "GANDALF_BUNDLE_VERIFY_FAILED"
 require_file "$SCRATCH/bundle-verify-invalid.out" "exit_code=1"
-require_file "$SCRATCH/review-restore-apply.json"
-require_file "$SCRATCH/desktop-home-state.json" "currentSnapshotId"
-require_file "$SCRATCH/review-commits.log" "fix(review)"
-require_file "$SCRATCH/workspace-tests.log" "test result:"
+require_file "$SCRATCH/review-commits.log"
+require_file "$SCRATCH/go-tests.log" "go_test_exit=0"
 
 if [[ "$FAILED" -ne 0 ]]; then
-  echo "verification FAILED — see $SCRATCH" >&2
+  echo "verification FAILED -- see $SCRATCH" >&2
   exit 1
 fi
 
-echo "verification PASSED — artifacts in $SCRATCH"
+echo "verification PASSED -- artifacts in $SCRATCH"
 exit 0

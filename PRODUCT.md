@@ -130,7 +130,7 @@ Active Profile
 Applies to this Mac
 ```
 
-This keeps the first desktop dashboard and CLI status simple:
+This keeps the first local status surfaces simple:
 
 ```text
 Mac Setup
@@ -283,16 +283,16 @@ Rollback uses older snapshots from the profile history.
 
 Before risky operations, Gandalf can create an automatic snapshot in the current profile so the user can return to it later. That automatic snapshot is still a profile save, not a separate storage model.
 
-### D7. Desktop MVP Is Dashboard Plus Lightweight Menu Bar
+### D7. Future Desktop Is Dashboard Plus Lightweight Menu Bar
 
-Desktop MVP should include both:
+If desktop becomes active later, it should include both:
 
 ```text
 Full dashboard
 + lightweight menu bar companion
 ```
 
-The dashboard is the primary product surface.
+The dashboard would be the primary desktop product surface.
 
 ```text
 Dashboard
@@ -300,7 +300,7 @@ Dashboard
 = create snapshot / switch / restore / compare / team proposal
 ```
 
-The menu bar is the always-visible status and quick-action surface.
+The menu bar would be the always-visible status and quick-action surface.
 
 ```text
 Menu bar
@@ -313,7 +313,7 @@ Menu bar
 
 Product implication:
 
-> Gandalf desktop is not just a background watcher. It is a global AI agent setup branch manager with a lightweight always-on status surface.
+Future always-on surfaces should not be framed as background watchers. If Gandalf later adds one, it should feel like a global AI agent setup branch manager with a lightweight status surface.
 
 ### D8. High-Risk Changes Warn, But Do Not Block Snapshot
 
@@ -646,7 +646,7 @@ Rationale:
 Codex-only MVP
 = narrower parser surface
 = safer restore semantics
-= faster desktop MVP
+= faster CLI/TUI MVP
 = clearer product dogfooding
 ```
 
@@ -925,18 +925,18 @@ MVP Gandalf Cloud login should use browser-based device code approval.
 Core model:
 
 ```text
-Desktop or CLI requests device login.
+Local app or CLI requests device login.
 Gandalf shows a short device code.
 User opens Gandalf Cloud in the browser.
 User signs in with email code.
 User approves this Mac or CLI session.
-Gandalf desktop/CLI receives a device session token.
+Gandalf receives a device session token.
 ```
 
 This should be the default for:
 
 ```text
-desktop app login
+local app login
 CLI login
 team invite acceptance
 personal cloud remotes
@@ -944,7 +944,7 @@ team profile remotes
 subscription ownership
 ```
 
-Desktop UI:
+Future local app UI:
 
 ```text
 Sign in to Gandalf Cloud
@@ -984,7 +984,7 @@ Device:
 MacBook Pro
 
 Requested by:
-Gandalf Desktop
+Gandalf
 
 Signed in as:
 hippoo@example.com
@@ -1003,7 +1003,7 @@ Team Spaces available.
 Reason:
 
 ```text
-Works for both desktop and CLI.
+Works for both local app surfaces and CLI.
 Avoids fragile localhost callback and custom URL scheme flows.
 Avoids password management in MVP.
 Keeps account creation inside the browser.
@@ -1021,7 +1021,7 @@ Out of MVP:
 
 ```text
 password login
-magic-link-only desktop login
+magic-link-only local app login
 local callback login
 custom URL scheme login
 passkey-first login
@@ -1081,7 +1081,7 @@ Device management UI:
 Account Settings
 
 Devices
-- MacBook Pro        Active now        Gandalf Desktop
+- MacBook Pro        Active now        Gandalf Local App
 - Mac Studio         Last seen 2d ago  Gandalf CLI
 
 [Revoke Device]
@@ -1105,7 +1105,7 @@ Easy immediate revoke.
 Simple device audit.
 Simple last_seen tracking.
 No JWT revocation complexity in MVP.
-Better fit for desktop/CLI local-first sessions.
+Better fit for local app/CLI local-first sessions.
 ```
 
 ### D23. Device Naming Uses System Name With Rename Support
@@ -1144,7 +1144,7 @@ Examples:
 display_name: Work Mac
 system_name: Hippoo's MacBook Pro
 platform: macOS
-client_type: Gandalf Desktop
+client_type: Gandalf Local App
 ```
 
 Approval UI:
@@ -1156,7 +1156,7 @@ Device:
 Hippoo's MacBook Pro
 
 App:
-Gandalf Desktop
+Gandalf Local App
 
 [Approve Device]
 ```
@@ -1166,9 +1166,9 @@ Account settings UI:
 ```text
 Devices
 
-Work Mac              Active now        Gandalf Desktop
+Work Mac              Active now        Gandalf Local App
 Home Mac              Last seen 3d ago  Gandalf CLI
-Hippoo's Mac Studio   Last seen 12d ago Gandalf Desktop
+Hippoo's Mac Studio   Last seen 12d ago Gandalf Local App
 
 [Rename] [Revoke]
 ```
@@ -1775,7 +1775,7 @@ Daemon must not be the product concept or main user-facing feature.
 Reason:
 
 ```text
-Gandalf needs always-on protection to deliver desktop value.
+Gandalf may eventually need always-on protection to deliver a richer local app experience.
 Opt-in onboarding avoids silently installing background behavior.
 Menu bar presence makes the watcher visible and controllable.
 Launch at Login gives always-on protection without daemon-first UX.
@@ -2572,7 +2572,7 @@ Snapshots: 18
 [Attach to This Mac]
 ```
 
-Desktop behavior:
+Future local app behavior:
 
 ```text
 Cloud
@@ -2586,7 +2586,7 @@ Attach flow:
 ```text
 User clicks [Attach to This Mac] in web dashboard.
 Browser device approval confirms the Mac.
-Gandalf desktop receives attach request.
+Gandalf receives attach request.
 Gandalf creates local personal profile tracking the cloud remote.
 Gandalf fetches remote snapshots.
 Gandalf shows preview before applying the profile to current Codex setup.
@@ -2598,13 +2598,13 @@ CLI can still expose an explicit attach command for power users:
 gandalf profile attach cloud/hippoo/frontend
 ```
 
-Do not put cloud-only deleted profiles in the primary desktop profile picker by default.
+Do not put cloud-only deleted profiles in the primary local profile picker by default.
 
 Reason:
 
 ```text
 Cloud-only profile management is account/cloud state, not daily local switching.
-The desktop profile picker should stay focused on local active profiles.
+The local profile picker should stay focused on local active profiles.
 The web dashboard is a better place to browse cloud history and recover deleted local profiles.
 Attach still requires local preview before writing Codex setup.
 ```
@@ -2632,7 +2632,7 @@ Out of scope for web MVP:
 local profile switching
 local restore/apply
 editing ~/.codex
-full desktop dashboard replacement
+full local dashboard replacement
 complex team proposal review UI
 full audit dashboard
 field-level diff/merge
@@ -2677,7 +2677,7 @@ Home Mac        Last seen 3d ago
 Role split:
 
 ```text
-Desktop:
+Local app surface:
 local profile switching, restore, apply, timeline, protection, local risk review
 
 Web:
@@ -2688,18 +2688,18 @@ Reason:
 
 ```text
 Web is the natural place for account and cloud state.
-Desktop is the natural place for local file writes and Codex setup apply.
-Keeping web smaller avoids duplicating the desktop dashboard.
+Local app surfaces are the natural place for local file writes and Codex setup apply.
+Keeping web smaller avoids duplicating the local dashboard.
 Attach to This Mac bridges cloud state back into local preview/apply.
 ```
 
-### D43. Team Proposal Review Is Desktop-Only In MVP
+### D43. Team Proposal Review Needs A Local-Context Surface
 
-MVP should not split team Profile Proposal review between web and desktop.
+MVP should not split team Profile Proposal review between web and a local-context surface when that workflow becomes active.
 
-Team proposal review, approval, and publish should happen in the desktop app.
+Team proposal review, approval, and publish should happen in a local-context surface.
 
-Desktop owns:
+Local-context surface owns:
 
 ```text
 team proposal list
@@ -2723,7 +2723,7 @@ personal cloud profiles
 account settings
 ```
 
-Desktop proposal list UI:
+Local proposal list UI:
 
 ```text
 Team Proposals
@@ -2738,7 +2738,7 @@ Risk: High
 [Review]
 ```
 
-Desktop proposal review UI:
+Local proposal review UI:
 
 ```text
 Profile Proposal #42
@@ -2768,9 +2768,9 @@ Reason:
 
 ```text
 Team proposal review is about Codex setup diff and risk.
-The desktop app already owns local preview, switch, restore, and risk review.
-Web proposal UI would duplicate desktop product surface too early.
-Keeping proposal review in desktop makes the MVP simpler and safer.
+The local-context surface should own local preview, switch, restore, and risk review.
+Web proposal UI would duplicate local product surface too early.
+Keeping proposal review local makes the workflow simpler and safer.
 ```
 
 ### D44. Team Proposal Publish Is Lightweight And Non-Blocking
@@ -2813,7 +2813,7 @@ Do not write ~/.codex on reviewer machines.
 Do not bypass each user's switch/apply preview later.
 ```
 
-Desktop proposal UI:
+Local proposal UI:
 
 ```text
 Profile Proposal #42
@@ -4353,11 +4353,11 @@ Needs action:
 [Show Setup Instructions]
 ```
 
-## Desktop Product Direction
+## Future Desktop Product Direction
 
-Gandalf should become a desktop app, but not by simply porting the TUI.
+Gandalf may become a desktop app later, but the current MVP should focus on CLI/TUI setup semantics first.
 
-The desktop app should be dashboard-first with a lightweight menu bar companion.
+If a desktop app is revisited, it should be dashboard-first with a lightweight menu bar companion. The implementation stack is intentionally undecided.
 
 ### Desktop Role
 
@@ -4462,15 +4462,15 @@ Settings as a main nav item
 
 These can exist under advanced/debug views.
 
-## Desktop MVP Design
+## Future Desktop Reference Design
 
 Detailed desktop screen composition and ASCII wireframes live in [docs/design/desktop-mvp.md](docs/design/desktop-mvp.md).
 
-This product document keeps only the desktop product direction and menu bar/protection requirements.
+This product document keeps desktop ideas as deferred reference material, not current MVP requirements.
 
 ### Menu Bar / Guard
 
-Desktop MVP should include lightweight menu bar status.
+A future desktop surface may include lightweight menu bar status.
 
 ```text
 Gandalf: Protected
@@ -4677,7 +4677,7 @@ For local usage, risk is a warning and explanation layer. For team usage, risk b
 ### Free
 
 - local CLI
-- desktop dashboard
+- future desktop dashboard
 - personal profiles
 - create snapshot/switch/compare/restore
 - local snapshots
@@ -4728,7 +4728,7 @@ Recommended sequence:
 9. Automatic local snapshots while using a team profile
 10. Push local snapshots
 11. Profile Proposal create/review/publish flow
-12. Desktop dashboard + lightweight menu bar
+12. Future local dashboard + lightweight status surface
 13. Personal cloud remote sync
 14. Guard notifications
 15. Team review/publish
@@ -4796,9 +4796,9 @@ Team profile updates should use a lightweight proposal, diff, comment, and publi
 
 Using a team profile creates or updates a local tracking profile. Local environment changes become local snapshots. Sharing them requires push plus Profile Proposal.
 
-### 9. Desktop Is Dashboard Plus Lightweight Menu Bar
+### 9. Future Desktop Is Dashboard Plus Lightweight Menu Bar
 
-Desktop should center active profile, working changes, risk, timeline, switch, save, and rollback in the dashboard. Menu bar should provide status, notifications, and quick actions only.
+If a desktop surface is revisited, it should center active profile, working changes, risk, timeline, switch, save, and rollback in the dashboard. A lightweight status surface should provide status, notifications, and quick actions only.
 
 ### 10. Cloud Sync Uses Pull-Rebase
 
@@ -4830,7 +4830,7 @@ Generic invite links are allowed for easy onboarding, but they should expire, be
 
 ### 17. Cloud Login Is Device Approval
 
-Gandalf Cloud login should treat each Mac or CLI installation as an approved device session. The browser owns account sign-in; desktop and CLI receive approved device access.
+Gandalf Cloud login should treat each Mac or CLI installation as an approved device session. The browser owns account sign-in; local app surfaces and CLI receive approved device access.
 
 ### 18. Device Sessions Are Server-Revocable
 
@@ -4914,15 +4914,15 @@ Deleting a local personal profile should delete local state only and preserve cl
 
 ### 38. Cloud-Only Profiles Live In Web Dashboard
 
-When a personal cloud remote exists without a local profile, users should recover or attach it from the Gandalf web dashboard, not from the primary desktop profile picker.
+When a personal cloud remote exists without a local profile, users should recover or attach it from the Gandalf web dashboard, not from the primary local profile picker.
 
-### 39. Web Owns Cloud State, Desktop Owns Local Apply
+### 39. Web Owns Cloud State, Local Surfaces Own Local Apply
 
-The web dashboard should manage account, devices, billing, personal cloud profiles, and basic team membership. The desktop app should own local profile switching, restore, protection, and Codex setup writes.
+The web dashboard should manage account, devices, billing, personal cloud profiles, and basic team membership. Local surfaces should own local profile switching, restore, protection, and Codex setup writes.
 
-### 40. Team Proposal Review Belongs In Desktop
+### 40. Team Proposal Review Needs Local Context
 
-MVP team proposal review and publish should happen in the desktop app, because proposals are evaluated through setup diff, risk, preview, and local rollback context.
+Team proposal review and publish should happen in a local-context surface when that workflow becomes current scope, because proposals are evaluated through setup diff, risk, preview, and local rollback context.
 
 ### 41. Team Publish Is Lightweight By Default
 
@@ -4995,4 +4995,4 @@ The team proposal MVP decision is now resolved:
 
 > Ship Lightweight Proposal in MVP.
 
-The next product decision should be about desktop MVP sequencing, not deeper PR-style review mechanics.
+The next product decision should be about CLI/TUI setup semantics, not desktop MVP sequencing or deeper PR-style review mechanics.

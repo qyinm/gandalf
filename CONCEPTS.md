@@ -42,4 +42,4 @@ A named capture of project and user-global evidence at a point in time. Snapshot
 A snapshot whose store entry includes captured file bytes in addition to metadata and structured evidence. Gate 2 restore depends on content-backed snapshots when byte-exact restoration of agent config files is required.
 
 ### Store
-The on-disk persistence layer for snapshots, timeline entries, and related Gandalf state. Desktop and CLI clients read the same store APIs for snapshot listing and changelog, so snapshot replacement must be atomic enough that readers never observe new metadata paired with partial or missing content blobs.
+The on-disk persistence layer for snapshots, timeline entries, and related Gandalf state. CLI and TUI surfaces read the same store APIs for snapshot listing and changelog, so snapshot replacement must be atomic enough that readers never observe new metadata paired with partial or missing content blobs.
