@@ -42,9 +42,19 @@ go build -o "$GANDALF_BIN" ./cmd/gandalf
 
 # --- Step 1: restore tests (twice) + Go summary ---
 log "step 1: restore tests x2"
-go test ./internal/gandalfcore/restore >"$SCRATCH/restore-test-1.log" 2>&1
-go test ./internal/gandalfcore/restore >"$SCRATCH/restore-test-2.log" 2>&1
-go test ./internal/gandalfcore/... 2>&1 | tail -30 >"$SCRATCH/gandalfcore-summary.log"
+go test ./internal/gandalfcore/restore >"$SCRATCH/restore-test-1.log" 2>&1 &
+RESTORE_1_PID=$!
+go test ./internal/gandalfcore/restore >"$SCRATCH/restore-test-2.log" 2>&1 &
+RESTORE_2_PID=$!
+
+if ! wait "$RESTORE_1_PID"; then
+  echo "CHECK FAIL: restore test run 1 failed" >&2
+  FAILED=1
+fi
+if ! wait "$RESTORE_2_PID"; then
+  echo "CHECK FAIL: restore test run 2 failed" >&2
+  FAILED=1
+fi
 
 # --- Step 2: CLI restore help/dry-run + bundle verify ---
 log "step 2: CLI restore dry-run and bundle verify"
@@ -105,6 +115,8 @@ go test ./... >"$SCRATCH/go-tests-full.log" 2>&1
 GO_TEST_EXIT=$?
 set -e
 tail -30 "$SCRATCH/go-tests-full.log" >"$SCRATCH/go-tests.log"
+grep -E 'github.com/qyinm/gandalf/internal/gandalfcore' "$SCRATCH/go-tests-full.log" >"$SCRATCH/gandalfcore-summary-full.log" || true
+tail -30 "$SCRATCH/gandalfcore-summary-full.log" >"$SCRATCH/gandalfcore-summary.log"
 echo "go_test_exit=$GO_TEST_EXIT" >>"$SCRATCH/go-tests.log"
 if [[ "$GO_TEST_EXIT" -ne 0 ]]; then
   echo "CHECK FAIL: go test ./... exited $GO_TEST_EXIT" >&2

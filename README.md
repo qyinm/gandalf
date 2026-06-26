@@ -236,9 +236,8 @@ make gate2
 
 ```bash
 bun install
-bun run check
 bun run typecheck
-bun run test
+bun run build
 ```
 
 ## Repository Layout

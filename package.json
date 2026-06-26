@@ -11,7 +11,7 @@
   "scripts": {
     "build": "bun run --cwd apps/landing build",
     "typecheck": "bun run --cwd apps/landing typecheck",
-    "test": "go test ./...",
+    "test": "bun run go:test",
     "check": "bun run typecheck && bun run build && bun run test",
     "go:test": "go test ./...",
     "go:build": "go build -o bin/gandalf ./cmd/gandalf",

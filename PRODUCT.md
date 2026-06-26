@@ -646,7 +646,7 @@ Rationale:
 Codex-only MVP
 = narrower parser surface
 = safer restore semantics
-= faster desktop MVP
+= faster CLI/TUI MVP
 = clearer product dogfooding
 ```
 
