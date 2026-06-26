@@ -1,4 +1,6 @@
 dist/
+/bin/
+/hem
 node_modules/
 /target/
 *.log
