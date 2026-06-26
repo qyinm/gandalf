@@ -218,7 +218,7 @@ design:
 
 ## Icons
 
-Use [Lucide icons](https://lucide.dev/icons/) across all surfaces (landing, desktop, web dashboard).
+Use [Lucide icons](https://lucide.dev/icons/) across landing and future app/dashboard surfaces.
 
 | Context | Icon |
 |---------|------|

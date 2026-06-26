@@ -1,6 +1,6 @@
 # Gandalf Architecture
 
-Gandalf is a local-first workspace for inspecting, packaging, and restoring AI coding agent environments. It captures agent configuration surfaces such as MCP servers, skills, hooks, permissions, instructions, and project-local agent files into a normalized evidence model, then uses that model for snapshots, diffs, audits, reports, `.gandalf` bundles, terminal UI, and the desktop dashboard shell.
+Gandalf is a local-first workspace for inspecting, packaging, and restoring AI coding agent environments. It captures agent configuration surfaces such as MCP servers, skills, hooks, permissions, instructions, and project-local agent files into a normalized evidence model, then uses that model for snapshots, diffs, audits, reports, `.gandalf` bundles, and the terminal UI.
 
 The core architectural rule is simple: scan paths are read-only and policy-aware; write paths are explicit, narrow, and reversible where possible.
 
@@ -8,7 +8,7 @@ The core architectural rule is simple: scan paths are read-only and policy-aware
 
 `internal/gandalfcore` is the canonical engine. `cmd/gandalf` is the supported CLI entrypoint and `internal/tui` is the Bubble Tea terminal workspace.
 
-New CLI, engine, and TUI behavior lands in Go first. The old Bun/TypeScript CLI, TUI, and core packages have been removed from the supported architecture. The Rust crates remain only for the Tauri desktop transition path until a separate desktop bridge plan replaces them.
+New CLI, engine, and TUI behavior lands in Go. The old Bun/TypeScript CLI, TUI, and core packages have been removed from the supported architecture, and the deprecated Rust engine, CLI, and Tauri desktop transition path are no longer active repository surfaces.
 
 ## System Shape
 
@@ -33,11 +33,6 @@ New CLI, engine, and TUI behavior lands in Go first. The old Bun/TypeScript CLI,
                 | internal/tui         |
                 +----------------------+
 
-                +----------------------+
-                | Desktop transition   |
-                | apps/desktop         |
-                | src-tauri -> Rust    |
-                +----------------------+
 ```
 
 ## Runtime Entry Points
@@ -49,8 +44,6 @@ New CLI, engine, and TUI behavior lands in Go first. The old Bun/TypeScript CLI,
 - `install.sh` installs the latest stable release binary from GitHub Releases.
 - Homebrew installs use the `qyinm/tap/gandalf` formula generated from GoReleaser into `qyinm/homebrew-tap`.
 - The release workflow needs `GORELEASER_GITHUB_TOKEN` with write access to `qyinm/homebrew-tap`; the default repository token is only enough for same-repo release assets.
-- `crates/gandalf-cli` and `crates/gandalf-core` are deprecated Rust stacks kept for desktop parity and transition tests only; do not extend for new CLI behavior.
-- `apps/desktop/src-tauri` still depends on Rust until a separate desktop bridge plan lands.
 
 ## Core Data Model
 
@@ -105,4 +98,4 @@ CI must keep the supported runtime green:
 - install script smoke: `./scripts/install-smoke.sh`
 - Gate 2 acceptance: `node scripts/gate2-acceptance.mjs`
 
-Frontend and desktop checks remain for `apps/landing` and `apps/desktop`, but they are not CLI distribution paths.
+Landing-site checks remain for `apps/landing`, but they are not CLI distribution paths.

@@ -3,13 +3,13 @@
 Status: working design document
 Last updated: 2026-06-10
 
-This document defines the desktop MVP screen structure and ASCII wireframes.
+This document preserves a deferred desktop reference direction and ASCII wireframes. It is not part of the current CLI/TUI implementation path.
 
 The product definition remains in `PRODUCT.md`. This file owns layout, screen hierarchy, and UI composition.
 
 ## Design Intent
 
-Gandalf Desktop should feel like a focused Git client for the user's Codex setup.
+A future Gandalf desktop surface should feel like a focused Git client for the user's Codex setup.
 
 The UI should be organized around the active profile and its setup surfaces:
 
