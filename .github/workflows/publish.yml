@@ -1,3 +1,5 @@
+# npm workspace publish for legacy @qxinm/hem packages.
+# Go binary releases are handled by .github/workflows/release.yml (GoReleaser on v* tags).
 name: Publish
 
 on:

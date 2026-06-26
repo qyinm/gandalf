@@ -28,7 +28,18 @@ Package note: `@qxinm/hem` is the npm package because `qxinm` is the publishing 
 
 Hem also has broader experimental scan, TUI, restore, and bundle commands. Those are useful for dogfooding, but the current product test is Codex user-global rollback.
 
-**Rust engine:** The canonical engine lives in `crates/hem-core` with `crates/hem-cli` as the Rust CLI. Build and test with `cargo test --workspace`. The Bun `packages/core` and `apps/cli` stacks are deprecated reference implementations.
+**Go engine:** The canonical engine lives in `internal/hemcore` with `cmd/hem` as the CLI. Build, test, and run Gate 2 with:
+
+```bash
+make build         # produces bin/hem
+make test          # go test ./...
+make gate2         # Codex user-global rollback demo
+./bin/hem --help
+```
+
+Install from source: `go install github.com/qyinm/hem/cmd/hem@latest` (after a tagged release). Prebuilt darwin/linux binaries ship via GitHub Releases on `v*` tags (GoReleaser).
+
+`crates/hem-core`, `crates/hem-cli`, and the Bun `packages/core` / `apps/cli` stacks are deprecated reference implementations during the phased cutover.
 
 ```bash
 # Machine A: export your setup
@@ -198,9 +209,20 @@ Scanner plugin interface: add new agents by implementing `ScannerPlugin`. `Proje
 
 ## Development
 
+### Go (canonical)
+
 ```bash
 git clone git@github.com:qyinm/hem.git
 cd hem
+make test            # go test ./...
+make build           # bin/hem
+make gate2           # Gate 2 acceptance demo
+./bin/hem scan --project .
+```
+
+### Legacy Bun / TypeScript
+
+```bash
 bun install
 bun run check        # build + test
 bun run typecheck    # TypeScript only, no emit
@@ -208,13 +230,23 @@ bun run test         # run tests (requires build first)
 bun run desktop:dev  # run the Tauri desktop app in development
 ```
 
+### Legacy Rust
+
+```bash
+cargo test --workspace
+cargo run -p hem-cli -- snapshot list
+```
+
 ## Repository Layout
 
-Hem is a Bun workspace:
-
-| Workspace | Purpose |
+| Path | Purpose |
 |---|---|
-| `packages/core` | Read-only scan, snapshot, diff, audit, bundle, restore, and shared domain types |
-| `apps/cli` | Published `hem` command and command handlers |
-| `apps/tui` | Ink/Clack terminal workspace used by `hem tui` |
+| `cmd/hem` | Go CLI entrypoint (`bin/hem`) |
+| `internal/hemcore` | Canonical Go engine: scan, store, snapshot, diff, restore, bundle, timeline |
+| `internal/cli` | Cobra command handlers |
+| `crates/hem-core` | **Deprecated** Rust engine (desktop transition) |
+| `crates/hem-cli` | **Deprecated** Rust CLI |
+| `packages/core` | **Deprecated** TypeScript engine reference |
+| `apps/cli` | **Deprecated** npm `hem` shim (`@qxinm/hem`) |
+| `apps/tui` | **Deprecated** Ink/Clack terminal workspace |
 | `apps/desktop` | Tauri v2 + Vite desktop dashboard shell |

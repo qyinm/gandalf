@@ -8,13 +8,27 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const node = process.execPath;
-const cli = path.join(repo, "apps/cli/dist/src/cli.js");
+const hem = path.join(repo, "bin", "hem");
+
+function ensureGoBinary() {
+  if (existsSync(hem)) {
+    return;
+  }
+  const result = spawnSync("go", ["build", "-o", hem, "./cmd/hem"], {
+    cwd: repo,
+    encoding: "utf8"
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `bin/hem is missing and go build failed.\n${result.stderr || result.stdout || ""}`.trim()
+    );
+  }
+}
 
 function run(args, options = {}) {
   const rendered = `hem ${args.join(" ")}`;
   console.log(`\n$ ${rendered}`);
-  const result = spawnSync(node, [cli, ...args], {
+  const result = spawnSync(hem, args, {
     cwd: options.cwd ?? repo,
     env: { ...process.env, ...(options.env ?? {}) },
     encoding: "utf8"
@@ -28,9 +42,7 @@ function run(args, options = {}) {
 }
 
 async function main() {
-  if (!existsSync(cli)) {
-    throw new Error("apps/cli/dist/src/cli.js is missing. Run `bun run build` before `bun run dogfood:gate2`.");
-  }
+  ensureGoBinary();
 
   const root = await mkdtemp(path.join(tmpdir(), "hem-gate2-demo-"));
   try {
@@ -60,6 +72,7 @@ async function main() {
     console.log(`HOME=${home}`);
     console.log(`HEM_STORE=${store}`);
     console.log(`project=${project}`);
+    console.log(`binary=${hem}`);
 
     run([
       "snapshot", "create",
