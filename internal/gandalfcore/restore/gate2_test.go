@@ -36,7 +36,7 @@ func TestGate2CodexRollbackWedge(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(originalConfig), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(projectPath, "README.md"), []byte("Disposable Gate 2 demo project.\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectPath, "README.md"), []byte("Disposable Gate 2 acceptance project.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -66,7 +66,7 @@ func TestGate2CodexRollbackWedge(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(addedSkill), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	skillContent := "---\nname: synthetic-harness\n---\nAdds a disposable demo skill.\n"
+	skillContent := "---\nname: synthetic-harness\n---\nAdds a disposable acceptance skill.\n"
 	if err := os.WriteFile(addedSkill, []byte(skillContent), 0o644); err != nil {
 		t.Fatal(err)
 	}

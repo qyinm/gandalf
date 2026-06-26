@@ -44,7 +44,7 @@ function run(args, options = {}) {
 async function main() {
   ensureGoBinary();
 
-  const root = await mkdtemp(path.join(tmpdir(), "gandalf-gate2-demo-"));
+  const root = await mkdtemp(path.join(tmpdir(), "gandalf-gate2-acceptance-"));
   try {
     const project = path.join(root, "project");
     const home = path.join(root, "home");
@@ -64,11 +64,11 @@ async function main() {
       ""
     ].join("\n");
     await writeFile(configPath, originalConfig, "utf8");
-    await writeFile(path.join(project, "README.md"), "Disposable Gate 2 demo project.\n", "utf8");
+    await writeFile(path.join(project, "README.md"), "Disposable Gate 2 acceptance project.\n", "utf8");
 
     const env = { HOME: home, GANDALF_STORE: store, GANDALF_UPDATE_CHECK: "0" };
 
-    console.log("Gate 2 deterministic Codex rollback demo");
+    console.log("Gate 2 deterministic Codex rollback acceptance");
     console.log(`HOME=${home}`);
     console.log(`GANDALF_STORE=${store}`);
     console.log(`project=${project}`);
@@ -85,7 +85,7 @@ async function main() {
     await writeFile(configPath, "", "utf8");
     const addedSkill = path.join(codexDir, "skills", "synthetic-harness", "SKILL.md");
     await mkdir(path.dirname(addedSkill), { recursive: true });
-    await writeFile(addedSkill, "---\nname: synthetic-harness\n---\nAdds a disposable demo skill.\n", "utf8");
+    await writeFile(addedSkill, "---\nname: synthetic-harness\n---\nAdds a disposable acceptance skill.\n", "utf8");
     console.log("\n# Synthetic harness install zero-filled config.toml and added a Codex skill.");
 
     run([
@@ -116,9 +116,9 @@ async function main() {
 
     assert.equal(await readFile(configPath, "utf8"), originalConfig);
     assert.equal(existsSync(addedSkill), false);
-    console.log("\nGate 2 demo passed: config restored and synthetic skill removed.");
+    console.log("\nGate 2 acceptance passed: config restored and synthetic skill removed.");
   } finally {
-    if (!process.env.GANDALF_KEEP_GATE2_DEMO) {
+    if (!process.env.GANDALF_KEEP_GATE2_ACCEPTANCE) {
       await rm(root, { recursive: true, force: true });
     }
   }
