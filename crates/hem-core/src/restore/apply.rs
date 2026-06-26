@@ -365,6 +365,54 @@ pub fn apply_mcp_server(item: &mut RestoreItem) -> Result<(), String> {
     Ok(())
 }
 
+fn permission_name_for_item(item: &RestoreItem) -> Result<String, String> {
+    if let Some(name) = item
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get("permissionName"))
+        .and_then(|value| value.as_str())
+        .filter(|name| !name.is_empty())
+    {
+        return Ok(name.to_string());
+    }
+    if let Some(name) = item
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get("permissionKey"))
+        .and_then(|value| value.as_str())
+        .filter(|name| !name.is_empty())
+    {
+        return Ok(name.to_string());
+    }
+    for candidate in [&item.path, &item.source, &item.item_id] {
+        if let Some(name) = permission_name_from_evidence_id(candidate) {
+            return Ok(name);
+        }
+    }
+    Err(format!(
+        "Unable to resolve permission name for {}",
+        item.item_id
+    ))
+}
+
+fn permission_name_from_evidence_id(id: &str) -> Option<String> {
+    let marker = ".perm-";
+    let (_, suffix) = id.rsplit_once(marker)?;
+    let name = suffix.split(':').next().unwrap_or(suffix);
+    if name.is_empty() {
+        None
+    } else {
+        Some(name.to_string())
+    }
+}
+
+fn permission_rule_value_for_apply(value: Value) -> Value {
+    if let Some(rule) = value.as_object().and_then(|object| object.get("rule")) {
+        return rule.clone();
+    }
+    value
+}
+
 pub fn apply_permission(item: &mut RestoreItem) -> Result<(), String> {
     let file_path = item.dest.clone();
     let mut settings: Map<String, Value> = Map::new();
@@ -380,20 +428,23 @@ pub fn apply_permission(item: &mut RestoreItem) -> Result<(), String> {
     if !settings.contains_key("permissions") || !settings["permissions"].is_object() {
         settings.insert("permissions".to_string(), json!({}));
     }
-    let perm_name = item.item_id.split('.').next_back().unwrap_or("permission");
+    let perm_name = permission_name_for_item(item)?;
     let permissions = settings
         .get_mut("permissions")
         .and_then(|v| v.as_object_mut())
         .ok_or_else(|| "Invalid permissions object".to_string())?;
 
     if item.action == Some(RestoreAction::Delete) {
-        permissions.remove(perm_name);
+        permissions.remove(&perm_name);
     } else {
         let perm_value = item
             .target_content
             .clone()
             .ok_or_else(|| format!("Missing target permission content for {perm_name}"))?;
-        permissions.insert(perm_name.to_string(), perm_value);
+        permissions.insert(
+            perm_name,
+            permission_rule_value_for_apply(perm_value),
+        );
     }
 
     let serialized =
@@ -526,6 +577,36 @@ pub fn restore_previous_content_undo_handler(item: &mut RestoreItem) -> Result<(
         return Ok(());
     };
     let prev_content = state.get("previousContent").cloned();
+
+    if item.item_type == "mcp_server" {
+        if let (Some(mcp_path), Some(saved_config)) = (
+            state.get("mcpPath").and_then(|v| v.as_str()),
+            state.get("mcpConfig"),
+        ) {
+            let serialized =
+                serde_json::to_string_pretty(saved_config).map_err(|e| e.to_string())? + "\n";
+            if let Some(parent) = Path::new(mcp_path).parent() {
+                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            write_file_atomically(Path::new(mcp_path), &serialized).map_err(|e| e.to_string())?;
+            return Ok(());
+        }
+    }
+
+    if matches!(item.item_type.as_str(), "env_key" | "env") {
+        if let Some(env_path) = state.get("envPath").and_then(|v| v.as_str()) {
+            if prev_content.is_none() || prev_content == Some(Value::Null) {
+                let _ = fs::remove_file(env_path);
+            } else if let Some(Value::String(content)) = prev_content {
+                if let Some(parent) = Path::new(env_path).parent() {
+                    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                }
+                write_file_atomically(Path::new(env_path), &content).map_err(|e| e.to_string())?;
+            }
+            return Ok(());
+        }
+    }
+
     if let Some(file_path) = state.get("filePath").and_then(|v| v.as_str()) {
         let file_path = Path::new(file_path);
         if prev_content.is_none() || prev_content == Some(Value::Null) {
@@ -535,28 +616,6 @@ pub fn restore_previous_content_undo_handler(item: &mut RestoreItem) -> Result<(
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
             write_file_atomically(file_path, &content).map_err(|e| e.to_string())?;
-        }
-        return Ok(());
-    }
-    if let Some(mcp_path) = state.get("mcpPath").and_then(|v| v.as_str()) {
-        if let Some(Value::Object(saved_config)) = state.get("mcpConfig") {
-            let serialized = serde_json::to_string_pretty(saved_config).map_err(|e| e.to_string())?
-                + "\n";
-            if let Some(parent) = Path::new(mcp_path).parent() {
-                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-            }
-            write_file_atomically(Path::new(mcp_path), &serialized).map_err(|e| e.to_string())?;
-        }
-        return Ok(());
-    }
-    if let Some(env_path) = state.get("envPath").and_then(|v| v.as_str()) {
-        if prev_content.is_none() || prev_content == Some(Value::Null) {
-            let _ = fs::remove_file(env_path);
-        } else if let Some(Value::String(content)) = prev_content {
-            if let Some(parent) = Path::new(env_path).parent() {
-                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-            }
-            write_file_atomically(Path::new(env_path), &content).map_err(|e| e.to_string())?;
         }
     }
     Ok(())

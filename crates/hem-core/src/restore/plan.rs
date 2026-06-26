@@ -670,10 +670,41 @@ fn restore_item_metadata(plan_item: &RestorePlanItem) -> Option<Value> {
             metadata.insert("mcpPath".to_string(), json!(plan_item.source_path));
         }
     }
+    if plan_item.kind == EvidenceKind::Permission {
+        if let Some(permission_name) = permission_name_from_state(plan_item.target_state.as_ref())
+            .or_else(|| permission_name_from_state(plan_item.current_state.as_ref()))
+        {
+            metadata.insert("permissionName".to_string(), json!(permission_name));
+        }
+    }
     if metadata.is_empty() {
         None
     } else {
         Some(Value::Object(metadata))
+    }
+}
+
+fn permission_name_from_state(state: Option<&DiscoveredItem>) -> Option<String> {
+    let state = state?;
+    if let Some(key) = state
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get("permissionKey"))
+        .and_then(|value| value.as_str())
+    {
+        return Some(key.to_string());
+    }
+    permission_name_from_evidence_id(&state.id)
+}
+
+fn permission_name_from_evidence_id(id: &str) -> Option<String> {
+    let marker = ".perm-";
+    let (_, suffix) = id.rsplit_once(marker)?;
+    let name = suffix.split(':').next().unwrap_or(suffix);
+    if name.is_empty() {
+        None
+    } else {
+        Some(name.to_string())
     }
 }
 

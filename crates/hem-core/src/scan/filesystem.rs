@@ -409,7 +409,7 @@ fn emit_json_evidence(target: &ScanTarget, value: &Value) -> Vec<DiscoveredItem>
                             ..target.clone()
                         },
                         CaptureStatus::Captured,
-                        None,
+                        Some(json!({ "permissionKey": perm_name })),
                         Some(json!({ "rule": perm_rule })),
                     );
                     item.id = item_id(target, &format!("perm-{perm_name}"));
