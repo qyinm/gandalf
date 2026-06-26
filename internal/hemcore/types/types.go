@@ -279,3 +279,75 @@ func ParseScope(value string) (EvidenceScope, bool) {
 		return "", false
 	}
 }
+
+type TimelineEntrySource string
+
+const TimelineSourceManual TimelineEntrySource = "manual"
+
+type TimelineEntryEventKind string
+
+const (
+	TimelineEventBaseline      TimelineEntryEventKind = "baseline"
+	TimelineEventSetupChanged  TimelineEntryEventKind = "setup_changed"
+	TimelineEventUnchanged     TimelineEntryEventKind = "unchanged"
+)
+
+type TimelineRestoreReadiness string
+
+const (
+	TimelineRestoreFull        TimelineRestoreReadiness = "full"
+	TimelineRestorePartial     TimelineRestoreReadiness = "partial"
+	TimelineRestoreObserveOnly TimelineRestoreReadiness = "observe-only"
+)
+
+type TimelineConfidence string
+
+const (
+	TimelineConfidenceLow    TimelineConfidence = "low"
+	TimelineConfidenceMedium TimelineConfidence = "medium"
+	TimelineConfidenceHigh   TimelineConfidence = "high"
+)
+
+type TimelineChangeSummary struct {
+	PreviousEntryID       *string  `json:"previousEntryId,omitempty"`
+	PreviousSnapshotName  *string  `json:"previousSnapshotName,omitempty"`
+	HasChanges            bool     `json:"hasChanges"`
+	SemanticChangeCount   uint32   `json:"semanticChangeCount"`
+	RawSourceChangeCount  uint32   `json:"rawSourceChangeCount"`
+	Highlights            []string `json:"highlights"`
+}
+
+type TimelineChangedSurface struct {
+	Kind        string          `json:"kind"`
+	ChangeType  string          `json:"changeType"`
+	Path        string          `json:"path"`
+	EntityName  *string         `json:"entityName,omitempty"`
+	Restorable  bool            `json:"restorable"`
+	ObserveOnly bool            `json:"observeOnly"`
+	Before      json.RawMessage `json:"before,omitempty"`
+	After       json.RawMessage `json:"after,omitempty"`
+}
+
+type TimelineEntry struct {
+	SchemaVersion      string                   `json:"schemaVersion"`
+	ID                 string                   `json:"id"`
+	Source             TimelineEntrySource      `json:"source"`
+	EventKind          TimelineEntryEventKind   `json:"eventKind"`
+	Title              string                   `json:"title"`
+	ProjectPath        string                   `json:"projectPath"`
+	Agent              *AgentID                 `json:"agent,omitempty"`
+	Agents             []AgentID                `json:"agents"`
+	BeforeSnapshotName *string                  `json:"beforeSnapshotName,omitempty"`
+	AfterSnapshotName  string                   `json:"afterSnapshotName"`
+	CaptureID          string                   `json:"captureId"`
+	CreatedAt          string                   `json:"createdAt"`
+	ObservedAt         string                   `json:"observedAt"`
+	ChangedSurfaces    []TimelineChangedSurface `json:"changedSurfaces"`
+	RestoreReadiness   TimelineRestoreReadiness `json:"restoreReadiness"`
+	Confidence         TimelineConfidence       `json:"confidence"`
+	ConfidenceReason   string                   `json:"confidenceReason"`
+	EvidenceCount      uint32                   `json:"evidenceCount"`
+	GraphNodeCount     uint32                   `json:"graphNodeCount"`
+	AuditFindingCount  uint32                   `json:"auditFindingCount"`
+	Changes            TimelineChangeSummary    `json:"changes"`
+}
