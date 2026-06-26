@@ -93,9 +93,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.102"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "async-broadcast"
@@ -1200,6 +1200,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "gandalf-cli"
+version = "0.3.4"
+dependencies = [
+ "clap",
+ "gandalf-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "gandalf-core"
+version = "0.3.4"
+dependencies = [
+ "hmac",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.18",
+ "time",
+ "toml 0.8.2",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
+name = "gandalf-desktop"
+version = "0.3.3"
+dependencies = [
+ "block2",
+ "gandalf-core",
+ "objc2",
+ "objc2-foundation",
+ "objc2-user-notifications",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tempfile",
+]
+
+[[package]]
 name = "gdk"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1513,51 +1558,6 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
-
-[[package]]
-name = "hem-cli"
-version = "0.3.4"
-dependencies = [
- "clap",
- "hem-core",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "hem-core"
-version = "0.3.4"
-dependencies = [
- "hmac",
- "regex",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror 2.0.18",
- "time",
- "toml 0.8.2",
- "uuid",
- "walkdir",
-]
-
-[[package]]
-name = "hem-desktop"
-version = "0.3.3"
-dependencies = [
- "block2",
- "hem-core",
- "objc2",
- "objc2-foundation",
- "objc2-user-notifications",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tempfile",
-]
 
 [[package]]
 name = "hermit-abi"

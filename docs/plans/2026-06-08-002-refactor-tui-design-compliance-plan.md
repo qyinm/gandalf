@@ -9,13 +9,13 @@ date: 2026-06-08
 
 ## Summary
 
-Refactor the current Hem TUI from a tab-driven agent dashboard into the v0 design described in `docs/design/ui/tui/v0/README.md`: persistent Profiles / Agents / History navigation, Timeline-first launch, inventory-first Agent Detail, full-setup snapshots, explicit Compare, and non-mutating MCP undo preview.
+Refactor the current Gandalf TUI from a tab-driven agent dashboard into the v0 design described in `docs/design/ui/tui/v0/README.md`: persistent Profiles / Agents / History navigation, Timeline-first launch, inventory-first Agent Detail, full-setup snapshots, explicit Compare, and non-mutating MCP undo preview.
 
 Post-implementation alignment note: the shipped Timeline screen now includes a Current Setup panel above Timeline with `Skills`, `MCP Servers`, `Hooks`, and `Project` section tabs. The left `Agents` nav should list detected agents only; `Project` is a setup surface, not an agent nav item.
 
 ## Problem Frame
 
-The current TUI only partially follows the v0 design. It now opens on Timeline, but it still uses an agent-filter sidebar plus top tabs for Timeline / Snapshots / Scan / Audit / Diff. The design document describes a different product shape: Hem is a local Time Machine for agent setups, with profile context first, current setup inventory second, and setup history/compare/save flows using Git-like concepts without Git terminology.
+The current TUI only partially follows the v0 design. It now opens on Timeline, but it still uses an agent-filter sidebar plus top tabs for Timeline / Snapshots / Scan / Audit / Diff. The design document describes a different product shape: Gandalf is a local Time Machine for agent setups, with profile context first, current setup inventory second, and setup history/compare/save flows using Git-like concepts without Git terminology.
 
 This plan treats `docs/design/ui/tui/v0/README.md` as the source of truth. The work should change the implementation to match the document, not soften the document to match the current TUI.
 
@@ -27,7 +27,7 @@ This plan treats `docs/design/ui/tui/v0/README.md` as the source of truth. The w
 - R4. Selecting an agent outside the Timeline opens an inventory-first Agent Detail screen showing Current Setup counts, Skills, MCP Servers, Instructions, and filtered History.
 - R5. Selecting an agent while Timeline is active filters Current Setup and Timeline instead of leaving the Timeline screen.
 - R6. TUI snapshot save/list/compare flows operate on full setup snapshots by default; agent-scoped snapshots remain an implementation/backcompat capability, not the primary v0 UI model.
-- R7. Save Setup opens a confirmation view with detected changes, deterministic generated title, and destinations for Local history and optional `.hem` export.
+- R7. Save Setup opens a confirmation view with detected changes, deterministic generated title, and destinations for Local history and optional `.gandalf` export.
 - R8. Compare always shows explicit From, To, and Scope, and renders a structured side-by-side comparison before any raw diff-oriented view.
 - R9. Timeline undo preview remains non-mutating in P0, renders `writes files: no`, and separates writable MCP preview items from observe-only skill, hook, permission, env, and unsupported surfaces.
 - R10. Keyboard behavior matches the design: `↑↓`, `Enter`, `Esc back`, `s save`, `c compare`, `u preview undo`, `r refresh`, `p profile`, `/ search`, and `q quit`.
@@ -41,7 +41,7 @@ This plan treats `docs/design/ui/tui/v0/README.md` as the source of truth. The w
 - **Use full-setup snapshots in the main TUI:** `captureCurrentState(options)` and unscoped `writeSnapshot` / `listSnapshots` / `readSnapshot` already support full setup snapshots. The TUI should stop passing `selectedAgent` for primary save/list/compare flows.
 - **Preserve agent filtering without agent-scoped saved units:** Agent Detail and Timeline can filter scan evidence and history by agent, but saving/restoring/comparing should default to Full setup even when invoked from an agent screen. `This agent` can appear as a future or explicitly selected compare scope, not the default.
 - **Introduce pure view models before the Dashboard refactor:** `Dashboard.tsx` is already state-heavy. Add testable helpers for navigation, inventory, snapshots, save, and compare before moving rendering and key handling.
-- **Use design language in TUI labels:** Prefer `Timeline`, `Current setup`, `Save setup`, `Compare`, and `Restore preview` over CLI/internal labels like `hem timeline`, `scan`, `audit`, `diff`, `snapshot create`, or raw agent IDs.
+- **Use design language in TUI labels:** Prefer `Timeline`, `Current setup`, `Save setup`, `Compare`, and `Restore preview` over CLI/internal labels like `gandalf timeline`, `scan`, `audit`, `diff`, `snapshot create`, or raw agent IDs.
 - **Keep P0 restore boundaries visible:** Timeline undo remains a dry-run planner. Full setup restore and agent-only restore stay deferred unless covered by a later restore-audit plan.
 - **Defer full text search:** The design lists `/ search`; this refactor should reserve the key and show a non-disruptive placeholder or focus affordance, but full cross-screen search is out of scope unless it falls out cheaply from the navigation model.
 
@@ -178,7 +178,7 @@ stateDiagram-v2
 **Patterns to follow:** Existing `buildTimelineViewModel`, `timelineUndoPreviewModel`, and `buildTimelineUndoPlan` contracts.
 
 **Test scenarios:**
-- Empty Timeline renders `No timeline entries yet.` and `hem daemon start --project .`.
+- Empty Timeline renders `No timeline entries yet.` and `gandalf daemon start --project .`.
 - Timeline rows include short event id, human observed time, kind, readiness, human agent label, and title.
 - Selecting an event renders `Selected`, changed surface groups, and an `Actions` section.
 - `u` with a selected event renders the dry-run MCP undo preview and never exposes an apply action.
@@ -234,7 +234,7 @@ stateDiagram-v2
 - `tests/tui.test.tsx`
 - `tests/store.test.ts`
 
-**Approach:** Load and save primary TUI snapshots without an agent argument. Build a Save Setup preview before writing: compare latest full setup snapshot to current setup, generate a deterministic title from structured changes, and show destinations for Local history and optional `.hem` export. If no latest snapshot exists, title the save `capture baseline`. If no changes exist, show the no-changes empty state and avoid writing a duplicate unless the user makes an explicit save choice.
+**Approach:** Load and save primary TUI snapshots without an agent argument. Build a Save Setup preview before writing: compare latest full setup snapshot to current setup, generate a deterministic title from structured changes, and show destinations for Local history and optional `.gandalf` export. If no latest snapshot exists, title the save `capture baseline`. If no changes exist, show the no-changes empty state and avoid writing a duplicate unless the user makes an explicit save choice.
 
 This unit must also remove the current agent gate from primary save/snapshot actions. Dashboard should load root snapshot names and manifests on boot and refresh, allow `s` from Timeline `All agents`, avoid `selectedAgent` guards for Save Setup, and keep agent-scoped snapshot reads only for legacy CLI/backcompat paths.
 
@@ -250,7 +250,7 @@ Extend the diff/title surface enough to support deterministic titles in the desi
 - Saving writes to the root store path through unscoped `writeSnapshot`, not an agent subdirectory.
 - Boot and rescan load root snapshot metadata even when no agent is selected.
 - Snapshot empty state reads `No saved setups yet.` and includes `s save setup`.
-- Optional `.hem` export is presented as a destination but not required for local save.
+- Optional `.gandalf` export is presented as a destination but not required for local save.
 
 **Verification:** Store tests confirm root snapshots still coexist with agent-scoped legacy snapshots; TUI tests confirm the primary UI lists root snapshots.
 
@@ -369,7 +369,7 @@ Add a snapshot selection model before Compare relies on "selected" or "latest": 
 
 ## System-Wide Impact
 
-This changes Hem's primary interactive surface from a developer command dashboard to a setup-history product surface. The scanner, daemon, store, timeline, and diff domain APIs should remain compatible, but the TUI will call them with different defaults: full setup first, agent filters second.
+This changes Gandalf's primary interactive surface from a developer command dashboard to a setup-history product surface. The scanner, daemon, store, timeline, and diff domain APIs should remain compatible, but the TUI will call them with different defaults: full setup first, agent filters second.
 
 ## Risks & Dependencies
 
@@ -390,7 +390,7 @@ The final implementation should be verified with:
 - `bun test dist/tests/timeline.test.js`
 - `bun test dist/tests/cli.test.js --test-name-pattern timeline`
 - `bun run test`
-- A PTY smoke run of `hem tui` that confirms Timeline-first launch, left nav sections, Agent Detail, Save Setup preview, Compare From/To, and `u` dry-run undo preview.
+- A PTY smoke run of `gandalf tui` that confirms Timeline-first launch, left nav sections, Agent Detail, Save Setup preview, Compare From/To, and `u` dry-run undo preview.
 
 ## Sources / Research
 

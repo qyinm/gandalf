@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/hem-core",
-  "crates/hem-cli",
+  "crates/gandalf-core",
+  "crates/gandalf-cli",
   "apps/desktop/src-tauri",
 ]
 

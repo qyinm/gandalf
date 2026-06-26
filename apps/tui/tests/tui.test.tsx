@@ -26,8 +26,8 @@ import {
   formatTimelineTimestamp,
   truncateText
 } from "../src/components/TuiFormatters.js";
-import type { TimelineUndoPlan } from "@qxinm/hem-core/timeline-undo.js";
-import type { DiscoveredItem, GraphNode, Snapshot, TimelineEntry } from "@qxinm/hem-core/types.js";
+import type { TimelineUndoPlan } from "@qxinm/gandalf-core/timeline-undo.js";
+import type { DiscoveredItem, GraphNode, Snapshot, TimelineEntry } from "@qxinm/gandalf-core/types.js";
 
 function timelineEntry(overrides: Partial<TimelineEntry> & Pick<TimelineEntry, "id" | "observedAt" | "afterSnapshotName">): TimelineEntry {
   const { id, afterSnapshotName, observedAt, ...rest } = overrides;
@@ -680,7 +680,7 @@ describe("TUI save setup model", () => {
     assert.equal(model.detectedChanges[0], "capture baseline");
     assert.equal(model.destinations[0].label, "Local history");
     assert.equal(model.destinations[0].selected, true);
-    assert.equal(model.destinations[1].label, "Export as .hem");
+    assert.equal(model.destinations[1].label, "Export as .gandalf");
   });
 
   it("generates deterministic titles from structured changes", () => {

@@ -1,10 +1,10 @@
 /**
- * .hem bundle export, import, and inspect.
+ * .gandalf bundle export, import, and inspect.
  *
- * A .hem bundle is a POSIX ustar tar archive containing:
- *   .hem/format-version   — "1"
- *   .hem/manifest.json    — BundleManifest (includes sourceMachine)
- *   .hem/checksums.json   — BundleChecksums
+ * A .gandalf bundle is a POSIX ustar tar archive containing:
+ *   .gandalf/format-version   — "1"
+ *   .gandalf/manifest.json    — BundleManifest (includes sourceMachine)
+ *   .gandalf/checksums.json   — BundleChecksums
  *   snapshot/evidence.json    — DiscoveredItem[]
  *   snapshot/graph.json       — GraphNode[]
  *   snapshot/audit-findings.json — AuditFinding[]
@@ -48,12 +48,12 @@ const FORMAT_VERSION = "1";
 /** Token used in bundle paths to represent the source home directory. */
 const HOME_TOKEN = "{home}";
 
-const MAX_BUNDLE_BYTES = parseInt(process.env.HEM_MAX_BUNDLE_BYTES ?? "", 10) || 500 * 1024 * 1024;
-const MAX_CONTENT_BYTES = parseInt(process.env.HEM_MAX_CONTENT_BYTES ?? "", 10) || 50 * 1024 * 1024;
+const MAX_BUNDLE_BYTES = parseInt(process.env.GANDALF_MAX_BUNDLE_BYTES ?? "", 10) || 500 * 1024 * 1024;
+const MAX_CONTENT_BYTES = parseInt(process.env.GANDALF_MAX_CONTENT_BYTES ?? "", 10) || 50 * 1024 * 1024;
 const SIGNATURE_ALGORITHM = "HMAC-SHA256";
 
 function resolveSignatureKey(explicitKey?: string): string | undefined {
-  return explicitKey ?? process.env.HEM_BUNDLE_KEY;
+  return explicitKey ?? process.env.GANDALF_BUNDLE_KEY;
 }
 
 function cloneManifestWithoutSignature(manifest: BundleManifest): BundleManifest {
@@ -68,7 +68,7 @@ function cloneManifestWithoutSignature(manifest: BundleManifest): BundleManifest
 
 function canonicalSignaturePayload(entries: TarEntry[], manifest: BundleManifest): Buffer {
   const hmacEntries = entries
-    .filter((entry) => entry.path !== ".hem/manifest.json" && entry.path !== ".hem/checksums.json")
+    .filter((entry) => entry.path !== ".gandalf/manifest.json" && entry.path !== ".gandalf/checksums.json")
     .filter((entry) => entry.type === "file")
     .sort((a, b) => a.path.localeCompare(b.path));
   const chunks: Buffer[] = [
@@ -222,7 +222,7 @@ function captureSourceMachine(): SourceMachine {
 // ── Export ──────────────────────────────────────────────────────
 
 /**
- * Export a snapshot to a .hem bundle file.
+ * Export a snapshot to a .gandalf bundle file.
  *
  * Content inclusion respects per-kind restore policies.
  * Home paths are normalised to {home}/... for cross-machine portability.
@@ -265,12 +265,12 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
   // Build tar entries
   const entries: TarEntry[] = [];
 
-  // .hem/ directory
-  entries.push({ path: ".hem/", content: Buffer.alloc(0), mode: 0o755, mtime: Date.now(), type: "directory" });
+  // .gandalf/ directory
+  entries.push({ path: ".gandalf/", content: Buffer.alloc(0), mode: 0o755, mtime: Date.now(), type: "directory" });
 
-  // .hem/format-version
+  // .gandalf/format-version
   entries.push({
-    path: ".hem/format-version",
+    path: ".gandalf/format-version",
     content: Buffer.from(`${FORMAT_VERSION}\n`, "utf-8"),
     mode: 0o644,
     mtime: Date.now(),
@@ -295,9 +295,9 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     }
   };
 
-  // .hem/manifest.json
+  // .gandalf/manifest.json
   entries.push({
-    path: ".hem/manifest.json",
+    path: ".gandalf/manifest.json",
     content: Buffer.from(JSON.stringify(manifest, null, 2) + "\n", "utf-8"),
     mode: 0o644,
     mtime: Date.now(),
@@ -415,7 +415,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     // Update manifest with content stats
     manifest.contentFileCount = contentCount;
     manifest.contentTotalBytes = totalContentBytes;
-    const manifestIndex = entries.findIndex((e) => e.path === ".hem/manifest.json");
+    const manifestIndex = entries.findIndex((e) => e.path === ".gandalf/manifest.json");
     if (manifestIndex >= 0) {
       entries[manifestIndex] = {
         ...entries[manifestIndex],
@@ -427,7 +427,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
   // Compute and persist signature after content stats are final, but before checksums.
   if (signatureKey) {
     manifest.security.signature = signBundleEntries(entries, manifest, signatureKey);
-    const manifestIndex = entries.findIndex((e) => e.path === ".hem/manifest.json");
+    const manifestIndex = entries.findIndex((e) => e.path === ".gandalf/manifest.json");
     if (manifestIndex >= 0) {
       entries[manifestIndex] = {
         ...entries[manifestIndex],
@@ -444,9 +444,9 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
     entryChecksums[entry.path] = hash.digest("hex");
   }
 
-  // Build .hem/checksums.json entry
+  // Build .gandalf/checksums.json entry
   const checksumsEntry: TarEntry = {
-    path: ".hem/checksums.json",
+    path: ".gandalf/checksums.json",
     content: Buffer.from(JSON.stringify({ algorithm: "SHA-256", entries: entryChecksums } as BundleChecksums, null, 2) + "\n", "utf-8"),
     mode: 0o644,
     mtime: Date.now(),
@@ -458,7 +458,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
   let checksumsInserted = false;
   for (const entry of entries) {
     finalEntries.push(entry);
-    if (entry.path === ".hem/manifest.json" && !checksumsInserted) {
+    if (entry.path === ".gandalf/manifest.json" && !checksumsInserted) {
       finalEntries.push(checksumsEntry);
       checksumsInserted = true;
     }
@@ -475,7 +475,7 @@ export async function bundleExport(options: BundleExportOptions): Promise<Bundle
 // ── Import ──────────────────────────────────────────────────────
 
 /**
- * Import a .hem bundle into the local snapshot store.
+ * Import a .gandalf bundle into the local snapshot store.
  *
  * On import, cross-machine compatibility is assessed:
  *   - Home paths ({home}/...) are remapped to the current machine's $HOME
@@ -490,9 +490,9 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
   const { entries, checksum: bundleChecksum } = await readTar(bundlePath);
 
   // Validate format version
-  const formatEntry = entries.find((e) => e.path === ".hem/format-version");
+  const formatEntry = entries.find((e) => e.path === ".gandalf/format-version");
   if (!formatEntry) {
-    throw new Error("Invalid bundle: missing .hem/format-version");
+    throw new Error("Invalid bundle: missing .gandalf/format-version");
   }
   const formatVersion = formatEntry.content.toString("utf-8").trim();
   if (formatVersion !== FORMAT_VERSION) {
@@ -500,9 +500,9 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
   }
 
   // Validate manifest
-  const manifestEntry = entries.find((e) => e.path === ".hem/manifest.json");
+  const manifestEntry = entries.find((e) => e.path === ".gandalf/manifest.json");
   if (!manifestEntry) {
-    throw new Error("Invalid bundle: missing .hem/manifest.json");
+    throw new Error("Invalid bundle: missing .gandalf/manifest.json");
   }
   const manifest: BundleManifest = JSON.parse(manifestEntry.content.toString("utf-8"));
 
@@ -515,11 +515,11 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
     : undefined;
 
   // Validate checksums
-  const checksumsEntry = entries.find((e) => e.path === ".hem/checksums.json");
+  const checksumsEntry = entries.find((e) => e.path === ".gandalf/checksums.json");
   if (checksumsEntry) {
     const checksums: BundleChecksums = JSON.parse(checksumsEntry.content.toString("utf-8"));
     for (const entry of entries) {
-      if (entry.path === ".hem/checksums.json") continue;
+      if (entry.path === ".gandalf/checksums.json") continue;
       const expected = checksums.entries[entry.path];
       if (expected) {
         const actual = createHash("sha256").update(entry.content).digest("hex");
@@ -818,18 +818,18 @@ export async function bundleImport(options: BundleImportOptions): Promise<Bundle
 // ── Inspect ─────────────────────────────────────────────────────
 
 /**
- * Inspect a .hem bundle and return metadata without unpacking.
+ * Inspect a .gandalf bundle and return metadata without unpacking.
  */
 export async function bundleInspect(bundlePath: string): Promise<BundleInspectResult> {
   const { entries, checksum: bundleChecksum } = await readTar(bundlePath);
 
-  const manifestEntry = entries.find((e) => e.path === ".hem/manifest.json");
+  const manifestEntry = entries.find((e) => e.path === ".gandalf/manifest.json");
   if (!manifestEntry) {
-    throw new Error("Invalid bundle: missing .hem/manifest.json");
+    throw new Error("Invalid bundle: missing .gandalf/manifest.json");
   }
   const manifest: BundleManifest = JSON.parse(manifestEntry.content.toString("utf-8"));
 
-  const checksumsEntry = entries.find((e) => e.path === ".hem/checksums.json");
+  const checksumsEntry = entries.find((e) => e.path === ".gandalf/checksums.json");
   const checksums: BundleChecksums | null = checksumsEntry
     ? JSON.parse(checksumsEntry.content.toString("utf-8"))
     : null;
@@ -868,9 +868,9 @@ export async function bundleVerify(options: BundleVerifyOptions): Promise<Bundle
     errors
   };
 
-  const formatEntry = entries.find((e) => e.path === ".hem/format-version");
+  const formatEntry = entries.find((e) => e.path === ".gandalf/format-version");
   if (!formatEntry) {
-    errors.push("Invalid bundle: missing .hem/format-version");
+    errors.push("Invalid bundle: missing .gandalf/format-version");
   } else {
     const formatVersion = formatEntry.content.toString("utf-8").trim();
     if (formatVersion !== FORMAT_VERSION) {
@@ -880,9 +880,9 @@ export async function bundleVerify(options: BundleVerifyOptions): Promise<Bundle
     }
   }
 
-  const manifestEntry = entries.find((e) => e.path === ".hem/manifest.json");
+  const manifestEntry = entries.find((e) => e.path === ".gandalf/manifest.json");
   if (!manifestEntry) {
-    errors.push("Invalid bundle: missing .hem/manifest.json");
+    errors.push("Invalid bundle: missing .gandalf/manifest.json");
     base.valid = false;
     return base;
   }
@@ -909,14 +909,14 @@ export async function bundleVerify(options: BundleVerifyOptions): Promise<Bundle
     else errors.push(signatureVerification.warning);
   }
 
-  const checksumsEntry = entries.find((e) => e.path === ".hem/checksums.json");
+  const checksumsEntry = entries.find((e) => e.path === ".gandalf/checksums.json");
   if (!checksumsEntry) {
-    errors.push("Invalid bundle: missing .hem/checksums.json");
+    errors.push("Invalid bundle: missing .gandalf/checksums.json");
   } else {
     base.checksums.checked = true;
     const checksums = JSON.parse(checksumsEntry.content.toString("utf-8")) as BundleChecksums;
     for (const entry of entries) {
-      if (entry.path === ".hem/checksums.json") continue;
+      if (entry.path === ".gandalf/checksums.json") continue;
       const expected = checksums.entries[entry.path];
       if (!expected) continue;
       base.checksums.entriesChecked += 1;

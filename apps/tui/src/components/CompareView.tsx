@@ -1,8 +1,8 @@
 import React from "react";
 import { Box, Text } from "ink";
 
-import type { GraphDiff } from "@qxinm/hem-core/diff.js";
-import type { Snapshot } from "@qxinm/hem-core/types.js";
+import type { GraphDiff } from "@qxinm/gandalf-core/diff.js";
+import type { Snapshot } from "@qxinm/gandalf-core/types.js";
 import { buildCompareViewModel } from "./CompareViewModel.js";
 import { padDisplay } from "./TuiFormatters.js";
 

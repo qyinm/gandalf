@@ -1,12 +1,12 @@
-import { buildReadinessReport, formatReadinessSummaryLines } from "@qxinm/hem-core/readiness.js";
-import { scanProject } from "@qxinm/hem-core/scan.js";
+import { buildReadinessReport, formatReadinessSummaryLines } from "@qxinm/gandalf-core/readiness.js";
+import { scanProject } from "@qxinm/gandalf-core/scan.js";
 import { json } from "../cli-shared.js";
 import type { Command, CommandContext } from "./index.js";
-import type { ReadinessReport } from "@qxinm/hem-core/types.js";
+import type { ReadinessReport } from "@qxinm/gandalf-core/types.js";
 
 function renderReadinessText(report: ReadinessReport): string {
   const lines = [
-    "hem doctor",
+    "gandalf doctor",
     "",
     `Target platform: ${report.targetPlatform}`,
     ""

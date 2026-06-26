@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/qyinm/hem/internal/hemcore/bundle"
-	"github.com/qyinm/hem/internal/hemcore/types"
+	"github.com/qyinm/gandalf/internal/gandalfcore/bundle"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 	"github.com/spf13/cobra"
 )
 
 func newBundleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bundle",
-		Short: "Export, import, inspect, and verify .hem bundle archives",
+		Short: "Export, import, inspect, and verify .gandalf bundle archives",
 	}
 	cmd.AddCommand(newBundleExportCmd())
 	cmd.AddCommand(newBundleImportCmd())
@@ -29,7 +29,7 @@ func newBundleExportCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "export",
-		Short: "Export a snapshot to a .hem bundle",
+		Short: "Export a snapshot to a .gandalf bundle",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			exitCode := runBundleExport(cmd, &common, name, out, metadataOnly)
 			if exitCode != 0 {
@@ -42,7 +42,7 @@ func newBundleExportCmd() *cobra.Command {
 	common.bindFlags(cmd.Flags())
 	cmd.Flags().StringVar(&name, "name", "", "Snapshot name to export")
 	_ = cmd.MarkFlagRequired("name")
-	cmd.Flags().StringVar(&out, "out", "", "Output .hem bundle path")
+	cmd.Flags().StringVar(&out, "out", "", "Output .gandalf bundle path")
 	_ = cmd.MarkFlagRequired("out")
 	cmd.Flags().BoolVar(&metadataOnly, "metadata-only", false, "Export metadata only (no content)")
 	return cmd
@@ -58,7 +58,7 @@ func newBundleImportCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "import [bundle-path]",
-		Short: "Import a .hem bundle",
+		Short: "Import a .gandalf bundle",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			exitCode := runBundleImport(cmd, &common, args[0], dryRun, applyContent, quarantine, experimental, trust)
@@ -134,13 +134,13 @@ func runBundleExport(cmd *cobra.Command, common *CommonFlags, name, out string, 
 		Agent:          runtime.Agent,
 	})
 	if err != nil {
-		return writeError(cmd.ErrOrStderr(), bundleSnapError("HEM_BUNDLE_EXPORT_FAILED", "Failed to export bundle.", err))
+		return writeError(cmd.ErrOrStderr(), bundleSnapError("GANDALF_BUNDLE_EXPORT_FAILED", "Failed to export bundle.", err))
 	}
 	if common.JSON {
 		return writeJSON(cmd.OutOrStdout(), result)
 	}
 	lines := []string{
-		"hem bundle export",
+		"gandalf bundle export",
 		"",
 		"Bundle: " + result.BundlePath,
 		"Checksum: " + result.Checksum,
@@ -154,10 +154,10 @@ func runBundleExport(cmd *cobra.Command, common *CommonFlags, name, out string, 
 func runBundleImport(cmd *cobra.Command, common *CommonFlags, bundlePath string, dryRun, applyContent, quarantine, experimental, trust bool) int {
 	if applyContent && !experimental {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
-			Code:    "HEM_EXPERIMENTAL_REQUIRED",
+			Code:    "GANDALF_EXPERIMENTAL_REQUIRED",
 			Problem: "Bundle content apply requires --experimental.",
 			Cause:   "`bundle import --apply-content` was called without `--experimental`.",
-			Fix:     "Run `hem bundle import <path> --apply-content --experimental`.",
+			Fix:     "Run `gandalf bundle import <path> --apply-content --experimental`.",
 		})
 	}
 	runtime, snapErr := resolveRuntime(common)
@@ -176,13 +176,13 @@ func runBundleImport(cmd *cobra.Command, common *CommonFlags, bundlePath string,
 		Agent:        runtime.Agent,
 	})
 	if err != nil {
-		return writeError(cmd.ErrOrStderr(), bundleSnapError("HEM_BUNDLE_IMPORT_FAILED", "Failed to import bundle.", err))
+		return writeError(cmd.ErrOrStderr(), bundleSnapError("GANDALF_BUNDLE_IMPORT_FAILED", "Failed to import bundle.", err))
 	}
 	if common.JSON {
 		return writeJSON(cmd.OutOrStdout(), result)
 	}
 	lines := []string{
-		"hem bundle import",
+		"gandalf bundle import",
 		"",
 		"Snapshot: " + result.SnapshotName,
 		fmt.Sprintf("Evidence items: %d", result.EvidenceCount),
@@ -197,13 +197,13 @@ func runBundleImport(cmd *cobra.Command, common *CommonFlags, bundlePath string,
 func runBundleInspect(cmd *cobra.Command, bundlePath string, jsonOut bool) int {
 	result, err := bundle.Inspect(bundlePath)
 	if err != nil {
-		return writeError(cmd.ErrOrStderr(), bundleSnapError("HEM_BUNDLE_INSPECT_FAILED", "Failed to inspect bundle.", err))
+		return writeError(cmd.ErrOrStderr(), bundleSnapError("GANDALF_BUNDLE_INSPECT_FAILED", "Failed to inspect bundle.", err))
 	}
 	if jsonOut {
 		return writeJSON(cmd.OutOrStdout(), result)
 	}
 	lines := []string{
-		"hem bundle inspect",
+		"gandalf bundle inspect",
 		"",
 		"Bundle: " + result.BundlePath,
 		fmt.Sprintf("Format version: %d", result.FormatVersion),
@@ -217,7 +217,7 @@ func runBundleInspect(cmd *cobra.Command, bundlePath string, jsonOut bool) int {
 func runBundleVerify(cmd *cobra.Command, bundlePath string, jsonOut bool) int {
 	result, err := bundle.Verify(&types.BundleVerifyOptions{BundlePath: bundlePath})
 	if err != nil {
-		return writeError(cmd.ErrOrStderr(), bundleSnapError("HEM_BUNDLE_VERIFY_FAILED", "Failed to verify bundle.", err))
+		return writeError(cmd.ErrOrStderr(), bundleSnapError("GANDALF_BUNDLE_VERIFY_FAILED", "Failed to verify bundle.", err))
 	}
 	if jsonOut {
 		return writeJSON(cmd.OutOrStdout(), result)
@@ -227,7 +227,7 @@ func runBundleVerify(cmd *cobra.Command, bundlePath string, jsonOut bool) int {
 		status = "valid"
 	}
 	lines := []string{
-		"hem bundle verify",
+		"gandalf bundle verify",
 		"",
 		"Bundle: " + result.BundlePath,
 		"Status: " + status,

@@ -10,12 +10,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/qyinm/hem/internal/hemcore/agents"
-	"github.com/qyinm/hem/internal/hemcore/diff"
-	hemerrors "github.com/qyinm/hem/internal/hemcore/errors"
-	"github.com/qyinm/hem/internal/hemcore/snapshot"
-	"github.com/qyinm/hem/internal/hemcore/store"
-	"github.com/qyinm/hem/internal/hemcore/types"
+	"github.com/qyinm/gandalf/internal/gandalfcore/agents"
+	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
+	hemerrors "github.com/qyinm/gandalf/internal/gandalfcore/errors"
+	"github.com/qyinm/gandalf/internal/gandalfcore/snapshot"
+	"github.com/qyinm/gandalf/internal/gandalfcore/store"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
 var validAgents = []string{
@@ -47,7 +47,7 @@ func (f *CommonFlags) bindFlags(cmdFlags interface {
 }) {
 	cmdFlags.StringVarP(&f.Project, "project", "p", ".", "Project directory to scan")
 	cmdFlags.StringVar(&f.Home, "home", "", "Home directory (defaults to $HOME)")
-	cmdFlags.StringVar(&f.Store, "store", "", "Hem store directory (defaults to ~/.hem or $HEM_STORE)")
+	cmdFlags.StringVar(&f.Store, "store", "", "Gandalf store directory (defaults to ~/.gandalf or $GANDALF_STORE)")
 	cmdFlags.StringVar(&f.Agent, "agent", "", "Filter by agent")
 	cmdFlags.StringVar(&f.Scope, "scope", "", "Filter by evidence scope")
 	cmdFlags.BoolVar(&f.JSON, "json", false, "Emit JSON output")
@@ -67,7 +67,7 @@ func resolveRuntime(flags *CommonFlags) (types.RuntimeOptions, *types.SnapError)
 
 	storeDir := flags.Store
 	if storeDir == "" {
-		if envStore := os.Getenv("HEM_STORE"); envStore != "" {
+		if envStore := os.Getenv("GANDALF_STORE"); envStore != "" {
 			storeDir = envStore
 		} else {
 			storeDir = store.DefaultStoreDir(homeDir)
@@ -94,7 +94,7 @@ func resolveRuntime(flags *CommonFlags) (types.RuntimeOptions, *types.SnapError)
 		}
 		if !valid {
 			return types.RuntimeOptions{}, &types.SnapError{
-				Code:    "HEM_INVALID_AGENT",
+				Code:    "GANDALF_INVALID_AGENT",
 				Problem: fmt.Sprintf("Invalid agent: %q.", flags.Agent),
 				Cause:   "An unsupported agent identifier was provided.",
 				Fix:     fmt.Sprintf("Valid agents: %s", strings.Join(validAgents, ", ")),
@@ -115,7 +115,7 @@ func resolveRuntime(flags *CommonFlags) (types.RuntimeOptions, *types.SnapError)
 		}
 		if !valid {
 			return types.RuntimeOptions{}, &types.SnapError{
-				Code:    "HEM_INVALID_SCOPE",
+				Code:    "GANDALF_INVALID_SCOPE",
 				Problem: fmt.Sprintf("Invalid scope: %q.", flags.Scope),
 				Cause:   "An unsupported evidence scope was provided.",
 				Fix:     fmt.Sprintf("Valid scopes: %s", strings.Join(validScopes, ", ")),
@@ -139,7 +139,7 @@ func snapshotByRef(reference string, runtime *types.RuntimeOptions) (types.Snaps
 		state, err := snapshot.CaptureCurrentState(runtime, "current")
 		if err != nil {
 			return types.Snapshot{}, &types.SnapError{
-				Code:    "HEM_CURRENT_STATE_FAILED",
+				Code:    "GANDALF_CURRENT_STATE_FAILED",
 				Problem: "Failed to capture current state.",
 				Cause:   err.Error(),
 				Fix:     "Verify project and store paths are accessible.",
@@ -151,10 +151,10 @@ func snapshotByRef(reference string, runtime *types.RuntimeOptions) (types.Snaps
 	snap, err := store.ReadSnapshot(runtime.StoreDir, reference, runtime.Agent)
 	if err != nil {
 		return types.Snapshot{}, &types.SnapError{
-			Code:    "HEM_SNAPSHOT_NOT_FOUND",
+			Code:    "GANDALF_SNAPSHOT_NOT_FOUND",
 			Problem: fmt.Sprintf("Snapshot %q not found.", reference),
 			Cause:   err.Error(),
-			Fix:     "Run `hem snapshot list` to see available snapshots.",
+			Fix:     "Run `gandalf snapshot list` to see available snapshots.",
 		}
 	}
 	return snap, nil
@@ -164,7 +164,7 @@ func writeJSON(w io.Writer, value any) int {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return writeError(w, &types.SnapError{
-			Code:    "HEM_JSON_SERIALIZE_FAILED",
+			Code:    "GANDALF_JSON_SERIALIZE_FAILED",
 			Problem: "Failed to serialize JSON output.",
 			Cause:   err.Error(),
 			Fix:     "This is an internal error.",
@@ -211,7 +211,7 @@ func IsExitError(err error) (int, bool) {
 
 func notImplementedError(feature string) *types.SnapError {
 	return &types.SnapError{
-		Code:    "HEM_NOT_IMPLEMENTED",
+		Code:    "GANDALF_NOT_IMPLEMENTED",
 		Problem: fmt.Sprintf("%s is not implemented in the Go engine yet.", feature),
 		Cause:   "This command requires engine modules planned for U8.",
 		Fix:     "Use the Rust CLI for this feature until Go parity lands.",
@@ -224,7 +224,7 @@ func displayAgent(agent types.AgentID) string {
 
 func renderScanText(scan *types.ScanResult) string {
 	lines := []string{
-		"hem scan",
+		"gandalf scan",
 		"",
 		fmt.Sprintf("Read-only: %s", boolYesNo(scan.Trust.ReadOnly)),
 		fmt.Sprintf("Network: %s", scan.Trust.Network),
@@ -274,7 +274,7 @@ func renderScanText(scan *types.ScanResult) string {
 		}
 	}
 
-	lines = append(lines, "", "Next", "  hem snapshot create --name baseline --agent codex --scope user --project .")
+	lines = append(lines, "", "Next", "  gandalf snapshot create --name baseline --agent codex --scope user --project .")
 	return strings.Join(lines, "\n") + "\n"
 }
 
@@ -304,7 +304,7 @@ func renderScanExplainText(scan *types.ScanResult) string {
 
 func renderDiffText(graphDiff *diff.GraphDiff) string {
 	lines := []string{
-		"hem diff",
+		"gandalf diff",
 		"",
 		"Semantic changes",
 	}
@@ -334,7 +334,7 @@ func renderDiffText(graphDiff *diff.GraphDiff) string {
 
 func formatRestorePlanPreview(plan *types.RestorePlan) string {
 	lines := []string{
-		"hem restore dry-run",
+		"gandalf restore dry-run",
 		"",
 		fmt.Sprintf("Snapshot: %s", plan.SourceSnapshot),
 		fmt.Sprintf("Target project: %s", plan.TargetProject),
@@ -501,36 +501,36 @@ func boolYesNo(value bool) string {
 
 func printRootHelp(w io.Writer) {
 	help := []string{
-		"hem",
+		"gandalf",
 		"",
 		"Save, compare, and restore Codex user-global setup experiments.",
 		"",
 		"Diagnosis commands:",
-		"  hem scan --project .",
-		"  hem scan --project . --explain",
-		"  hem snapshot create --name baseline --agent codex --scope user --project .",
-		"  hem snapshot create --name baseline --metadata-only --project .",
-		"  hem snapshot list",
-		"  hem snapshot list --agent codex",
-		"  hem snapshot show baseline --json",
-		"  hem diff baseline current --agent codex --scope user --project .",
-		"  hem diff baseline current --project .",
+		"  gandalf scan --project .",
+		"  gandalf scan --project . --explain",
+		"  gandalf snapshot create --name baseline --agent codex --scope user --project .",
+		"  gandalf snapshot create --name baseline --metadata-only --project .",
+		"  gandalf snapshot list",
+		"  gandalf snapshot list --agent codex",
+		"  gandalf snapshot show baseline --json",
+		"  gandalf diff baseline current --agent codex --scope user --project .",
+		"  gandalf diff baseline current --project .",
 		"",
 		"Restore commands:",
-		"  hem restore --snapshot <name> --dry-run --agent codex --scope user --project .",
-		"  hem restore --snapshot <name> --apply --experimental --agent codex --scope user --project .",
+		"  gandalf restore --snapshot <name> --dry-run --agent codex --scope user --project .",
+		"  gandalf restore --snapshot <name> --apply --experimental --agent codex --scope user --project .",
 		"",
 		"Extended commands:",
-		"  hem doctor --project . [--json]",
-		"  hem report [ref] --project . [--out path] [--json]",
-		"  hem timeline list --project . [--json]",
-		"  hem timeline undo <id> --dry-run --project . [--json]",
-		"  hem bundle export --name <snapshot> --out file.hem --project .",
-		"  hem bundle import file.hem --dry-run --project . [--json]",
-		"  hem bundle verify file.hem",
+		"  gandalf doctor --project . [--json]",
+		"  gandalf report [ref] --project . [--out path] [--json]",
+		"  gandalf timeline list --project . [--json]",
+		"  gandalf timeline undo <id> --dry-run --project . [--json]",
+		"  gandalf bundle export --name <snapshot> --out file.gandalf --project .",
+		"  gandalf bundle import file.gandalf --dry-run --project . [--json]",
+		"  gandalf bundle verify file.gandalf",
 		"",
 		"Interactive workspace:",
-		"  hem tui --project .",
+		"  gandalf tui --project .",
 	}
 	_, _ = io.WriteString(w, strings.Join(help, "\n")+"\n")
 }

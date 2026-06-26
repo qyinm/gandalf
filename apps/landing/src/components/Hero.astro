@@ -2,12 +2,12 @@
 import TerminalWindow from './TerminalWindow.astro';
 
 const terminalLines = [
-  { command: 'hem save baseline', prompt: true },
+  { command: 'gandalf save baseline', prompt: true },
   { command: 'saved · 12 MCPs · 8 skills · 14 hooks', prompt: false },
-  { command: 'hem diff baseline', prompt: true },
+  { command: 'gandalf diff baseline', prompt: true },
   { command: ' + skill web-search', prompt: false },
   { command: ' ~ mcp github  env keys changed', prompt: false },
-  { command: 'hem restore baseline', prompt: true },
+  { command: 'gandalf restore baseline', prompt: true },
 ];
 ---
 
@@ -24,13 +24,13 @@ const terminalLines = [
     </h1>
 
     <p class="hero__lede">
-      Hem saves, diffs, and restores the Codex setup on your Mac
+      Gandalf saves, diffs, and restores the Codex setup on your Mac
       like a Git branch.
     </p>
 
     <div class="hero__actions">
       <a href="#install" class="btn btn--primary">
-        Install Hem
+        Install Gandalf
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
       </a>
       <a href="/docs/bundle-format" class="btn btn--outline">
@@ -44,11 +44,11 @@ const terminalLines = [
       <span class="hero__sub-meta-dot">·</span>
       <span>macOS 13+</span>
       <span class="hero__sub-meta-dot">·</span>
-      <code>npm install -g @qxinm/hem</code>
+      <code>npm install -g @qxinm/gandalf</code>
     </p>
 
     <div class="hero__terminal">
-      <TerminalWindow label="hem" lines={terminalLines} />
+      <TerminalWindow label="gandalf" lines={terminalLines} />
     </div>
   </div>
 </section>

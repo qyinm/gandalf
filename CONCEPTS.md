@@ -2,13 +2,21 @@
 
 > Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
 
+## Product Identity
+
+### Gandalf
+The selected new product identity for Gandalf. Gandalf is the wizard for AI agent setup: it guides setup changes, captures working agent environments into portable setup containers, and makes those containers rollbackable across machines.
+
+### Setup Container
+A portable, rollbackable captured AI agent setup state managed by Gandalf. This is the product-level container concept behind snapshots, bundles, profile states, and cross-machine restore flows; it should not imply an OS container or remote agent runtime.
+
 ## Restore
 
 ### Trust Contract
-The safety boundary Hem promises for scan, snapshot, diff, restore, and bundle flows. In this project it means read-only discovery, confined writes under declared home/project roots, symlink refusal on write targets, and restore behavior that matches the evidence kind rather than falling back to unsafe generic file mutation.
+The safety boundary Gandalf promises for scan, snapshot, diff, restore, and bundle flows. In this project it means read-only discovery, confined writes under declared home/project roots, symlink refusal on write targets, and restore behavior that matches the evidence kind rather than falling back to unsafe generic file mutation.
 
 ### Evidence
-A discovered configuration artifact Hem tracks for drift and restore planning. Each evidence record has a kind (config file, MCP server entry, permission rule, env key, etc.), a source path, and optional structured value metadata.
+A discovered configuration artifact Gandalf tracks for drift and restore planning. Each evidence record has a kind (config file, MCP server entry, permission rule, env key, etc.), a source path, and optional structured value metadata.
 
 ### Evidence Kind
 The typed category of an evidence record that determines how restore planning and apply handlers treat it. Kinds with structured JSON values (MCP server, permission, env key) require dedicated apply handlers rather than whole-file replacement.
@@ -34,4 +42,4 @@ A named capture of project and user-global evidence at a point in time. Snapshot
 A snapshot whose store entry includes captured file bytes in addition to metadata and structured evidence. Gate 2 restore depends on content-backed snapshots when byte-exact restoration of agent config files is required.
 
 ### Store
-The on-disk persistence layer for snapshots, timeline entries, and related Hem state. Desktop and CLI clients read the same store APIs for snapshot listing and changelog, so snapshot replacement must be atomic enough that readers never observe new metadata paired with partial or missing content blobs.
+The on-disk persistence layer for snapshots, timeline entries, and related Gandalf state. Desktop and CLI clients read the same store APIs for snapshot listing and changelog, so snapshot replacement must be atomic enough that readers never observe new metadata paired with partial or missing content blobs.

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Hem",
+  "productName": "Gandalf",
   "version": "0.3.3",
-  "identifier": "dev.hem.app",
+  "identifier": "dev.gandalf.app",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Hem",
+        "title": "Gandalf",
         "width": 1100,
         "height": 720,
         "minWidth": 960,

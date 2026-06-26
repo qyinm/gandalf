@@ -6,12 +6,12 @@
  */
 
 import React from "react";
-import type { AuditFinding } from "@qxinm/hem-core/types.js";
-import type { ScanResult } from "@qxinm/hem-core/scan.js";
+import type { AuditFinding } from "@qxinm/gandalf-core/types.js";
+import type { ScanResult } from "@qxinm/gandalf-core/scan.js";
 import { hasFlag, json } from "../cli-shared.js";
 import type { CommandContext, Command } from "./index.js";
-import { captureCurrentState, type CurrentState } from "@qxinm/hem-core/current-state.js";
-import { isInkMode, renderComponent } from "@qxinm/hem-tui";
+import { captureCurrentState, type CurrentState } from "@qxinm/gandalf-core/current-state.js";
+import { isInkMode, renderComponent } from "@qxinm/gandalf-tui";
 
 // ── Renderers ─────────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ function displayAgent(agent: string): string {
 
 function renderScanText(state: CurrentState): string {
   const lines = [
-    "hem scan",
+    "gandalf scan",
     "",
     `Read-only: ${state.scan.trust.readOnly ? "yes" : "no"}`,
     `Network: ${state.scan.trust.network}`,
@@ -60,7 +60,7 @@ function renderScanText(state: CurrentState): string {
     lines.push(`  ${blindSpot}`);
   }
 
-  lines.push("", "Next", "  hem snapshot create --name baseline --agent codex --scope user --project .");
+  lines.push("", "Next", "  gandalf snapshot create --name baseline --agent codex --scope user --project .");
   return `${lines.join("\n")}\n`;
 }
 
@@ -99,7 +99,7 @@ export const scanCommand: Command = {
 
     // --tui: render with Ink
     if (isInkMode(ctx.args)) {
-      const { default: ScanView } = await import("@qxinm/hem-tui/components/ScanView.js");
+      const { default: ScanView } = await import("@qxinm/gandalf-tui/components/ScanView.js");
       return renderComponent(
         () => React.createElement(ScanView, {
           evidence: state.scan.evidence,

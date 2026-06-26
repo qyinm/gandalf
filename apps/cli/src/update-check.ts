@@ -63,14 +63,14 @@ export function noticeForLatestVersion(latestVersion: string | undefined): Updat
   return {
     currentVersion: packageJson.version,
     latestVersion,
-    message: `✨ hem ${latestVersion} is available. Update with: bun install -g ${packageJson.name}`
+    message: `✨ gandalf ${latestVersion} is available. Update with: bun install -g ${packageJson.name}`
   };
 }
 
 export function shouldCheckForUpdates(options: UpdateCheckOptions): boolean {
   const env = options.env ?? process.env;
-  if (env.HEM_UPDATE_CHECK === "0" || env.NO_UPDATE_NOTIFIER === "1") return false;
-  if (env.HEM_UPDATE_CHECK !== "1") return false;
+  if (env.GANDALF_UPDATE_CHECK === "0" || env.NO_UPDATE_NOTIFIER === "1") return false;
+  if (env.GANDALF_UPDATE_CHECK !== "1") return false;
   if (env.CI === "true" || env.CI === "1") return false;
   if (options.stderrIsTty === false) return false;
   if (options.args.includes("--json")) return false;
@@ -146,5 +146,5 @@ async function writeUpdateCache(cachePath: string, cache: UpdateCheckCache): Pro
 }
 
 function updateCachePath(homeDir: string): string {
-  return path.join(homeDir, ".hem", "update-check.json");
+  return path.join(homeDir, ".gandalf", "update-check.json");
 }

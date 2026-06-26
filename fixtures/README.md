@@ -1,4 +1,4 @@
-# 📦 hem — Sample Drift Fixtures
+# 📦 gandalf — Sample Drift Fixtures
 
 ## 구조
 
@@ -23,18 +23,18 @@ fixtures/
 
 ```bash
 # 1. baseline 스냅샷 생성
-hem snapshot create --name demo-baseline \
+gandalf snapshot create --name demo-baseline \
   --metadata-only --project fixtures/baseline
 
 # 2. scan + explain
-hem scan --project fixtures/drifted
+gandalf scan --project fixtures/drifted
 
 # 3. diff
-hem diff demo-baseline current --project fixtures/drifted
+gandalf diff demo-baseline current --project fixtures/drifted
 
 # audit
-hem audit current --project fixtures/drifted
+gandalf audit current --project fixtures/drifted
 
 # 5. report
-hem report current --project fixtures/drifted --out drift-report.md
+gandalf report current --project fixtures/drifted --out drift-report.md
 ```

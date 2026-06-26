@@ -1,5 +1,5 @@
 /**
- * Clack wizard for `hem bundle export`.
+ * Clack wizard for `gandalf bundle export`.
  *
  * Walks the user through:
  *   1. Picking a snapshot (or typing a new name)
@@ -11,10 +11,10 @@
 import path from "node:path";
 import * as clack from "@clack/prompts";
 
-import { bundleExport } from "@qxinm/hem-core/bundle.js";
-import { ensureStore, listSnapshots } from "@qxinm/hem-core/store.js";
-import type { RuntimeOptions } from "@qxinm/hem-core";
-import { formatSnapError } from "@qxinm/hem-core/errors.js";
+import { bundleExport } from "@qxinm/gandalf-core/bundle.js";
+import { ensureStore, listSnapshots } from "@qxinm/gandalf-core/store.js";
+import type { RuntimeOptions } from "@qxinm/gandalf-core";
+import { formatSnapError } from "@qxinm/gandalf-core/errors.js";
 
 /**
  * Run the bundle export wizard interactively.
@@ -23,7 +23,7 @@ import { formatSnapError } from "@qxinm/hem-core/errors.js";
 export async function bundleExportWizard(
   options: RuntimeOptions
 ): Promise<number> {
-  clack.intro("hem bundle export");
+  clack.intro("gandalf bundle export");
 
   await ensureStore(options.storeDir);
   const snapshots = await listSnapshots(options.storeDir, options.agent);
@@ -73,15 +73,15 @@ export async function bundleExportWizard(
   }
 
   // ── Step 2: Output path ──────────────────────────────────
-  const defaultOut = `${snapshotName}.hem`;
+  const defaultOut = `${snapshotName}.gandalf`;
 
   const outputPath = await clack.text({
-    message: "Output .hem path:",
+    message: "Output .gandalf path:",
     placeholder: defaultOut,
     initialValue: defaultOut,
     validate: (val) => {
       if (!val || val.trim().length === 0) return "Path is required";
-      if (!val.endsWith(".hem")) return "Path should end with .hem";
+      if (!val.endsWith(".gandalf")) return "Path should end with .gandalf";
       return;
     },
   });
@@ -142,7 +142,7 @@ export async function bundleExportWizard(
     spinner.stop("Export failed");
     process.stderr.write(
       formatSnapError({
-        code: "HEM_BUNDLE_EXPORT_FAILED",
+        code: "GANDALF_BUNDLE_EXPORT_FAILED",
         problem: `Bundle export failed: ${err instanceof Error ? err.message : String(err)}`,
         cause: "An error occurred during bundle export.",
         fix: "Check the snapshot name and output path, then try again.",

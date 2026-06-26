@@ -8,27 +8,27 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const hem = path.join(repo, "bin", "hem");
+const gandalf = path.join(repo, "bin", "gandalf");
 
 function ensureGoBinary() {
-  if (existsSync(hem)) {
+  if (existsSync(gandalf)) {
     return;
   }
-  const result = spawnSync("go", ["build", "-o", hem, "./cmd/hem"], {
+  const result = spawnSync("go", ["build", "-o", gandalf, "./cmd/gandalf"], {
     cwd: repo,
     encoding: "utf8"
   });
   if (result.status !== 0) {
     throw new Error(
-      `bin/hem is missing and go build failed.\n${result.stderr || result.stdout || ""}`.trim()
+      `bin/gandalf is missing and go build failed.\n${result.stderr || result.stdout || ""}`.trim()
     );
   }
 }
 
 function run(args, options = {}) {
-  const rendered = `hem ${args.join(" ")}`;
+  const rendered = `gandalf ${args.join(" ")}`;
   console.log(`\n$ ${rendered}`);
-  const result = spawnSync(hem, args, {
+  const result = spawnSync(gandalf, args, {
     cwd: options.cwd ?? repo,
     env: { ...process.env, ...(options.env ?? {}) },
     encoding: "utf8"
@@ -44,7 +44,7 @@ function run(args, options = {}) {
 async function main() {
   ensureGoBinary();
 
-  const root = await mkdtemp(path.join(tmpdir(), "hem-gate2-demo-"));
+  const root = await mkdtemp(path.join(tmpdir(), "gandalf-gate2-demo-"));
   try {
     const project = path.join(root, "project");
     const home = path.join(root, "home");
@@ -66,13 +66,13 @@ async function main() {
     await writeFile(configPath, originalConfig, "utf8");
     await writeFile(path.join(project, "README.md"), "Disposable Gate 2 demo project.\n", "utf8");
 
-    const env = { HOME: home, HEM_STORE: store, HEM_UPDATE_CHECK: "0" };
+    const env = { HOME: home, GANDALF_STORE: store, GANDALF_UPDATE_CHECK: "0" };
 
     console.log("Gate 2 deterministic Codex rollback demo");
     console.log(`HOME=${home}`);
-    console.log(`HEM_STORE=${store}`);
+    console.log(`GANDALF_STORE=${store}`);
     console.log(`project=${project}`);
-    console.log(`binary=${hem}`);
+    console.log(`binary=${gandalf}`);
 
     run([
       "snapshot", "create",
@@ -118,7 +118,7 @@ async function main() {
     assert.equal(existsSync(addedSkill), false);
     console.log("\nGate 2 demo passed: config restored and synthetic skill removed.");
   } finally {
-    if (!process.env.HEM_KEEP_GATE2_DEMO) {
+    if (!process.env.GANDALF_KEEP_GATE2_DEMO) {
       await rm(root, { recursive: true, force: true });
     }
   }
