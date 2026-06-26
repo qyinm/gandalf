@@ -2,6 +2,14 @@
 
 > Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
 
+## Product Identity
+
+### Gandalf
+The selected new product identity for Hem. Gandalf is the wizard for AI agent setup: it guides setup changes, captures working agent environments into portable setup containers, and makes those containers rollbackable across machines.
+
+### Setup Container
+A portable, rollbackable captured AI agent setup state managed by Gandalf. This is the product-level container concept behind snapshots, bundles, profile states, and cross-machine restore flows; it should not imply an OS container or remote agent runtime.
+
 ## Restore
 
 ### Trust Contract
