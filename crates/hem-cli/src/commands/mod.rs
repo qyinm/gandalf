@@ -499,6 +499,8 @@ fn execute_restore(args: RestoreArgs) -> i32 {
         &hem_core::ApplyOptions {
             fail_fast: args.fail_fast,
             rollback: Some(args.rollback),
+            home_dir: Some(runtime.home_dir.clone()),
+            project_path: Some(runtime.project_path.clone()),
         },
     );
 
