@@ -55,24 +55,23 @@ jobs:
       - run: bun run typecheck
       - run: bun run build
       - run: bun run test
-      - run: bun run package:smoke
 
   go:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24.2"
 
-      - uses: oven-sh/setup-bun@v2
+      - name: GoReleaser config check
+        uses: goreleaser/goreleaser-action@v6
         with:
-          bun-version: "1.3.14"
-
-      - run: bun install --frozen-lockfile
+          distribution: goreleaser
+          version: "~> v2"
+          args: check
 
       - name: Go tests
         run: go test ./...
@@ -80,5 +79,8 @@ jobs:
       - name: Build Go CLI
         run: go build -o bin/gandalf ./cmd/gandalf
 
+      - name: Install script smoke
+        run: ./scripts/install-smoke.sh
+
       - name: Gate 2 demo (Go binary)
-        run: bun run dogfood:gate2
+        run: node scripts/gate2-demo.mjs

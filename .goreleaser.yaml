@@ -34,6 +34,20 @@ archives:
 checksum:
   name_template: checksums.txt
 
+brews:
+  - name: gandalf
+    repository:
+      owner: qyinm
+      name: homebrew-tap
+    directory: Formula
+    homepage: https://github.com/qyinm/gandalf
+    description: Rollback safety net for Codex setup experiments
+    license: MIT
+    install: |
+      bin.install "gandalf"
+    test: |
+      system "#{bin}/gandalf", "--help"
+
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
 
