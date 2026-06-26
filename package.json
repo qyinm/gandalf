@@ -1,6 +1,6 @@
 {
   "name": "gandalf-workspace",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Workspace for Gandalf landing and desktop apps.",
   "type": "module",
