@@ -117,7 +117,10 @@ gandalf restore --snapshot <name> --apply --rollback --project .
 The first useful moment must sell local history immediately.
 
 ```bash
-bun install -g @qxinm/gandalf
+curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | sh
+
+# or, on macOS
+brew install qyinm/tap/gandalf
 
 # Save the setup that works
 gandalf snapshot create --name baseline --metadata-only --project ~/my-project
@@ -203,7 +206,7 @@ Every scanner emits a policy-aware intermediate item:
 }
 ```
 
-Implementation status: TypeScript model in `packages/core/src/types.ts`. **restorePolicy is the active development surface — currently defaulting to `"not_supported_v0_1"`, needs per-kind policy mapping.**
+Implementation status: the canonical model lives in Go under `internal/gandalfcore/types`. **restorePolicy is the active development surface and should be mapped per evidence kind.**
 
 ### Capture Status Values
 
