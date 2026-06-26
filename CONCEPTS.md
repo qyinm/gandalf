@@ -4,6 +4,9 @@
 
 ## Restore
 
+### Trust Contract
+The safety boundary Hem promises for scan, snapshot, diff, restore, and bundle flows. In this project it means read-only discovery, confined writes under declared home/project roots, symlink refusal on write targets, and restore behavior that matches the evidence kind rather than falling back to unsafe generic file mutation.
+
 ### Evidence
 A discovered configuration artifact Hem tracks for drift and restore planning. Each evidence record has a kind (config file, MCP server entry, permission rule, env key, etc.), a source path, and optional structured value metadata.
 
@@ -20,12 +23,15 @@ An executable unit derived from a restore plan item. Carries resolved destinatio
 The dispatch table mapping restore item types to apply functions. Plan generation and apply execution share type labels; a missing registry entry surfaces as a handler error at apply time even when the plan looks valid.
 
 ### Path Confinement
-The trust boundary that restricts restore and bundle writes to declared home and project roots. Confinement must be active in plan parsing, apply, and bundle import; callers must supply roots or checks are skipped.
+The trust boundary that restricts restore and bundle writes to declared home and project roots. Confinement must be active in plan parsing, apply, rollback, and bundle import, and it only holds when the path that is actually written is the same path that was validated. Callers must supply roots or apply fails closed.
 
 ## Snapshots and Store
 
 ### Snapshot
 A named capture of project and user-global evidence at a point in time. Snapshots may be metadata-only or content-backed depending on capture policy.
 
+### Content-Backed Snapshot
+A snapshot whose store entry includes captured file bytes in addition to metadata and structured evidence. Gate 2 restore depends on content-backed snapshots when byte-exact restoration of agent config files is required.
+
 ### Store
-The on-disk persistence layer for snapshots, timeline entries, and related Hem state. Desktop and CLI clients read the same store APIs for snapshot listing and changelog.
+The on-disk persistence layer for snapshots, timeline entries, and related Hem state. Desktop and CLI clients read the same store APIs for snapshot listing and changelog, so snapshot replacement must be atomic enough that readers never observe new metadata paired with partial or missing content blobs.

@@ -1,7 +1,7 @@
 {
   "name": "@qxinm/hem",
   "version": "0.3.4",
-  "description": "[DEPRECATED] Use crates/hem-cli. npm package kept until Rust binary distribution ships.",
+  "description": "[DEPRECATED] Use the Go binary (bin/hem or GitHub Releases). npm package kept until Go binary distribution is primary.",
   "type": "module",
   "bin": {
     "hem": "dist/src/cli.js"
