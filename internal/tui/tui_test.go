@@ -428,6 +428,16 @@ func TestSetupConsoleViewModelShowsMarketplaceSources(t *testing.T) {
 	if len(model.Selected.Actions) == 0 || model.Selected.Actions[0].Available {
 		t.Fatalf("marketplace actions should be unavailable: %#v", model.Selected.Actions)
 	}
+
+	filtered := tui.BuildSetupConsoleViewModel(tui.BuildSetupConsoleViewModelInput{
+		Inventory:          setup.BuildInventory(evidence),
+		MarketplaceSources: setup.BuildMarketplace(evidence),
+		ActiveTab:          tui.SetupConsoleTabMarketplace,
+		Search:             "openai-codex",
+	})
+	if len(filtered.Rows) != 2 {
+		t.Fatalf("source search should keep source and entries: %#v", filtered.Rows)
+	}
 }
 
 func TestTimelineCorruptWarning(t *testing.T) {

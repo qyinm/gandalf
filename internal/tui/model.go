@@ -225,12 +225,13 @@ func setupConsoleMarketplaceRows(sources []setup.MarketplaceSource, search strin
 	var rows []SetupConsoleRowModel
 	var details []SetupConsoleDetailModel
 	for _, source := range sources {
-		if query == "" || marketplaceSourceMatches(source, query) {
+		sourceMatches := query == "" || marketplaceSourceMatches(source, query)
+		if sourceMatches {
 			rows = append(rows, setupConsoleRowFromMarketplaceSource(source))
 			details = append(details, setupConsoleDetailFromMarketplaceSource(source))
 		}
 		for _, entry := range source.Entries {
-			if query != "" && !marketplaceEntryMatches(entry, source, query) {
+			if query != "" && !sourceMatches && !marketplaceEntryMatches(entry, source, query) {
 				continue
 			}
 			rows = append(rows, setupConsoleRowFromMarketplaceEntry(entry))
