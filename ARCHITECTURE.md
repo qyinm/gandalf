@@ -1,6 +1,6 @@
 # Gandalf Architecture
 
-Gandalf is a local-first workspace for managing user-global AI coding agent setup. It presents skills, hooks, MCP servers, and plugins in a unified terminal inventory, then uses the same normalized evidence model for snapshots, diffs, audits, reports, `.gandalf` bundles, and restore safety workflows.
+Gandalf is a local-first workspace for managing user-global AI coding agent setup. It presents skills, hooks, MCP servers, plugins, and agent marketplace sources in a top-tab terminal setup console, then uses the same normalized evidence model for snapshots, diffs, audits, reports, `.gandalf` bundles, and restore safety workflows.
 
 The core architectural rule is simple: scan paths are read-only and policy-aware; write paths are explicit, narrow, and reversible where possible.
 
@@ -38,8 +38,8 @@ New CLI, engine, and TUI behavior lands in Go. The old Bun/TypeScript CLI, TUI, 
 ## Runtime Entry Points
 
 - `cmd/gandalf` is the primary CLI (`go build -o bin/gandalf ./cmd/gandalf`). Command wiring lives in `internal/cli`; it exposes scan, snapshot, diff, restore, doctor, report, timeline, bundle, and TUI subcommands.
-- `internal/gandalfcore` holds engine logic: scanners, store, snapshot, graph, diff, audit, provenance, restore, bundle, timeline, readiness, and report rendering.
-- `internal/tui` is the Bubble Tea presentation layer over typed Go engine APIs. It must not own scan, restore, or bundle business logic.
+- `internal/gandalfcore` holds engine logic: scanners, setup inventory and marketplace source models, store, snapshot, graph, diff, audit, provenance, restore, bundle, timeline, readiness, and report rendering.
+- `internal/tui` is the Bubble Tea presentation layer over typed Go engine APIs. It owns the top-tab setup console interaction state but must not own scan, restore, setup action, or bundle business logic.
 - Release binaries for darwin/linux amd64/arm64 are built with GoReleaser (`.goreleaser.yaml`) on `v*` tags via `.github/workflows/release.yml`.
 - `install.sh` installs the latest stable release binary from GitHub Releases.
 - Homebrew installs use the `qyinm/tap/gandalf` formula generated from GoReleaser into `qyinm/homebrew-tap`.

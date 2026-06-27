@@ -41,7 +41,7 @@ Agent power users constantly change their local environment:
 - edit prompts, instructions, hooks, and permissions
 - let an agent modify the setup on their behalf
 
-Those changes usually have no clean management layer. Gandalf opens as a TUI-first global setup inventory for skills, hooks, MCP servers, and plugins across supported agents. Snapshot, diff, bundle, and restore remain the safety layer behind that workflow:
+Those changes usually have no clean management layer. Gandalf opens as a TUI-first setup console for skills, hooks, MCP servers, plugins, and agent marketplace sources across supported agents. Snapshot, diff, bundle, and restore remain the safety layer behind that workflow:
 
 ```bash
 gandalf
@@ -54,7 +54,7 @@ Use it before you let an agent change config, install skills, edit hooks, or rew
 ## Highlights
 
 - **Local history** for AI agent environment experiments.
-- **Unified TUI inventory** for user-global skills, hooks, MCP servers, and plugins.
+- **Top-tab TUI setup console** for user-global skills, hooks, MCP servers, plugins, and agent marketplace sources.
 - **Human-readable diffs** for config, skills, hooks, and MCP servers.
 - **Dry-run first restores** with explicit apply flags before writing content.
 - **Content-backed snapshots** for the current Codex user-global launch path.
@@ -88,7 +88,7 @@ Prebuilt darwin/linux binaries are published on `v*` tags with GoReleaser. The n
 
 ## Quick Start
 
-Open the global setup inventory:
+Open the global setup console:
 
 ```bash
 gandalf
@@ -165,7 +165,7 @@ gandalf timeline undo <id> --dry-run --json
 gandalf tui --project .
 ```
 
-`gandalf` and `gandalf tui` open the global setup inventory first. History, snapshots, and timeline undo remain available as secondary safety workflows; timeline undo is dry-run preview only for stored history entries and reports `writesFiles=false`.
+`gandalf` and `gandalf tui` open the global setup console first. The console uses top tabs for Hooks, Plugins, Marketplace, Skills, and MCP Servers. History, snapshots, and timeline undo remain available as secondary safety workflows; timeline undo is dry-run preview only for stored history entries and reports `writesFiles=false`.
 
 ### Bundles
 
@@ -264,7 +264,7 @@ bun run build
 | Read-only scan, diff, audit, provenance, report | v0.1 |
 | Bundle export/import (`.gandalf` format) | v0.2 experimental |
 | Restore engine: dry-run, apply, rollback | v0.2 experimental |
-| TUI global setup inventory | v0.4 preview |
+| TUI setup console | v0.4 preview |
 | Codex user-global content-backed restore | current launch path |
 | Local multi-profile persistence | future |
 | MCP/skills add-remove manager | future |
