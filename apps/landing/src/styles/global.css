@@ -22,8 +22,13 @@ body {
   font-size: 15px;
   line-height: 1.6;
   color: var(--foreground);
-  background: var(--bg);
+  background:
+    linear-gradient(rgb(226 232 240 / 0.38) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(226 232 240 / 0.38) 1px, transparent 1px),
+    var(--bg);
+  background-size: 72px 72px;
   font-synthesis: none;
+  overflow-x: hidden;
 }
 
 ::selection {
@@ -52,9 +57,9 @@ img, svg {
 }
 
 h1, h2, h3, h4 {
-  font-family: var(--font-serif);
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-family: var(--font-sans);
+  font-weight: 650;
+  letter-spacing: 0;
   margin: 0;
   color: var(--foreground);
 }
@@ -69,9 +74,10 @@ code, pre {
 
 /* ── Layout primitives ── */
 .container {
+  width: min(calc(100% - (var(--gutter) * 2)), var(--max-width));
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 0 var(--gutter);
+  padding: 0;
 }
 
 /* ── Section meta (the editorial spine: "01 — SECTION") ── */
@@ -79,10 +85,10 @@ code, pre {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   font-weight: 500;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--muted-foreground);
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .section-meta__num {
@@ -91,8 +97,9 @@ code, pre {
 
 /* ── Hairline divider between sections ── */
 .section {
-  padding: 80px 0;
-  border-top: 1px solid var(--border);
+  padding: 82px 0;
+  border-top: 1px solid rgb(9 9 11 / 0.08);
+  background: rgb(255 255 255 / 0.86);
 }
 
 .section--no-rule {
@@ -109,11 +116,12 @@ code, pre {
   font-family: var(--font-sans);
   font-size: 0.875rem;
   font-weight: 500;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .btn--primary {
@@ -139,6 +147,10 @@ code, pre {
   color: var(--foreground);
 }
 
+.btn svg {
+  flex: 0 0 auto;
+}
+
 .btn--ghost {
   background: transparent;
   color: var(--foreground);
@@ -157,10 +169,10 @@ code, pre {
 
 /* ── Section titles (period-ending, large serif) ── */
 .section-title {
-  font-family: var(--font-serif);
-  font-size: clamp(1.75rem, 3.5vw, 2.5rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-family: var(--font-sans);
+  font-size: clamp(1.65rem, 2.6vw, 2.4rem);
+  font-weight: 650;
+  letter-spacing: 0;
   line-height: 1.15;
   margin-bottom: 16px;
   max-width: 32ch;
@@ -171,7 +183,7 @@ code, pre {
   color: var(--muted-foreground);
   line-height: 1.65;
   max-width: 56ch;
-  margin-bottom: 48px;
+  margin-bottom: 28px;
 }
 
 /* ── Inline mono tag (for hero meta strip, footer license) ── */
@@ -182,7 +194,7 @@ code, pre {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   font-weight: 500;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   color: var(--muted-foreground);
   padding: 4px 8px;
   border: 1px solid var(--border);

@@ -1,11 +1,11 @@
 import * as React from "react";
 
 const tabs = [
+	{ label: "Homebrew", cmd: "brew install qyinm/tap/gandalf" },
 	{
 		label: "install.sh",
 		cmd: "curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | sh",
 	},
-	{ label: "Homebrew", cmd: "brew install qyinm/tap/gandalf" },
 ] as const;
 
 export default function InstallTabs() {
