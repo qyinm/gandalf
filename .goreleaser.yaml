@@ -41,7 +41,7 @@ brews:
       name: homebrew-tap
     directory: Formula
     homepage: https://github.com/qyinm/gandalf
-    description: Rollback safety net for Codex setup experiments
+    description: Manage global agent skills, hooks, MCP servers, and plugins
     license: MIT
     install: |
       bin.install "gandalf"
