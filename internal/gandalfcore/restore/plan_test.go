@@ -440,37 +440,33 @@ func TestParseDryRunSkipsDestinationsWithTraversal(t *testing.T) {
 	}
 }
 
-func writeProjectMCP(t *testing.T, projectPath, command string) {
+func writeClaudeSettings(t *testing.T, homeDir, command string, permissions []string) {
 	t.Helper()
+	claudeDir := filepath.Join(homeDir, ".claude")
+	if err := os.MkdirAll(claudeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	payload := map[string]any{
 		"mcpServers": map[string]any{
 			"github": map[string]any{"command": command},
+		},
+		"permissions": map[string]any{
+			"bash": map[string]any{"allow": permissions},
 		},
 	}
 	raw, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(projectPath, ".mcp.json"), raw, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), raw, 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestRestorePlanPipelineAppliesMCPPermissionAndEnvWithConfinement(t *testing.T) {
+func TestRestorePlanPipelineAppliesUserGlobalPermissionWithConfinement(t *testing.T) {
 	t.Parallel()
 	projectPath, homeDir, storeDir := makeRestoreSandbox(t)
-	writeProjectMCP(t, projectPath, "gh-baseline")
-	claudeDir := filepath.Join(homeDir, ".claude")
-	if err := os.MkdirAll(claudeDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(
-		filepath.Join(claudeDir, "settings.json"),
-		[]byte("{\n  \"permissions\": {\n    \"bash\": { \"allow\": [] }\n  }\n}\n"),
-		0o644,
-	); err != nil {
-		t.Fatal(err)
-	}
+	writeClaudeSettings(t, homeDir, "gh-baseline", nil)
 
 	state, err := snapshot.CaptureCurrentState(&types.RuntimeOptions{
 		ProjectPath:    projectPath,
@@ -485,17 +481,7 @@ func TestRestorePlanPipelineAppliesMCPPermissionAndEnvWithConfinement(t *testing
 		t.Fatal(err)
 	}
 
-	writeProjectMCP(t, projectPath, "gh-changed")
-	if err := os.WriteFile(
-		filepath.Join(claudeDir, "settings.json"),
-		[]byte("{\n  \"permissions\": {\n    \"bash\": { \"allow\": [\"Bash(npm)\"] }\n  }\n}\n"),
-		0o644,
-	); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(projectPath, ".env"), []byte("NEW_KEY=added\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeClaudeSettings(t, homeDir, "gh-changed", []string{"Bash(npm)"})
 
 	plan, err := restore.BuildRestorePlan(&types.RestoreOptions{
 		SourceSnapshot: "baseline",
@@ -508,25 +494,15 @@ func TestRestorePlanPipelineAppliesMCPPermissionAndEnvWithConfinement(t *testing
 		t.Fatal(err)
 	}
 
-	var mcpItem, permissionItem, envItem *types.RestorePlanItem
+	var permissionItem *types.RestorePlanItem
 	for i := range plan.Items {
 		switch plan.Items[i].Kind {
-		case types.KindMcpServer:
-			mcpItem = &plan.Items[i]
 		case types.KindPermission:
 			permissionItem = &plan.Items[i]
-		case types.KindEnvKey:
-			envItem = &plan.Items[i]
 		}
-	}
-	if mcpItem == nil || mcpItem.Action != types.RestoreActionUpdate {
-		t.Fatalf("mcp item = %#v", mcpItem)
 	}
 	if permissionItem == nil || permissionItem.Action != types.RestoreActionUpdate {
 		t.Fatalf("permission item = %#v", permissionItem)
-	}
-	if envItem == nil || envItem.Action != types.RestoreActionDelete {
-		t.Fatalf("env item = %#v", envItem)
 	}
 
 	planJSON, _ := json.Marshal(plan)
@@ -535,7 +511,7 @@ func TestRestorePlanPipelineAppliesMCPPermissionAndEnvWithConfinement(t *testing
 		t.Fatalf("parse errors: %#v", parsed.Errors)
 	}
 
-	structuredTypes := []string{"mcp_server", "permission", "env_key"}
+	structuredTypes := []string{"permission"}
 	items := parsed.Items
 	for _, itemType := range structuredTypes {
 		found := false
@@ -580,12 +556,7 @@ func TestRestorePlanPipelineAppliesMCPPermissionAndEnvWithConfinement(t *testing
 		}
 	}
 
-	mcpWritten, _ := os.ReadFile(filepath.Join(projectPath, ".mcp.json"))
-	if !strings.Contains(string(mcpWritten), "gh-baseline") {
-		t.Fatalf("mcp = %s", string(mcpWritten))
-	}
-
-	settingsWritten, _ := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+	settingsWritten, _ := os.ReadFile(filepath.Join(homeDir, ".claude", "settings.json"))
 	var settingsJSON map[string]any
 	if err := json.Unmarshal(settingsWritten, &settingsJSON); err != nil {
 		t.Fatal(err)
@@ -598,10 +569,5 @@ func TestRestorePlanPipelineAppliesMCPPermissionAndEnvWithConfinement(t *testing
 	}
 	if _, hasRule := bashRule["rule"]; hasRule {
 		t.Fatal("permission apply must unwrap rule wrapper")
-	}
-
-	envWritten, _ := os.ReadFile(filepath.Join(projectPath, ".env"))
-	if strings.Contains(string(envWritten), "NEW_KEY=") {
-		t.Fatalf("env = %s", string(envWritten))
 	}
 }

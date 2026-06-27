@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
+	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	timelineundo "github.com/qyinm/gandalf/internal/gandalfcore/timeline_undo"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -22,16 +23,11 @@ var VisibleAgents = []types.AgentID{
 	types.AgentPiAgent,
 }
 
-var sidebarCountKinds = map[types.EvidenceKind]struct{}{
-	types.KindSkill:     {},
-	types.KindMcpServer: {},
-	types.KindHook:      {},
-}
-
 // Screen identifies the active workspace panel.
 type Screen string
 
 const (
+	ScreenInventory   Screen = "inventory"
 	ScreenTimeline    Screen = "timeline"
 	ScreenSnapshots   Screen = "snapshots"
 	ScreenAgentDetail Screen = "agent-detail"
@@ -41,9 +37,90 @@ const (
 )
 
 const (
-	DefaultProfile   = "default"
-	InitialNavItemID = "history:all-changes"
+	DefaultProfile      = "default"
+	InventoryNavItemID  = "inventory:global"
+	HistoryAllNavItemID = "history:all"
+	InitialNavItemID    = InventoryNavItemID
 )
+
+// --- Setup inventory view model ---
+
+type SetupInventoryRowModel struct {
+	ID          string
+	AgentLabel  string
+	AgentMarker string
+	ObjectKind  string
+	Name        string
+	SourcePath  string
+	ActionLabel string
+	Selected    bool
+}
+
+type SetupInventoryViewModel struct {
+	Rows         []SetupInventoryRowModel
+	Skills       int
+	McpServers   int
+	Hooks        int
+	Plugins      int
+	EmptyMessage string
+	Confirmation *SetupActionConfirmationModel
+	ActionError  string
+}
+
+type SetupActionConfirmationModel struct {
+	Action       string
+	AgentLabel   string
+	ObjectKind   string
+	TargetName   string
+	Operation    string
+	ConfigTarget string
+	Command      string
+}
+
+type BuildSetupInventoryViewModelInput struct {
+	Inventory      []setup.InventoryItem
+	SelectedIndex  int
+	InventoryFocus bool
+	PendingAction  *setup.ActionPlan
+	ActionError    string
+}
+
+func BuildSetupInventoryViewModel(input BuildSetupInventoryViewModelInput) SetupInventoryViewModel {
+	model := SetupInventoryViewModel{
+		Rows: make([]SetupInventoryRowModel, 0, len(input.Inventory)),
+	}
+	selectedIndex := clampIndex(input.SelectedIndex, len(input.Inventory))
+	for i, item := range input.Inventory {
+		switch item.ObjectKind {
+		case setup.ObjectSkill:
+			model.Skills++
+		case setup.ObjectMCPServer:
+			model.McpServers++
+		case setup.ObjectHook:
+			model.Hooks++
+		case setup.ObjectPlugin:
+			model.Plugins++
+		}
+		model.Rows = append(model.Rows, SetupInventoryRowModel{
+			ID:          item.ID,
+			AgentLabel:  FormatAgentLabel(item.Agent),
+			AgentMarker: FormatAgentMarker(item.Agent),
+			ObjectKind:  formatSetupObjectKind(item.ObjectKind),
+			Name:        item.Name,
+			SourcePath:  item.SourcePath,
+			ActionLabel: formatSetupActions(item.Actions),
+			Selected:    input.InventoryFocus && i == selectedIndex,
+		})
+	}
+	if len(model.Rows) == 0 {
+		model.EmptyMessage = "No global skills, hooks, MCP servers, or plugins found."
+	}
+	if input.PendingAction != nil {
+		model.Confirmation = buildSetupActionConfirmation(*input.PendingAction)
+	}
+	model.ActionError = input.ActionError
+	return model
+}
 
 // --- Timeline view model ---
 
@@ -416,6 +493,17 @@ func buildNavSections(evidence []types.DiscoveredItem) []NavSection {
 
 	return []NavSection{
 		{
+			ID:    "inventory",
+			Label: "Inventory",
+			Items: []NavItem{{
+				ID:            InitialNavItemID,
+				Kind:          NavHistoryItem,
+				Label:         "Global setup",
+				Screen:        ScreenInventory,
+				EvidenceCount: countSidebarInventory(evidence, nil),
+			}},
+		},
+		{
 			ID:    NavProfiles,
 			Label: "Profiles",
 			Items: []NavItem{{
@@ -436,7 +524,7 @@ func buildNavSections(evidence []types.DiscoveredItem) []NavSection {
 			Label: "History",
 			Items: []NavItem{
 				{
-					ID:     InitialNavItemID,
+					ID:     HistoryAllNavItemID,
 					Kind:   NavHistoryItem,
 					Label:  "All changes",
 					Screen: ScreenTimeline,
@@ -453,11 +541,14 @@ func buildNavSections(evidence []types.DiscoveredItem) []NavSection {
 }
 
 func NavItemIDForSelection(selection NavigationSelection) string {
+	if selection.Screen == ScreenInventory {
+		return InventoryNavItemID
+	}
 	if selection.Screen == ScreenTimeline {
 		if selection.SelectedAgent != nil {
 			return "agent:" + selection.SelectedAgent.String()
 		}
-		return InitialNavItemID
+		return HistoryAllNavItemID
 	}
 	if selection.Screen == ScreenSnapshots {
 		return "history:snapshots"
@@ -538,7 +629,7 @@ func buildAgentEntries(evidence []types.DiscoveredItem) []AgentEntry {
 func countSidebarInventory(evidence []types.DiscoveredItem, agent *types.AgentID) int {
 	count := 0
 	for _, item := range evidence {
-		if _, ok := sidebarCountKinds[item.Kind]; !ok {
+		if !setup.IsInventoryEvidence(item) {
 			continue
 		}
 		if agent != nil {

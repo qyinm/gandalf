@@ -47,7 +47,7 @@ func (CodexScanner) Targets(projectPath, homeDir string) []scan.ScanTarget {
 func (c CodexScanner) Scan(context *scan.ScannerContext) []types.DiscoveredItem {
 	base := scan.NewScannerBase(types.AgentCodex)
 	inScope := func(target scan.ScanTarget) bool {
-		return context.Scope == nil || target.Scope == *context.Scope
+		return scan.ScopeEnabled(target.Scope, context.Scope)
 	}
 
 	var targets []scan.ScanTarget

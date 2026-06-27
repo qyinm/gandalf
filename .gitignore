@@ -4,6 +4,7 @@ apps/landing/.astro/
 /gandalf
 node_modules/
 /target/
+.worktrees/
 *.log
 .DS_Store
 docs/private

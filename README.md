@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  Manage the local setup layer Git does not track:
+  Manage the user-global setup layer Git does not track:
   MCP servers, skills, hooks, prompts, permissions, and agent config.
 </p>
 
@@ -41,21 +41,21 @@ Agent power users constantly change their local environment:
 - edit prompts, instructions, hooks, and permissions
 - let an agent modify the setup on their behalf
 
-Those changes usually have no clean management layer. Gandalf gives agent environments a local save point, diff, bundle, and restore loop:
+Those changes usually have no clean management layer. Gandalf opens as a TUI-first global setup inventory for skills, hooks, MCP servers, and plugins across supported agents. Snapshot, diff, bundle, and restore remain the safety layer behind that workflow:
 
 ```bash
+gandalf
 gandalf snapshot create --name baseline --agent codex --scope user --project .
 gandalf diff baseline current --agent codex --scope user --project .
-gandalf restore --snapshot baseline --dry-run --agent codex --scope user --project .
-gandalf restore --snapshot baseline --apply --experimental --agent codex --scope user --project .
 ```
 
-Use it before you let an agent change config, install skills, edit hooks, or rewrite setup instructions. Codex user-global setup is the first fully supported path; Gandalf is built for AI agent environment management.
+Use it before you let an agent change config, install skills, edit hooks, or rewrite setup instructions. User-global setup is the active product scope; project-local setup files are outside the current management workflow.
 
 ## Highlights
 
 - **Local history** for AI agent environment experiments.
-- **Human-readable diffs** for config, skills, hooks, MCP servers, and project setup files.
+- **Unified TUI inventory** for user-global skills, hooks, MCP servers, and plugins.
+- **Human-readable diffs** for config, skills, hooks, and MCP servers.
 - **Dry-run first restores** with explicit apply flags before writing content.
 - **Content-backed snapshots** for the current Codex user-global launch path.
 - **Portable bundles** for exporting, verifying, inspecting, and previewing setup state on another machine.
@@ -88,7 +88,13 @@ Prebuilt darwin/linux binaries are published on `v*` tags with GoReleaser. The n
 
 ## Quick Start
 
-Create a safe baseline before changing your agent environment. The current launch path uses Codex user-global setup:
+Open the global setup inventory:
+
+```bash
+gandalf
+```
+
+Create a safe baseline before changing your agent environment. The current safety path uses user-global setup:
 
 ```bash
 gandalf snapshot create --name clean-codex --agent codex --scope user --project .
@@ -117,13 +123,12 @@ gandalf restore --snapshot clean-codex --apply --experimental --agent codex --sc
 | Surface | Supported setup inventory |
 |---|---|
 | Codex | user-global `~/.codex/config.toml`, user hooks, user skills, managed plugin skill inventory |
-| Claude Code | `settings.json`, `.mcp.json`, `CLAUDE.md`, skills, hooks, agents |
-| Cursor | `.cursor/mcp.json`, skills, hooks |
-| OpenCode | config, skills |
-| Pi Agent | settings, extensions, skills, themes, prompts, agents, models |
-| Project | `AGENTS.md`, `CLAUDE.md`, `CODE.md`, `.mcp.json`, `.env` keys |
+| Claude Code | user-global settings, skills, hooks, agents |
+| Cursor | user-global MCP servers, skills, hooks |
+| OpenCode | user-global config and skills |
+| Pi Agent | user-global settings, extensions, skills, themes, prompts, agents, models |
 
-Codex user-global restore is the current launch path. Broader multi-agent profile management, team sync, and cloud workflows are future direction.
+Project-local files such as repo `.mcp.json`, `AGENTS.md`, and `.env` are not part of the current product scope. Broader team sync and cloud workflows are future direction.
 
 ## Commands
 
@@ -160,7 +165,7 @@ gandalf timeline undo <id> --dry-run --json
 gandalf tui --project .
 ```
 
-`gandalf tui` opens a local setup-history workspace with `Profiles`, `Agents`, and `History` navigation. Timeline undo is dry-run preview only for stored history entries and reports `writesFiles=false`.
+`gandalf` and `gandalf tui` open the global setup inventory first. History, snapshots, and timeline undo remain available as secondary safety workflows; timeline undo is dry-run preview only for stored history entries and reports `writesFiles=false`.
 
 ### Bundles
 
@@ -197,11 +202,11 @@ Every command supports `--json` where structured output is useful.
 
 By default Gandalf:
 
-- reads local user and project agent configuration only
+- reads local user-global agent configuration only
 - does not execute MCP commands, hooks, scripts, plugins, or agent tools
 - does not use the network unless `GANDALF_UPDATE_CHECK=1` is set
 - writes only to `~/.gandalf`, unless `--out` is explicit
-- omits raw secrets and raw `.env` values
+- omits raw secrets and does not manage project `.env` values
 - does not follow symlinks
 - requires explicit apply flags before restoring content
 - creates rollback paths for restore operations where supported
@@ -259,7 +264,7 @@ bun run build
 | Read-only scan, diff, audit, provenance, report | v0.1 |
 | Bundle export/import (`.gandalf` format) | v0.2 experimental |
 | Restore engine: dry-run, apply, rollback | v0.2 experimental |
-| TUI setup-history workspace | v0.3 preview |
+| TUI global setup inventory | v0.4 preview |
 | Codex user-global content-backed restore | current launch path |
 | Local multi-profile persistence | future |
 | MCP/skills add-remove manager | future |
