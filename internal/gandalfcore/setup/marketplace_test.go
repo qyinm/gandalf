@@ -55,7 +55,7 @@ func TestBuildMarketplaceGroupsObservedAgentSources(t *testing.T) {
 	}
 
 	codex := findMarketplaceSource(t, sources, types.AgentCodex)
-	if codex.Label != "plugin" {
+	if codex.Label != "openai-codex" {
 		t.Fatalf("codex source label = %q", codex.Label)
 	}
 	if len(codex.Entries) != 1 {

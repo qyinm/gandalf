@@ -108,20 +108,22 @@ func isMarketplaceEvidence(item types.DiscoveredItem) bool {
 }
 
 func marketplaceSourceIdentity(item types.DiscoveredItem, meta map[string]any) (id, label, path string) {
+	sourceKind := metadataString(meta, "source")
+	sourceRoot := metadataString(meta, "sourceRoot")
 	label = firstNonEmpty(
 		metadataString(meta, "marketplaceSource"),
 		metadataString(meta, "sourceName"),
-		metadataString(meta, "source"),
-		metadataString(meta, "sourceRoot"),
+		sourceLabelFromPath(sourceRoot),
+		sourceKind,
 	)
-	path = firstNonEmpty(metadataString(meta, "sourceRoot"), item.SourcePath)
+	path = firstNonEmpty(sourceRoot, item.SourcePath)
 	if label == "" {
 		label = sourceLabelFromPath(path)
 	}
 	if label == "" {
 		label = item.Agent.String()
 	}
-	id = strings.Join([]string{item.Agent.String(), string(item.Scope), label, path}, ":")
+	id = strings.Join([]string{item.Agent.String(), string(item.Scope), sourceKind, label, path}, ":")
 	return id, label, path
 }
 
