@@ -39,6 +39,7 @@ brews:
     repository:
       owner: qyinm
       name: homebrew-tap
+      token: "{{ .Env.GORELEASER_GITHUB_TOKEN }}"
     directory: Formula
     homepage: https://github.com/qyinm/gandalf
     description: Manage global agent skills, hooks, MCP servers, and plugins
