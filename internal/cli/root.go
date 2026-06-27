@@ -24,16 +24,19 @@ func Execute() int {
 
 // NewRootCmd builds the root Cobra command tree.
 func NewRootCmd() *cobra.Command {
+	var common CommonFlags
+
 	root := &cobra.Command{
 		Use:           "gandalf",
 		Short:         "Save, compare, and restore Codex user-global setup experiments.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Run: func(cmd *cobra.Command, _ []string) {
-			printRootHelp(cmd.OutOrStdout())
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runTUICommand(cmd, &common)
 		},
 	}
 
+	common.bindFlags(root.Flags())
 	root.AddCommand(newScanCmd())
 	root.AddCommand(newSnapshotCmd())
 	root.AddCommand(newDiffCmd())
