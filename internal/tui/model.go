@@ -77,6 +77,279 @@ type SetupActionConfirmationModel struct {
 	Command      string
 }
 
+// SetupConsoleTab identifies the active top-level setup console tab.
+type SetupConsoleTab string
+
+const (
+	SetupConsoleTabHooks       SetupConsoleTab = "hooks"
+	SetupConsoleTabPlugins     SetupConsoleTab = "plugins"
+	SetupConsoleTabMarketplace SetupConsoleTab = "marketplace"
+	SetupConsoleTabSkills      SetupConsoleTab = "skills"
+	SetupConsoleTabMCPServers  SetupConsoleTab = "mcp_servers"
+)
+
+// SetupConsoleTabs is the stable top-tab order.
+var SetupConsoleTabs = []SetupConsoleTab{
+	SetupConsoleTabHooks,
+	SetupConsoleTabPlugins,
+	SetupConsoleTabMarketplace,
+	SetupConsoleTabSkills,
+	SetupConsoleTabMCPServers,
+}
+
+type SetupConsoleTabModel struct {
+	Tab      SetupConsoleTab
+	Label    string
+	Count    int
+	Selected bool
+}
+
+type SetupConsoleRowModel struct {
+	ID          string
+	AgentLabel  string
+	AgentMarker string
+	ObjectKind  string
+	Name        string
+	SourcePath  string
+	Scope       string
+	Status      string
+	ActionLabel string
+	Selected    bool
+}
+
+type SetupConsoleDetailModel struct {
+	Title       string
+	AgentLabel  string
+	ObjectKind  string
+	SourcePath  string
+	Scope       string
+	Status      string
+	Actions     []SetupConsoleActionModel
+	ConfigTarget string
+}
+
+type SetupConsoleActionModel struct {
+	Label     string
+	Available bool
+	Reason    string
+}
+
+type SetupConsoleViewModel struct {
+	ActiveTab    SetupConsoleTab
+	Tabs         []SetupConsoleTabModel
+	Rows         []SetupConsoleRowModel
+	Search       string
+	EmptyMessage string
+	Selected     *SetupConsoleDetailModel
+	Confirmation *SetupActionConfirmationModel
+	ActionError  string
+}
+
+type BuildSetupConsoleViewModelInput struct {
+	Inventory     []setup.InventoryItem
+	ActiveTab     SetupConsoleTab
+	Search        string
+	SelectedIndex int
+	PendingAction *setup.ActionPlan
+	ActionError   string
+}
+
+func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupConsoleViewModel {
+	activeTab := normalizeSetupConsoleTab(input.ActiveTab)
+	counts := setupConsoleTabCounts(input.Inventory)
+	filtered := filterSetupConsoleInventory(input.Inventory, activeTab, input.Search)
+	selectedIndex := clampIndex(input.SelectedIndex, len(filtered))
+
+	model := SetupConsoleViewModel{
+		ActiveTab:   activeTab,
+		Tabs:        buildSetupConsoleTabs(activeTab, counts),
+		Rows:        make([]SetupConsoleRowModel, 0, len(filtered)),
+		Search:      strings.TrimSpace(input.Search),
+		ActionError: input.ActionError,
+	}
+
+	for i, item := range filtered {
+		model.Rows = append(model.Rows, setupConsoleRowFromInventory(item, i == selectedIndex))
+	}
+	if len(model.Rows) == 0 {
+		model.EmptyMessage = setupConsoleEmptyMessage(activeTab, input.Search)
+	} else {
+		selected := setupConsoleDetailFromInventory(filtered[selectedIndex])
+		model.Selected = &selected
+	}
+	if input.PendingAction != nil {
+		model.Confirmation = buildSetupActionConfirmation(*input.PendingAction)
+	}
+	return model
+}
+
+func normalizeSetupConsoleTab(tab SetupConsoleTab) SetupConsoleTab {
+	for _, known := range SetupConsoleTabs {
+		if tab == known {
+			return tab
+		}
+	}
+	return SetupConsoleTabHooks
+}
+
+func buildSetupConsoleTabs(active SetupConsoleTab, counts map[SetupConsoleTab]int) []SetupConsoleTabModel {
+	tabs := make([]SetupConsoleTabModel, 0, len(SetupConsoleTabs))
+	for _, tab := range SetupConsoleTabs {
+		tabs = append(tabs, SetupConsoleTabModel{
+			Tab:      tab,
+			Label:    setupConsoleTabLabel(tab),
+			Count:    counts[tab],
+			Selected: tab == active,
+		})
+	}
+	return tabs
+}
+
+func setupConsoleTabCounts(inventory []setup.InventoryItem) map[SetupConsoleTab]int {
+	counts := make(map[SetupConsoleTab]int)
+	for _, item := range inventory {
+		if tab, ok := setupConsoleTabForObjectKind(item.ObjectKind); ok {
+			counts[tab]++
+		}
+	}
+	return counts
+}
+
+func filterSetupConsoleInventory(inventory []setup.InventoryItem, tab SetupConsoleTab, search string) []setup.InventoryItem {
+	objectKind, ok := setupObjectKindForConsoleTab(tab)
+	if !ok {
+		return nil
+	}
+	query := strings.ToLower(strings.TrimSpace(search))
+	filtered := make([]setup.InventoryItem, 0, len(inventory))
+	for _, item := range inventory {
+		if item.ObjectKind != objectKind {
+			continue
+		}
+		if query != "" && !setupInventoryMatchesSearch(item, query) {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
+}
+
+func setupInventoryMatchesSearch(item setup.InventoryItem, query string) bool {
+	haystack := strings.ToLower(strings.Join([]string{
+		item.ID,
+		item.Name,
+		item.SourcePath,
+		string(item.Scope),
+		string(item.Agent),
+		formatSetupObjectKind(item.ObjectKind),
+	}, " "))
+	return strings.Contains(haystack, query)
+}
+
+func setupConsoleTabForObjectKind(kind setup.ObjectKind) (SetupConsoleTab, bool) {
+	switch kind {
+	case setup.ObjectHook:
+		return SetupConsoleTabHooks, true
+	case setup.ObjectPlugin:
+		return SetupConsoleTabPlugins, true
+	case setup.ObjectSkill:
+		return SetupConsoleTabSkills, true
+	case setup.ObjectMCPServer:
+		return SetupConsoleTabMCPServers, true
+	default:
+		return "", false
+	}
+}
+
+func setupObjectKindForConsoleTab(tab SetupConsoleTab) (setup.ObjectKind, bool) {
+	switch tab {
+	case SetupConsoleTabHooks:
+		return setup.ObjectHook, true
+	case SetupConsoleTabPlugins:
+		return setup.ObjectPlugin, true
+	case SetupConsoleTabSkills:
+		return setup.ObjectSkill, true
+	case SetupConsoleTabMCPServers:
+		return setup.ObjectMCPServer, true
+	default:
+		return "", false
+	}
+}
+
+func setupConsoleRowFromInventory(item setup.InventoryItem, selected bool) SetupConsoleRowModel {
+	return SetupConsoleRowModel{
+		ID:          item.ID,
+		AgentLabel:  FormatAgentLabel(item.Agent),
+		AgentMarker: FormatAgentMarker(item.Agent),
+		ObjectKind:  formatSetupObjectKind(item.ObjectKind),
+		Name:        item.Name,
+		SourcePath:  item.SourcePath,
+		Scope:       string(item.Scope),
+		Status:      setupInventoryStatus(item),
+		ActionLabel: formatSetupActions(item.Actions),
+		Selected:    selected,
+	}
+}
+
+func setupConsoleDetailFromInventory(item setup.InventoryItem) SetupConsoleDetailModel {
+	actions := make([]SetupConsoleActionModel, 0, len(item.Actions))
+	for _, action := range item.Actions {
+		actions = append(actions, SetupConsoleActionModel{
+			Label:     string(action.Action),
+			Available: action.Available,
+			Reason:    action.Reason,
+		})
+	}
+	return SetupConsoleDetailModel{
+		Title:        item.Name,
+		AgentLabel:   FormatAgentLabel(item.Agent),
+		ObjectKind:   formatSetupObjectKind(item.ObjectKind),
+		SourcePath:   item.SourcePath,
+		Scope:        string(item.Scope),
+		Status:       setupInventoryStatus(item),
+		Actions:      actions,
+		ConfigTarget: item.SourcePath,
+	}
+}
+
+func setupInventoryStatus(item setup.InventoryItem) string {
+	switch item.Scope {
+	case types.ScopeUser:
+		return "user"
+	case types.ScopeManaged:
+		return "managed"
+	default:
+		return string(item.Scope)
+	}
+}
+
+func setupConsoleTabLabel(tab SetupConsoleTab) string {
+	switch tab {
+	case SetupConsoleTabHooks:
+		return "Hooks"
+	case SetupConsoleTabPlugins:
+		return "Plugins"
+	case SetupConsoleTabMarketplace:
+		return "Marketplace"
+	case SetupConsoleTabSkills:
+		return "Skills"
+	case SetupConsoleTabMCPServers:
+		return "MCP Servers"
+	default:
+		return string(tab)
+	}
+}
+
+func setupConsoleEmptyMessage(tab SetupConsoleTab, search string) string {
+	if strings.TrimSpace(search) != "" {
+		return "No matching " + strings.ToLower(setupConsoleTabLabel(tab)) + "."
+	}
+	if tab == SetupConsoleTabMarketplace {
+		return "No marketplace sources found."
+	}
+	return "No global " + strings.ToLower(setupConsoleTabLabel(tab)) + " found."
+}
+
 type BuildSetupInventoryViewModelInput struct {
 	Inventory      []setup.InventoryItem
 	SelectedIndex  int
