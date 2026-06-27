@@ -1,6 +1,7 @@
 ---
 title: Separate global setup inventory from executable setup actions
 date: 2026-06-27
+last_updated: 2026-06-28
 category: docs/solutions/architecture-patterns
 module: Gandalf global setup manager
 problem_type: architecture_pattern
@@ -10,6 +11,7 @@ applies_when:
   - Building a TUI-first setup manager over global agent configuration
   - Showing editable setup objects before concrete mutation providers exist
   - Changing scan defaults from project-aware discovery to global-only discovery
+  - Browsing agent marketplace or plugin sources before install providers exist
 tags: [global-setup, tui, inventory, actions, scan-scope, agent-setup]
 ---
 
@@ -28,6 +30,8 @@ That product shift creates two separate boundaries that are easy to collapse:
   manager.
 - The action boundary decides which visible objects can actually be edited,
   removed, or added by Gandalf.
+- The marketplace boundary decides which agent-native source catalogs can be
+  browsed without implying that Gandalf owns the catalog or can install from it.
 
 Treating a visible row as automatically executable caused a review finding:
 edit/remove confirmations could report success even when no concrete file or
@@ -48,6 +52,14 @@ The inventory layer should answer only: "Which setup objects belong in the
 global manager?" It can show unavailable actions with reasons, but it should
 not imply executability just because an item is user-scoped.
 
+Marketplace rows should be treated as source-backed inventory, not as a
+separate Gandalf catalog. Derive source labels from the agent ecosystem's
+source root or explicit source name so the UI shows recognizable sources such
+as plugin repositories or official catalogs, rather than generic metadata like
+`plugin`. When search matches a source, keep the source's entries visible under
+it; otherwise the grouped marketplace view turns into a header-only result and
+stops being useful for install decisions.
+
 The action layer should own executability. A setup action is available only
 when an action provider can produce a concrete effect such as:
 
@@ -64,6 +76,11 @@ return []setup.ActionAvailability{
     {Action: setup.ActionRemove, Available: false, Reason: "remove action provider is not implemented yet"},
 }
 ```
+
+Apply the same rule to marketplace entries and marketplace sources. The TUI can
+show install, update, uninstall, add-source, or remove-source actions as
+unavailable, but pressing Enter should explain that an agent-native provider is
+missing instead of falling through to a generic "no setup item selected" error.
 
 The TUI should report success only after a real executor completes. If action
 execution succeeds but the follow-up rescan fails, clear the pending action so
@@ -83,6 +100,11 @@ and navigation first while preserving truthful action semantics. It also gives
 future CLI or agent surfaces a reusable contract: list objects, list available
 actions, plan an action, then execute only concrete effects.
 
+For marketplace-like sources, the same separation prevents product confusion:
+Gandalf can make agent ecosystems easier to inspect without becoming a catalog
+authority. Source identity, browse grouping, and action availability remain
+separate facts.
+
 ## When to Apply
 
 - Introducing a management UI before every mutation path is implemented.
@@ -90,6 +112,8 @@ actions, plan an action, then execute only concrete effects.
   have different storage formats.
 - Refactoring scans so nil or default scope means global-only product behavior.
 - Adding CLI or agent automation on top of TUI-visible setup objects.
+- Adding a marketplace or plugin-source tab before install/update/uninstall
+  providers are wired.
 
 ## Examples
 
@@ -114,6 +138,26 @@ if plan.Command == nil {
 Pair that with unavailable inventory actions until a provider can emit a
 concrete command or file mutation.
 
+For marketplace sources, prefer source-root labels over generic source kinds:
+
+```go
+label := firstNonEmpty(
+    metadataString(meta, "marketplaceSource"),
+    metadataString(meta, "sourceName"),
+    sourceLabelFromPath(metadataString(meta, "sourceRoot")),
+    metadataString(meta, "source"),
+)
+```
+
+Then make source search preserve the child entries:
+
+```go
+sourceMatches := query == "" || marketplaceSourceMatches(source, query)
+if query != "" && !sourceMatches && !marketplaceEntryMatches(entry, source, query) {
+    continue
+}
+```
+
 For scan scope, do not let custom scanners interpret nil scope as "read
 everything" when the product default is global-only:
 
@@ -128,3 +172,5 @@ if !scan.ScopeEnabled(target.Scope, context.Scope) {
 - [Preserve Go verification when removing runtime surfaces](../workflow-issues/go-verification-after-runtime-surface-removal.md)
 - [Global Agent Setup Manager](../../../CONCEPTS.md#global-agent-setup-manager)
 - [Unified Inventory](../../../CONCEPTS.md#unified-inventory)
+- [Agent Marketplace Source](../../../CONCEPTS.md#agent-marketplace-source)
+- [Setup Action Provider](../../../CONCEPTS.md#setup-action-provider)

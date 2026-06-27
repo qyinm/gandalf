@@ -20,7 +20,7 @@ The normalized cross-agent setup inventory used by the setup console. It present
 The current target information structure for Gandalf's default TUI. It uses top-level setup tabs for hooks, plugins, marketplace, skills, and MCP servers while preserving cross-agent rows inside each tab.
 
 ### Agent Marketplace Source
-A marketplace or plugin source exposed by an agent ecosystem and browsed through Gandalf. Gandalf may display, install, update, uninstall, add, or remove source-backed entries through agent-native providers, but it does not own or certify the catalog itself.
+A marketplace or plugin source exposed by an agent ecosystem and browsed through Gandalf. Gandalf can group and display source-backed entries, but install, update, uninstall, add-source, and remove-source actions are available only through agent-native providers; Gandalf does not own or certify the catalog itself.
 
 ### Setup Action Provider
 The component that turns a visible setup inventory item into a concrete edit, remove, add, or dry-run action. Inventory visibility does not imply action executability; a provider must describe the target, expected effect, and execution mechanism before Gandalf can truthfully mark an action available.
