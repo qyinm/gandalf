@@ -73,28 +73,6 @@ func PlanItemAction(item InventoryItem, action ActionKind) ActionPlan {
 	return plan
 }
 
-func NewCommandActionPlan(
-	id string,
-	action ActionKind,
-	agent types.AgentID,
-	objectKind ObjectKind,
-	targetName string,
-	configTarget string,
-	command CommandPlan,
-) ActionPlan {
-	return ActionPlan{
-		ID:           id,
-		Action:       action,
-		Agent:        agent,
-		ObjectKind:   objectKind,
-		TargetName:   targetName,
-		Operation:    "run agent-native command",
-		ConfigTarget: configTarget,
-		Command:      &command,
-		Available:    true,
-	}
-}
-
 func ExecuteActionPlan(ctx context.Context, plan ActionPlan, runner CommandRunner) (ActionResult, error) {
 	if !plan.Available {
 		return ActionResult{}, fmt.Errorf("%w: %s", ErrActionUnavailable, plan.UnavailableReason)

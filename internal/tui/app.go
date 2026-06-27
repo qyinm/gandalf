@@ -49,6 +49,7 @@ type App struct {
 	errText string
 
 	evidence        []types.DiscoveredItem
+	inventory       []setup.InventoryItem
 	timelineEntries []types.TimelineEntry
 	corruptEvents   []store.TimelineCorruptEvent
 	snapshotNames   []string
@@ -117,13 +118,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		a.ready = true
-		a.evidence = typed.evidence
-		a.timelineEntries = typed.timelineEntries
-		a.corruptEvents = typed.corruptEvents
-		a.snapshotNames = typed.snapshotNames
+		a.applyWorkspaceData(bootMsg(typed))
 		a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
-		a.cachedNav = nil
-		a.cachedNavKey = ""
 		return a, nil
 
 	case rescanMsg:
@@ -131,13 +127,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.notice = typed.err.Error()
 			return a, nil
 		}
-		a.evidence = typed.evidence
-		a.timelineEntries = typed.timelineEntries
-		a.corruptEvents = typed.corruptEvents
-		a.snapshotNames = typed.snapshotNames
+		a.applyWorkspaceData(bootMsg(typed))
 		a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
-		a.cachedNav = nil
-		a.cachedNavKey = ""
 		a.undoPlan = nil
 		a.undoError = ""
 		a.pendingAction = nil
@@ -154,13 +145,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.actionError = typed.data.err.Error()
 			return a, nil
 		}
-		a.evidence = typed.data.evidence
-		a.timelineEntries = typed.data.timelineEntries
-		a.corruptEvents = typed.data.corruptEvents
-		a.snapshotNames = typed.data.snapshotNames
+		a.applyWorkspaceData(typed.data)
 		a.inventoryCursor = clampIndex(a.inventoryCursor, len(a.currentInventory()))
-		a.cachedNav = nil
-		a.cachedNavKey = ""
 		a.pendingAction = nil
 		a.actionError = ""
 		a.notice = "Applied setup action and rescanned global setup."
@@ -334,7 +320,17 @@ func (a *App) handleInventoryEnter() tea.Cmd {
 }
 
 func (a *App) currentInventory() []setup.InventoryItem {
-	return setup.BuildInventory(a.evidence)
+	return a.inventory
+}
+
+func (a *App) applyWorkspaceData(data bootMsg) {
+	a.evidence = data.evidence
+	a.inventory = setup.BuildInventory(data.evidence)
+	a.timelineEntries = data.timelineEntries
+	a.corruptEvents = data.corruptEvents
+	a.snapshotNames = data.snapshotNames
+	a.cachedNav = nil
+	a.cachedNavKey = ""
 }
 
 func (a *App) moveInventoryCursor(delta int) {
@@ -444,7 +440,7 @@ func (a *App) renderContent(width, height int) string {
 	switch a.screen {
 	case ScreenInventory:
 		model := BuildSetupInventoryViewModel(BuildSetupInventoryViewModelInput{
-			Evidence:       a.evidence,
+			Inventory:      a.currentInventory(),
 			SelectedIndex:  a.inventoryCursor,
 			InventoryFocus: a.inventoryFocus,
 			PendingAction:  a.pendingAction,

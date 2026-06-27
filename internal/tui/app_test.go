@@ -15,14 +15,14 @@ func TestInventoryEnterConfirmsActionAndRescans(t *testing.T) {
 	name := "review"
 	app := NewApp(runtime)
 	app.ready = true
-	app.evidence = []types.DiscoveredItem{{
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
 		ID:         "skill-review",
 		Agent:      types.AgentCodex,
 		Kind:       types.KindSkill,
 		Name:       &name,
 		SourcePath: "~/.codex/skills/review",
 		Scope:      types.ScopeUser,
-	}}
+	}}})
 
 	if cmd := app.handleInventoryEnter(); cmd != nil {
 		t.Fatal("opening confirmation should not return a command")
@@ -66,14 +66,14 @@ func TestInventoryActionFailureKeepsUserInContext(t *testing.T) {
 	name := "review"
 	app := NewApp(runtime)
 	app.ready = true
-	app.evidence = []types.DiscoveredItem{{
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
 		ID:         "skill-review",
 		Agent:      types.AgentCodex,
 		Kind:       types.KindSkill,
 		Name:       &name,
 		SourcePath: "~/.codex/skills/review",
 		Scope:      types.ScopeUser,
-	}}
+	}}})
 
 	app.handleInventoryEnter()
 	app.actionExecutor = func(context.Context, setup.ActionPlan) error {

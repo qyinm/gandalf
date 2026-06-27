@@ -23,12 +23,6 @@ var VisibleAgents = []types.AgentID{
 	types.AgentPiAgent,
 }
 
-var sidebarCountKinds = map[types.EvidenceKind]struct{}{
-	types.KindSkill:     {},
-	types.KindMcpServer: {},
-	types.KindHook:      {},
-}
-
 // Screen identifies the active workspace panel.
 type Screen string
 
@@ -43,8 +37,10 @@ const (
 )
 
 const (
-	DefaultProfile   = "default"
-	InitialNavItemID = "inventory:global"
+	DefaultProfile      = "default"
+	InventoryNavItemID  = "inventory:global"
+	HistoryAllNavItemID = "history:all"
+	InitialNavItemID    = InventoryNavItemID
 )
 
 // --- Setup inventory view model ---
@@ -82,7 +78,7 @@ type SetupActionConfirmationModel struct {
 }
 
 type BuildSetupInventoryViewModelInput struct {
-	Evidence       []types.DiscoveredItem
+	Inventory      []setup.InventoryItem
 	SelectedIndex  int
 	InventoryFocus bool
 	PendingAction  *setup.ActionPlan
@@ -90,12 +86,11 @@ type BuildSetupInventoryViewModelInput struct {
 }
 
 func BuildSetupInventoryViewModel(input BuildSetupInventoryViewModelInput) SetupInventoryViewModel {
-	inventory := setup.BuildInventory(input.Evidence)
 	model := SetupInventoryViewModel{
-		Rows: make([]SetupInventoryRowModel, 0, len(inventory)),
+		Rows: make([]SetupInventoryRowModel, 0, len(input.Inventory)),
 	}
-	selectedIndex := clampIndex(input.SelectedIndex, len(inventory))
-	for i, item := range inventory {
+	selectedIndex := clampIndex(input.SelectedIndex, len(input.Inventory))
+	for i, item := range input.Inventory {
 		switch item.ObjectKind {
 		case setup.ObjectSkill:
 			model.Skills++
@@ -529,7 +524,7 @@ func buildNavSections(evidence []types.DiscoveredItem) []NavSection {
 			Label: "History",
 			Items: []NavItem{
 				{
-					ID:     InitialNavItemID,
+					ID:     HistoryAllNavItemID,
 					Kind:   NavHistoryItem,
 					Label:  "All changes",
 					Screen: ScreenTimeline,
@@ -547,13 +542,13 @@ func buildNavSections(evidence []types.DiscoveredItem) []NavSection {
 
 func NavItemIDForSelection(selection NavigationSelection) string {
 	if selection.Screen == ScreenInventory {
-		return InitialNavItemID
+		return InventoryNavItemID
 	}
 	if selection.Screen == ScreenTimeline {
 		if selection.SelectedAgent != nil {
 			return "agent:" + selection.SelectedAgent.String()
 		}
-		return InitialNavItemID
+		return HistoryAllNavItemID
 	}
 	if selection.Screen == ScreenSnapshots {
 		return "history:snapshots"
@@ -634,7 +629,7 @@ func buildAgentEntries(evidence []types.DiscoveredItem) []AgentEntry {
 func countSidebarInventory(evidence []types.DiscoveredItem, agent *types.AgentID) int {
 	count := 0
 	for _, item := range evidence {
-		if _, ok := sidebarCountKinds[item.Kind]; !ok {
+		if !setup.IsInventoryEvidence(item) {
 			continue
 		}
 		if agent != nil {

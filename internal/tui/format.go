@@ -92,7 +92,8 @@ func TruncateText(value string, width int) string {
 
 // PadDisplay truncates then pads text to width.
 func PadDisplay(value string, width int) string {
-	return TruncateText(value, width) + strings.Repeat(" ", max(0, width-len(TruncateText(value, width))))
+	truncated := TruncateText(value, width)
+	return truncated + strings.Repeat(" ", max(0, width-len(truncated)))
 }
 
 // FormatInventorySourceRoot returns a compact source-root label for inventory rows.

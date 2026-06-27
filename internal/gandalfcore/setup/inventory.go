@@ -46,7 +46,7 @@ func BuildInventory(evidence []types.DiscoveredItem) []InventoryItem {
 	items := make([]InventoryItem, 0, len(evidence))
 	for _, item := range evidence {
 		objectKind, ok := objectKindForEvidence(item.Kind)
-		if !ok || !inventoryScopeEnabled(item) {
+		if !ok || !IsInventoryEvidence(item) {
 			continue
 		}
 		items = append(items, InventoryItem{
@@ -62,24 +62,56 @@ func BuildInventory(evidence []types.DiscoveredItem) []InventoryItem {
 		})
 	}
 
-	sort.SliceStable(items, func(i, j int) bool {
-		left := items[i]
-		right := items[j]
-		for _, pair := range [][2]string{
-			{string(left.ObjectKind), string(right.ObjectKind)},
-			{string(left.Agent), string(right.Agent)},
-			{strings.ToLower(left.Name), strings.ToLower(right.Name)},
-			{left.SourcePath, right.SourcePath},
-			{left.ID, right.ID},
-		} {
-			if pair[0] != pair[1] {
-				return pair[0] < pair[1]
-			}
+	keyedItems := make([]inventoryKeyedItem, len(items))
+	for i, item := range items {
+		keyedItems[i] = inventoryKeyedItem{
+			item: item,
+			key: inventorySortKey{
+				objectKind: string(item.ObjectKind),
+				agent:      string(item.Agent),
+				name:       strings.ToLower(item.Name),
+				sourcePath: item.SourcePath,
+				id:         item.ID,
+			},
 		}
-		return false
+	}
+	sort.SliceStable(keyedItems, func(i, j int) bool {
+		return keyedItems[i].key.less(keyedItems[j].key)
 	})
+	for i, keyedItem := range keyedItems {
+		items[i] = keyedItem.item
+	}
 
 	return items
+}
+
+type inventoryKeyedItem struct {
+	item InventoryItem
+	key  inventorySortKey
+}
+
+type inventorySortKey struct {
+	objectKind string
+	agent      string
+	name       string
+	sourcePath string
+	id         string
+}
+
+func (key inventorySortKey) less(other inventorySortKey) bool {
+	if key.objectKind != other.objectKind {
+		return key.objectKind < other.objectKind
+	}
+	if key.agent != other.agent {
+		return key.agent < other.agent
+	}
+	if key.name != other.name {
+		return key.name < other.name
+	}
+	if key.sourcePath != other.sourcePath {
+		return key.sourcePath < other.sourcePath
+	}
+	return key.id < other.id
 }
 
 func objectKindForEvidence(kind types.EvidenceKind) (ObjectKind, bool) {
@@ -97,7 +129,10 @@ func objectKindForEvidence(kind types.EvidenceKind) (ObjectKind, bool) {
 	}
 }
 
-func inventoryScopeEnabled(item types.DiscoveredItem) bool {
+func IsInventoryEvidence(item types.DiscoveredItem) bool {
+	if _, ok := objectKindForEvidence(item.Kind); !ok {
+		return false
+	}
 	if item.Agent == types.AgentProject {
 		return false
 	}

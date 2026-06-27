@@ -98,15 +98,18 @@ func TestPlanItemActionRejectsProjectTargets(t *testing.T) {
 
 func TestExecuteActionPlanRunsCommandPlan(t *testing.T) {
 	runner := &fakeRunner{}
-	plan := NewCommandActionPlan(
-		"install-browser",
-		ActionAdd,
-		types.AgentPiAgent,
-		ObjectPlugin,
-		"browser",
-		"~/.pi/agent/settings.json",
-		CommandPlan{Program: "pi", Args: []string{"extension", "install", "browser"}},
-	)
+	command := CommandPlan{Program: "pi", Args: []string{"extension", "install", "browser"}}
+	plan := ActionPlan{
+		ID:           "install-browser",
+		Action:       ActionAdd,
+		Agent:        types.AgentPiAgent,
+		ObjectKind:   ObjectPlugin,
+		TargetName:   "browser",
+		Operation:    "run agent-native command",
+		ConfigTarget: "~/.pi/agent/settings.json",
+		Command:      &command,
+		Available:    true,
+	}
 
 	result, err := ExecuteActionPlan(context.Background(), plan, runner)
 	if err != nil {
@@ -137,15 +140,18 @@ func TestExecuteActionPlanReturnsUnavailableError(t *testing.T) {
 func TestExecuteActionPlanPropagatesRunnerFailure(t *testing.T) {
 	expected := errors.New("boom")
 	runner := &fakeRunner{err: expected}
-	plan := NewCommandActionPlan(
-		"install-browser",
-		ActionAdd,
-		types.AgentPiAgent,
-		ObjectPlugin,
-		"browser",
-		"~/.pi/agent/settings.json",
-		CommandPlan{Program: "pi", Args: []string{"extension", "install", "browser"}},
-	)
+	command := CommandPlan{Program: "pi", Args: []string{"extension", "install", "browser"}}
+	plan := ActionPlan{
+		ID:           "install-browser",
+		Action:       ActionAdd,
+		Agent:        types.AgentPiAgent,
+		ObjectKind:   ObjectPlugin,
+		TargetName:   "browser",
+		Operation:    "run agent-native command",
+		ConfigTarget: "~/.pi/agent/settings.json",
+		Command:      &command,
+		Available:    true,
+	}
 
 	_, err := ExecuteActionPlan(context.Background(), plan, runner)
 	if !errors.Is(err, expected) {

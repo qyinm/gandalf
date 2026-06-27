@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
+	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	timelineundo "github.com/qyinm/gandalf/internal/gandalfcore/timeline_undo"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -273,21 +274,22 @@ func TestTimelineCurrentSetupSourceRootRows(t *testing.T) {
 }
 
 func TestSetupInventoryViewModelShowsGlobalItemsWithAgentMarkers(t *testing.T) {
+	evidence := []types.DiscoveredItem{
+		discoveredItem(map[string]any{
+			"id": "skill:review", "agent": types.AgentClaudeCode, "kind": types.KindSkill,
+			"name": "review", "sourcePath": "~/.claude/skills/review", "scope": types.ScopeUser,
+		}),
+		discoveredItem(map[string]any{
+			"id": "mcp:docs", "agent": types.AgentCodex, "kind": types.KindMcpServer,
+			"name": "docs", "sourcePath": "~/.codex/config.toml", "scope": types.ScopeUser,
+		}),
+		discoveredItem(map[string]any{
+			"id": "project:env", "agent": types.AgentProject, "kind": types.KindEnvKey,
+			"name": "OPENAI_API_KEY", "sourcePath": ".env", "scope": types.ScopeProject,
+		}),
+	}
 	model := tui.BuildSetupInventoryViewModel(tui.BuildSetupInventoryViewModelInput{
-		Evidence: []types.DiscoveredItem{
-			discoveredItem(map[string]any{
-				"id": "skill:review", "agent": types.AgentClaudeCode, "kind": types.KindSkill,
-				"name": "review", "sourcePath": "~/.claude/skills/review", "scope": types.ScopeUser,
-			}),
-			discoveredItem(map[string]any{
-				"id": "mcp:docs", "agent": types.AgentCodex, "kind": types.KindMcpServer,
-				"name": "docs", "sourcePath": "~/.codex/config.toml", "scope": types.ScopeUser,
-			}),
-			discoveredItem(map[string]any{
-				"id": "project:env", "agent": types.AgentProject, "kind": types.KindEnvKey,
-				"name": "OPENAI_API_KEY", "sourcePath": ".env", "scope": types.ScopeProject,
-			}),
-		},
+		Inventory: setup.BuildInventory(evidence),
 	})
 
 	if len(model.Rows) != 2 {
