@@ -16,6 +16,9 @@ The current product direction for Gandalf: a TUI-first manager for user-global a
 ### Unified Inventory
 The first-screen TUI model for global setup management. It presents skills, hooks, MCP servers, and plugins in one cross-agent list, with each item carrying compact agent identity rather than forcing users through an agent picker first.
 
+### Setup Action Provider
+The component that turns a visible setup inventory item into a concrete edit, remove, add, or dry-run action. Inventory visibility does not imply action executability; a provider must describe the target, expected effect, and execution mechanism before Gandalf can truthfully mark an action available.
+
 ## Restore
 
 ### Trust Contract
