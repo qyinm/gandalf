@@ -260,3 +260,19 @@ func formatSetupActions(actions []setup.ActionAvailability) string {
 	}
 	return strings.Join(labels, " ")
 }
+
+func buildSetupActionConfirmation(plan setup.ActionPlan) *SetupActionConfirmationModel {
+	command := plan.Operation
+	if plan.Command != nil {
+		command = strings.Join(append([]string{plan.Command.Program}, plan.Command.Args...), " ")
+	}
+	return &SetupActionConfirmationModel{
+		Action:       string(plan.Action),
+		AgentLabel:   FormatAgentLabel(plan.Agent),
+		ObjectKind:   formatSetupObjectKind(plan.ObjectKind),
+		TargetName:   plan.TargetName,
+		Operation:    plan.Operation,
+		ConfigTarget: plan.ConfigTarget,
+		Command:      command,
+	}
+}

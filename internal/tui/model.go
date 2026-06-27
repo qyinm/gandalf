@@ -57,6 +57,7 @@ type SetupInventoryRowModel struct {
 	Name        string
 	SourcePath  string
 	ActionLabel string
+	Selected    bool
 }
 
 type SetupInventoryViewModel struct {
@@ -66,10 +67,25 @@ type SetupInventoryViewModel struct {
 	Hooks        int
 	Plugins      int
 	EmptyMessage string
+	Confirmation *SetupActionConfirmationModel
+	ActionError  string
+}
+
+type SetupActionConfirmationModel struct {
+	Action       string
+	AgentLabel   string
+	ObjectKind   string
+	TargetName   string
+	Operation    string
+	ConfigTarget string
+	Command      string
 }
 
 type BuildSetupInventoryViewModelInput struct {
-	Evidence []types.DiscoveredItem
+	Evidence      []types.DiscoveredItem
+	SelectedIndex int
+	PendingAction *setup.ActionPlan
+	ActionError   string
 }
 
 func BuildSetupInventoryViewModel(input BuildSetupInventoryViewModelInput) SetupInventoryViewModel {
@@ -77,7 +93,8 @@ func BuildSetupInventoryViewModel(input BuildSetupInventoryViewModelInput) Setup
 	model := SetupInventoryViewModel{
 		Rows: make([]SetupInventoryRowModel, 0, len(inventory)),
 	}
-	for _, item := range inventory {
+	selectedIndex := clampIndex(input.SelectedIndex, len(inventory))
+	for i, item := range inventory {
 		switch item.ObjectKind {
 		case setup.ObjectSkill:
 			model.Skills++
@@ -96,11 +113,16 @@ func BuildSetupInventoryViewModel(input BuildSetupInventoryViewModelInput) Setup
 			Name:        item.Name,
 			SourcePath:  item.SourcePath,
 			ActionLabel: formatSetupActions(item.Actions),
+			Selected:    i == selectedIndex,
 		})
 	}
 	if len(model.Rows) == 0 {
 		model.EmptyMessage = "No global skills, hooks, MCP servers, or plugins found."
 	}
+	if input.PendingAction != nil {
+		model.Confirmation = buildSetupActionConfirmation(*input.PendingAction)
+	}
+	model.ActionError = input.ActionError
 	return model
 }
 

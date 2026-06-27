@@ -22,6 +22,18 @@ type SetupInventoryView struct {
 	Hooks        int
 	Plugins      int
 	EmptyMessage string
+	Confirmation *SetupActionConfirmation
+	ActionError  string
+}
+
+type SetupActionConfirmation struct {
+	Action       string
+	AgentLabel   string
+	ObjectKind   string
+	TargetName   string
+	Operation    string
+	ConfigTarget string
+	Command      string
 }
 
 func RenderSetupInventory(model SetupInventoryView, width, height int) string {
@@ -39,6 +51,9 @@ func RenderSetupInventory(model SetupInventoryView, width, height int) string {
 	if model.EmptyMessage != "" {
 		lines = append(lines, mutedStyle.Render(model.EmptyMessage))
 		return fitHeight(strings.Join(lines, "\n"), height)
+	}
+	if model.ActionError != "" {
+		lines = append(lines, warnStyle.Render(model.ActionError), "")
 	}
 
 	for _, row := range model.Rows {
@@ -59,6 +74,23 @@ func RenderSetupInventory(model SetupInventoryView, width, height int) string {
 		lines = append(lines, style.Render(truncate(line, width-2)))
 	}
 
-	lines = append(lines, "", labelStyle.Render("Enter action · r rescan"))
+	if model.Confirmation != nil {
+		lines = append(lines, "")
+		lines = append(lines, renderSetupActionConfirmation(*model.Confirmation)...)
+	} else {
+		lines = append(lines, "", labelStyle.Render("Enter action · r rescan"))
+	}
 	return fitHeight(strings.Join(lines, "\n"), height)
+}
+
+func renderSetupActionConfirmation(model SetupActionConfirmation) []string {
+	return []string{
+		titleStyle.Render("Confirm setup action"),
+		fmt.Sprintf("%s %s: %s", model.Action, model.ObjectKind, model.TargetName),
+		labelStyle.Render("agent: " + model.AgentLabel),
+		labelStyle.Render("operation: " + model.Operation),
+		labelStyle.Render("target: " + model.ConfigTarget),
+		labelStyle.Render("command: " + model.Command),
+		mutedStyle.Render("Enter confirm · esc cancel"),
+	}
 }

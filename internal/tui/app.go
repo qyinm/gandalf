@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
 	"github.com/qyinm/gandalf/internal/gandalfcore/scan"
+	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/snapshot"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	timelineundo "github.com/qyinm/gandalf/internal/gandalfcore/timeline_undo"
@@ -26,6 +28,11 @@ type bootMsg struct {
 }
 
 type rescanMsg bootMsg
+
+type setupActionMsg struct {
+	data bootMsg
+	err  error
+}
 
 type undoPreviewMsg struct {
 	plan *timelineundo.Plan
@@ -50,19 +57,24 @@ type App struct {
 	selectedAgent   *types.AgentID
 	selectedProfile string
 
-	navCursor      int
-	selectedNavID  string
-	timelineCursor int
+	navCursor       int
+	selectedNavID   string
+	inventoryCursor int
+	timelineCursor  int
 
-	undoPlan  *timelineundo.Plan
-	undoError string
-	notice    string
+	undoPlan      *timelineundo.Plan
+	undoError     string
+	notice        string
+	actionError   string
+	pendingAction *setup.ActionPlan
 
 	compareModel   *CompareViewModel
 	saveSetupModel *SaveSetupViewModel
 
 	cachedNav    *NavigationModel
 	cachedNavKey string
+
+	actionExecutor func(context.Context, setup.ActionPlan) error
 }
 
 // NewApp creates a TUI app bound to engine runtime options.
@@ -72,6 +84,7 @@ func NewApp(runtime types.RuntimeOptions) *App {
 		screen:          ScreenInventory,
 		selectedNavID:   InitialNavItemID,
 		selectedProfile: DefaultProfile,
+		actionExecutor:  defaultSetupActionExecutor,
 	}
 }
 
@@ -121,7 +134,28 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
 		a.undoPlan = nil
 		a.undoError = ""
+		a.pendingAction = nil
+		a.actionError = ""
 		a.notice = "Rescanned global setup."
+		return a, nil
+
+	case setupActionMsg:
+		if typed.err != nil {
+			a.actionError = typed.err.Error()
+			return a, nil
+		}
+		if typed.data.err != nil {
+			a.actionError = typed.data.err.Error()
+			return a, nil
+		}
+		a.evidence = typed.data.evidence
+		a.timelineEntries = typed.data.timelineEntries
+		a.corruptEvents = typed.data.corruptEvents
+		a.snapshotNames = typed.data.snapshotNames
+		a.inventoryCursor = clampIndex(a.inventoryCursor, len(a.currentInventory()))
+		a.pendingAction = nil
+		a.actionError = ""
+		a.notice = "Applied setup action and rescanned global setup."
 		return a, nil
 
 	case undoPreviewMsg:
@@ -188,6 +222,11 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	switch msg.String() {
 	case "ctrl+c", "q":
 		return nil, true
+	case "esc":
+		if a.pendingAction != nil {
+			a.pendingAction = nil
+			a.actionError = ""
+		}
 	case "r":
 		return func() tea.Msg {
 			data := a.fetchWorkspaceData()
@@ -219,8 +258,16 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return undoPreviewMsg{plan: plan}
 		}, false
 	case "up", "k":
+		if a.screen == ScreenInventory && a.pendingAction == nil {
+			a.moveInventoryCursor(-1)
+			return nil, false
+		}
 		a.moveNavCursor(-1)
 	case "down", "j":
+		if a.screen == ScreenInventory && a.pendingAction == nil {
+			a.moveInventoryCursor(1)
+			return nil, false
+		}
 		a.moveNavCursor(1)
 	case "left", "h":
 		if a.screen == ScreenTimeline {
@@ -231,9 +278,79 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.moveTimelineCursor(1)
 		}
 	case "enter":
+		if a.screen == ScreenInventory {
+			return a.handleInventoryEnter(), false
+		}
 		a.activateNavItem()
 	}
 	return nil, false
+}
+
+func (a *App) handleInventoryEnter() tea.Cmd {
+	if a.pendingAction != nil {
+		plan := *a.pendingAction
+		return func() tea.Msg {
+			if a.actionExecutor == nil {
+				return setupActionMsg{err: fmt.Errorf("setup action executor is unavailable")}
+			}
+			if err := a.actionExecutor(context.Background(), plan); err != nil {
+				return setupActionMsg{err: err}
+			}
+			return setupActionMsg{data: a.fetchWorkspaceData()}
+		}
+	}
+
+	inventory := a.currentInventory()
+	if len(inventory) == 0 {
+		a.actionError = "No setup item selected."
+		return nil
+	}
+	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
+	action, ok := firstAvailableInventoryAction(item)
+	if !ok {
+		a.actionError = "No supported action is available for this setup item."
+		return nil
+	}
+	plan := setup.PlanItemAction(item, action)
+	if !plan.Available {
+		a.actionError = plan.UnavailableReason
+		return nil
+	}
+	a.pendingAction = &plan
+	a.actionError = ""
+	return nil
+}
+
+func (a *App) currentInventory() []setup.InventoryItem {
+	return setup.BuildInventory(a.evidence)
+}
+
+func (a *App) moveInventoryCursor(delta int) {
+	inventory := a.currentInventory()
+	if len(inventory) == 0 {
+		a.inventoryCursor = 0
+		return
+	}
+	next := a.inventoryCursor + delta
+	if next < 0 {
+		next = len(inventory) - 1
+	}
+	if next >= len(inventory) {
+		next = 0
+	}
+	a.inventoryCursor = next
+	a.actionError = ""
+}
+
+func firstAvailableInventoryAction(item setup.InventoryItem) (setup.ActionKind, bool) {
+	for _, preferred := range []setup.ActionKind{setup.ActionEdit, setup.ActionRemove} {
+		for _, action := range item.Actions {
+			if action.Action == preferred && action.Available {
+				return preferred, true
+			}
+		}
+	}
+	return "", false
 }
 
 func (a *App) moveNavCursor(delta int) {
@@ -315,7 +432,10 @@ func (a *App) renderContent(width, height int) string {
 	switch a.screen {
 	case ScreenInventory:
 		model := BuildSetupInventoryViewModel(BuildSetupInventoryViewModelInput{
-			Evidence: a.evidence,
+			Evidence:      a.evidence,
+			SelectedIndex: a.inventoryCursor,
+			PendingAction: a.pendingAction,
+			ActionError:   a.actionError,
 		})
 		return views.RenderSetupInventory(setupInventoryViewFromModel(model), width, height)
 	case ScreenTimeline:
@@ -385,6 +505,11 @@ func (a *App) renderContent(width, height int) string {
 	default:
 		return "Unsupported screen."
 	}
+}
+
+func defaultSetupActionExecutor(ctx context.Context, plan setup.ActionPlan) error {
+	_, err := setup.ExecuteActionPlan(ctx, plan, nil)
+	return err
 }
 
 func (a *App) loadData() tea.Msg {
