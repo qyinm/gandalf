@@ -12,8 +12,8 @@ func newTuiCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "tui",
-		Short: "Launch the interactive global setup inventory",
-		Long:  "Open the Bubble Tea TUI with Global setup inventory as the first screen.",
+		Short: "Launch the interactive global setup console",
+		Long:  "Open the Bubble Tea TUI with the top-tab setup console as the first screen.",
 		RunE:  func(cmd *cobra.Command, _ []string) error { return runTUICommand(cmd, &common) },
 	}
 

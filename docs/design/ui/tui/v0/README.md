@@ -77,77 +77,74 @@ Examples:
 
 ## Layout
 
-The TUI uses a persistent left nav and a main workspace. The Global Setup inventory is the first screen. It shows one cross-agent list of user-global skills, hooks, MCP servers, and plugins with a compact agent marker on each row. Timeline and snapshots remain available from History.
+The TUI uses a top-tab setup console as the first screen. The primary tabs are `Hooks`, `Plugins`, `Marketplace`, `Skills`, and `MCP Servers`. Each tab is an object-type view over global/user setup, not a separate agent page. Rows remain cross-agent and carry compact agent markers.
+
+Timeline, snapshots, and rollback workflows remain available as secondary screens through explicit key hints instead of persistent left navigation.
 
 ```text
-┌──────────────────────┬────────────────────────────────────────────────────────┐
-│ Inventory            │ Global setup inventory                                 │
-│ ▸ Global setup       │ skills 570  mcp 3  hooks 13  plugins 4                │
-│                      │                                                        │
-│ Profiles             │ > CC  skill   autoplan              ~/.claude/skills   │
-│   default            │   CX  skill   review                ~/.codex/skills    │
-│                      │   CU  mcp     github                ~/.cursor/mcp.json │
-│ Agents               │   PI  plugin  browser               ~/.pi/agent/...    │
-│   Claude Code   71   │                                                        │
-│   Codex         377  │ Confirm setup action                                   │
-│   OpenCode      126  │ edit skill: review                                     │
-│   Pi Agent      27   │ target: ~/.codex/skills/review                        │
-│                      │                                                        │
-│ History              │                                                        │
-│   All changes        │                                                        │
-│   Snapshots          │                                                        │
-├──────────────────────┴────────────────────────────────────────────────────────┤
-│ ↑↓ move  Enter action  r=rescan  u=preview undo in history  q=quit           │
+┌───────────────────────────────────────────────────────────────────────────────┐
+│ Hooks 13   Plugins 4   Marketplace 5   Skills 570   MCP Servers 3            │
+│ / search                                                                      │
+│                                                                               │
+│ > CC  hook    PostToolUse.Write      user       ~/.claude/settings.json       │
+│   CX  hook    SessionStart           user       ~/.codex/hooks.json           │
+│   CU  hook    beforeShellExecution   user       ~/.cursor/hooks.json          │
+│                                                                               │
+│ PostToolUse.Write                                                             │
+│ Claude Code · hook · user                                                     │
+│ source: ~/.claude/settings.json                                               │
+│ actions: edit:unavailable, remove:unavailable                                 │
+│                                                                               │
+│ Tab tabs  / search  r rescan  Enter action  H history  S snapshots  q quit    │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
 Do not show a large `Gandalf` brand header. The selected inventory row, agent marker, and global setup object are the primary context.
 
-The nav frame and inventory workspace should share the same overall height. The first screen should not require choosing an agent before inspecting setup.
+The first screen should not require choosing an agent before inspecting setup.
 
-## Left Navigation
+## Top Tabs
 
 ```text
-Inventory
-  Global setup
-
-Profiles
-  default
-
-Agents
-  Claude Code
-  Codex
-  OpenCode
-  Pi Agent
-
-History
-  All changes
-  Snapshots
+Hooks | Plugins | Marketplace | Skills | MCP Servers
 ```
 
-Profiles appear first because they define the active environment line. MVP shows only the `default` profile.
+Tabs are always visible in the setup console. Counts reflect observed global/user setup rows for the tab. Agents are shown inside rows only when detected in the current scan. Do not list supported-but-absent agents with zero counts. Project evidence is not an agent tab and project-scoped setup is outside the current TUI product scope.
 
-Agents are shown only when detected in the current scan. Do not list supported-but-absent agents with zero counts. Project evidence is not an agent nav item and project-scoped setup is outside the current TUI product scope.
-
-History can be viewed globally. `All changes` opens the Timeline screen with `Filter: All agents`; selecting an agent while Timeline is open keeps the Timeline screen and changes the filter.
+History can be viewed globally through a secondary key route. It opens the Timeline screen with `Filter: All agents`.
 
 ## Main Screens
 
-### Global Setup Inventory
+### Setup Console Tabs
 
-Shown first. It lists user-global skills, hooks, MCP servers, and plugins across agents.
+Shown first. Non-marketplace tabs list user-global skills, hooks, MCP servers, and plugins across agents.
 
 ```text
-Global setup inventory
-skills 570  mcp 3  hooks 13  plugins 4
+Hooks 13   Plugins 4   Marketplace 5   Skills 570   MCP Servers 3
+/ search
 
-> CC  skill   autoplan              ~/.claude/skills           edit remove
-  CX  skill   review                ~/.codex/skills            edit remove
-  CU  mcp     github                ~/.cursor/mcp.json         edit remove
-  PI  plugin  browser               ~/.pi/agent/extensions     edit remove
+> CC  hook    PostToolUse.Write      user       ~/.claude/settings.json
+  CX  hook    SessionStart           user       ~/.codex/hooks.json
+  CU  hook    beforeShellExecution   user       ~/.cursor/hooks.json
 ```
 
-Each row shows agent marker, object kind, name, source, and available actions. Selecting a row opens a short confirmation that shows the target, agent, operation or command, and global config target.
+Each row shows agent marker, object kind, name, source, status, and available actions. Unsupported actions remain visible as unavailable. Selecting a row reveals in-place detail with the target, agent, operation or command, and global config target.
+
+### Marketplace
+
+Marketplace is an agent ecosystem source browser, not a Gandalf-owned catalog. It groups observed plugin/marketplace entries by source and marks installed entries when current evidence proves presence.
+
+```text
+Marketplace
+/ search
+
+> CX  source  openai-codex          1 entries  ~/.codex/plugins/cache/openai-codex
+  CX  skill   codex                 installed  ~/.codex/plugins/cache/openai-codex/skills/codex
+  PI  source  package               1 entries  ~/.pi/agent/extensions/cmux-session.ts
+  PI  plugin  cmux-session          installed  ~/.pi/agent/extensions/cmux-session.ts
+```
+
+Marketplace actions such as install, update, uninstall, add source, and remove source are provider-gated. If no agent-native provider exists, show the action as unavailable rather than pretending Gandalf can run it.
 
 ### Current Setup Panel
 

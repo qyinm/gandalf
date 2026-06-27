@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -24,6 +25,19 @@ func TestInventoryEnterReportsUnavailableWhenNoActionProviderExists(t *testing.T
 	}
 	if app.actionError == "" {
 		t.Fatal("expected action error")
+	}
+}
+
+func TestMarketplaceEnterReportsUnavailableProvider(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	app.activeSetupTab = SetupConsoleTabMarketplace
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("marketplace action should not return a command")
+	}
+	if !strings.Contains(app.actionError, "provider") {
+		t.Fatalf("action error = %q", app.actionError)
 	}
 }
 
@@ -127,7 +141,58 @@ func TestUndoPreviewMessageUpdatesCorruptEventsInUpdate(t *testing.T) {
 	}
 }
 
-func TestInventoryKeyboardFlowTogglesSidebarAndCancelsPendingAction(t *testing.T) {
+func TestSetupConsoleFirstScreenUsesTopTabsWithoutSidebar(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	app.width = 120
+	app.height = 32
+
+	view := app.View()
+	if !strings.Contains(view, "Hooks") || !strings.Contains(view, "Plugins") || !strings.Contains(view, "Marketplace") {
+		t.Fatalf("expected top tabs in view:\n%s", view)
+	}
+	if strings.Contains(view, "Profiles") || strings.Contains(view, "Agents") || strings.Contains(view, "Inventory\n") {
+		t.Fatalf("expected no persistent sidebar in view:\n%s", view)
+	}
+}
+
+func TestSetupConsoleSearchFiltersActiveTab(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	name := "planning"
+	app.applyWorkspaceData(bootMsg{evidence: append(app.evidence, types.DiscoveredItem{
+		ID:         "skill-plan",
+		Agent:      types.AgentCodex,
+		Kind:       types.KindSkill,
+		Name:       &name,
+		SourcePath: "~/.codex/skills/planning",
+		Scope:      types.ScopeUser,
+	})})
+
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")}); quit {
+		t.Fatal("slash should not quit")
+	}
+	if !app.setupSearchFocused {
+		t.Fatal("search should be focused")
+	}
+	if cmd, handled := app.handleSetupSearchKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("plan")}); !handled {
+		t.Fatal("search key should be handled")
+	} else if cmd != nil {
+		cmd()
+	}
+	rows := app.currentInventory()
+	if len(rows) != 1 || rows[0].Name != "planning" {
+		t.Fatalf("filtered rows = %#v", rows)
+	}
+	if _, handled := app.handleSetupSearchKey(tea.KeyMsg{Type: tea.KeyEnter}); !handled {
+		t.Fatal("enter should blur search")
+	}
+	if app.setupSearchFocused {
+		t.Fatal("search should be blurred")
+	}
+}
+
+func TestInventoryKeyboardFlowSwitchesTabsAndCancelsPendingAction(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newInventoryTestApp(t, runtime)
 	enableInventoryAction(app, setup.ActionEdit)
@@ -139,21 +204,14 @@ func TestInventoryKeyboardFlowTogglesSidebarAndCancelsPendingAction(t *testing.T
 	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyTab}); quit {
 		t.Fatal("tab should not quit")
 	}
-	if app.inventoryFocus {
-		t.Fatal("tab should move focus to sidebar")
+	if app.activeSetupTab != SetupConsoleTabMCPServers {
+		t.Fatalf("tab should switch from skills to mcp servers: %s", app.activeSetupTab)
 	}
-	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyDown}); quit {
-		t.Fatal("down should not quit")
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyShiftTab}); quit {
+		t.Fatal("shift+tab should not quit")
 	}
-	if app.inventoryCursor != 0 {
-		t.Fatalf("inventory cursor moved while sidebar focused: %d", app.inventoryCursor)
-	}
-
-	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyTab}); quit {
-		t.Fatal("tab should not quit")
-	}
-	if !app.inventoryFocus {
-		t.Fatal("tab should return focus to inventory")
+	if app.activeSetupTab != SetupConsoleTabSkills {
+		t.Fatalf("shift+tab should return to skills: %s", app.activeSetupTab)
 	}
 	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if quit {
@@ -178,6 +236,7 @@ func newInventoryTestApp(t *testing.T, runtime types.RuntimeOptions) *App {
 	t.Helper()
 	name := "review"
 	app := NewApp(runtime)
+	app.activeSetupTab = SetupConsoleTabSkills
 	app.ready = true
 	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
 		ID:         "skill-review",
