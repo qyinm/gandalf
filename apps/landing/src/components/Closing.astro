@@ -1,48 +1,89 @@
 ---
+import { Code2, Download } from 'lucide-react';
 ---
 <section class="section closing">
-  <div class="container closing__inner">
-    <h2 class="closing__title">
-      Get your setup back.
-    </h2>
-    <p class="closing__lede">
-      Gandalf is free. Local-first. No account.
-    </p>
-    <div class="closing__actions">
-      <a href="#install" class="btn btn--primary">
-        Install Gandalf
-      </a>
-      <a href="https://github.com/usegandalf/gandalf" class="btn btn--outline" target="_blank" rel="noopener">
-        Star on GitHub
-      </a>
+  <div class="container">
+    <div class="closing__inner">
+      <div>
+        <p class="section-meta">
+          <span class="section-meta__num">04</span> &nbsp;/&nbsp; Ready
+        </p>
+        <h2 class="closing__title">
+          Make setup reversible.
+        </h2>
+      </div>
+      <div class="closing__aside">
+        <p class="closing__lede">
+          Save. Diff. Restore.
+        </p>
+        <div class="closing__actions">
+          <a href="#install" class="btn btn--primary">
+            <Download size={16} strokeWidth={2} aria-hidden="true" />
+            Install
+          </a>
+          <a href="https://github.com/qyinm/gandalf" class="btn btn--outline" target="_blank" rel="noopener">
+            <Code2 size={16} strokeWidth={2} aria-hidden="true" />
+            GitHub
+          </a>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
 <style>
+  .closing {
+    padding-bottom: 74px;
+    background: rgb(255 255 255 / 0.82);
+  }
+
   .closing__inner {
-    text-align: center;
-    padding: 32px 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 34px;
+    align-items: end;
+    padding: 44px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: transparent;
   }
 
   .closing__title {
-    font-family: var(--font-serif);
-    font-size: clamp(2rem, 4vw, 3rem);
-    font-weight: 600;
-    letter-spacing: -0.025em;
-    margin-bottom: 16px;
+    font-family: var(--font-sans);
+    font-size: clamp(2.2rem, 5.2vw, 5.2rem);
+    font-weight: 680;
+    letter-spacing: 0;
+    line-height: 0.98;
+    max-width: 11ch;
   }
 
   .closing__lede {
-    font-size: 0.95rem;
+    font-size: 0.98rem;
     color: var(--muted-foreground);
-    margin-bottom: 32px;
+    line-height: 1.65;
+    margin-bottom: 24px;
   }
 
   .closing__actions {
     display: flex;
-    justify-content: center;
     gap: 10px;
     flex-wrap: wrap;
+  }
+
+  .closing__actions svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  @media (max-width: 780px) {
+    .closing__inner {
+      grid-template-columns: 1fr;
+      padding: 28px;
+    }
   }
 </style>

@@ -1,99 +1,250 @@
 ---
-const principles = [
-  {
-    label: "01",
-    title: "Local-first.",
-    body: "Your branches live in `~/.gandalf`. No cloud, no telemetry, no account required."
-  },
-  {
-    label: "02",
-    title: "Setup as text.",
-    body: "Every snapshot is plain JSON. Diff with Git, share with your team, version with anything."
-  },
-  {
-    label: "03",
-    title: "Reversible.",
-    body: "`gandalf restore` is the only thing that should change your config without you knowing."
-  }
+import { Check } from 'lucide-react';
+
+const files = ["MCP servers", "skills", "hooks", "permissions", "agent config"];
+const baseline = [
+  "[model]",
+  'provider = "openai"',
+  'model = "gpt-5"',
+  "",
+  "[permissions]",
+  'default = "ask"',
+];
+const working = [
+  "[model]",
+  'provider = "openai"',
+  'model = "gpt-5-agent"',
+  "",
+  "[permissions]",
+  'default = "allow"',
+];
+const signals = [
+  ["parser", "high"],
+  ["restore", "safe"],
+  ["env", "keys only"],
 ];
 ---
 
-<section class="section manifesto">
-  <div class="container">
-    <p class="section-meta">
-      <span class="section-meta__num">01</span> &nbsp;&mdash;&nbsp; Why Gandalf
-    </p>
+<section class="section manifesto" id="why">
+  <div class="container manifesto__grid">
+    <div class="manifesto__copy">
+      <p class="section-meta">
+        <span class="section-meta__num">01</span> &nbsp;/&nbsp; Drift proof
+      </p>
 
-    <h2 class="section-title">
-      Branches for the layer Git forgot.
-    </h2>
+      <h2 class="section-title manifesto__title">
+        Drift shows up late.
+      </h2>
 
-    <p class="section-lede">
-      Agents install MCP servers. Agents add skills. Agents edit hooks and permissions.
-      The Codex setup on your Mac is a real surface — and it has no undo.
-      Gandalf treats it like source code: save it, diff it, switch it, restore it.
-    </p>
+      <p class="section-lede manifesto__lede">
+        MCP, skills, hooks, permissions, config.
+      </p>
 
-    <div class="manifesto__grid">
-      {principles.map((p) => (
-        <article class="principle">
-          <span class="principle__label">{p.label}</span>
-          <h3 class="principle__title">{p.title}</h3>
-          <p class="principle__body" set:html={p.body.replace(/`([^`]+)`/g, '<code>$1</code>')} />
-        </article>
-      ))}
+      <div class="manifesto__signals" aria-label="Gandalf safety signals">
+        {signals.map(([label, value]) => (
+          <div>
+            <Check size={14} strokeWidth={2} aria-hidden="true" />
+            <span>{label}</span>
+            <strong>{value}</strong>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div class="proof-board" aria-label="Agent setup drift proof">
+      <div class="proof-board__files">
+        <div class="proof-board__head">tracked setup surface</div>
+        {files.map((file, index) => (
+          <code class:list={[index === 0 ? "is-active" : ""]}>{file}</code>
+        ))}
+      </div>
+
+      <div class="proof-board__diff">
+        <div class="proof-board__head">config.toml semantic diff</div>
+        <div class="diff-grid">
+          <div>
+            <span>baseline</span>
+            {baseline.map((line) => <code>{line || "\u00a0"}</code>)}
+          </div>
+          <div>
+            <span>working copy</span>
+            {working.map((line, index) => (
+              <code class:list={[index === 2 ? "is-change" : "", index === 5 ? "is-danger" : ""]}>{line || "\u00a0"}</code>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
 <style>
+  .manifesto {
+    background: rgb(255 255 255 / 0.84);
+  }
+
   .manifesto__grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    border-top: 1px solid var(--border);
-    border-left: 1px solid var(--border);
+    grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr);
+    gap: 54px;
+    align-items: center;
   }
 
-  .principle {
-    padding: 28px 24px;
-    border-right: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
+  .manifesto__title {
+    max-width: 13ch;
+    font-size: clamp(2.1rem, 3vw, 3.1rem);
   }
 
-  .principle__label {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    letter-spacing: 0.08em;
-    color: var(--muted-foreground);
-    margin-bottom: 14px;
+  .manifesto__lede {
+    max-width: 36ch;
   }
 
-  .principle__title {
-    font-family: var(--font-serif);
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin-bottom: 8px;
-    letter-spacing: -0.015em;
-  }
-
-  .principle__body {
-    font-size: 0.875rem;
-    color: var(--muted-foreground);
-    line-height: 1.6;
-  }
-
-  .principle__body code {
-    font-family: var(--font-mono);
-    font-size: 0.85em;
-    background: var(--surface);
-    padding: 1px 5px;
-    border-radius: var(--radius-sm);
+  .manifesto__lede code {
+    font-size: 0.9em;
     color: var(--foreground);
   }
 
-  @media (max-width: 768px) {
-    .manifesto__grid {
+  .manifesto__signals {
+    display: grid;
+    gap: 8px;
+    margin-top: 28px;
+    max-width: 360px;
+  }
+
+  .manifesto__signals div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+  }
+
+  .manifesto__signals span {
+    color: var(--muted-foreground);
+  }
+
+  .manifesto__signals svg {
+    width: 14px;
+    height: 14px;
+    color: var(--brand);
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .manifesto__signals strong {
+    color: var(--foreground);
+    font-weight: 500;
+  }
+
+  .proof-board {
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr);
+    min-height: 390px;
+    overflow: hidden;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: rgb(255 255 255 / 0.72);
+  }
+
+  .proof-board__files {
+    padding: 16px;
+    border-right: 1px solid var(--border);
+    background: rgb(248 252 255 / 0.74);
+  }
+
+  .proof-board__head {
+    margin-bottom: 14px;
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+  }
+
+  .proof-board__files code {
+    display: block;
+    padding: 9px 10px;
+    border-radius: var(--radius-sm);
+    color: #52525b;
+    font-size: 0.8rem;
+  }
+
+  .proof-board__files code.is-active {
+    color: var(--foreground);
+    background: rgb(255 255 255 / 0.82);
+  }
+
+  .proof-board__diff {
+    min-width: 0;
+    padding: 16px;
+  }
+
+  .diff-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .diff-grid > div {
+    overflow: hidden;
+    border-top: 1px solid var(--border);
+    background: rgb(255 255 255 / 0.72);
+  }
+
+  .diff-grid span {
+    display: block;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+  }
+
+  .diff-grid code {
+    display: block;
+    min-height: 28px;
+    padding: 5px 12px;
+    color: var(--foreground);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .diff-grid code.is-change {
+    background: #fff7ed;
+    color: #9a3412;
+  }
+
+  .diff-grid code.is-danger {
+    background: #fff1f2;
+    color: #be123c;
+  }
+
+  @media (max-width: 900px) {
+    .manifesto__grid,
+    .proof-board {
+      grid-template-columns: 1fr;
+    }
+
+    .manifesto {
+      padding-top: 64px;
+    }
+
+    .proof-board__files {
+      border-right: 0;
+      border-bottom: 1px solid var(--border);
+    }
+  }
+
+  @media (max-width: 620px) {
+    .diff-grid {
       grid-template-columns: 1fr;
     }
   }

@@ -1,115 +1,271 @@
 ---
-const commands = [
+import { Download, GitCompare, RotateCcw } from 'lucide-react';
+
+const steps = [
   {
-    verb: "save",
-    sig: "gandalf save <name>",
-    desc: "Snapshot every MCP, skill, hook, permission, and env key into a named branch."
+    label: "Snapshot",
+    cmd: "gandalf snapshot create --name baseline",
+    desc: "Save point.",
+    note: "files + metadata",
   },
   {
-    verb: "diff",
-    sig: "gandalf diff <a> <b>",
-    desc: "Side-by-side compare of two branches. Highlights added skills, removed MCPs, changed env keys."
+    label: "Inspect",
+    cmd: "gandalf diff baseline current",
+    desc: "Drift check.",
+    note: "semantic diff",
   },
   {
-    verb: "switch",
-    sig: "gandalf switch <name>",
-    desc: "Atomically apply a branch to your live ~/.codex setup. Survives partial failure."
+    label: "Restore",
+    cmd: "gandalf restore --snapshot baseline --dry-run",
+    desc: "Dry-run first.",
+    note: "no write",
   },
-  {
-    verb: "restore",
-    sig: "gandalf restore <name>",
-    desc: "One command back to a known-good state. The undo your agent setup never had."
-  },
-  {
-    verb: "list",
-    sig: "gandalf list",
-    desc: "Show every branch with metadata: created, last applied, drift since save."
-  },
-  {
-    verb: "export",
-    sig: "gandalf export <name>",
-    desc: "Emit a portable JSON bundle. Move setups across machines or share with a team."
-  }
+];
+
+const scope = [
+  ["~/.codex/config.toml", "content-backed snapshot and restore"],
+  ["user hooks / skills", "inventory and semantic evidence"],
+  ["env values", "never copied, key inventory only"],
+  ["unsupported files", "listed with reason before restore"],
 ];
 ---
 
 <section class="section primitives" id="primitives">
   <div class="container">
-    <p class="section-meta">
-      <span class="section-meta__num">02</span> &nbsp;&mdash;&nbsp; Primitives
-    </p>
+    <div class="primitives__head">
+      <div>
+        <p class="section-meta">
+          <span class="section-meta__num">02</span> &nbsp;/&nbsp; Rollback workflow
+        </p>
+        <h2 class="section-title">Before you say yes.</h2>
+      </div>
+    </div>
 
-    <h2 class="section-title">
-      Six verbs. The whole product.
-    </h2>
-
-    <p class="section-lede">
-      Gandalf doesn't introduce new concepts — it borrows the ones you already use every day.
-      Every command names what it does. Nothing else to learn.
-    </p>
-
-    <ol class="primitives__list">
-      {commands.map((c, i) => (
-        <li class="primitive">
-          <span class="primitive__num">{String(i + 1).padStart(2, '0')}</span>
-          <div class="primitive__body">
-            <code class="primitive__sig">{c.sig}</code>
-            <p class="primitive__desc">{c.desc}</p>
-          </div>
-        </li>
+    <div class="workflow" aria-label="Gandalf rollback workflow">
+      {steps.map((step, index) => (
+        <article class="workflow__step">
+          <span class="workflow__index">{String(index + 1).padStart(2, "0")}</span>
+          {index === 0 && <Download className="workflow__icon" size={24} strokeWidth={2} aria-hidden="true" />}
+          {index === 1 && <GitCompare className="workflow__icon" size={24} strokeWidth={2} aria-hidden="true" />}
+          {index === 2 && <RotateCcw className="workflow__icon" size={24} strokeWidth={2} aria-hidden="true" />}
+          <h3>{step.label}</h3>
+          <code><span>$</span> {step.cmd}</code>
+          <p>{step.desc}</p>
+          <strong>{step.note}</strong>
+        </article>
       ))}
-    </ol>
+    </div>
+
+    <div class="scope-panel" aria-label="Gandalf supported scope">
+      <div class="scope-panel__copy">
+        <span>Supported scope</span>
+        <strong>Conservative by default.</strong>
+      </div>
+      <div class="scope-panel__rows">
+        {scope.map(([name, value]) => (
+          <div>
+            <code>{name}</code>
+            <span>{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   </div>
 </section>
 
 <style>
-  .primitives__list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    border-top: 1px solid var(--border);
+  .primitives {
+    background: rgb(255 255 255 / 0.82);
   }
 
-  .primitive {
+  .primitives__head {
     display: grid;
-    grid-template-columns: 60px 1fr;
-    gap: 24px;
-    padding: 24px 0;
+    grid-template-columns: minmax(280px, 0.9fr) minmax(280px, 0.8fr);
+    gap: 54px;
+    align-items: end;
+    margin-bottom: 34px;
+  }
+
+  .primitives__head .section-lede {
+    margin-bottom: 0;
+  }
+
+  .workflow {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    background: rgb(255 255 255 / 0.68);
+  }
+
+  .workflow__step {
+    min-height: 292px;
+    padding: 30px 28px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .workflow__step:last-child {
+    border-right: 0;
+  }
+
+  .workflow__index {
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    margin-bottom: 54px;
+  }
+
+  .workflow__icon {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 18px;
+    color: var(--brand);
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .workflow h3 {
+    font-size: 1.3rem;
+    font-weight: 650;
+    margin-bottom: 14px;
+  }
+
+  .workflow code {
+    display: block;
+    width: 100%;
+    padding: 13px 14px;
+    border-radius: var(--radius-sm);
+    background: #0b0b0c;
+    color: #ffffff;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .workflow code span {
+    color: var(--brand);
+  }
+
+  .workflow p {
+    margin-top: 20px;
+    color: var(--muted-foreground);
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+
+  .workflow strong {
+    margin-top: auto;
+    padding-top: 20px;
+    color: var(--foreground);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+
+  .scope-panel {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    margin-top: 18px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: rgb(255 255 255 / 0.68);
+    overflow: hidden;
+  }
+
+  .scope-panel__copy {
+    padding: 22px;
+    border-right: 1px solid var(--border);
+  }
+
+  .scope-panel__copy span {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+  }
+
+  .scope-panel__copy strong {
+    display: block;
+    max-width: 20ch;
+    font-size: 1.05rem;
+    line-height: 1.35;
+  }
+
+  .scope-panel__rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scope-panel__rows div {
+    display: grid;
+    gap: 4px;
+    padding: 15px 18px;
+    border-right: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
   }
 
-  .primitive__num {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--muted-foreground);
-    padding-top: 4px;
-    letter-spacing: 0.06em;
+  .scope-panel__rows div:nth-child(2n) {
+    border-right: 0;
   }
 
-  .primitive__body {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  .scope-panel__rows div:nth-last-child(-n + 2) {
+    border-bottom: 0;
   }
 
-  .primitive__sig {
-    font-family: var(--font-mono);
-    font-size: 0.95rem;
+  .scope-panel__rows code {
     color: var(--foreground);
-    font-weight: 500;
+    font-size: 0.78rem;
   }
 
-  .primitive__desc {
-    font-size: 0.875rem;
+  .scope-panel__rows span {
     color: var(--muted-foreground);
-    line-height: 1.6;
-    max-width: 60ch;
+    font-size: 0.84rem;
   }
 
-  @media (max-width: 640px) {
-    .primitive {
-      grid-template-columns: 40px 1fr;
-      gap: 16px;
+  @media (max-width: 900px) {
+    .primitives__head,
+    .workflow,
+    .scope-panel {
+      grid-template-columns: 1fr;
+    }
+
+    .workflow__step,
+    .scope-panel__copy {
+      border-right: 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .workflow__step {
+      min-height: 0;
+    }
+
+    .workflow__index {
+      margin-bottom: 28px;
+    }
+
+    .scope-panel__rows {
+      grid-template-columns: 1fr;
+    }
+
+    .scope-panel__rows div,
+    .scope-panel__rows div:nth-child(2n) {
+      border-right: 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .scope-panel__rows div:last-child {
+      border-bottom: 0;
     }
   }
 </style>
