@@ -262,6 +262,21 @@ func formatSetupActions(actions []setup.ActionAvailability) string {
 	return strings.Join(labels, " ")
 }
 
+func formatMarketplaceActions(actions []setup.MarketplaceActionAvailability) string {
+	labels := make([]string, 0, len(actions))
+	for _, action := range actions {
+		label := string(action.Action)
+		if !action.Available {
+			label = label + ":unavailable"
+		}
+		labels = append(labels, label)
+	}
+	if len(labels) == 0 {
+		return "none"
+	}
+	return strings.Join(labels, " ")
+}
+
 func buildSetupActionConfirmation(plan setup.ActionPlan) *SetupActionConfirmationModel {
 	command := plan.Operation
 	if plan.Command != nil {

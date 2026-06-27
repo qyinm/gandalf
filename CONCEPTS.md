@@ -14,7 +14,13 @@ A portable, rollbackable captured AI agent setup state managed by Gandalf. This 
 The current product direction for Gandalf: a TUI-first manager for user-global agent skills, hooks, MCP servers, and plugins across supported agents. It excludes project-local setup surfaces from the core product scope.
 
 ### Unified Inventory
-The first-screen TUI model for global setup management. It presents skills, hooks, MCP servers, and plugins in one cross-agent list, with each item carrying compact agent identity rather than forcing users through an agent picker first.
+The normalized cross-agent setup inventory used by the setup console. It presents skills, hooks, MCP servers, and plugins as global/user setup rows with compact agent identity rather than forcing users through an agent picker first.
+
+### Setup Console
+The current target information structure for Gandalf's default TUI. It uses top-level setup tabs for hooks, plugins, marketplace, skills, and MCP servers while preserving cross-agent rows inside each tab.
+
+### Agent Marketplace Source
+A marketplace or plugin source exposed by an agent ecosystem and browsed through Gandalf. Gandalf can group and display source-backed entries, but install, update, uninstall, add-source, and remove-source actions are available only through agent-native providers; Gandalf does not own or certify the catalog itself.
 
 ### Setup Action Provider
 The component that turns a visible setup inventory item into a concrete edit, remove, add, or dry-run action. Inventory visibility does not imply action executability; a provider must describe the target, expected effect, and execution mechanism before Gandalf can truthfully mark an action available.
