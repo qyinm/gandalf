@@ -10,6 +10,12 @@ The selected new product identity for Gandalf. Gandalf is the wizard for AI agen
 ### Setup Container
 A portable, rollbackable captured AI agent setup state managed by Gandalf. This is the product-level container concept behind snapshots, bundles, profile states, and cross-machine restore flows; it should not imply an OS container or remote agent runtime.
 
+### Global Agent Setup Manager
+The current product direction for Gandalf: a TUI-first manager for user-global agent skills, hooks, MCP servers, and plugins across supported agents. It excludes project-local setup surfaces from the core product scope.
+
+### Unified Inventory
+The first-screen TUI model for global setup management. It presents skills, hooks, MCP servers, and plugins in one cross-agent list, with each item carrying compact agent identity rather than forcing users through an agent picker first.
+
 ## Restore
 
 ### Trust Contract
