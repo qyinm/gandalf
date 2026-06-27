@@ -44,7 +44,7 @@ func scanOptions(sb sandbox) *types.ScanOptions {
 	}
 }
 
-func TestDiscoversProjectMCPAndReportsReadOnlyTrust(t *testing.T) {
+func TestDefaultScanIgnoresProjectMCPAndReportsReadOnlyTrust(t *testing.T) {
 	sb := makeSandbox(t)
 	if err := os.WriteFile(
 		filepath.Join(sb.projectPath, ".mcp.json"),
@@ -69,21 +69,12 @@ func TestDiscoversProjectMCPAndReportsReadOnlyTrust(t *testing.T) {
 		t.Fatalf("store location = %q", scanResult.Trust.StoreWriteLocation)
 	}
 
-	var github *types.DiscoveredItem
 	for i := range scanResult.Evidence {
 		item := &scanResult.Evidence[i]
 		if item.Kind == types.KindMcpServer && item.Name != nil && *item.Name == "github" &&
-			item.SourcePath == ".mcp.json" && item.Scope == types.ScopeProject &&
-			item.CaptureStatus == types.CaptureCaptured {
-			github = item
-			break
+			item.SourcePath == ".mcp.json" && item.Scope == types.ScopeProject {
+			t.Fatalf("default scan included project mcp evidence: %#v", item)
 		}
-	}
-	if github == nil {
-		t.Fatal("expected github mcp evidence")
-	}
-	if github.RestorePolicy != types.RestoreStructuredFields {
-		t.Fatalf("restore policy = %q", github.RestorePolicy)
 	}
 
 	serialized, err := json.Marshal(scanResult.Evidence)
@@ -253,7 +244,7 @@ func TestDiscoversCodexHooksFromHookFiles(t *testing.T) {
 			names = append(names, *item.Name)
 		}
 	}
-	if len(names) < 3 {
+	if len(names) != 2 {
 		t.Fatalf("hook names = %#v", names)
 	}
 
@@ -267,7 +258,7 @@ func TestDiscoversCodexHooksFromHookFiles(t *testing.T) {
 			foundSession = true
 		}
 	}
-	if !foundProject || !foundSession {
+	if foundProject || !foundSession {
 		t.Fatalf("hooks missing: project=%v session=%v", foundProject, foundSession)
 	}
 }
@@ -345,7 +336,7 @@ func TestFiltersCodexUserGlobalEvidenceWhenAgentAndScopeSpecified(t *testing.T) 
 	}
 }
 
-func TestEmitsParseFailedForMalformedJSON(t *testing.T) {
+func TestDefaultScanIgnoresMalformedProjectJSON(t *testing.T) {
 	sb := makeSandbox(t)
 	if err := os.MkdirAll(filepath.Join(sb.projectPath, ".claude"), 0o755); err != nil {
 		t.Fatal(err)
@@ -364,12 +355,12 @@ func TestEmitsParseFailedForMalformedJSON(t *testing.T) {
 			break
 		}
 	}
-	if !found {
-		t.Fatal("expected parse_failed evidence for malformed json")
+	if found {
+		t.Fatal("default scan included malformed project json evidence")
 	}
 }
 
-func TestRecordsSymlinkEvidenceWithoutFollowing(t *testing.T) {
+func TestDefaultScanIgnoresProjectSymlinkEvidence(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink test requires unix")
 	}
@@ -399,12 +390,12 @@ func TestRecordsSymlinkEvidenceWithoutFollowing(t *testing.T) {
 			t.Fatal("symlink target was followed")
 		}
 	}
-	if !foundSymlink {
-		t.Fatal("expected symlink evidence")
+	if foundSymlink {
+		t.Fatal("default scan included project symlink evidence")
 	}
 }
 
-func TestCapturesDotenvKeyInventoryWhileOmittingSecretValues(t *testing.T) {
+func TestDefaultScanIgnoresProjectDotenv(t *testing.T) {
 	sb := makeSandbox(t)
 	if err := os.WriteFile(filepath.Join(sb.projectPath, ".env"), []byte("OPENAI_API_KEY=sk-real-secret\nGANDALF_MODE=local\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -418,20 +409,8 @@ func TestCapturesDotenvKeyInventoryWhileOmittingSecretValues(t *testing.T) {
 		}
 	}
 
-	foundSecret := false
-	foundMode := false
-	for _, item := range envEvidence {
-		if item.Name != nil && *item.Name == "OPENAI_API_KEY" &&
-			item.CaptureStatus == types.CaptureRedacted && len(item.Value) == 0 {
-			foundSecret = true
-		}
-		if item.Name != nil && *item.Name == "GANDALF_MODE" &&
-			item.CaptureStatus == types.CaptureOmitted && len(item.Value) == 0 {
-			foundMode = true
-		}
-	}
-	if !foundSecret || !foundMode {
-		t.Fatalf("env evidence missing: secret=%v mode=%v", foundSecret, foundMode)
+	if len(envEvidence) != 0 {
+		t.Fatalf("default scan included project env evidence: %#v", envEvidence)
 	}
 
 	serialized, err := json.Marshal(envEvidence)
@@ -444,7 +423,7 @@ func TestCapturesDotenvKeyInventoryWhileOmittingSecretValues(t *testing.T) {
 	}
 }
 
-func TestMarksOversizedFilesUnsupported(t *testing.T) {
+func TestDefaultScanIgnoresOversizedProjectFiles(t *testing.T) {
 	sb := makeSandbox(t)
 	large := strings.Repeat("a", int(policy.MaxFileBytes)+1)
 	if err := os.WriteFile(filepath.Join(sb.projectPath, "AGENTS.md"), []byte(large), 0o644); err != nil {
@@ -464,8 +443,8 @@ func TestMarksOversizedFilesUnsupported(t *testing.T) {
 			}
 		}
 	}
-	if !found {
-		t.Fatal("expected file_too_large unsupported evidence")
+	if found {
+		t.Fatal("default scan included oversized project file evidence")
 	}
 }
 
@@ -511,6 +490,12 @@ OPENAI_API_KEY = "secret"
 	if err := os.WriteFile(filepath.Join(sb.projectPath, ".pi/settings.json"), []byte(`{"skills":[]}`), 0o644); err != nil {
 		return err
 	}
+	if err := os.MkdirAll(filepath.Join(sb.homeDir, ".pi/agent"), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(sb.homeDir, ".pi/agent/settings.json"), []byte(`{"skills":[]}`), 0o644); err != nil {
+		return err
+	}
 	return os.WriteFile(filepath.Join(sb.projectPath, ".env"), []byte("GANDALF_MODE=local\n"), 0o644)
 }
 
@@ -532,7 +517,6 @@ func TestMultiAgentSandboxDiscoversAtLeastFourAgents(t *testing.T) {
 		types.AgentCursor,
 		types.AgentOpencode,
 		types.AgentPiAgent,
-		types.AgentProject,
 	}
 	for _, agent := range required {
 		if _, ok := agents[agent]; !ok {
