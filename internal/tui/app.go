@@ -60,6 +60,7 @@ type App struct {
 	navCursor       int
 	selectedNavID   string
 	inventoryCursor int
+	inventoryFocus  bool
 	timelineCursor  int
 
 	undoPlan      *timelineundo.Plan
@@ -84,6 +85,7 @@ func NewApp(runtime types.RuntimeOptions) *App {
 		screen:          ScreenInventory,
 		selectedNavID:   InitialNavItemID,
 		selectedProfile: DefaultProfile,
+		inventoryFocus:  true,
 		actionExecutor:  defaultSetupActionExecutor,
 	}
 }
@@ -120,6 +122,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.corruptEvents = typed.corruptEvents
 		a.snapshotNames = typed.snapshotNames
 		a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
+		a.cachedNav = nil
+		a.cachedNavKey = ""
 		return a, nil
 
 	case rescanMsg:
@@ -132,6 +136,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.corruptEvents = typed.corruptEvents
 		a.snapshotNames = typed.snapshotNames
 		a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
+		a.cachedNav = nil
+		a.cachedNavKey = ""
 		a.undoPlan = nil
 		a.undoError = ""
 		a.pendingAction = nil
@@ -153,6 +159,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.corruptEvents = typed.data.corruptEvents
 		a.snapshotNames = typed.data.snapshotNames
 		a.inventoryCursor = clampIndex(a.inventoryCursor, len(a.currentInventory()))
+		a.cachedNav = nil
+		a.cachedNavKey = ""
 		a.pendingAction = nil
 		a.actionError = ""
 		a.notice = "Applied setup action and rescanned global setup."
@@ -227,6 +235,10 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.pendingAction = nil
 			a.actionError = ""
 		}
+	case "tab":
+		if a.screen == ScreenInventory && a.pendingAction == nil {
+			a.inventoryFocus = !a.inventoryFocus
+		}
 	case "r":
 		return func() tea.Msg {
 			data := a.fetchWorkspaceData()
@@ -258,13 +270,13 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return undoPreviewMsg{plan: plan}
 		}, false
 	case "up", "k":
-		if a.screen == ScreenInventory && a.pendingAction == nil {
+		if a.screen == ScreenInventory && a.inventoryFocus && a.pendingAction == nil {
 			a.moveInventoryCursor(-1)
 			return nil, false
 		}
 		a.moveNavCursor(-1)
 	case "down", "j":
-		if a.screen == ScreenInventory && a.pendingAction == nil {
+		if a.screen == ScreenInventory && a.inventoryFocus && a.pendingAction == nil {
 			a.moveInventoryCursor(1)
 			return nil, false
 		}
@@ -278,7 +290,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.moveTimelineCursor(1)
 		}
 	case "enter":
-		if a.screen == ScreenInventory {
+		if a.screen == ScreenInventory && a.inventoryFocus {
 			return a.handleInventoryEnter(), false
 		}
 		a.activateNavItem()
@@ -432,10 +444,11 @@ func (a *App) renderContent(width, height int) string {
 	switch a.screen {
 	case ScreenInventory:
 		model := BuildSetupInventoryViewModel(BuildSetupInventoryViewModelInput{
-			Evidence:      a.evidence,
-			SelectedIndex: a.inventoryCursor,
-			PendingAction: a.pendingAction,
-			ActionError:   a.actionError,
+			Evidence:       a.evidence,
+			SelectedIndex:  a.inventoryCursor,
+			InventoryFocus: a.inventoryFocus,
+			PendingAction:  a.pendingAction,
+			ActionError:    a.actionError,
 		})
 		return views.RenderSetupInventory(setupInventoryViewFromModel(model), width, height)
 	case ScreenTimeline:

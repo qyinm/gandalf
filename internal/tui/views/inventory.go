@@ -78,7 +78,7 @@ func RenderSetupInventory(model SetupInventoryView, width, height int) string {
 		lines = append(lines, "")
 		lines = append(lines, renderSetupActionConfirmation(*model.Confirmation)...)
 	} else {
-		lines = append(lines, "", labelStyle.Render("Enter action · r rescan"))
+		lines = append(lines, "", labelStyle.Render("Enter action · tab sidebar · r rescan"))
 	}
 	return fitHeight(strings.Join(lines, "\n"), height)
 }

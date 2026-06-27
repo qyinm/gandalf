@@ -82,10 +82,11 @@ type SetupActionConfirmationModel struct {
 }
 
 type BuildSetupInventoryViewModelInput struct {
-	Evidence      []types.DiscoveredItem
-	SelectedIndex int
-	PendingAction *setup.ActionPlan
-	ActionError   string
+	Evidence       []types.DiscoveredItem
+	SelectedIndex  int
+	InventoryFocus bool
+	PendingAction  *setup.ActionPlan
+	ActionError    string
 }
 
 func BuildSetupInventoryViewModel(input BuildSetupInventoryViewModelInput) SetupInventoryViewModel {
@@ -113,7 +114,7 @@ func BuildSetupInventoryViewModel(input BuildSetupInventoryViewModelInput) Setup
 			Name:        item.Name,
 			SourcePath:  item.SourcePath,
 			ActionLabel: formatSetupActions(item.Actions),
-			Selected:    i == selectedIndex,
+			Selected:    input.InventoryFocus && i == selectedIndex,
 		})
 	}
 	if len(model.Rows) == 0 {
