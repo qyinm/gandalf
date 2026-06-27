@@ -272,6 +272,40 @@ func TestTimelineCurrentSetupSourceRootRows(t *testing.T) {
 	}
 }
 
+func TestSetupInventoryViewModelShowsGlobalItemsWithAgentMarkers(t *testing.T) {
+	model := tui.BuildSetupInventoryViewModel(tui.BuildSetupInventoryViewModelInput{
+		Evidence: []types.DiscoveredItem{
+			discoveredItem(map[string]any{
+				"id": "skill:review", "agent": types.AgentClaudeCode, "kind": types.KindSkill,
+				"name": "review", "sourcePath": "~/.claude/skills/review", "scope": types.ScopeUser,
+			}),
+			discoveredItem(map[string]any{
+				"id": "mcp:docs", "agent": types.AgentCodex, "kind": types.KindMcpServer,
+				"name": "docs", "sourcePath": "~/.codex/config.toml", "scope": types.ScopeUser,
+			}),
+			discoveredItem(map[string]any{
+				"id": "project:env", "agent": types.AgentProject, "kind": types.KindEnvKey,
+				"name": "OPENAI_API_KEY", "sourcePath": ".env", "scope": types.ScopeProject,
+			}),
+		},
+	})
+
+	if len(model.Rows) != 2 {
+		t.Fatalf("rows = %#v", model.Rows)
+	}
+	if model.Rows[0].AgentMarker == "" || model.Rows[0].AgentLabel == "" {
+		t.Fatalf("missing agent identity: %#v", model.Rows[0])
+	}
+	for _, row := range model.Rows {
+		if row.SourcePath == ".env" {
+			t.Fatalf("project row included: %#v", row)
+		}
+	}
+	if model.Skills != 1 || model.McpServers != 1 {
+		t.Fatalf("counts = %#v", model)
+	}
+}
+
 func TestTimelineCorruptWarning(t *testing.T) {
 	model := tui.BuildTimelineViewModel(tui.BuildTimelineViewModelInput{
 		Entries: []types.TimelineEntry{timelineEntry(nil)},
@@ -402,8 +436,24 @@ func TestNavigationAgentsExcludeProject(t *testing.T) {
 			discoveredItem(map[string]any{"id": "env", "agent": types.AgentProject, "kind": types.KindEnvKey}),
 		},
 	})
-	agentsSection := model.Sections[1]
+	var agentsSection tui.NavSection
+	for _, section := range model.Sections {
+		if section.Label == "Agents" {
+			agentsSection = section
+			break
+		}
+	}
 	if len(agentsSection.Items) != 1 || agentsSection.Items[0].Label != "Claude Code" {
 		t.Fatalf("agents section: got %#v", agentsSection.Items)
+	}
+}
+
+func TestNavigationDefaultsToInventory(t *testing.T) {
+	model := tui.BuildNavigationModel(tui.BuildNavigationModelInput{})
+	if model.SelectedItemID != "inventory:global" {
+		t.Fatalf("selected item = %q", model.SelectedItemID)
+	}
+	if len(model.Sections) == 0 || model.Sections[0].Label != "Inventory" {
+		t.Fatalf("sections = %#v", model.Sections)
 	}
 }

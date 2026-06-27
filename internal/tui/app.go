@@ -32,7 +32,7 @@ type undoPreviewMsg struct {
 	err  error
 }
 
-// App is the Bubble Tea root model for the Gandalf setup-history workspace.
+// App is the Bubble Tea root model for the Gandalf global setup workspace.
 type App struct {
 	runtime types.RuntimeOptions
 	width   int
@@ -69,7 +69,7 @@ type App struct {
 func NewApp(runtime types.RuntimeOptions) *App {
 	return &App{
 		runtime:         runtime,
-		screen:          ScreenTimeline,
+		screen:          ScreenInventory,
 		selectedNavID:   InitialNavItemID,
 		selectedProfile: DefaultProfile,
 	}
@@ -121,7 +121,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
 		a.undoPlan = nil
 		a.undoError = ""
-		a.notice = "Rescanned project setup."
+		a.notice = "Rescanned global setup."
 		return a, nil
 
 	case undoPreviewMsg:
@@ -161,14 +161,14 @@ func (a *App) View() string {
 				EmptyCommand: a.errText,
 			}, contentWidth, contentHeight)
 		}
-		return "Loading Gandalf setup-history workspace..."
+		return "Loading Gandalf global setup workspace..."
 	}
 
 	nav := a.navigationModel()
 	sidebar := views.RenderSidebar(sidebarViewFromModel(nav), sidebarWidth, contentHeight)
 	content := a.renderContent(contentWidth, contentHeight)
 
-	header := lipgloss.NewStyle().Bold(true).Render("gandalf tui · setup-history workspace")
+	header := lipgloss.NewStyle().Bold(true).Render("gandalf tui · global setup workspace")
 	if a.notice != "" {
 		header += "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(a.notice)
 	}
@@ -313,6 +313,11 @@ func (a *App) filteredTimeline() []types.TimelineEntry {
 func (a *App) renderContent(width, height int) string {
 	now := time.Now()
 	switch a.screen {
+	case ScreenInventory:
+		model := BuildSetupInventoryViewModel(BuildSetupInventoryViewModelInput{
+			Evidence: a.evidence,
+		})
+		return views.RenderSetupInventory(setupInventoryViewFromModel(model), width, height)
 	case ScreenTimeline:
 		model := BuildTimelineViewModel(BuildTimelineViewModelInput{
 			Entries:       a.filteredTimeline(),

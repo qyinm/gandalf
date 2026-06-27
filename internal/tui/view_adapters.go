@@ -2,6 +2,27 @@ package tui
 
 import "github.com/qyinm/gandalf/internal/tui/views"
 
+func setupInventoryViewFromModel(model SetupInventoryViewModel) views.SetupInventoryView {
+	view := views.SetupInventoryView{
+		Skills:       model.Skills,
+		McpServers:   model.McpServers,
+		Hooks:        model.Hooks,
+		Plugins:      model.Plugins,
+		EmptyMessage: model.EmptyMessage,
+	}
+	for _, row := range model.Rows {
+		view.Rows = append(view.Rows, views.SetupInventoryRow{
+			AgentLabel:  row.AgentLabel,
+			AgentMarker: row.AgentMarker,
+			ObjectKind:  row.ObjectKind,
+			Name:        row.Name,
+			SourcePath:  row.SourcePath,
+			ActionLabel: row.ActionLabel,
+		})
+	}
+	return view
+}
+
 func historyViewFromModel(model TimelineViewModel) views.HistoryView {
 	view := views.HistoryView{
 		FilterLabel:    model.FilterLabel,

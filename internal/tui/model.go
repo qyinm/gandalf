@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
+	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	timelineundo "github.com/qyinm/gandalf/internal/gandalfcore/timeline_undo"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -32,6 +33,7 @@ var sidebarCountKinds = map[types.EvidenceKind]struct{}{
 type Screen string
 
 const (
+	ScreenInventory   Screen = "inventory"
 	ScreenTimeline    Screen = "timeline"
 	ScreenSnapshots   Screen = "snapshots"
 	ScreenAgentDetail Screen = "agent-detail"
@@ -42,8 +44,65 @@ const (
 
 const (
 	DefaultProfile   = "default"
-	InitialNavItemID = "history:all-changes"
+	InitialNavItemID = "inventory:global"
 )
+
+// --- Setup inventory view model ---
+
+type SetupInventoryRowModel struct {
+	ID          string
+	AgentLabel  string
+	AgentMarker string
+	ObjectKind  string
+	Name        string
+	SourcePath  string
+	ActionLabel string
+}
+
+type SetupInventoryViewModel struct {
+	Rows         []SetupInventoryRowModel
+	Skills       int
+	McpServers   int
+	Hooks        int
+	Plugins      int
+	EmptyMessage string
+}
+
+type BuildSetupInventoryViewModelInput struct {
+	Evidence []types.DiscoveredItem
+}
+
+func BuildSetupInventoryViewModel(input BuildSetupInventoryViewModelInput) SetupInventoryViewModel {
+	inventory := setup.BuildInventory(input.Evidence)
+	model := SetupInventoryViewModel{
+		Rows: make([]SetupInventoryRowModel, 0, len(inventory)),
+	}
+	for _, item := range inventory {
+		switch item.ObjectKind {
+		case setup.ObjectSkill:
+			model.Skills++
+		case setup.ObjectMCPServer:
+			model.McpServers++
+		case setup.ObjectHook:
+			model.Hooks++
+		case setup.ObjectPlugin:
+			model.Plugins++
+		}
+		model.Rows = append(model.Rows, SetupInventoryRowModel{
+			ID:          item.ID,
+			AgentLabel:  FormatAgentLabel(item.Agent),
+			AgentMarker: FormatAgentMarker(item.Agent),
+			ObjectKind:  formatSetupObjectKind(item.ObjectKind),
+			Name:        item.Name,
+			SourcePath:  item.SourcePath,
+			ActionLabel: formatSetupActions(item.Actions),
+		})
+	}
+	if len(model.Rows) == 0 {
+		model.EmptyMessage = "No global skills, hooks, MCP servers, or plugins found."
+	}
+	return model
+}
 
 // --- Timeline view model ---
 
@@ -416,6 +475,17 @@ func buildNavSections(evidence []types.DiscoveredItem) []NavSection {
 
 	return []NavSection{
 		{
+			ID:    "inventory",
+			Label: "Inventory",
+			Items: []NavItem{{
+				ID:            InitialNavItemID,
+				Kind:          NavHistoryItem,
+				Label:         "Global setup",
+				Screen:        ScreenInventory,
+				EvidenceCount: countSidebarInventory(evidence, nil),
+			}},
+		},
+		{
 			ID:    NavProfiles,
 			Label: "Profiles",
 			Items: []NavItem{{
@@ -453,6 +523,9 @@ func buildNavSections(evidence []types.DiscoveredItem) []NavSection {
 }
 
 func NavItemIDForSelection(selection NavigationSelection) string {
+	if selection.Screen == ScreenInventory {
+		return InitialNavItemID
+	}
 	if selection.Screen == ScreenTimeline {
 		if selection.SelectedAgent != nil {
 			return "agent:" + selection.SelectedAgent.String()
