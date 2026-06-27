@@ -7,12 +7,31 @@ import (
 	"time"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/agents"
+	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
 // FormatAgentLabel returns a human-readable agent name.
 func FormatAgentLabel(id types.AgentID) string {
 	return agents.DisplayName(id)
+}
+
+// FormatAgentMarker returns a compact stable marker for inventory rows.
+func FormatAgentMarker(id types.AgentID) string {
+	switch id {
+	case types.AgentClaudeCode:
+		return "CC"
+	case types.AgentCodex:
+		return "CX"
+	case types.AgentCursor:
+		return "CU"
+	case types.AgentOpencode:
+		return "OC"
+	case types.AgentPiAgent:
+		return "PI"
+	default:
+		return "??"
+	}
 }
 
 // FormatAgentScope formats timeline agent scope for list rows.
@@ -73,7 +92,8 @@ func TruncateText(value string, width int) string {
 
 // PadDisplay truncates then pads text to width.
 func PadDisplay(value string, width int) string {
-	return TruncateText(value, width) + strings.Repeat(" ", max(0, width-len(TruncateText(value, width))))
+	truncated := TruncateText(value, width)
+	return truncated + strings.Repeat(" ", max(0, width-len(truncated)))
 }
 
 // FormatInventorySourceRoot returns a compact source-root label for inventory rows.
@@ -210,4 +230,50 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func formatSetupObjectKind(kind setup.ObjectKind) string {
+	switch kind {
+	case setup.ObjectMCPServer:
+		return "mcp"
+	case setup.ObjectSkill:
+		return "skill"
+	case setup.ObjectHook:
+		return "hook"
+	case setup.ObjectPlugin:
+		return "plugin"
+	default:
+		return "setup"
+	}
+}
+
+func formatSetupActions(actions []setup.ActionAvailability) string {
+	labels := make([]string, 0, len(actions))
+	for _, action := range actions {
+		label := string(action.Action)
+		if !action.Available {
+			label = label + ":unavailable"
+		}
+		labels = append(labels, label)
+	}
+	if len(labels) == 0 {
+		return "none"
+	}
+	return strings.Join(labels, " ")
+}
+
+func buildSetupActionConfirmation(plan setup.ActionPlan) *SetupActionConfirmationModel {
+	command := plan.Operation
+	if plan.Command != nil {
+		command = strings.Join(append([]string{plan.Command.Program}, plan.Command.Args...), " ")
+	}
+	return &SetupActionConfirmationModel{
+		Action:       string(plan.Action),
+		AgentLabel:   FormatAgentLabel(plan.Agent),
+		ObjectKind:   formatSetupObjectKind(plan.ObjectKind),
+		TargetName:   plan.TargetName,
+		Operation:    plan.Operation,
+		ConfigTarget: plan.ConfigTarget,
+		Command:      command,
+	}
 }

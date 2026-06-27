@@ -35,10 +35,13 @@ func (CursorScanner) Targets(projectPath, homeDir string) []scan.ScanTarget {
 
 func (c CursorScanner) Scan(context *scan.ScannerContext) []types.DiscoveredItem {
 	base := scan.NewScannerBase(types.AgentCursor)
-	mcpEvidence := scanCursorMCPServers(context.ProjectPath, context.HomeDir, base)
-	hookEvidence := scanCursorHooks(context.ProjectPath, context.HomeDir, base)
+	mcpEvidence := scanCursorMCPServers(context.ProjectPath, context.HomeDir, context.Scope, base)
+	hookEvidence := scanCursorHooks(context.ProjectPath, context.HomeDir, context.Scope, base)
 	var skillEvidence []types.DiscoveredItem
 	for _, target := range cursorSkillTargets(context.ProjectPath, context.HomeDir) {
+		if !scan.ScopeEnabled(target.Scope, context.Scope) {
+			continue
+		}
 		skillEvidence = append(skillEvidence, scanCursorSkillDirectory(target)...)
 	}
 	if len(mcpEvidence) == 0 && len(skillEvidence) == 0 && len(hookEvidence) == 0 {
@@ -63,9 +66,12 @@ func cursorMCPTargets(projectPath, homeDir string) []scan.ScanTarget {
 	}
 }
 
-func scanCursorMCPServers(projectPath, homeDir string, base scan.ScannerBase) []types.DiscoveredItem {
+func scanCursorMCPServers(projectPath, homeDir string, scope *types.EvidenceScope, base scan.ScannerBase) []types.DiscoveredItem {
 	var evidence []types.DiscoveredItem
 	for _, target := range cursorMCPTargets(projectPath, homeDir) {
+		if !scan.ScopeEnabled(target.Scope, scope) {
+			continue
+		}
 		evidence = append(evidence, scanCursorMCPFile(target, base)...)
 	}
 	return evidence
@@ -435,9 +441,12 @@ func cursorHookTargets(projectPath, homeDir string) []scan.ScanTarget {
 	return targets
 }
 
-func scanCursorHooks(projectPath, homeDir string, base scan.ScannerBase) []types.DiscoveredItem {
+func scanCursorHooks(projectPath, homeDir string, scope *types.EvidenceScope, base scan.ScannerBase) []types.DiscoveredItem {
 	var evidence []types.DiscoveredItem
 	for _, target := range cursorHookTargets(projectPath, homeDir) {
+		if !scan.ScopeEnabled(target.Scope, scope) {
+			continue
+		}
 		evidence = append(evidence, scanCursorHookFile(target, base)...)
 	}
 	return evidence

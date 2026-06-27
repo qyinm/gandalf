@@ -52,18 +52,34 @@ func (p PiAgentScanner) Targets(projectPath, homeDir string) []scan.ScanTarget {
 }
 
 func (p PiAgentScanner) Scan(context *scan.ScannerContext) []types.DiscoveredItem {
-	evidence := scan.ScanTargets(p.Targets(context.ProjectPath, context.HomeDir))
+	evidence := scan.ScanTargets(filterPiTargets(p.Targets(context.ProjectPath, context.HomeDir), context.Scope))
 	var extensionEvidence []types.DiscoveredItem
 	var skillEvidence []types.DiscoveredItem
 	for _, target := range piExtensionTargets(context.ProjectPath, context.HomeDir) {
+		if !scan.ScopeEnabled(target.scope, context.Scope) {
+			continue
+		}
 		extensionEvidence = append(extensionEvidence, scanPiExtensionTarget(target)...)
 	}
 	for _, target := range piSkillTargets(context.ProjectPath, context.HomeDir) {
+		if !scan.ScopeEnabled(target.scope, context.Scope) {
+			continue
+		}
 		skillEvidence = append(skillEvidence, scanPiSkillTarget(target)...)
 	}
 	evidence = append(evidence, dedupePiExtensions(extensionEvidence)...)
 	evidence = append(evidence, dedupePiSkills(skillEvidence)...)
 	return evidence
+}
+
+func filterPiTargets(targets []scan.ScanTarget, scope *types.EvidenceScope) []scan.ScanTarget {
+	filtered := make([]scan.ScanTarget, 0, len(targets))
+	for _, target := range targets {
+		if scan.ScopeEnabled(target.Scope, scope) {
+			filtered = append(filtered, target)
+		}
+	}
+	return filtered
 }
 
 func boolPtr(value bool) *bool { return &value }

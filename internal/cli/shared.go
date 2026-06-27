@@ -503,7 +503,11 @@ func printRootHelp(w io.Writer) {
 	help := []string{
 		"gandalf",
 		"",
-		"Save, compare, and restore Codex user-global setup experiments.",
+		"Manage global agent skills, hooks, MCP servers, and plugins.",
+		"",
+		"Interactive workspace:",
+		"  gandalf",
+		"  gandalf tui",
 		"",
 		"Diagnosis commands:",
 		"  gandalf scan --project .",

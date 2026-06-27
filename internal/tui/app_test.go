@@ -1,0 +1,216 @@
+package tui
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
+	"github.com/qyinm/gandalf/internal/gandalfcore/store"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
+)
+
+func TestInventoryEnterReportsUnavailableWhenNoActionProviderExists(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("unavailable action should not return a command")
+	}
+	if app.pendingAction != nil {
+		t.Fatalf("pending action = %#v", app.pendingAction)
+	}
+	if app.actionError == "" {
+		t.Fatal("expected action error")
+	}
+}
+
+func TestInventoryEnterConfirmsActionAndRescans(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	enableInventoryAction(app, setup.ActionEdit)
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("opening confirmation should not return a command")
+	}
+	if app.pendingAction == nil {
+		t.Fatal("expected pending action")
+	}
+	if app.pendingAction.TargetName != "review" {
+		t.Fatalf("pending action = %#v", app.pendingAction)
+	}
+
+	executed := 0
+	app.actionExecutor = func(_ context.Context, plan setup.ActionPlan) error {
+		executed++
+		if plan.TargetName != "review" {
+			t.Fatalf("executed plan = %#v", plan)
+		}
+		return nil
+	}
+
+	cmd := app.handleInventoryEnter()
+	if cmd == nil {
+		t.Fatal("confirming action should return a command")
+	}
+	model, _ := app.Update(cmd())
+	updated := model.(*App)
+
+	if executed != 1 {
+		t.Fatalf("executed = %d", executed)
+	}
+	if updated.pendingAction != nil {
+		t.Fatalf("pending action was not cleared: %#v", updated.pendingAction)
+	}
+	if updated.notice == "" {
+		t.Fatal("expected success notice")
+	}
+}
+
+func TestInventoryActionFailureKeepsUserInContext(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	enableInventoryAction(app, setup.ActionEdit)
+
+	app.handleInventoryEnter()
+	app.actionExecutor = func(context.Context, setup.ActionPlan) error {
+		return os.ErrPermission
+	}
+
+	cmd := app.handleInventoryEnter()
+	model, _ := app.Update(cmd())
+	updated := model.(*App)
+
+	if updated.pendingAction == nil {
+		t.Fatal("pending action should remain for a failed confirmation")
+	}
+	if updated.actionError == "" {
+		t.Fatal("expected action error")
+	}
+}
+
+func TestInventoryRescanFailureAfterActionClearsPendingAction(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	enableInventoryAction(app, setup.ActionEdit)
+	app.handleInventoryEnter()
+
+	model, _ := app.Update(setupActionMsg{data: bootMsg{err: os.ErrPermission}})
+	updated := model.(*App)
+
+	if updated.pendingAction != nil {
+		t.Fatalf("pending action should be cleared after executed action: %#v", updated.pendingAction)
+	}
+	if updated.actionError == "" {
+		t.Fatal("expected rescan error")
+	}
+}
+
+func TestUndoPreviewMessageUpdatesCorruptEventsInUpdate(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := NewApp(runtime)
+	app.corruptEvents = []store.TimelineCorruptEvent{{FilePath: "old"}}
+	next := []store.TimelineCorruptEvent{{FilePath: "new"}}
+
+	model, _ := app.Update(undoPreviewMsg{corruptEvents: next})
+	updated := model.(*App)
+	if len(updated.corruptEvents) != 1 || updated.corruptEvents[0].FilePath != "new" {
+		t.Fatalf("corrupt events = %#v", updated.corruptEvents)
+	}
+
+	model, _ = updated.Update(undoPreviewMsg{})
+	updated = model.(*App)
+	if len(updated.corruptEvents) != 0 {
+		t.Fatalf("corrupt events should clear: %#v", updated.corruptEvents)
+	}
+}
+
+func TestInventoryKeyboardFlowTogglesSidebarAndCancelsPendingAction(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	enableInventoryAction(app, setup.ActionEdit)
+
+	if !app.inventoryFocus {
+		t.Fatal("inventory should start focused")
+	}
+
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyTab}); quit {
+		t.Fatal("tab should not quit")
+	}
+	if app.inventoryFocus {
+		t.Fatal("tab should move focus to sidebar")
+	}
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyDown}); quit {
+		t.Fatal("down should not quit")
+	}
+	if app.inventoryCursor != 0 {
+		t.Fatalf("inventory cursor moved while sidebar focused: %d", app.inventoryCursor)
+	}
+
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyTab}); quit {
+		t.Fatal("tab should not quit")
+	}
+	if !app.inventoryFocus {
+		t.Fatal("tab should return focus to inventory")
+	}
+	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if quit {
+		t.Fatal("enter should not quit")
+	}
+	if cmd != nil {
+		t.Fatal("opening confirmation should not return a command")
+	}
+	if app.pendingAction == nil {
+		t.Fatal("expected pending action")
+	}
+
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyEsc}); quit {
+		t.Fatal("esc should not quit")
+	}
+	if app.pendingAction != nil {
+		t.Fatalf("pending action after esc = %#v", app.pendingAction)
+	}
+}
+
+func newInventoryTestApp(t *testing.T, runtime types.RuntimeOptions) *App {
+	t.Helper()
+	name := "review"
+	app := NewApp(runtime)
+	app.ready = true
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "skill-review",
+		Agent:      types.AgentCodex,
+		Kind:       types.KindSkill,
+		Name:       &name,
+		SourcePath: "~/.codex/skills/review",
+		Scope:      types.ScopeUser,
+	}}})
+	return app
+}
+
+func enableInventoryAction(app *App, action setup.ActionKind) {
+	app.inventory[0].Actions = []setup.ActionAvailability{
+		{Action: action, Available: true},
+	}
+}
+
+func makeTestRuntime(t *testing.T) types.RuntimeOptions {
+	t.Helper()
+	root := t.TempDir()
+	projectPath := filepath.Join(root, "project")
+	homeDir := filepath.Join(root, "home")
+	storeDir := filepath.Join(homeDir, ".gandalf")
+	if err := os.MkdirAll(projectPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(homeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+	}
+}

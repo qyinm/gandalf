@@ -30,26 +30,30 @@ func makeRuntime(t *testing.T) (string, *types.RuntimeOptions) {
 	}
 }
 
-func writeMCP(t *testing.T, projectPath, command string) {
+func writePermission(t *testing.T, homeDir string, allow []string) {
 	t.Helper()
 	payload := map[string]any{
-		"mcpServers": map[string]any{
-			"github": map[string]any{"transport": "stdio", "command": command},
+		"permissions": map[string]any{
+			"bash": map[string]any{"allow": allow},
 		},
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(projectPath, ".mcp.json"), data, 0o644); err != nil {
+	settingsPath := filepath.Join(homeDir, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(settingsPath, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestCreatesBaselinePartialChangesAndBuildsMcpOnlyDryRunUndo(t *testing.T) {
+func TestCreatesBaselineObserveOnlyChangesAndBuildsPermissionDryRunUndo(t *testing.T) {
 	t.Parallel()
 	root, options := makeRuntime(t)
-	writeMCP(t, options.ProjectPath, "gh-mcp")
+	writePermission(t, options.HomeDir, nil)
 
 	captureID := "capture-test"
 	snapshotName := "manual-baseline-capture-test"
@@ -70,7 +74,7 @@ func TestCreatesBaselinePartialChangesAndBuildsMcpOnlyDryRunUndo(t *testing.T) {
 		t.Fatalf("restore readiness = %s", baseline.Entry.RestoreReadiness)
 	}
 
-	writeMCP(t, options.ProjectPath, "gh-mcp-v2")
+	writePermission(t, options.HomeDir, []string{"Bash(npm)"})
 
 	changed, err := timeline.CaptureSnapshot(options, &timeline.CaptureOptions{
 		CaptureID:     &captureID,
@@ -85,7 +89,7 @@ func TestCreatesBaselinePartialChangesAndBuildsMcpOnlyDryRunUndo(t *testing.T) {
 	if changed.Entry.EventKind != types.TimelineEventSetupChanged {
 		t.Fatalf("event kind = %s", changed.Entry.EventKind)
 	}
-	if changed.Entry.RestoreReadiness != types.TimelineRestoreFull && changed.Entry.RestoreReadiness != types.TimelineRestorePartial {
+	if changed.Entry.RestoreReadiness != types.TimelineRestoreObserveOnly {
 		t.Fatalf("restore readiness = %s", changed.Entry.RestoreReadiness)
 	}
 
@@ -93,11 +97,11 @@ func TestCreatesBaselinePartialChangesAndBuildsMcpOnlyDryRunUndo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("undo plan: %v", err)
 	}
-	if !plan.DryRun || plan.WritesFiles || len(plan.WritableItems) != 1 {
+	if !plan.DryRun || plan.WritesFiles || len(plan.WritableItems) != 0 {
 		t.Fatalf("plan = %#v", plan)
 	}
-	if plan.WritableItems[0].Action != timelineundo.ActionUpdate || plan.WritableItems[0].ServerName != "github" {
-		t.Fatalf("writable item = %#v", plan.WritableItems[0])
+	if len(plan.ObserveOnlySurfaces) == 0 {
+		t.Fatalf("expected observe-only surfaces: %#v", plan)
 	}
 
 	entries, err := store.ListTimelineEntries(options.StoreDir, store.TimelineListOptions{})

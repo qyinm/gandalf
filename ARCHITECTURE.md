@@ -1,12 +1,12 @@
 # Gandalf Architecture
 
-Gandalf is a local-first workspace for inspecting, packaging, and restoring AI coding agent environments. It captures agent configuration surfaces such as MCP servers, skills, hooks, permissions, instructions, and project-local agent files into a normalized evidence model, then uses that model for snapshots, diffs, audits, reports, `.gandalf` bundles, and the terminal UI.
+Gandalf is a local-first workspace for managing user-global AI coding agent setup. It presents skills, hooks, MCP servers, and plugins in a unified terminal inventory, then uses the same normalized evidence model for snapshots, diffs, audits, reports, `.gandalf` bundles, and restore safety workflows.
 
 The core architectural rule is simple: scan paths are read-only and policy-aware; write paths are explicit, narrow, and reversible where possible.
 
 ## Canonical Runtime
 
-`internal/gandalfcore` is the canonical engine. `cmd/gandalf` is the supported CLI entrypoint and `internal/tui` is the Bubble Tea terminal workspace.
+`internal/gandalfcore` is the canonical engine. `cmd/gandalf` is the supported CLI entrypoint and `internal/tui` is the Bubble Tea terminal workspace. The default command opens the TUI.
 
 New CLI, engine, and TUI behavior lands in Go. The old Bun/TypeScript CLI, TUI, and core packages have been removed from the supported architecture, and the deprecated Rust engine, CLI, and Tauri desktop transition path are no longer active repository surfaces.
 
@@ -60,9 +60,9 @@ The rest of the system derives from that inventory:
 
 ## Scan Pipeline
 
-The scan package builds a scanner context from project path, home directory, and store directory, then executes the registered scanner plugins. Target-based scanners declare files or directories to inspect; custom scanners implement direct discovery when an agent needs more than static file targets.
+The scan package builds a scanner context from project path, home directory, and store directory, then executes the registered scanner plugins. The active default scan returns user-global and managed evidence; project-scoped evidence is excluded from the default product path. Target-based scanners declare files or directories to inspect; custom scanners implement direct discovery when an agent needs more than static file targets.
 
-Supported built-in scanner modules currently cover Claude Code, Codex, Cursor, OpenCode, Pi Agent, and project-local agent files.
+Supported built-in scanner modules currently cover Claude Code, Codex, Cursor, OpenCode, and Pi Agent user-global setup surfaces.
 
 Scanner plugins should emit typed evidence without executing referenced MCP commands, hooks, scripts, plugins, or agent tools.
 

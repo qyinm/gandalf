@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
+	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	timelineundo "github.com/qyinm/gandalf/internal/gandalfcore/timeline_undo"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -272,6 +273,41 @@ func TestTimelineCurrentSetupSourceRootRows(t *testing.T) {
 	}
 }
 
+func TestSetupInventoryViewModelShowsGlobalItemsWithAgentMarkers(t *testing.T) {
+	evidence := []types.DiscoveredItem{
+		discoveredItem(map[string]any{
+			"id": "skill:review", "agent": types.AgentClaudeCode, "kind": types.KindSkill,
+			"name": "review", "sourcePath": "~/.claude/skills/review", "scope": types.ScopeUser,
+		}),
+		discoveredItem(map[string]any{
+			"id": "mcp:docs", "agent": types.AgentCodex, "kind": types.KindMcpServer,
+			"name": "docs", "sourcePath": "~/.codex/config.toml", "scope": types.ScopeUser,
+		}),
+		discoveredItem(map[string]any{
+			"id": "project:env", "agent": types.AgentProject, "kind": types.KindEnvKey,
+			"name": "OPENAI_API_KEY", "sourcePath": ".env", "scope": types.ScopeProject,
+		}),
+	}
+	model := tui.BuildSetupInventoryViewModel(tui.BuildSetupInventoryViewModelInput{
+		Inventory: setup.BuildInventory(evidence),
+	})
+
+	if len(model.Rows) != 2 {
+		t.Fatalf("rows = %#v", model.Rows)
+	}
+	if model.Rows[0].AgentMarker == "" || model.Rows[0].AgentLabel == "" {
+		t.Fatalf("missing agent identity: %#v", model.Rows[0])
+	}
+	for _, row := range model.Rows {
+		if row.SourcePath == ".env" {
+			t.Fatalf("project row included: %#v", row)
+		}
+	}
+	if model.Skills != 1 || model.McpServers != 1 {
+		t.Fatalf("counts = %#v", model)
+	}
+}
+
 func TestTimelineCorruptWarning(t *testing.T) {
 	model := tui.BuildTimelineViewModel(tui.BuildTimelineViewModelInput{
 		Entries: []types.TimelineEntry{timelineEntry(nil)},
@@ -402,8 +438,56 @@ func TestNavigationAgentsExcludeProject(t *testing.T) {
 			discoveredItem(map[string]any{"id": "env", "agent": types.AgentProject, "kind": types.KindEnvKey}),
 		},
 	})
-	agentsSection := model.Sections[1]
+	var agentsSection tui.NavSection
+	for _, section := range model.Sections {
+		if section.Label == "Agents" {
+			agentsSection = section
+			break
+		}
+	}
 	if len(agentsSection.Items) != 1 || agentsSection.Items[0].Label != "Claude Code" {
 		t.Fatalf("agents section: got %#v", agentsSection.Items)
+	}
+}
+
+func TestNavigationDefaultsToInventory(t *testing.T) {
+	model := tui.BuildNavigationModel(tui.BuildNavigationModelInput{})
+	if model.SelectedItemID != "inventory:global" {
+		t.Fatalf("selected item = %q", model.SelectedItemID)
+	}
+	if len(model.Sections) == 0 || model.Sections[0].Label != "Inventory" {
+		t.Fatalf("sections = %#v", model.Sections)
+	}
+}
+
+func TestNavigationSelectionIDsSplitInventoryAndHistory(t *testing.T) {
+	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenInventory}); got != tui.InventoryNavItemID {
+		t.Fatalf("inventory id = %q", got)
+	}
+	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenTimeline}); got != tui.HistoryAllNavItemID {
+		t.Fatalf("history id = %q", got)
+	}
+	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenSnapshots}); got != "history:snapshots" {
+		t.Fatalf("snapshots id = %q", got)
+	}
+
+	agent := types.AgentCodex
+	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenTimeline, SelectedAgent: &agent}); got != "agent:codex" {
+		t.Fatalf("agent timeline id = %q", got)
+	}
+	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenProfile}); got != "profile:default" {
+		t.Fatalf("profile id = %q", got)
+	}
+}
+
+func TestSelectNavItemRoutesInventoryAndHistoryScreens(t *testing.T) {
+	inventory := tui.NavItem{ID: tui.InventoryNavItemID, Kind: tui.NavHistoryItem, Screen: tui.ScreenInventory}
+	if selection := tui.SelectNavItem(inventory, tui.ScreenTimeline, nil, ""); selection.Screen != tui.ScreenInventory {
+		t.Fatalf("inventory selection = %#v", selection)
+	}
+
+	history := tui.NavItem{ID: tui.HistoryAllNavItemID, Kind: tui.NavHistoryItem, Screen: tui.ScreenTimeline}
+	if selection := tui.SelectNavItem(history, tui.ScreenInventory, nil, ""); selection.Screen != tui.ScreenTimeline {
+		t.Fatalf("history selection = %#v", selection)
 	}
 }

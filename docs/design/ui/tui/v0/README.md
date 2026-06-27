@@ -2,22 +2,22 @@
 
 ## Product Frame
 
-Gandalf v0 is a local Time Machine for AI coding agent setups.
+Gandalf v0 is a global setup manager for AI coding agent setups.
 
 The TUI should help a power user answer four questions quickly:
 
-1. What changed in my local agent setup timeline?
-2. What is installed in each agent right now?
-3. What does this setup look like compared with another saved point?
-4. Can I preview what is safe to undo without guessing which files changed?
+1. What user-global skills, hooks, MCP servers, and plugins are installed right now?
+2. Which agent does each setup object belong to?
+3. Can I add, remove, or edit an item through the agent's native setup path?
+4. Can I still use snapshots and history as a rollback safety layer?
 
-The app is not primarily a marketplace, security dashboard, or brand page. It is a local environment manager with Git-like history using setup-focused language.
+The app is not primarily a marketplace, security dashboard, or brand page. It is a user-global setup manager with history and restore as secondary safety workflows.
 
 ## Core Model
 
 | Concept | Git Analogy | User-Facing Term |
 |---|---|---|
-| Current local agent files | working tree | Current setup |
+| Current user-global agent setup | working tree | Current setup |
 | Named environment line | branch | Profile |
 | Saved state in a profile | commit | Snapshot / saved setup |
 | Local setup history event | log entry | Timeline event / change |
@@ -42,7 +42,7 @@ MVP starts with one default profile. Users can add more profiles later.
 
 ### Snapshot
 
-A snapshot is one saved point inside a profile. It captures the full setup, not only one agent.
+A snapshot is one saved point inside a profile. It captures user-global setup, not only one agent.
 
 The snapshot contains:
 
@@ -50,11 +50,8 @@ The snapshot contains:
 - Codex state
 - Cursor state
 - OpenCode/Pi Agent state when supported
-- Project instructions
-- Shared MCP files
-- Env key inventory
 
-Agent screens show filtered history, but the saved unit is the full setup. This avoids confusing restores when shared files affect multiple agents.
+Agent screens show filtered history, but the saved unit is the global setup. Project-local setup files are outside the current product scope.
 
 ### Deterministic Snapshot Titles
 
@@ -65,9 +62,8 @@ Priority order:
 1. MCP added or removed
 2. Skill added or removed
 3. Hook or permission changed
-4. Instruction changed
-5. Env key inventory changed
-6. Other settings changed
+4. Plugin changed
+5. Other global settings changed
 
 Examples:
 
@@ -75,45 +71,46 @@ Examples:
 - `remove playwright mcp from Cursor`
 - `install react-review skill`
 - `update Claude Code permissions`
-- `update project instructions`
 - `change 2 MCPs and 1 skill`
 - `capture baseline`
 - `before restore to 61b8`
 
 ## Layout
 
-The TUI uses a persistent left nav and a main workspace. The Timeline screen is the first screen. On Timeline, the main workspace is split into two framed panels: Current Setup on top and Timeline below it. Local history status lives inside the top workspace frame so all three visible areas line up vertically.
+The TUI uses a persistent left nav and a main workspace. The Global Setup inventory is the first screen. It shows one cross-agent list of user-global skills, hooks, MCP servers, and plugins with a compact agent marker on each row. Timeline and snapshots remain available from History.
 
 ```text
 ┌──────────────────────┬────────────────────────────────────────────────────────┐
-│ Profiles             │ Local history  entries: 0  snapshots: 0                │
-│   default            │                                                        │
-│                      │ Current Setup                                          │
-│ Agents               │   Scope: All agents                                    │
-│   Claude Code   71   │   Agents 4  Skills 570  MCP Servers 3  Hooks 13       │
-│ ● Codex         377  │                                                        │
-│   OpenCode      126  │   Skills 570  MCP Servers 3  Hooks 13  Project 0      │
-│   Pi Agent      27   │   Claude Code: autoplan                                │
-│                      │   Claude Code: benchmark                               │
-│ History              │   Claude Code: benchmark-models                        │
-│ ▸ All changes        │   Claude Code: better-auth-best-practices              │
-│   Snapshots          │   showing 1-4 of 553                                   │
+│ Inventory            │ Global setup inventory                                 │
+│ ▸ Global setup       │ skills 570  mcp 3  hooks 13  plugins 4                │
 │                      │                                                        │
-│                      │ Timeline  Filter: All agents                           │
-│                      │ No timeline entries yet.                               │
-│                      │ Save a setup to start local history.                   │
+│ Profiles             │ > CC  skill   autoplan              ~/.claude/skills   │
+│   default            │   CX  skill   review                ~/.codex/skills    │
+│                      │   CU  mcp     github                ~/.cursor/mcp.json │
+│ Agents               │   PI  plugin  browser               ~/.pi/agent/...    │
+│   Claude Code   71   │                                                        │
+│   Codex         377  │ Confirm setup action                                   │
+│   OpenCode      126  │ edit skill: review                                     │
+│   Pi Agent      27   │ target: ~/.codex/skills/review                        │
+│                      │                                                        │
+│ History              │                                                        │
+│   All changes        │                                                        │
+│   Snapshots          │                                                        │
 ├──────────────────────┴────────────────────────────────────────────────────────┤
-│ ↑↓ move  Enter open  Tab setup  ←→ scroll  u=preview undo  c=compare  q=quit │
+│ ↑↓ move  Enter action  r=rescan  u=preview undo in history  q=quit           │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Do not show a large `Gandalf` brand header. The selected profile, selected agent, and current setup are the primary context.
+Do not show a large `Gandalf` brand header. The selected inventory row, agent marker, and global setup object are the primary context.
 
-The nav frame, Current Setup frame, and Timeline frame should share the same overall height. The Timeline screen should not look like a loose stack of unrelated blocks.
+The nav frame and inventory workspace should share the same overall height. The first screen should not require choosing an agent before inspecting setup.
 
 ## Left Navigation
 
 ```text
+Inventory
+  Global setup
+
 Profiles
   default
 
@@ -130,22 +127,38 @@ History
 
 Profiles appear first because they define the active environment line. MVP shows only the `default` profile.
 
-Agents are shown only when detected in the current scan. Do not list supported-but-absent agents with zero counts. Project evidence is not an agent nav item; project-scoped setup appears in the Current Setup `Project` tab and in rows as `(project)`.
+Agents are shown only when detected in the current scan. Do not list supported-but-absent agents with zero counts. Project evidence is not an agent nav item and project-scoped setup is outside the current TUI product scope.
 
 History can be viewed globally. `All changes` opens the Timeline screen with `Filter: All agents`; selecting an agent while Timeline is open keeps the Timeline screen and changes the filter.
 
 ## Main Screens
 
+### Global Setup Inventory
+
+Shown first. It lists user-global skills, hooks, MCP servers, and plugins across agents.
+
+```text
+Global setup inventory
+skills 570  mcp 3  hooks 13  plugins 4
+
+> CC  skill   autoplan              ~/.claude/skills           edit remove
+  CX  skill   review                ~/.codex/skills            edit remove
+  CU  mcp     github                ~/.cursor/mcp.json         edit remove
+  PI  plugin  browser               ~/.pi/agent/extensions     edit remove
+```
+
+Each row shows agent marker, object kind, name, source, and available actions. Selecting a row opens a short confirmation that shows the target, agent, operation or command, and global config target.
+
 ### Current Setup Panel
 
-Shown above Timeline. It summarizes the currently scanned setup for `All agents` or the selected agent filter.
+Shown on the secondary Timeline screen. It summarizes the currently scanned global setup for `All agents` or the selected agent filter.
 
 ```text
 Current Setup
   Scope: Codex
   Agents 1  Skills 368  MCP Servers 3  Hooks 5  Permissions 0  Env Keys 0
 
-  Skills 368  MCP Servers 3  Hooks 5  Project 0
+  Skills 368  MCP Servers 3  Hooks 5
   Spreadsheets
   ads-explorer
   agent-browser
@@ -153,14 +166,7 @@ Current Setup
   showing 1-4 of 351
 ```
 
-The section tabs are:
-
-- `Skills`
-- `MCP Servers`
-- `Hooks`
-- `Project`
-
-`Tab` / `Shift+Tab` changes the focused setup section. `←→` scrolls the selected section. The `showing n-m of total` footer must reflect the actual visible item rows, excluding the footer itself.
+The section rows are skills, MCP servers, hooks, and plugins. Project-local setup is not shown in the active product path.
 
 Do not render `Instructions none`. Missing instructions should simply be absent from the Timeline Current Setup panel. Agent Detail can still show instruction counts and paths when they exist.
 
@@ -177,7 +183,7 @@ Current Setup
   MCP Servers   3
   Hooks         2
   Permissions   4
-  Instructions  CLAUDE.md, AGENTS.md
+  Instructions  ~/.claude/CLAUDE.md
 
 Skills
   react-review
@@ -191,18 +197,17 @@ MCP Servers
 
 Instructions
   ~/.claude/CLAUDE.md
-  ./AGENTS.md
 
 History
 * 9f2a  Today 14:22  add github mcp to Claude Code
 * 61b8  Today 13:50  install react-review skill
 ```
 
-Agent detail is inventory-first. History is attached below the current setup. Add/remove actions are available from section context, not from the global first screen.
+Agent detail is inventory-first. History is attached below the current setup. Add/remove/edit actions are available from the global inventory first screen.
 
 ### All Changes / Timeline
 
-Shown first in the shipped TUI. The initial view is project-wide (`All agents`), and selecting an agent filters both Current Setup and Timeline instead of leaving the Timeline screen.
+Shown from History. The initial view is global (`All agents`), and selecting an agent filters both Current Setup and Timeline instead of leaving the Timeline screen.
 
 The Timeline screen includes Current Setup above the timeline list. Timeline is below setup, not a separate top-level tab above it.
 
@@ -211,7 +216,7 @@ Current Setup
   Scope: All agents
   Agents 4  Skills 570  MCP Servers 3  Hooks 13  Permissions 1  Env Keys 0
 
-  Skills 570  MCP Servers 3  Hooks 13  Project 0
+  Skills 570  MCP Servers 3  Hooks 13
   Claude Code: autoplan
   Claude Code: benchmark
   Claude Code: benchmark-models
