@@ -378,6 +378,58 @@ func TestSetupConsoleViewModelFiltersTabsAndBuildsDetail(t *testing.T) {
 	}
 }
 
+func TestSetupConsoleViewModelShowsMarketplaceSources(t *testing.T) {
+	name := "codex"
+	evidence := []types.DiscoveredItem{
+		discoveredItem(map[string]any{
+			"id": "plugin-skill", "agent": types.AgentCodex, "kind": types.KindSkill,
+			"name": "codex", "sourcePath": "~/.codex/plugins/cache/openai-codex/skills/codex", "scope": types.ScopeManaged,
+			"metadata": json.RawMessage(`{
+				"source": "plugin",
+				"sourceRoot": "~/.codex/plugins/cache/openai-codex",
+				"description": "Use Codex from Claude Code",
+				"author": "OpenAI",
+				"version": "1.0.5",
+				"provides": ["skills", "hooks"]
+			}`),
+		}),
+		discoveredItem(map[string]any{
+			"id": "project-skill", "agent": types.AgentCodex, "kind": types.KindSkill,
+			"name": name, "sourcePath": ".codex/skills/codex", "scope": types.ScopeProject,
+			"metadata": json.RawMessage(`{"source":"plugin"}`),
+		}),
+	}
+
+	model := tui.BuildSetupConsoleViewModel(tui.BuildSetupConsoleViewModelInput{
+		Inventory:          setup.BuildInventory(evidence),
+		MarketplaceSources: setup.BuildMarketplace(evidence),
+		ActiveTab:          tui.SetupConsoleTabMarketplace,
+		SelectedIndex:      1,
+	})
+
+	if len(model.Rows) != 2 {
+		t.Fatalf("rows = %#v", model.Rows)
+	}
+	if model.Rows[0].ObjectKind != "source" || model.Rows[1].Status != "installed" {
+		t.Fatalf("marketplace rows = %#v", model.Rows)
+	}
+	if model.Tabs[2].Count != 1 {
+		t.Fatalf("marketplace tab count = %#v", model.Tabs)
+	}
+	if model.Selected == nil {
+		t.Fatal("selected marketplace detail missing")
+	}
+	if model.Selected.Description != "Use Codex from Claude Code" || model.Selected.Author != "OpenAI" || model.Selected.Version != "1.0.5" {
+		t.Fatalf("selected metadata = %#v", model.Selected)
+	}
+	if len(model.Selected.Provides) != 2 || model.Selected.Provides[0] != "skills" {
+		t.Fatalf("provides = %#v", model.Selected.Provides)
+	}
+	if len(model.Selected.Actions) == 0 || model.Selected.Actions[0].Available {
+		t.Fatalf("marketplace actions should be unavailable: %#v", model.Selected.Actions)
+	}
+}
+
 func TestTimelineCorruptWarning(t *testing.T) {
 	model := tui.BuildTimelineViewModel(tui.BuildTimelineViewModelInput{
 		Entries: []types.TimelineEntry{timelineEntry(nil)},

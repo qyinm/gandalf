@@ -511,14 +511,15 @@ func (a *App) renderContent(width, height int) string {
 	switch a.screen {
 	case ScreenInventory:
 		model := BuildSetupConsoleViewModel(BuildSetupConsoleViewModelInput{
-			Inventory:     a.inventory,
-			ActiveTab:     a.activeSetupTab,
-			Search:        a.setupSearch,
-			SearchInput:   a.setupSearchInput.View(),
-			SearchFocused: a.setupSearchFocused,
-			SelectedIndex: a.inventoryCursor,
-			PendingAction: a.pendingAction,
-			ActionError:   a.actionError,
+			Inventory:          a.inventory,
+			MarketplaceSources: setup.BuildMarketplace(a.evidence),
+			ActiveTab:          a.activeSetupTab,
+			Search:             a.setupSearch,
+			SearchInput:        a.setupSearchInput.View(),
+			SearchFocused:      a.setupSearchFocused,
+			SelectedIndex:      a.inventoryCursor,
+			PendingAction:      a.pendingAction,
+			ActionError:        a.actionError,
 		})
 		return views.RenderSetupConsole(setupConsoleViewFromModel(model), width, height)
 	case ScreenTimeline:

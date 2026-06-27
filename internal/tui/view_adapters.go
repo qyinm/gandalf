@@ -72,6 +72,11 @@ func setupConsoleViewFromModel(model SetupConsoleViewModel) views.SetupConsoleVi
 			SourcePath:   model.Selected.SourcePath,
 			Scope:        model.Selected.Scope,
 			Status:       model.Selected.Status,
+			Description:  model.Selected.Description,
+			Author:       model.Selected.Author,
+			Category:     model.Selected.Category,
+			Version:      model.Selected.Version,
+			Provides:     append([]string(nil), model.Selected.Provides...),
 			ConfigTarget: model.Selected.ConfigTarget,
 		}
 		for _, action := range model.Selected.Actions {

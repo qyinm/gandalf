@@ -44,6 +44,11 @@ type SetupConsoleDetail struct {
 	SourcePath   string
 	Scope        string
 	Status       string
+	Description  string
+	Author       string
+	Category     string
+	Version      string
+	Provides     []string
 	Actions      []SetupConsoleAction
 	ConfigTarget string
 }
@@ -157,7 +162,18 @@ func renderSetupConsoleDetail(detail SetupConsoleDetail, width int) []string {
 		titleStyle.Render(detail.Title),
 		labelStyle.Render(fmt.Sprintf("%s · %s · %s", detail.AgentLabel, detail.ObjectKind, detail.Status)),
 		mutedStyle.Render(truncate("source: "+detail.SourcePath, width)),
-		mutedStyle.Render("scope: " + detail.Scope),
+	}
+	if detail.Scope != "" {
+		lines = append(lines, mutedStyle.Render("scope: "+detail.Scope))
+	}
+	if detail.Description != "" {
+		lines = append(lines, mutedStyle.Render(truncate(detail.Description, width)))
+	}
+	if detail.Author != "" || detail.Category != "" || detail.Version != "" {
+		lines = append(lines, mutedStyle.Render(truncate(renderMetadataLine(detail), width)))
+	}
+	if len(detail.Provides) > 0 {
+		lines = append(lines, mutedStyle.Render(truncate("provides: "+strings.Join(detail.Provides, ", "), width)))
 	}
 	if detail.ConfigTarget != "" {
 		lines = append(lines, mutedStyle.Render(truncate("target: "+detail.ConfigTarget, width)))
@@ -177,6 +193,20 @@ func renderSetupConsoleDetail(detail SetupConsoleDetail, width int) []string {
 		lines = append(lines, mutedStyle.Render(truncate("actions: "+strings.Join(actionLabels, ", "), width)))
 	}
 	return lines
+}
+
+func renderMetadataLine(detail SetupConsoleDetail) string {
+	parts := make([]string, 0, 3)
+	if detail.Version != "" {
+		parts = append(parts, "version: "+detail.Version)
+	}
+	if detail.Author != "" {
+		parts = append(parts, "author: "+detail.Author)
+	}
+	if detail.Category != "" {
+		parts = append(parts, "category: "+detail.Category)
+	}
+	return strings.Join(parts, " · ")
 }
 
 type setupConsoleKeyMap struct {
