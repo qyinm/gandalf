@@ -28,6 +28,19 @@ func TestInventoryEnterReportsUnavailableWhenNoActionProviderExists(t *testing.T
 	}
 }
 
+func TestMarketplaceEnterReportsUnavailableProvider(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	app.activeSetupTab = SetupConsoleTabMarketplace
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("marketplace action should not return a command")
+	}
+	if !strings.Contains(app.actionError, "provider") {
+		t.Fatalf("action error = %q", app.actionError)
+	}
+}
+
 func TestInventoryEnterConfirmsActionAndRescans(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newInventoryTestApp(t, runtime)

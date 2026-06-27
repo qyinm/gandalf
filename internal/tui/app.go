@@ -349,6 +349,11 @@ func (a *App) handleInventoryEnter() tea.Cmd {
 		}
 	}
 
+	if normalizeSetupConsoleTab(a.activeSetupTab) == SetupConsoleTabMarketplace {
+		a.actionError = "Marketplace actions are unavailable until an agent-native provider is implemented."
+		return nil
+	}
+
 	inventory := a.currentInventory()
 	if len(inventory) == 0 {
 		a.actionError = "No setup item selected."
