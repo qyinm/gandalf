@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -127,7 +128,22 @@ func TestUndoPreviewMessageUpdatesCorruptEventsInUpdate(t *testing.T) {
 	}
 }
 
-func TestInventoryKeyboardFlowTogglesSidebarAndCancelsPendingAction(t *testing.T) {
+func TestSetupConsoleFirstScreenUsesTopTabsWithoutSidebar(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	app.width = 120
+	app.height = 32
+
+	view := app.View()
+	if !strings.Contains(view, "Hooks") || !strings.Contains(view, "Plugins") || !strings.Contains(view, "Marketplace") {
+		t.Fatalf("expected top tabs in view:\n%s", view)
+	}
+	if strings.Contains(view, "Profiles") || strings.Contains(view, "Agents") || strings.Contains(view, "Inventory\n") {
+		t.Fatalf("expected no persistent sidebar in view:\n%s", view)
+	}
+}
+
+func TestInventoryKeyboardFlowSwitchesTabsAndCancelsPendingAction(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newInventoryTestApp(t, runtime)
 	enableInventoryAction(app, setup.ActionEdit)
@@ -139,21 +155,14 @@ func TestInventoryKeyboardFlowTogglesSidebarAndCancelsPendingAction(t *testing.T
 	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyTab}); quit {
 		t.Fatal("tab should not quit")
 	}
-	if app.inventoryFocus {
-		t.Fatal("tab should move focus to sidebar")
+	if app.activeSetupTab != SetupConsoleTabMCPServers {
+		t.Fatalf("tab should switch from skills to mcp servers: %s", app.activeSetupTab)
 	}
-	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyDown}); quit {
-		t.Fatal("down should not quit")
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyShiftTab}); quit {
+		t.Fatal("shift+tab should not quit")
 	}
-	if app.inventoryCursor != 0 {
-		t.Fatalf("inventory cursor moved while sidebar focused: %d", app.inventoryCursor)
-	}
-
-	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyTab}); quit {
-		t.Fatal("tab should not quit")
-	}
-	if !app.inventoryFocus {
-		t.Fatal("tab should return focus to inventory")
+	if app.activeSetupTab != SetupConsoleTabSkills {
+		t.Fatalf("shift+tab should return to skills: %s", app.activeSetupTab)
 	}
 	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if quit {
@@ -178,6 +187,7 @@ func newInventoryTestApp(t *testing.T, runtime types.RuntimeOptions) *App {
 	t.Helper()
 	name := "review"
 	app := NewApp(runtime)
+	app.activeSetupTab = SetupConsoleTabSkills
 	app.ready = true
 	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
 		ID:         "skill-review",

@@ -36,6 +36,65 @@ func setupInventoryViewFromModel(model SetupInventoryViewModel) views.SetupInven
 	return view
 }
 
+func setupConsoleViewFromModel(model SetupConsoleViewModel) views.SetupConsoleView {
+	view := views.SetupConsoleView{
+		ActiveTab:    string(model.ActiveTab),
+		Search:       model.Search,
+		EmptyMessage: model.EmptyMessage,
+		ActionError:  model.ActionError,
+	}
+	for _, tab := range model.Tabs {
+		view.Tabs = append(view.Tabs, views.SetupConsoleTab{
+			Label:    tab.Label,
+			Count:    tab.Count,
+			Selected: tab.Selected,
+		})
+	}
+	for _, row := range model.Rows {
+		view.Rows = append(view.Rows, views.SetupConsoleRow{
+			AgentMarker: row.AgentMarker,
+			ObjectKind:  row.ObjectKind,
+			Name:        row.Name,
+			SourcePath:  row.SourcePath,
+			Scope:       row.Scope,
+			Status:      row.Status,
+			ActionLabel: row.ActionLabel,
+			Selected:    row.Selected,
+		})
+	}
+	if model.Selected != nil {
+		detail := views.SetupConsoleDetail{
+			Title:        model.Selected.Title,
+			AgentLabel:   model.Selected.AgentLabel,
+			ObjectKind:   model.Selected.ObjectKind,
+			SourcePath:   model.Selected.SourcePath,
+			Scope:        model.Selected.Scope,
+			Status:       model.Selected.Status,
+			ConfigTarget: model.Selected.ConfigTarget,
+		}
+		for _, action := range model.Selected.Actions {
+			detail.Actions = append(detail.Actions, views.SetupConsoleAction{
+				Label:     action.Label,
+				Available: action.Available,
+				Reason:    action.Reason,
+			})
+		}
+		view.Selected = &detail
+	}
+	if model.Confirmation != nil {
+		view.Confirmation = &views.SetupActionConfirmation{
+			Action:       model.Confirmation.Action,
+			AgentLabel:   model.Confirmation.AgentLabel,
+			ObjectKind:   model.Confirmation.ObjectKind,
+			TargetName:   model.Confirmation.TargetName,
+			Operation:    model.Confirmation.Operation,
+			ConfigTarget: model.Confirmation.ConfigTarget,
+			Command:      model.Confirmation.Command,
+		}
+	}
+	return view
+}
+
 func historyViewFromModel(model TimelineViewModel) views.HistoryView {
 	view := views.HistoryView{
 		FilterLabel:    model.FilterLabel,

@@ -62,6 +62,8 @@ type App struct {
 	navCursor       int
 	inventoryCursor int
 	inventoryFocus  bool
+	activeSetupTab  SetupConsoleTab
+	setupSearch     string
 	timelineCursor  int
 
 	undoPlan      *timelineundo.Plan
@@ -86,6 +88,7 @@ func NewApp(runtime types.RuntimeOptions) *App {
 		screen:          ScreenInventory,
 		selectedProfile: DefaultProfile,
 		inventoryFocus:  true,
+		activeSetupTab:  SetupConsoleTabHooks,
 		actionExecutor:  defaultSetupActionExecutor,
 	}
 }
@@ -176,8 +179,7 @@ func (a *App) View() string {
 		a.height = 28
 	}
 
-	sidebarWidth := 28
-	contentWidth := a.width - sidebarWidth - 3
+	contentWidth := a.width
 	if contentWidth < 40 {
 		contentWidth = 40
 	}
@@ -193,11 +195,9 @@ func (a *App) View() string {
 		return "Loading Gandalf global setup workspace..."
 	}
 
-	nav := a.navigationModel()
-	sidebar := views.RenderSidebar(sidebarViewFromModel(nav), sidebarWidth, contentHeight)
 	content := a.renderContent(contentWidth, contentHeight)
 
-	header := lipgloss.NewStyle().Bold(true).Render("gandalf tui · global setup workspace")
+	header := lipgloss.NewStyle().Bold(true).Render("gandalf tui · setup console")
 	if a.notice != "" {
 		header += "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(a.notice)
 	}
@@ -205,12 +205,7 @@ func (a *App) View() string {
 		header += "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(a.undoError)
 	}
 
-	body := lipgloss.JoinHorizontal(lipgloss.Top,
-		lipgloss.NewStyle().Width(sidebarWidth).Render(sidebar),
-		lipgloss.NewStyle().Width(contentWidth).Render(content),
-	)
-
-	return lipgloss.JoinVertical(lipgloss.Left, header, body)
+	return lipgloss.JoinVertical(lipgloss.Left, header, lipgloss.NewStyle().Width(contentWidth).Render(content))
 }
 
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
@@ -224,13 +219,32 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 	case "tab":
 		if a.screen == ScreenInventory && a.pendingAction == nil {
-			a.inventoryFocus = !a.inventoryFocus
+			a.moveSetupTab(1)
+		}
+	case "shift+tab":
+		if a.screen == ScreenInventory && a.pendingAction == nil {
+			a.moveSetupTab(-1)
 		}
 	case "r":
 		return func() tea.Msg {
 			data := a.fetchWorkspaceData()
 			return rescanMsg(data)
 		}, false
+	case "H":
+		if a.screen == ScreenInventory {
+			a.screen = ScreenTimeline
+			a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
+		}
+	case "S":
+		if a.screen == ScreenInventory {
+			a.screen = ScreenSnapshots
+		}
+	case "i":
+		if a.screen != ScreenInventory {
+			a.screen = ScreenInventory
+			a.undoPlan = nil
+			a.undoError = ""
+		}
 	case "u":
 		if a.screen != ScreenTimeline {
 			return nil, false
@@ -277,7 +291,6 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		if a.screen == ScreenInventory && a.inventoryFocus {
 			return a.handleInventoryEnter(), false
 		}
-		a.activateNavItem()
 	}
 	return nil, false
 }
@@ -318,7 +331,7 @@ func (a *App) handleInventoryEnter() tea.Cmd {
 }
 
 func (a *App) currentInventory() []setup.InventoryItem {
-	return a.inventory
+	return filterSetupConsoleInventory(a.inventory, normalizeSetupConsoleTab(a.activeSetupTab), a.setupSearch)
 }
 
 func (a *App) applyWorkspaceData(data bootMsg) {
@@ -345,6 +358,27 @@ func (a *App) moveInventoryCursor(delta int) {
 		next = 0
 	}
 	a.inventoryCursor = next
+	a.actionError = ""
+}
+
+func (a *App) moveSetupTab(delta int) {
+	active := normalizeSetupConsoleTab(a.activeSetupTab)
+	index := 0
+	for i, tab := range SetupConsoleTabs {
+		if tab == active {
+			index = i
+			break
+		}
+	}
+	next := index + delta
+	if next < 0 {
+		next = len(SetupConsoleTabs) - 1
+	}
+	if next >= len(SetupConsoleTabs) {
+		next = 0
+	}
+	a.activeSetupTab = SetupConsoleTabs[next]
+	a.inventoryCursor = clampIndex(a.inventoryCursor, len(a.currentInventory()))
 	a.actionError = ""
 }
 
@@ -436,14 +470,15 @@ func (a *App) renderContent(width, height int) string {
 	now := time.Now()
 	switch a.screen {
 	case ScreenInventory:
-		model := BuildSetupInventoryViewModel(BuildSetupInventoryViewModelInput{
-			Inventory:      a.currentInventory(),
-			SelectedIndex:  a.inventoryCursor,
-			InventoryFocus: a.inventoryFocus,
-			PendingAction:  a.pendingAction,
-			ActionError:    a.actionError,
+		model := BuildSetupConsoleViewModel(BuildSetupConsoleViewModelInput{
+			Inventory:     a.inventory,
+			ActiveTab:     a.activeSetupTab,
+			Search:        a.setupSearch,
+			SelectedIndex: a.inventoryCursor,
+			PendingAction: a.pendingAction,
+			ActionError:   a.actionError,
 		})
-		return views.RenderSetupInventory(setupInventoryViewFromModel(model), width, height)
+		return views.RenderSetupConsole(setupConsoleViewFromModel(model), width, height)
 	case ScreenTimeline:
 		model := BuildTimelineViewModel(BuildTimelineViewModelInput{
 			Entries:       a.filteredTimeline(),
