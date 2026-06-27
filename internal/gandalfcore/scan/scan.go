@@ -45,7 +45,7 @@ func ScanProject(options *types.ScanOptions) types.ScanResult {
 		targets := plugin.Targets(projectPath, homeDir)
 		var filtered []ScanTarget
 		for _, target := range targets {
-			if scanScopeEnabled(target.Scope, options.Scope) {
+			if ScopeEnabled(target.Scope, options.Scope) {
 				filtered = append(filtered, target)
 			}
 		}
@@ -57,7 +57,7 @@ func ScanProject(options *types.ScanOptions) types.ScanResult {
 		if options.Agent != nil && item.Agent != *options.Agent {
 			continue
 		}
-		if !scanScopeEnabled(item.Scope, options.Scope) {
+		if !ScopeEnabled(item.Scope, options.Scope) {
 			continue
 		}
 		filteredEvidence = append(filteredEvidence, item)
@@ -79,7 +79,7 @@ func ScanProject(options *types.ScanOptions) types.ScanResult {
 	}
 }
 
-func scanScopeEnabled(scope types.EvidenceScope, requested *types.EvidenceScope) bool {
+func ScopeEnabled(scope types.EvidenceScope, requested *types.EvidenceScope) bool {
 	if requested != nil {
 		return scope == *requested
 	}

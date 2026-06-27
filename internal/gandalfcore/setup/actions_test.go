@@ -19,19 +19,19 @@ func (f *fakeRunner) Run(_ context.Context, command CommandPlan) error {
 }
 
 func TestPlanItemActionBuildsConfirmationFields(t *testing.T) {
-	name := "github"
-	items := BuildInventory([]types.DiscoveredItem{
-		{
-			ID:         "mcp-github",
-			Agent:      types.AgentCodex,
-			Kind:       types.KindMcpServer,
-			Name:       &name,
-			SourcePath: "~/.codex/config.toml",
-			Scope:      types.ScopeUser,
+	item := InventoryItem{
+		ID:         "mcp-github",
+		Agent:      types.AgentCodex,
+		ObjectKind: ObjectMCPServer,
+		Name:       "github",
+		SourcePath: "~/.codex/config.toml",
+		Scope:      types.ScopeUser,
+		Actions: []ActionAvailability{
+			{Action: ActionRemove, Available: true},
 		},
-	})
+	}
 
-	plan := PlanItemAction(items[0], ActionRemove)
+	plan := PlanItemAction(item, ActionRemove)
 
 	if !plan.Available {
 		t.Fatalf("plan unavailable: %#v", plan)
@@ -54,25 +54,50 @@ func TestPlanItemActionBuildsConfirmationFields(t *testing.T) {
 }
 
 func TestPlanItemActionRejectsUnavailableActions(t *testing.T) {
-	name := "customize-opencode"
+	name := "review"
 	items := BuildInventory([]types.DiscoveredItem{
 		{
-			ID:         "managed-skill",
-			Agent:      types.AgentOpencode,
+			ID:         "user-skill",
+			Agent:      types.AgentCodex,
 			Kind:       types.KindSkill,
 			Name:       &name,
-			SourcePath: "<built-in>",
-			Scope:      types.ScopeManaged,
+			SourcePath: "~/.codex/skills/review",
+			Scope:      types.ScopeUser,
 		},
 	})
 
 	plan := PlanItemAction(items[0], ActionRemove)
 
 	if plan.Available {
-		t.Fatalf("managed action should be unavailable: %#v", plan)
+		t.Fatalf("action should be unavailable without a provider: %#v", plan)
 	}
 	if plan.UnavailableReason == "" {
 		t.Fatalf("missing unavailable reason: %#v", plan)
+	}
+}
+
+func TestPlanItemActionRejectsAddAndUnknownActions(t *testing.T) {
+	item := InventoryItem{
+		ID:         "user-skill",
+		Agent:      types.AgentCodex,
+		ObjectKind: ObjectSkill,
+		Name:       "review",
+		SourcePath: "~/.codex/skills/review",
+		Scope:      types.ScopeUser,
+		Actions: []ActionAvailability{
+			{Action: ActionAdd, Available: true},
+			{Action: ActionKind("bogus"), Available: true},
+		},
+	}
+
+	for _, action := range []ActionKind{ActionAdd, ActionKind("bogus")} {
+		plan := PlanItemAction(item, action)
+		if plan.Available {
+			t.Fatalf("%s action should be unavailable: %#v", action, plan)
+		}
+		if plan.UnavailableReason == "" {
+			t.Fatalf("%s action missing unavailable reason: %#v", action, plan)
+		}
 	}
 }
 
@@ -134,6 +159,44 @@ func TestExecuteActionPlanReturnsUnavailableError(t *testing.T) {
 
 	if !errors.Is(err, ErrActionUnavailable) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestExecuteActionPlanRejectsIncompleteCommandPlans(t *testing.T) {
+	command := CommandPlan{Program: "   "}
+	tests := []struct {
+		name string
+		plan ActionPlan
+	}{
+		{
+			name: "empty target",
+			plan: ActionPlan{Available: true},
+		},
+		{
+			name: "nil command",
+			plan: ActionPlan{Available: true, ConfigTarget: "~/.codex/config.toml"},
+		},
+		{
+			name: "blank command program",
+			plan: ActionPlan{Available: true, ConfigTarget: "~/.codex/config.toml", Command: &command},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := ExecuteActionPlan(context.Background(), tt.plan, &fakeRunner{}); err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+
+	validCommand := CommandPlan{Program: "pi"}
+	if _, err := ExecuteActionPlan(context.Background(), ActionPlan{
+		Available:    true,
+		ConfigTarget: "~/.pi/agent/settings.json",
+		Command:      &validCommand,
+	}, nil); err == nil {
+		t.Fatal("expected nil runner error")
 	}
 }
 

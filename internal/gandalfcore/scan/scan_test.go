@@ -87,6 +87,26 @@ func TestDefaultScanIgnoresProjectMCPAndReportsReadOnlyTrust(t *testing.T) {
 	}
 }
 
+func TestScopeEnabledDefaultsToGlobalOnly(t *testing.T) {
+	if scan.ScopeEnabled(types.ScopeProject, nil) {
+		t.Fatal("nil scope should exclude project evidence")
+	}
+	if !scan.ScopeEnabled(types.ScopeUser, nil) {
+		t.Fatal("nil scope should include user evidence")
+	}
+	if !scan.ScopeEnabled(types.ScopeManaged, nil) {
+		t.Fatal("nil scope should include managed evidence")
+	}
+
+	project := types.ScopeProject
+	if !scan.ScopeEnabled(types.ScopeProject, &project) {
+		t.Fatal("explicit project scope should include project evidence")
+	}
+	if scan.ScopeEnabled(types.ScopeUser, &project) {
+		t.Fatal("explicit project scope should exclude user evidence")
+	}
+}
+
 func TestDiscoversCodexMCPServersFromConfigTOML(t *testing.T) {
 	sb := makeSandbox(t)
 	codexDir := filepath.Join(sb.homeDir, ".codex")
@@ -476,6 +496,12 @@ OPENAI_API_KEY = "secret"
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(sb.projectPath, ".cursor/mcp.json"), []byte(`{"mcpServers":{"cursor-mcp":{"command":"cursor"}}}`), 0o644); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(sb.homeDir, ".cursor"), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(sb.homeDir, ".cursor/mcp.json"), []byte(`{"mcpServers":{"cursor-user-mcp":{"command":"cursor"}}}`), 0o644); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Join(sb.homeDir, ".config/opencode"), 0o755); err != nil {

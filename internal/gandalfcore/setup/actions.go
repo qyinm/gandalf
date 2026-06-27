@@ -9,13 +9,16 @@ import (
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
+// ErrActionUnavailable marks setup actions that cannot currently be executed.
 var ErrActionUnavailable = errors.New("setup action unavailable")
 
+// CommandPlan describes an executable command-backed setup action.
 type CommandPlan struct {
 	Program string
 	Args    []string
 }
 
+// ActionPlan is a concrete setup action proposal for confirmation and execution.
 type ActionPlan struct {
 	ID                string
 	Action            ActionKind
@@ -29,15 +32,17 @@ type ActionPlan struct {
 	UnavailableReason string
 }
 
+// CommandRunner executes command-backed setup action plans.
 type CommandRunner interface {
 	Run(ctx context.Context, command CommandPlan) error
 }
 
+// ActionResult reports what an executed setup action changed.
 type ActionResult struct {
 	ExecutedCommand bool
-	OperationOnly   bool
 }
 
+// PlanItemAction builds an executable or unavailable plan for an inventory item action.
 func PlanItemAction(item InventoryItem, action ActionKind) ActionPlan {
 	plan := ActionPlan{
 		ID:           strings.Join([]string{item.ID, string(action)}, ":"),
@@ -73,6 +78,7 @@ func PlanItemAction(item InventoryItem, action ActionKind) ActionPlan {
 	return plan
 }
 
+// ExecuteActionPlan runs a concrete setup action plan.
 func ExecuteActionPlan(ctx context.Context, plan ActionPlan, runner CommandRunner) (ActionResult, error) {
 	if !plan.Available {
 		return ActionResult{}, fmt.Errorf("%w: %s", ErrActionUnavailable, plan.UnavailableReason)
@@ -81,7 +87,7 @@ func ExecuteActionPlan(ctx context.Context, plan ActionPlan, runner CommandRunne
 		return ActionResult{}, errors.New("setup action requires a global config target")
 	}
 	if plan.Command == nil {
-		return ActionResult{OperationOnly: true}, nil
+		return ActionResult{}, errors.New("setup action requires an executable command plan")
 	}
 	if strings.TrimSpace(plan.Command.Program) == "" {
 		return ActionResult{}, errors.New("setup action command requires a program")

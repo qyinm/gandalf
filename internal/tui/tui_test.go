@@ -459,3 +459,35 @@ func TestNavigationDefaultsToInventory(t *testing.T) {
 		t.Fatalf("sections = %#v", model.Sections)
 	}
 }
+
+func TestNavigationSelectionIDsSplitInventoryAndHistory(t *testing.T) {
+	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenInventory}); got != tui.InventoryNavItemID {
+		t.Fatalf("inventory id = %q", got)
+	}
+	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenTimeline}); got != tui.HistoryAllNavItemID {
+		t.Fatalf("history id = %q", got)
+	}
+	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenSnapshots}); got != "history:snapshots" {
+		t.Fatalf("snapshots id = %q", got)
+	}
+
+	agent := types.AgentCodex
+	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenTimeline, SelectedAgent: &agent}); got != "agent:codex" {
+		t.Fatalf("agent timeline id = %q", got)
+	}
+	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenProfile}); got != "profile:default" {
+		t.Fatalf("profile id = %q", got)
+	}
+}
+
+func TestSelectNavItemRoutesInventoryAndHistoryScreens(t *testing.T) {
+	inventory := tui.NavItem{ID: tui.InventoryNavItemID, Kind: tui.NavHistoryItem, Screen: tui.ScreenInventory}
+	if selection := tui.SelectNavItem(inventory, tui.ScreenTimeline, nil, ""); selection.Screen != tui.ScreenInventory {
+		t.Fatalf("inventory selection = %#v", selection)
+	}
+
+	history := tui.NavItem{ID: tui.HistoryAllNavItemID, Kind: tui.NavHistoryItem, Screen: tui.ScreenTimeline}
+	if selection := tui.SelectNavItem(history, tui.ScreenInventory, nil, ""); selection.Screen != tui.ScreenTimeline {
+		t.Fatalf("history selection = %#v", selection)
+	}
+}

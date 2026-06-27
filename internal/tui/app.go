@@ -35,8 +35,9 @@ type setupActionMsg struct {
 }
 
 type undoPreviewMsg struct {
-	plan *timelineundo.Plan
-	err  error
+	plan          *timelineundo.Plan
+	corruptEvents []store.TimelineCorruptEvent
+	err           error
 }
 
 // App is the Bubble Tea root model for the Gandalf global setup workspace.
@@ -59,7 +60,6 @@ type App struct {
 	selectedProfile string
 
 	navCursor       int
-	selectedNavID   string
 	inventoryCursor int
 	inventoryFocus  bool
 	timelineCursor  int
@@ -84,7 +84,6 @@ func NewApp(runtime types.RuntimeOptions) *App {
 	return &App{
 		runtime:         runtime,
 		screen:          ScreenInventory,
-		selectedNavID:   InitialNavItemID,
 		selectedProfile: DefaultProfile,
 		inventoryFocus:  true,
 		actionExecutor:  defaultSetupActionExecutor,
@@ -142,7 +141,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		if typed.data.err != nil {
-			a.actionError = typed.data.err.Error()
+			a.pendingAction = nil
+			a.actionError = "Applied setup action, but failed to rescan: " + typed.data.err.Error()
 			return a, nil
 		}
 		a.applyWorkspaceData(typed.data)
@@ -155,6 +155,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case undoPreviewMsg:
 		a.undoPlan = nil
 		a.undoError = ""
+		a.corruptEvents = typed.corruptEvents
 		if typed.err != nil {
 			a.undoError = typed.err.Error()
 			return a, nil
@@ -250,10 +251,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			if err != nil {
 				return undoPreviewMsg{err: err}
 			}
-			if len(corrupt) > 0 {
-				a.corruptEvents = corrupt
-			}
-			return undoPreviewMsg{plan: plan}
+			return undoPreviewMsg{plan: plan, corruptEvents: corrupt}
 		}, false
 	case "up", "k":
 		if a.screen == ScreenInventory && a.inventoryFocus && a.pendingAction == nil {
@@ -405,7 +403,6 @@ func (a *App) activateNavItem() {
 	a.screen = selection.Screen
 	a.selectedAgent = selection.SelectedAgent
 	a.selectedProfile = selection.SelectedProfile
-	a.selectedNavID = item.ID
 	a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
 	a.undoPlan = nil
 	a.undoError = ""

@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -160,8 +161,35 @@ func assertInventoryItem(t *testing.T, item InventoryItem, agent types.AgentID, 
 		t.Fatalf("actions = %#v", item.Actions)
 	}
 	for _, action := range item.Actions {
-		if !action.Available {
-			t.Fatalf("user action should be available: %#v", action)
+		if action.Available {
+			t.Fatalf("user action should wait for a provider: %#v", action)
+		}
+		if action.Reason == "" {
+			t.Fatalf("unavailable user action should explain why: %#v", action)
 		}
 	}
+}
+
+func TestBuildInventorySortsDeterministically(t *testing.T) {
+	items := BuildInventory([]types.DiscoveredItem{
+		{ID: "skill-z", Agent: types.AgentCodex, Kind: types.KindSkill, Name: stringPtr("Zoo"), SourcePath: "~/.codex/skills/zoo", Scope: types.ScopeUser},
+		{ID: "hook-a", Agent: types.AgentCursor, Kind: types.KindHook, Name: stringPtr("alpha"), SourcePath: "~/.cursor/hooks.json", Scope: types.ScopeUser},
+		{ID: "mcp-b", Agent: types.AgentClaudeCode, Kind: types.KindMcpServer, Name: stringPtr("beta"), SourcePath: "~/.claude/settings.json", Scope: types.ScopeUser},
+		{ID: "plugin-a", Agent: types.AgentPiAgent, Kind: types.KindExtension, Name: stringPtr("alpha"), SourcePath: "~/.pi/agent/extensions/alpha", Scope: types.ScopeUser},
+		{ID: "skill-a2", Agent: types.AgentCodex, Kind: types.KindSkill, Name: stringPtr("alpha"), SourcePath: "~/.codex/skills/alpha-2", Scope: types.ScopeUser},
+		{ID: "skill-a1", Agent: types.AgentCodex, Kind: types.KindSkill, Name: stringPtr("Alpha"), SourcePath: "~/.codex/skills/alpha-1", Scope: types.ScopeUser},
+	})
+
+	var got []string
+	for _, item := range items {
+		got = append(got, item.ID)
+	}
+	want := []string{"hook-a", "mcp-b", "plugin-a", "skill-a1", "skill-a2", "skill-z"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("order = %#v want %#v", got, want)
+	}
+}
+
+func stringPtr(value string) *string {
+	return &value
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// SetupInventoryRow is one rendered row in the global setup inventory.
 type SetupInventoryRow struct {
 	AgentLabel  string
 	AgentMarker string
@@ -15,6 +16,7 @@ type SetupInventoryRow struct {
 	Selected    bool
 }
 
+// SetupInventoryView contains all data needed to render the global setup inventory.
 type SetupInventoryView struct {
 	Rows         []SetupInventoryRow
 	Skills       int
@@ -26,6 +28,7 @@ type SetupInventoryView struct {
 	ActionError  string
 }
 
+// SetupActionConfirmation contains the confirmation text for a pending setup action.
 type SetupActionConfirmation struct {
 	Action       string
 	AgentLabel   string
@@ -36,6 +39,7 @@ type SetupActionConfirmation struct {
 	Command      string
 }
 
+// RenderSetupInventory renders the global setup inventory panel.
 func RenderSetupInventory(model SetupInventoryView, width, height int) string {
 	if width < 40 {
 		width = 40

@@ -7,6 +7,7 @@ import (
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
+// ObjectKind classifies setup inventory objects for action planning and display.
 type ObjectKind string
 
 const (
@@ -16,6 +17,7 @@ const (
 	ObjectPlugin    ObjectKind = "plugin"
 )
 
+// ActionKind identifies a supported setup inventory action.
 type ActionKind string
 
 const (
@@ -24,12 +26,14 @@ const (
 	ActionEdit   ActionKind = "edit"
 )
 
+// ActionAvailability describes whether an inventory action can currently run.
 type ActionAvailability struct {
 	Action    ActionKind
 	Available bool
 	Reason    string
 }
 
+// InventoryItem is one global setup object visible in the setup inventory.
 type InventoryItem struct {
 	ID           string
 	EvidenceID   string
@@ -42,6 +46,7 @@ type InventoryItem struct {
 	Actions      []ActionAvailability
 }
 
+// BuildInventory converts discovered evidence into global setup inventory rows.
 func BuildInventory(evidence []types.DiscoveredItem) []InventoryItem {
 	items := make([]InventoryItem, 0, len(evidence))
 	for _, item := range evidence {
@@ -129,6 +134,7 @@ func objectKindForEvidence(kind types.EvidenceKind) (ObjectKind, bool) {
 	}
 }
 
+// IsInventoryEvidence reports whether discovered evidence belongs in the global setup inventory.
 func IsInventoryEvidence(item types.DiscoveredItem) bool {
 	if _, ok := objectKindForEvidence(item.Kind); !ok {
 		return false
@@ -166,8 +172,8 @@ func inventoryItemName(item types.DiscoveredItem) string {
 func defaultActions(scope types.EvidenceScope) []ActionAvailability {
 	if scope == types.ScopeUser {
 		return []ActionAvailability{
-			{Action: ActionEdit, Available: true},
-			{Action: ActionRemove, Available: true},
+			{Action: ActionEdit, Available: false, Reason: "edit action provider is not implemented yet"},
+			{Action: ActionRemove, Available: false, Reason: "remove action provider is not implemented yet"},
 		}
 	}
 	return []ActionAvailability{
