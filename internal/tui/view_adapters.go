@@ -38,10 +38,12 @@ func setupInventoryViewFromModel(model SetupInventoryViewModel) views.SetupInven
 
 func setupConsoleViewFromModel(model SetupConsoleViewModel) views.SetupConsoleView {
 	view := views.SetupConsoleView{
-		ActiveTab:    string(model.ActiveTab),
-		Search:       model.Search,
-		EmptyMessage: model.EmptyMessage,
-		ActionError:  model.ActionError,
+		ActiveTab:     string(model.ActiveTab),
+		Search:        model.Search,
+		SearchInput:   model.SearchInput,
+		SearchFocused: model.SearchFocused,
+		EmptyMessage:  model.EmptyMessage,
+		ActionError:   model.ActionError,
 	}
 	for _, tab := range model.Tabs {
 		view.Tabs = append(view.Tabs, views.SetupConsoleTab{

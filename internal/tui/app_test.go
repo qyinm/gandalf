@@ -143,6 +143,42 @@ func TestSetupConsoleFirstScreenUsesTopTabsWithoutSidebar(t *testing.T) {
 	}
 }
 
+func TestSetupConsoleSearchFiltersActiveTab(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	name := "planning"
+	app.applyWorkspaceData(bootMsg{evidence: append(app.evidence, types.DiscoveredItem{
+		ID:         "skill-plan",
+		Agent:      types.AgentCodex,
+		Kind:       types.KindSkill,
+		Name:       &name,
+		SourcePath: "~/.codex/skills/planning",
+		Scope:      types.ScopeUser,
+	})})
+
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")}); quit {
+		t.Fatal("slash should not quit")
+	}
+	if !app.setupSearchFocused {
+		t.Fatal("search should be focused")
+	}
+	if cmd, handled := app.handleSetupSearchKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("plan")}); !handled {
+		t.Fatal("search key should be handled")
+	} else if cmd != nil {
+		cmd()
+	}
+	rows := app.currentInventory()
+	if len(rows) != 1 || rows[0].Name != "planning" {
+		t.Fatalf("filtered rows = %#v", rows)
+	}
+	if _, handled := app.handleSetupSearchKey(tea.KeyMsg{Type: tea.KeyEnter}); !handled {
+		t.Fatal("enter should blur search")
+	}
+	if app.setupSearchFocused {
+		t.Fatal("search should be blurred")
+	}
+}
+
 func TestInventoryKeyboardFlowSwitchesTabsAndCancelsPendingAction(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newInventoryTestApp(t, runtime)

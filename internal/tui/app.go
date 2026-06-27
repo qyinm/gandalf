@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
@@ -59,12 +60,14 @@ type App struct {
 	selectedAgent   *types.AgentID
 	selectedProfile string
 
-	navCursor       int
-	inventoryCursor int
-	inventoryFocus  bool
-	activeSetupTab  SetupConsoleTab
-	setupSearch     string
-	timelineCursor  int
+	navCursor          int
+	inventoryCursor    int
+	inventoryFocus     bool
+	activeSetupTab     SetupConsoleTab
+	setupSearch        string
+	setupSearchInput   textinput.Model
+	setupSearchFocused bool
+	timelineCursor     int
 
 	undoPlan      *timelineundo.Plan
 	undoError     string
@@ -83,13 +86,18 @@ type App struct {
 
 // NewApp creates a TUI app bound to engine runtime options.
 func NewApp(runtime types.RuntimeOptions) *App {
+	searchInput := textinput.New()
+	searchInput.Prompt = "/ "
+	searchInput.Placeholder = "search"
+	searchInput.CharLimit = 120
 	return &App{
-		runtime:         runtime,
-		screen:          ScreenInventory,
-		selectedProfile: DefaultProfile,
-		inventoryFocus:  true,
-		activeSetupTab:  SetupConsoleTabHooks,
-		actionExecutor:  defaultSetupActionExecutor,
+		runtime:          runtime,
+		screen:           ScreenInventory,
+		selectedProfile:  DefaultProfile,
+		inventoryFocus:   true,
+		activeSetupTab:   SetupConsoleTabHooks,
+		setupSearchInput: searchInput,
+		actionExecutor:   defaultSetupActionExecutor,
 	}
 }
 
@@ -107,6 +115,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case tea.KeyMsg:
+		if a.screen == ScreenInventory && a.setupSearchFocused {
+			if cmd, handled := a.handleSetupSearchKey(typed); handled {
+				return a, cmd
+			}
+		}
 		if cmd, quit := a.handleKey(typed); quit {
 			return a, tea.Quit
 		} else if cmd != nil {
@@ -217,6 +230,12 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.pendingAction = nil
 			a.actionError = ""
 		}
+	case "/":
+		if a.screen == ScreenInventory && a.pendingAction == nil {
+			a.setupSearchFocused = true
+			a.setupSearchInput.Focus()
+			return nil, false
+		}
 	case "tab":
 		if a.screen == ScreenInventory && a.pendingAction == nil {
 			a.moveSetupTab(1)
@@ -293,6 +312,27 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 	}
 	return nil, false
+}
+
+func (a *App) handleSetupSearchKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return nil, false
+	case "esc":
+		a.setupSearchFocused = false
+		a.setupSearchInput.Blur()
+		return nil, true
+	case "enter":
+		a.setupSearchFocused = false
+		a.setupSearchInput.Blur()
+		return nil, true
+	}
+	var cmd tea.Cmd
+	a.setupSearchInput, cmd = a.setupSearchInput.Update(msg)
+	a.setupSearch = a.setupSearchInput.Value()
+	a.inventoryCursor = clampIndex(a.inventoryCursor, len(a.currentInventory()))
+	a.actionError = ""
+	return cmd, true
 }
 
 func (a *App) handleInventoryEnter() tea.Cmd {
@@ -474,6 +514,8 @@ func (a *App) renderContent(width, height int) string {
 			Inventory:     a.inventory,
 			ActiveTab:     a.activeSetupTab,
 			Search:        a.setupSearch,
+			SearchInput:   a.setupSearchInput.View(),
+			SearchFocused: a.setupSearchFocused,
 			SelectedIndex: a.inventoryCursor,
 			PendingAction: a.pendingAction,
 			ActionError:   a.actionError,

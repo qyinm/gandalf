@@ -118,13 +118,13 @@ type SetupConsoleRowModel struct {
 }
 
 type SetupConsoleDetailModel struct {
-	Title       string
-	AgentLabel  string
-	ObjectKind  string
-	SourcePath  string
-	Scope       string
-	Status      string
-	Actions     []SetupConsoleActionModel
+	Title        string
+	AgentLabel   string
+	ObjectKind   string
+	SourcePath   string
+	Scope        string
+	Status       string
+	Actions      []SetupConsoleActionModel
 	ConfigTarget string
 }
 
@@ -135,20 +135,24 @@ type SetupConsoleActionModel struct {
 }
 
 type SetupConsoleViewModel struct {
-	ActiveTab    SetupConsoleTab
-	Tabs         []SetupConsoleTabModel
-	Rows         []SetupConsoleRowModel
-	Search       string
-	EmptyMessage string
-	Selected     *SetupConsoleDetailModel
-	Confirmation *SetupActionConfirmationModel
-	ActionError  string
+	ActiveTab     SetupConsoleTab
+	Tabs          []SetupConsoleTabModel
+	Rows          []SetupConsoleRowModel
+	Search        string
+	SearchInput   string
+	SearchFocused bool
+	EmptyMessage  string
+	Selected      *SetupConsoleDetailModel
+	Confirmation  *SetupActionConfirmationModel
+	ActionError   string
 }
 
 type BuildSetupConsoleViewModelInput struct {
 	Inventory     []setup.InventoryItem
 	ActiveTab     SetupConsoleTab
 	Search        string
+	SearchInput   string
+	SearchFocused bool
 	SelectedIndex int
 	PendingAction *setup.ActionPlan
 	ActionError   string
@@ -161,11 +165,13 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 	selectedIndex := clampIndex(input.SelectedIndex, len(filtered))
 
 	model := SetupConsoleViewModel{
-		ActiveTab:   activeTab,
-		Tabs:        buildSetupConsoleTabs(activeTab, counts),
-		Rows:        make([]SetupConsoleRowModel, 0, len(filtered)),
-		Search:      strings.TrimSpace(input.Search),
-		ActionError: input.ActionError,
+		ActiveTab:     activeTab,
+		Tabs:          buildSetupConsoleTabs(activeTab, counts),
+		Rows:          make([]SetupConsoleRowModel, 0, len(filtered)),
+		Search:        strings.TrimSpace(input.Search),
+		SearchInput:   input.SearchInput,
+		SearchFocused: input.SearchFocused,
+		ActionError:   input.ActionError,
 	}
 
 	for i, item := range filtered {

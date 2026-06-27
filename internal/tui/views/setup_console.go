@@ -3,6 +3,11 @@ package views
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // SetupConsoleTab is one top-level setup console tab.
@@ -45,14 +50,16 @@ type SetupConsoleDetail struct {
 
 // SetupConsoleView contains all data needed to render the setup console.
 type SetupConsoleView struct {
-	ActiveTab    string
-	Tabs         []SetupConsoleTab
-	Rows         []SetupConsoleRow
-	Search       string
-	EmptyMessage string
-	Selected     *SetupConsoleDetail
-	Confirmation *SetupActionConfirmation
-	ActionError  string
+	ActiveTab     string
+	Tabs          []SetupConsoleTab
+	Rows          []SetupConsoleRow
+	Search        string
+	SearchInput   string
+	SearchFocused bool
+	EmptyMessage  string
+	Selected      *SetupConsoleDetail
+	Confirmation  *SetupActionConfirmation
+	ActionError   string
 }
 
 // RenderSetupConsole renders the default top-tab setup console.
@@ -66,35 +73,21 @@ func RenderSetupConsole(model SetupConsoleView, width, height int) string {
 
 	lines := []string{
 		renderSetupTabs(model.Tabs, width),
-		labelStyle.Render(renderSearchLine(model.Search)),
+		renderSetupSearch(model),
 		"",
 	}
 	if model.ActionError != "" {
 		lines = append(lines, warnStyle.Render(model.ActionError), "")
 	}
 
-	if model.EmptyMessage != "" {
-		lines = append(lines, mutedStyle.Render(model.EmptyMessage))
-	} else {
-		for _, row := range model.Rows {
-			prefix := "  "
-			style := mutedStyle
-			if row.Selected {
-				prefix = "> "
-				style = activeStyle
-			}
-			line := fmt.Sprintf("%s%-2s  %-6s  %-28s  %-10s  %-20s  %s",
-				prefix,
-				row.AgentMarker,
-				row.ObjectKind,
-				row.Name,
-				row.Status,
-				row.SourcePath,
-				row.ActionLabel,
-			)
-			lines = append(lines, style.Render(truncate(line, width-2)))
-		}
+	listHeight := height - 10
+	if model.Selected != nil {
+		listHeight -= 5
 	}
+	if listHeight < 4 {
+		listHeight = 4
+	}
+	lines = append(lines, renderSetupConsoleRows(model, width, listHeight))
 
 	if model.Confirmation != nil {
 		lines = append(lines, "")
@@ -104,7 +97,7 @@ func RenderSetupConsole(model SetupConsoleView, width, height int) string {
 		lines = append(lines, renderSetupConsoleDetail(*model.Selected, width)...)
 	}
 
-	lines = append(lines, "", labelStyle.Render("Tab tabs · r rescan · Enter action · H history · S snapshots · q quit"))
+	lines = append(lines, "", renderSetupConsoleHelp(width))
 	return fitHeight(strings.Join(lines, "\n"), height)
 }
 
@@ -121,11 +114,42 @@ func renderSetupTabs(tabs []SetupConsoleTab, width int) string {
 	return truncate(strings.Join(parts, "  "), width)
 }
 
-func renderSearchLine(search string) string {
-	if strings.TrimSpace(search) == "" {
-		return "/ to search"
+func renderSetupSearch(model SetupConsoleView) string {
+	if strings.TrimSpace(model.SearchInput) != "" {
+		if model.SearchFocused {
+			return activeStyle.Render(model.SearchInput)
+		}
+		return labelStyle.Render(model.SearchInput)
 	}
-	return "/ " + search
+	return labelStyle.Render("/ to search")
+}
+
+func renderSetupConsoleRows(model SetupConsoleView, width, height int) string {
+	if model.EmptyMessage != "" {
+		return mutedStyle.Render(model.EmptyMessage)
+	}
+	rows := make([]string, 0, len(model.Rows))
+	for _, row := range model.Rows {
+		prefix := "  "
+		style := mutedStyle
+		if row.Selected {
+			prefix = "> "
+			style = activeStyle
+		}
+		line := fmt.Sprintf("%s%-2s  %-6s  %-28s  %-10s  %-20s  %s",
+			prefix,
+			row.AgentMarker,
+			row.ObjectKind,
+			row.Name,
+			row.Status,
+			row.SourcePath,
+			row.ActionLabel,
+		)
+		rows = append(rows, style.Render(truncate(line, width-2)))
+	}
+	vp := viewport.New(width, height)
+	vp.SetContent(strings.Join(rows, "\n"))
+	return strings.TrimRight(vp.View(), "\n")
 }
 
 func renderSetupConsoleDetail(detail SetupConsoleDetail, width int) []string {
@@ -153,4 +177,38 @@ func renderSetupConsoleDetail(detail SetupConsoleDetail, width int) []string {
 		lines = append(lines, mutedStyle.Render(truncate("actions: "+strings.Join(actionLabels, ", "), width)))
 	}
 	return lines
+}
+
+type setupConsoleKeyMap struct {
+	Tabs      key.Binding
+	Search    key.Binding
+	Rescan    key.Binding
+	Action    key.Binding
+	History   key.Binding
+	Snapshots key.Binding
+	Quit      key.Binding
+}
+
+func (m setupConsoleKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{m.Tabs, m.Search, m.Rescan, m.Action, m.History, m.Snapshots, m.Quit}
+}
+
+func (m setupConsoleKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{m.ShortHelp()}
+}
+
+func renderSetupConsoleHelp(width int) string {
+	keyMap := setupConsoleKeyMap{
+		Tabs:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "tabs")),
+		Search:    key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
+		Rescan:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "rescan")),
+		Action:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "action")),
+		History:   key.NewBinding(key.WithKeys("H"), key.WithHelp("H", "history")),
+		Snapshots: key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "snapshots")),
+		Quit:      key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	}
+	helpView := help.New()
+	helpView.Styles.ShortKey = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
+	helpView.Styles.ShortDesc = mutedStyle
+	return truncate(helpView.ShortHelpView(keyMap.ShortHelp()), width)
 }
