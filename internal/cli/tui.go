@@ -5,6 +5,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var launchTUI = tui.Run
+
 func newTuiCmd() *cobra.Command {
 	var common CommonFlags
 
@@ -12,19 +14,21 @@ func newTuiCmd() *cobra.Command {
 		Use:   "tui",
 		Short: "Launch the interactive setup-history workspace",
 		Long:  "Open the Bubble Tea TUI with History > All changes as the first screen.",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			runtime, snapErr := resolveRuntime(&common)
-			if snapErr != nil {
-				return errExit(writeError(cmd.ErrOrStderr(), snapErr))
-			}
-			exitCode := tui.Run(runtime)
-			if exitCode != 0 {
-				return errExit(exitCode)
-			}
-			return nil
-		},
+		RunE:  func(cmd *cobra.Command, _ []string) error { return runTUICommand(cmd, &common) },
 	}
 
 	common.bindFlags(cmd.Flags())
 	return cmd
+}
+
+func runTUICommand(cmd *cobra.Command, common *CommonFlags) error {
+	runtime, snapErr := resolveRuntime(common)
+	if snapErr != nil {
+		return errExit(writeError(cmd.ErrOrStderr(), snapErr))
+	}
+	exitCode := launchTUI(runtime)
+	if exitCode != 0 {
+		return errExit(exitCode)
+	}
+	return nil
 }

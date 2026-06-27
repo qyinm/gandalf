@@ -1,4 +1,4 @@
-package cli_test
+package cli
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qyinm/gandalf/internal/cli"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 
@@ -32,7 +31,7 @@ func makeSandbox(t *testing.T) (projectPath, homeDir, storeDir string) {
 
 func runCLI(t *testing.T, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
-	cmd := cli.NewRootCmd()
+	cmd := NewRootCmd()
 	var outBuf, errBuf bytes.Buffer
 	cmd.SetOut(&outBuf)
 	cmd.SetErr(&errBuf)
@@ -40,7 +39,7 @@ func runCLI(t *testing.T, args ...string) (stdout, stderr string, exitCode int) 
 	err := cmd.Execute()
 	exitCode = 0
 	if err != nil {
-		if code, ok := cli.IsExitError(err); ok {
+		if code, ok := IsExitError(err); ok {
 			exitCode = code
 		} else {
 			exitCode = 1
@@ -258,12 +257,52 @@ func TestRestoreApplyWithoutExperimentalRejected(t *testing.T) {
 
 func TestRootWithoutSubcommandPrintsHelp(t *testing.T) {
 	t.Parallel()
-	stdout, _, code := runCLI(t)
+
+	projectPath, homeDir, storeDir := makeSandbox(t)
+	expectedProjectPath := projectPath
+	if abs, err := filepath.Abs(projectPath); err == nil {
+		if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+			expectedProjectPath = resolved
+		} else {
+			expectedProjectPath = abs
+		}
+	}
+	originalLaunch := cliLaunchTUIForTest(t, func(runtime types.RuntimeOptions) int {
+		if runtime.ProjectPath != expectedProjectPath {
+			t.Fatalf("project path = %q, want %q", runtime.ProjectPath, expectedProjectPath)
+		}
+		if runtime.HomeDir != homeDir {
+			t.Fatalf("home dir = %q, want %q", runtime.HomeDir, homeDir)
+		}
+		if runtime.StoreDir != storeDir {
+			t.Fatalf("store dir = %q, want %q", runtime.StoreDir, storeDir)
+		}
+		return 0
+	})
+	defer originalLaunch()
+
+	stdout, stderr, code := runCLI(t,
+		"--project", projectPath,
+		"--home", homeDir,
+		"--store", storeDir,
+	)
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
-	if !strings.Contains(stdout, "gandalf scan --project .") {
-		t.Fatalf("expected help text, got %q", stdout)
+	if stdout != "" {
+		t.Fatalf("expected no stdout from TUI launch stub, got %q", stdout)
+	}
+	if stderr != "" {
+		t.Fatalf("expected no stderr from TUI launch stub, got %q", stderr)
+	}
+}
+
+func cliLaunchTUIForTest(t *testing.T, fn func(types.RuntimeOptions) int) func() {
+	t.Helper()
+	previous := launchTUI
+	launchTUI = fn
+	return func() {
+		launchTUI = previous
 	}
 }
 
