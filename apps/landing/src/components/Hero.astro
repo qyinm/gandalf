@@ -1,143 +1,405 @@
 ---
-import TerminalWindow from './TerminalWindow.astro';
+import { Copy, Download } from 'lucide-react';
+import Nav from './Nav.astro';
 
 const terminalLines = [
-  { command: 'gandalf save baseline', prompt: true },
-  { command: 'saved · 12 MCPs · 8 skills · 14 hooks', prompt: false },
-  { command: 'gandalf diff baseline', prompt: true },
-  { command: ' + skill web-search', prompt: false },
-  { command: ' ~ mcp github  env keys changed', prompt: false },
-  { command: 'gandalf restore baseline', prompt: true },
+  { text: '$ gandalf snapshot create --name baseline', kind: 'prompt' },
+  { text: 'snapshot created: baseline', kind: 'ok' },
+  { text: 'scope: user   project: .   items: 4', kind: 'muted' },
+  { text: '', kind: 'space' },
+  { text: '$ gandalf diff baseline current', kind: 'prompt' },
+  { text: 'gandalf diff', kind: 'title' },
+  { text: 'Semantic changes', kind: 'section' },
+  { text: '  Medium  mcp_server.changed: github', kind: 'warn' },
+  { text: 'Raw source changes', kind: 'section' },
+  { text: '  modified: ~/.codex/config.toml', kind: 'change' },
+];
+
+const restoreLines = [
+  'gandalf restore dry-run',
+  '',
+  'Snapshot: baseline',
+  'Target project: .',
+  'Target home: ~/.codex',
+  'Writable changes: 1',
+  'Unsupported items: 0',
+  'Risk: medium',
+  '',
+  'Plan:',
+  '1. restore agent_config at ~/.codex/config.toml',
+  '   parser: toml',
+  '   action: write supported content',
+  '',
+  'No files were changed.',
+  'Apply with --apply --experimental.',
 ];
 ---
 
-<section class="hero section--no-rule">
-  <div class="container">
-    <div class="hero__meta" aria-hidden="true">
-      <span class="mono-tag">v0.1 · macOS</span>
-      <span class="mono-tag">[ CLI ]</span>
-      <span class="mono-tag">[ MIT ]</span>
+<section class="hero">
+  <div class="hero__scene">
+    <Nav />
+
+    <div class="hero__copy">
+      <h1>The wizard for AI agent environments.</h1>
+      <p>
+        Save. Diff. Restore.
+      </p>
+      <div class="hero__installbar">
+        <a href="#install" class="hero__install">
+          <Download size={16} strokeWidth={2} aria-hidden="true" />
+          Install
+        </a>
+        <code><span>$</span> brew install qyinm/tap/gandalf</code>
+        <button type="button" aria-label="Copy install command" class="hero__copycmd">
+          <Copy size={15} strokeWidth={2} aria-hidden="true" />
+        </button>
+      </div>
     </div>
 
-    <h1 class="hero__title">
-      Your agent setup, <em>versioned</em>.
-    </h1>
+    <div class="hero__product" aria-label="Gandalf CLI restore dry-run preview">
+      <div class="terminal-shell">
+        <div class="terminal-shell__bar">
+          <div class="terminal-shell__traffic" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
 
-    <p class="hero__lede">
-      Gandalf saves, diffs, and restores the Codex setup on your Mac
-      like a Git branch.
-    </p>
+        <div class="terminal-shell__body">
+          <div class="terminal-panel terminal-panel--main">
+            {terminalLines.map((line) => (
+              <div class:list={['terminal-line', `terminal-line--${line.kind}`]}>
+                {line.text || '\u00a0'}
+              </div>
+            ))}
+          </div>
 
-    <div class="hero__actions">
-      <a href="#install" class="btn btn--primary">
-        Install Gandalf
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
-      </a>
-      <a href="/docs/bundle-format" class="btn btn--outline">
-        Read the docs
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-      </a>
-    </div>
-
-    <p class="hero__sub-meta">
-      <span>v0.1.0</span>
-      <span class="hero__sub-meta-dot">·</span>
-      <span>macOS 13+</span>
-      <span class="hero__sub-meta-dot">·</span>
-      <code>curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | sh</code>
-    </p>
-
-    <div class="hero__terminal">
-      <TerminalWindow label="gandalf" lines={terminalLines} />
+          <div class="terminal-panel terminal-panel--preview">
+            {restoreLines.map((line) => (
+              <div class:list={['preview-line', line === 'Plan:' ? 'preview-line--section' : '', line.startsWith('No files') ? 'preview-line--safe' : '']}>
+                {line || '\u00a0'}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
 <style>
   .hero {
-    padding: 80px 0 64px;
-    text-align: left;
+    padding: 16px;
+    background: #ffffff;
   }
 
-  .hero__meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 28px;
+  .hero__scene {
+    position: relative;
+    min-height: calc(100vh - 32px);
+    overflow: hidden;
+    border: 1px solid #dbe3ea;
+    border-radius: 32px;
+    background:
+      radial-gradient(circle at 50% 42%, rgb(255 255 255 / 0.96) 0 20%, transparent 48%),
+      linear-gradient(180deg, rgb(248 252 255 / 0.96), rgb(255 255 255 / 0.96) 58%),
+      linear-gradient(120deg, #dff5ff, #ffffff 42%, #eff6f9);
+    box-shadow: 0 24px 60px -46px rgb(15 23 42 / 0.45);
   }
 
-  .hero__title {
-    font-family: var(--font-serif);
-    font-size: clamp(2.4rem, 6vw, 4rem);
-    font-weight: 600;
-    line-height: 1.05;
-    letter-spacing: -0.025em;
-    margin-bottom: 20px;
-    max-width: 18ch;
+  .hero__scene::before {
+    content: "";
+    position: absolute;
+    inset: 58px 0 auto;
+    height: 360px;
+    pointer-events: none;
+    background:
+      linear-gradient(rgb(148 163 184 / 0.13) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(148 163 184 / 0.13) 1px, transparent 1px);
+    background-size: 36px 36px;
+    mask-image: linear-gradient(to bottom, transparent, black 18%, transparent 95%);
   }
 
-  .hero__title em {
-    font-style: italic;
-    font-weight: 600;
+  .hero__copy {
+    position: relative;
+    z-index: 1;
+    max-width: 880px;
+    margin: 34px auto 20px;
+    text-align: center;
   }
 
-  .hero__lede {
-    font-size: clamp(1rem, 1.4vw, 1.125rem);
+  .hero__copy h1 {
+    max-width: 760px;
+    margin: 0 auto 18px;
+    font-size: clamp(3.7rem, 6.7vw, 6.7rem);
+    font-weight: 650;
+    line-height: 0.93;
+    letter-spacing: 0;
+  }
+
+  .hero__copy p {
+    max-width: 520px;
+    margin: 0 auto 26px;
     color: var(--muted-foreground);
+    font-size: clamp(1rem, 1.4vw, 1.2rem);
     line-height: 1.55;
-    max-width: 44ch;
-    margin-bottom: 36px;
   }
 
-  .hero__actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 20px;
-  }
-
-  .hero__sub-meta {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
+  .hero__copy code {
     font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--muted-foreground);
-    margin-bottom: 56px;
-  }
-
-  .hero__sub-meta code {
-    background: var(--surface);
-    padding: 2px 6px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
     color: var(--foreground);
+    font-size: 0.9em;
   }
 
-  .hero__sub-meta-dot {
-    opacity: 0.5;
+  .hero__installbar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: min(100%, 720px);
+    height: 46px;
+    border: 1px solid rgb(9 9 11 / 0.08);
+    background: rgb(250 250 250 / 0.78);
+    box-shadow: 0 18px 44px -36px rgb(15 23 42 / 0.55);
   }
 
-  .hero__terminal {
-    width: 100%;
+  .hero__install {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    gap: 8px;
+    padding: 0 18px;
+    color: #ffffff;
+    background: var(--foreground);
+    font-size: 0.9rem;
+    font-weight: 600;
   }
 
-  .hero__terminal .terminal {
-    width: 100%;
+  .hero__install:hover {
+    color: #ffffff;
+    background: var(--foreground-soft);
   }
 
-  .terminal__add { color: var(--foreground); font-weight: 500; }
-  .terminal__mod { color: var(--foreground); font-weight: 500; }
+  .hero__install svg,
+  .hero__copycmd svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
 
-  @media (max-width: 640px) {
+  .hero__installbar code {
+    min-width: 0;
+    max-width: none;
+    padding: 0 14px;
+    overflow: visible;
+    color: #71717a;
+    font-size: 0.86rem;
+    white-space: nowrap;
+  }
+
+  .hero__installbar code span {
+    color: var(--brand);
+    margin-right: 6px;
+  }
+
+  .hero__copycmd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    margin-right: 12px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--muted-foreground);
+  }
+
+  .hero__copycmd:hover {
+    color: var(--foreground);
+    background: rgb(9 9 11 / 0.05);
+  }
+
+  .hero__product {
+    position: relative;
+    z-index: 1;
+    width: min(1220px, calc(100% - 96px));
+    margin: 16px auto -86px;
+  }
+
+  .terminal-shell {
+    overflow: hidden;
+    border: 1px solid rgb(9 9 11 / 0.18);
+    border-radius: 18px 18px 0 0;
+    background: #09090b;
+    box-shadow: 0 34px 110px -48px rgb(0 0 0 / 0.78);
+  }
+
+  .terminal-shell__bar {
+    display: flex;
+    align-items: center;
+    height: 44px;
+    padding: 0 18px;
+    border-bottom: 1px solid #27272a;
+    background: #18181b;
+    color: #a1a1aa;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+  }
+
+  .terminal-shell__traffic {
+    display: flex;
+    gap: 8px;
+  }
+
+  .terminal-shell__traffic span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #71717a;
+  }
+
+  .terminal-shell__body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+    min-height: 480px;
+  }
+
+  .terminal-panel {
+    min-width: 0;
+    padding: 24px 28px;
+    color: #d4d4d8;
+    font-family: var(--font-mono);
+    font-size: clamp(0.74rem, 0.92vw, 0.88rem);
+    line-height: 1.68;
+  }
+
+  .terminal-panel--main {
+    background:
+      linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+      #09090b;
+    background-size: 56px 56px;
+  }
+
+  .terminal-panel--preview {
+    border-left: 1px solid #27272a;
+    background: #111113;
+    color: #d4d4d8;
+  }
+
+  .terminal-line,
+  .preview-line {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .terminal-line--prompt {
+    color: #ffffff;
+  }
+
+  .terminal-line--prompt::first-letter {
+    color: var(--brand);
+  }
+
+  .terminal-line--ok {
+    color: #86efac;
+  }
+
+  .terminal-line--muted,
+  .preview-line {
+    color: #a1a1aa;
+  }
+
+  .terminal-line--title,
+  .terminal-line--section,
+  .preview-line--section {
+    color: #ffffff;
+  }
+
+  .terminal-line--warn {
+    color: #fbbf24;
+  }
+
+  .terminal-line--change {
+    color: #93c5fd;
+  }
+
+  .preview-line--safe {
+    color: #86efac;
+  }
+
+  @media (max-width: 900px) {
     .hero {
-      padding: 56px 0 48px;
+      padding: 0;
     }
 
-    .hero__actions .btn {
-      flex: 1;
-      justify-content: center;
+    .hero__scene {
+      min-height: auto;
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
+    }
+
+    .hero__copy {
+      width: min(calc(100% - 48px), 720px);
+      margin: 24px auto 24px;
+    }
+
+    .hero__copy h1 {
+      font-size: clamp(2.9rem, 12vw, 4.2rem);
+      line-height: 0.96;
+    }
+
+    .hero__installbar {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      width: min(100%, 340px);
+      height: 44px;
+      margin: 0 auto;
+    }
+
+    .hero__installbar code {
+      max-width: none;
+      padding: 0 10px;
+      font-size: 0.7rem;
+    }
+
+    .hero__copycmd {
+      display: none;
+    }
+
+    .hero__product {
+      width: min(calc(100% - 14px), 720px);
+      margin: 0 auto -22px;
+    }
+
+    .terminal-shell {
+      border-radius: 12px 12px 0 0;
+    }
+
+    .terminal-shell__bar {
+      grid-template-columns: 58px 1fr;
+    }
+
+    .terminal-shell__bar > span {
+      display: none;
+    }
+
+    .terminal-shell__body {
+      grid-template-columns: 1fr;
+      min-height: auto;
+    }
+
+    .terminal-panel {
+      padding: 18px 16px;
+      font-size: 0.68rem;
+      line-height: 1.72;
+    }
+
+    .terminal-panel--preview {
+      display: none;
     }
   }
 </style>
