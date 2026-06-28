@@ -141,7 +141,7 @@ func renderSetupConsoleRows(model SetupConsoleView, width, height int) string {
 			prefix = "> "
 			style = activeStyle
 		}
-		line := fmt.Sprintf("%s%-2s  %-6s  %-28s  %-10s  %-20s  %s",
+		line := fmt.Sprintf("%s%-2s  %-13s  %-28s  %-10s  %-20s  %s",
 			prefix,
 			row.AgentMarker,
 			row.ObjectKind,

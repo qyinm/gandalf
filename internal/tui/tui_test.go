@@ -382,11 +382,11 @@ func TestSetupConsoleViewModelShowsMarketplaceSources(t *testing.T) {
 	name := "codex"
 	evidence := []types.DiscoveredItem{
 		discoveredItem(map[string]any{
-			"id": "plugin-skill", "agent": types.AgentCodex, "kind": types.KindSkill,
-			"name": "codex", "sourcePath": "~/.codex/plugins/cache/openai-codex/skills/codex", "scope": types.ScopeManaged,
+			"id": "plugin-skill", "agent": types.AgentClaudeCode, "kind": types.KindSkill,
+			"name": "codex", "sourcePath": "~/.claude/plugins/cache/openai-codex/codex/1.0.2/skills/codex", "scope": types.ScopeUser,
 			"metadata": json.RawMessage(`{
 				"source": "plugin",
-				"sourceRoot": "~/.codex/plugins/cache/openai-codex",
+				"sourceRoot": "~/.claude/plugins/marketplaces/openai-codex",
 				"description": "Use Codex from Claude Code",
 				"author": "OpenAI",
 				"version": "1.0.5",
@@ -410,7 +410,7 @@ func TestSetupConsoleViewModelShowsMarketplaceSources(t *testing.T) {
 	if len(model.Rows) != 2 {
 		t.Fatalf("rows = %#v", model.Rows)
 	}
-	if model.Rows[0].ObjectKind != "source" || model.Rows[1].Status != "installed" {
+	if model.Rows[0].ObjectKind != "marketplace" || model.Rows[1].Status != "installed" {
 		t.Fatalf("marketplace rows = %#v", model.Rows)
 	}
 	if model.Tabs[2].Count != 1 {
@@ -437,6 +437,34 @@ func TestSetupConsoleViewModelShowsMarketplaceSources(t *testing.T) {
 	})
 	if len(filtered.Rows) != 2 {
 		t.Fatalf("source search should keep source and entries: %#v", filtered.Rows)
+	}
+}
+
+func TestSetupConsoleViewModelClassifiesPiExtensionSources(t *testing.T) {
+	name := "cmux-session"
+	evidence := []types.DiscoveredItem{
+		discoveredItem(map[string]any{
+			"id": "pi-extension", "agent": types.AgentPiAgent, "kind": types.KindExtension,
+			"name": name, "sourcePath": "~/.pi/agent/extensions/cmux-session.ts", "scope": types.ScopeUser,
+			"metadata": json.RawMessage(`{"source":"settings"}`),
+		}),
+	}
+
+	model := tui.BuildSetupConsoleViewModel(tui.BuildSetupConsoleViewModelInput{
+		Inventory:          setup.BuildInventory(evidence),
+		MarketplaceSources: setup.BuildMarketplace(evidence),
+		ActiveTab:          tui.SetupConsoleTabMarketplace,
+		SelectedIndex:      1,
+	})
+
+	if len(model.Rows) != 0 {
+		t.Fatalf("rows = %#v", model.Rows)
+	}
+	if model.Tabs[2].Count != 0 {
+		t.Fatalf("tab count = %#v", model.Tabs)
+	}
+	if model.Selected != nil {
+		t.Fatalf("selected detail = %#v", model.Selected)
 	}
 }
 
