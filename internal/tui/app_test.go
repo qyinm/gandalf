@@ -36,8 +36,87 @@ func TestMarketplaceEnterReportsUnavailableProvider(t *testing.T) {
 	if cmd := app.handleInventoryEnter(); cmd != nil {
 		t.Fatal("marketplace action should not return a command")
 	}
+	if !strings.Contains(app.actionError, "marketplace source") {
+		t.Fatalf("action error = %q", app.actionError)
+	}
+}
+
+func TestMarketplaceEnterTogglesSourceAndChildActionIsProviderGated(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := NewApp(runtime)
+	app.ready = true
+	app.activeSetupTab = SetupConsoleTabMarketplace
+	name := "codex"
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "marketplace-plugin",
+		Agent:      types.AgentClaudeCode,
+		Kind:       types.KindSkill,
+		Name:       &name,
+		SourcePath: "~/.claude/plugins/marketplaces/openai-codex/codex/1.0.2/skills/codex",
+		Scope:      types.ScopeUser,
+		Metadata:   []byte(`{"source":"plugin","sourceRoot":"~/.claude/plugins/marketplaces/openai-codex"}`),
+	}}})
+
+	model := app.currentSetupConsoleViewModel()
+	if len(model.Rows) != 1 || model.Rows[0].RowKind != SetupConsoleRowMarketplaceSource {
+		t.Fatalf("collapsed marketplace rows = %#v", model.Rows)
+	}
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("source toggle should not return a command")
+	}
+	model = app.currentSetupConsoleViewModel()
+	if len(model.Rows) != 2 || !model.Rows[0].Expanded || model.Rows[1].RowKind != SetupConsoleRowMarketplaceEntry {
+		t.Fatalf("expanded marketplace rows = %#v", model.Rows)
+	}
+
+	app.moveInventoryCursor(1)
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("provider-gated child action should not return a command")
+	}
 	if !strings.Contains(app.actionError, "provider") {
 		t.Fatalf("action error = %q", app.actionError)
+	}
+
+	app.moveInventoryCursor(-1)
+	if cmd := app.handleSetupToggle(); cmd != nil {
+		t.Fatal("space toggle should not return a command")
+	}
+	model = app.currentSetupConsoleViewModel()
+	if len(model.Rows) != 1 || model.Rows[0].Expanded {
+		t.Fatalf("collapsed marketplace rows after toggle = %#v", model.Rows)
+	}
+}
+
+func TestMarketplaceSearchClampsCursorAgainstMarketplaceRows(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := NewApp(runtime)
+	app.ready = true
+	app.activeSetupTab = SetupConsoleTabMarketplace
+	name := "codex"
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "marketplace-plugin",
+		Agent:      types.AgentClaudeCode,
+		Kind:       types.KindSkill,
+		Name:       &name,
+		SourcePath: "~/.claude/plugins/marketplaces/openai-codex/codex/1.0.2/skills/codex",
+		Scope:      types.ScopeUser,
+		Metadata:   []byte(`{"source":"plugin","sourceRoot":"~/.claude/plugins/marketplaces/openai-codex"}`),
+	}}})
+
+	app.handleInventoryEnter()
+	app.moveInventoryCursor(1)
+	if app.activeSetupTabState().cursor != 1 {
+		t.Fatalf("cursor before search = %d", app.activeSetupTabState().cursor)
+	}
+
+	app.setupSearchFocused = true
+	app.activeSetupTabState().searchInput.Focus()
+	if _, handled := app.handleSetupSearchKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("codex")}); !handled {
+		t.Fatal("search key should be handled")
+	}
+	if app.activeSetupTabState().cursor != 1 {
+		t.Fatalf("marketplace cursor should clamp against marketplace rows, got %d", app.activeSetupTabState().cursor)
 	}
 }
 

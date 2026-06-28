@@ -42,6 +42,7 @@ func setupConsoleViewFromModel(model SetupConsoleViewModel) views.SetupConsoleVi
 		Search:        model.Search,
 		SearchInput:   model.SearchInput,
 		SearchFocused: model.SearchFocused,
+		RowOffset:     model.RowOffset,
 		EmptyMessage:  model.EmptyMessage,
 		ActionError:   model.ActionError,
 	}
@@ -54,6 +55,11 @@ func setupConsoleViewFromModel(model SetupConsoleViewModel) views.SetupConsoleVi
 	}
 	for _, row := range model.Rows {
 		view.Rows = append(view.Rows, views.SetupConsoleRow{
+			RowKind:     string(row.RowKind),
+			ParentID:    row.ParentID,
+			Depth:       row.Depth,
+			Expanded:    row.Expanded,
+			Toggleable:  row.Toggleable,
 			AgentMarker: row.AgentMarker,
 			ObjectKind:  row.ObjectKind,
 			Name:        row.Name,
