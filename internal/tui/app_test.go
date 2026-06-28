@@ -64,6 +64,46 @@ func TestSkillsEnterOpensMarkdownViewerForEntrypoint(t *testing.T) {
 	}
 }
 
+func TestSkillsEnterFollowsMarkdownEntrypointSymlink(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	targetDir := filepath.Join(runtime.HomeDir, "gstack", "diagram")
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(targetDir, "SKILL.md"), []byte("# Diagram\n\nRender diagrams."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(runtime.HomeDir, ".codex", "skills", "diagram")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(targetDir, "SKILL.md"), filepath.Join(skillDir, "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	app := newInventoryTestApp(t, runtime)
+	name := "diagram"
+	app.evidence[0].Name = &name
+	app.evidence[0].SourcePath = "~/.codex/skills/diagram"
+	app.evidence[0].Metadata = []byte(`{"entrypoint":"SKILL.md","entrypointStatus":"symlink_not_followed"}`)
+	app.applyWorkspaceData(bootMsg{evidence: app.evidence})
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("opening viewer should not return a command")
+	}
+	if app.skillViewer == nil {
+		t.Fatal("expected skill viewer")
+	}
+	if app.skillViewer.errorText != "" {
+		t.Fatalf("viewer error = %q", app.skillViewer.errorText)
+	}
+	if !strings.Contains(app.skillViewer.content, "# Diagram") {
+		t.Fatalf("viewer content = %q", app.skillViewer.content)
+	}
+	if app.skillViewer.sourcePath != "~/.codex/skills/diagram/SKILL.md -> ~/gstack/diagram/SKILL.md" {
+		t.Fatalf("source path = %q", app.skillViewer.sourcePath)
+	}
+}
+
 func TestMarketplaceEnterReportsUnavailableProvider(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newInventoryTestApp(t, runtime)

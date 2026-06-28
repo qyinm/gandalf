@@ -497,13 +497,6 @@ func (a *App) readSkillMarkdown(item setup.InventoryItem) (string, string, error
 	if item.ObjectKind != setup.ObjectSkill {
 		return "", item.SourcePath, fmt.Errorf("Selected setup item is not a skill.")
 	}
-	entryStatus := strings.TrimSpace(item.EntryStatus)
-	if entryStatus == "symlink_not_followed" {
-		return "", item.SourcePath, fmt.Errorf("Skill markdown entrypoint is a symlink and was not followed.")
-	}
-	if entryStatus == "unreadable" {
-		return "", item.SourcePath, fmt.Errorf("Skill markdown entrypoint is unreadable.")
-	}
 
 	entrypoint := strings.TrimSpace(item.Entrypoint)
 	if entrypoint == "" {
@@ -524,24 +517,35 @@ func (a *App) readSkillMarkdown(item setup.InventoryItem) (string, string, error
 	if !pathWithinRoot(skillPath, a.runtime.HomeDir) {
 		return "", item.SourcePath, fmt.Errorf("Skill markdown path is outside readable global setup roots.")
 	}
+	displayPath := displaySetupPath(skillPath, a.runtime.HomeDir)
 	info, err := os.Lstat(skillPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", displaySetupPath(skillPath, a.runtime.HomeDir), fmt.Errorf("Skill markdown entrypoint was not found.")
+			return "", displayPath, fmt.Errorf("Skill markdown entrypoint was not found.")
 		}
-		return "", displaySetupPath(skillPath, a.runtime.HomeDir), fmt.Errorf("Skill markdown entrypoint is unreadable: %v", err)
+		return "", displayPath, fmt.Errorf("Skill markdown entrypoint is unreadable: %v", err)
 	}
+	readPath := skillPath
 	if info.Mode()&os.ModeSymlink != 0 {
-		return "", displaySetupPath(skillPath, a.runtime.HomeDir), fmt.Errorf("Skill markdown entrypoint is a symlink and was not followed.")
+		targetPath, err := filepath.EvalSymlinks(skillPath)
+		if err != nil {
+			return "", displayPath, fmt.Errorf("Skill markdown symlink target is unreadable: %v", err)
+		}
+		readPath = targetPath
+		displayPath = displayPath + " -> " + displaySetupPath(targetPath, a.runtime.HomeDir)
+		info, err = os.Stat(readPath)
+		if err != nil {
+			return "", displayPath, fmt.Errorf("Skill markdown symlink target is unreadable: %v", err)
+		}
 	}
 	if !info.Mode().IsRegular() {
-		return "", displaySetupPath(skillPath, a.runtime.HomeDir), fmt.Errorf("Skill markdown entrypoint is not a regular file.")
+		return "", displayPath, fmt.Errorf("Skill markdown entrypoint is not a regular file.")
 	}
-	content, err := os.ReadFile(skillPath)
+	content, err := os.ReadFile(readPath)
 	if err != nil {
-		return "", displaySetupPath(skillPath, a.runtime.HomeDir), fmt.Errorf("Skill markdown entrypoint is unreadable: %v", err)
+		return "", displayPath, fmt.Errorf("Skill markdown entrypoint is unreadable: %v", err)
 	}
-	return string(content), displaySetupPath(skillPath, a.runtime.HomeDir), nil
+	return string(content), displayPath, nil
 }
 
 func (a *App) resolveSetupSourcePath(sourcePath string) (string, bool) {
@@ -573,13 +577,26 @@ func pathWithinRoot(path, root string) bool {
 }
 
 func displaySetupPath(path, homeDir string) string {
-	if pathWithinRoot(path, homeDir) {
-		rel, err := filepath.Rel(filepath.Clean(homeDir), filepath.Clean(path))
-		if err == nil {
-			return "~/" + filepath.ToSlash(rel)
+	if displayPath, ok := displayPathWithinRoot(path, homeDir); ok {
+		return displayPath
+	}
+	if resolvedHome, err := filepath.EvalSymlinks(homeDir); err == nil {
+		if displayPath, ok := displayPathWithinRoot(path, resolvedHome); ok {
+			return displayPath
 		}
 	}
 	return filepath.ToSlash(path)
+}
+
+func displayPathWithinRoot(path, root string) (string, bool) {
+	if !pathWithinRoot(path, root) {
+		return "", false
+	}
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
+	if err != nil {
+		return "", false
+	}
+	return "~/" + filepath.ToSlash(rel), true
 }
 
 func (a *App) handleMarketplaceEnter() tea.Cmd {
@@ -917,12 +934,7 @@ func (a *App) syncSkillViewer(view *views.SetupConsoleView, width, height int) {
 	if a.skillViewer == nil || view == nil {
 		return
 	}
-	overlayWidth := width - 4
-	if width >= 120 {
-		overlayWidth = min(width-12, 112)
-	} else if width >= 96 {
-		overlayWidth = min(width-8, 96)
-	}
+	overlayWidth := width - 2
 	if overlayWidth < 34 {
 		overlayWidth = max(20, width-2)
 	}
@@ -930,12 +942,7 @@ func (a *App) syncSkillViewer(view *views.SetupConsoleView, width, height int) {
 	if bodyWidth < 20 {
 		bodyWidth = 20
 	}
-	overlayHeight := height - 4
-	if height >= 30 {
-		overlayHeight = min(height-6, 24)
-	} else if height >= 24 {
-		overlayHeight = min(height-6, 20)
-	}
+	overlayHeight := height - 3
 	if overlayHeight < 8 {
 		overlayHeight = max(6, height-2)
 	}
