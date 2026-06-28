@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -270,11 +271,11 @@ func truncate(value string, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	if len(value) <= width {
+	if ansi.StringWidth(value) <= width {
 		return value
 	}
 	if width <= 3 {
 		return "..."
 	}
-	return value[:width-3] + "..."
+	return ansi.Truncate(value, width, "...")
 }
