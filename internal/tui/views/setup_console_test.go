@@ -103,6 +103,44 @@ func TestRenderSetupConsoleShowsExpandedInventoryRowDetails(t *testing.T) {
 	}
 }
 
+func TestRenderSetupConsoleHidesExpandedDetailsForUnselectedRows(t *testing.T) {
+	view := SetupConsoleView{
+		Tabs: []SetupConsoleTab{
+			{Label: "Hooks", Count: 2, Selected: true},
+		},
+		ActiveTab: "hooks",
+		Rows: []SetupConsoleRow{
+			{
+				RowKind:     "inventory",
+				AgentLabel:  "Claude Code",
+				AgentMarker: "CC",
+				ObjectKind:  "hook",
+				Name:        "old-hook",
+				SourcePath:  "~/.claude/settings.json",
+				Scope:       "user",
+				Status:      "user",
+				Expanded:    true,
+			},
+			{
+				RowKind:     "inventory",
+				AgentLabel:  "Claude Code",
+				AgentMarker: "CC",
+				ObjectKind:  "hook",
+				Name:        "selected-hook",
+				SourcePath:  "~/.claude/settings.json",
+				Scope:       "user",
+				Status:      "user",
+				Selected:    true,
+			},
+		},
+	}
+
+	rendered := ansi.Strip(RenderSetupConsole(view, 100, 18))
+	if strings.Contains(rendered, "source: ~/.claude/settings.json") {
+		t.Fatalf("unselected expanded detail rendered:\n%s", rendered)
+	}
+}
+
 func TestRenderSetupConsoleShowsSkillsOpenHelp(t *testing.T) {
 	view := SetupConsoleView{
 		ActiveTab: "skills",
@@ -272,10 +310,12 @@ func TestRenderSetupConsoleShowsMCPToolRowsAndDescription(t *testing.T) {
 
 	rendered := ansi.Strip(RenderSetupConsole(view, 110, 24))
 	if !strings.Contains(rendered, "⌄ posthog [ready]") ||
-		!strings.Contains(rendered, "140 tools") ||
 		!strings.Contains(rendered, "⌄   apm-attributes-list") ||
 		!strings.Contains(rendered, "List available span or resource attribute names") {
 		t.Fatalf("expected MCP tools and description in view:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "140 tools") {
+		t.Fatalf("server detail should not push tool rows while a tool is selected:\n%s", rendered)
 	}
 }
 

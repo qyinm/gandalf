@@ -242,6 +242,9 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 		selectedIndex := clampIndex(input.SelectedIndex, len(model.Rows))
 		for i := range model.Rows {
 			model.Rows[i].Selected = i == selectedIndex
+			if activeTab != SetupConsoleTabMarketplace && activeTab != SetupConsoleTabMCPServers && i != selectedIndex {
+				model.Rows[i].Expanded = false
+			}
 		}
 		if len(model.Rows) == 0 {
 			model.EmptyMessage = setupConsoleEmptyMessage(activeTab, input.Search)

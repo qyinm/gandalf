@@ -237,7 +237,10 @@ func shouldRenderSetupExpandedDetails(row SetupConsoleRow, activeTab string) boo
 	if strings.EqualFold(activeTab, "marketplace") && row.RowKind == "marketplace_source" {
 		return false
 	}
-	return true
+	if isMCPServerRow(row, activeTab) {
+		return false
+	}
+	return row.Selected
 }
 
 func renderSetupExpandedRows(row SetupConsoleRow, activeTab string, width int) []string {
