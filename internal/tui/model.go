@@ -227,15 +227,16 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 	} else {
 		filtered := filterSetupConsoleInventory(input.Inventory, activeTab, input.Search)
 		model.Rows = make([]SetupConsoleRowModel, 0, len(filtered))
+		query := strings.ToLower(strings.TrimSpace(input.Search))
 		for _, item := range filtered {
 			row := setupConsoleRowFromInventory(item, false)
 			if activeTab != SetupConsoleTabMarketplace {
 				row.Toggleable = true
-				row.Expanded = item.ID == input.ExpandedRowID
+				row.Expanded = item.ID == input.ExpandedRowID || (activeTab == SetupConsoleTabMCPServers && query != "")
 			}
 			model.Rows = append(model.Rows, row)
 			if activeTab == SetupConsoleTabMCPServers && row.Expanded {
-				model.Rows = append(model.Rows, setupConsoleMCPToolRows(item, input.ExpandedToolID)...)
+				model.Rows = append(model.Rows, setupConsoleMCPToolRows(item, input.ExpandedToolID, query)...)
 			}
 		}
 		selectedIndex := clampIndex(input.SelectedIndex, len(model.Rows))
@@ -245,9 +246,7 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 		if len(model.Rows) == 0 {
 			model.EmptyMessage = setupConsoleEmptyMessage(activeTab, input.Search)
 		} else {
-			inventoryIndex := min(selectedIndex, len(filtered)-1)
-			if inventoryIndex >= 0 {
-				selected := setupConsoleDetailFromInventory(filtered[inventoryIndex])
+			if selected, ok := setupConsoleSelectedDetail(model.Rows[selectedIndex], filtered); ok {
 				model.Selected = &selected
 			}
 		}
@@ -380,6 +379,18 @@ func filterSetupConsoleInventory(inventory []setup.InventoryItem, tab SetupConso
 }
 
 func setupInventoryMatchesSearch(item setup.InventoryItem, query string) bool {
+	if setupInventorySelfMatchesSearch(item, query) {
+		return true
+	}
+	for _, tool := range item.Tools {
+		if setupInventoryToolMatchesSearch(tool, query) {
+			return true
+		}
+	}
+	return false
+}
+
+func setupInventorySelfMatchesSearch(item setup.InventoryItem, query string) bool {
 	haystack := strings.ToLower(strings.Join([]string{
 		item.ID,
 		item.Name,
@@ -387,6 +398,15 @@ func setupInventoryMatchesSearch(item setup.InventoryItem, query string) bool {
 		string(item.Scope),
 		string(item.Agent),
 		formatSetupObjectKind(item.ObjectKind),
+		item.RuntimeStatus,
+	}, " "))
+	return strings.Contains(haystack, query)
+}
+
+func setupInventoryToolMatchesSearch(tool setup.InventoryTool, query string) bool {
+	haystack := strings.ToLower(strings.Join([]string{
+		tool.Name,
+		tool.Description,
 	}, " "))
 	return strings.Contains(haystack, query)
 }
@@ -442,9 +462,13 @@ func setupConsoleRowFromInventory(item setup.InventoryItem, selected bool) Setup
 	}
 }
 
-func setupConsoleMCPToolRows(item setup.InventoryItem, expandedToolID string) []SetupConsoleRowModel {
+func setupConsoleMCPToolRows(item setup.InventoryItem, expandedToolID string, search string) []SetupConsoleRowModel {
+	query := strings.ToLower(strings.TrimSpace(search))
 	rows := make([]SetupConsoleRowModel, 0, len(item.Tools))
 	for _, tool := range item.Tools {
+		if query != "" && !setupInventoryToolMatchesSearch(tool, query) {
+			continue
+		}
 		id := item.ID + ":tool:" + tool.Name
 		rows = append(rows, SetupConsoleRowModel{
 			ID:          id,
@@ -459,6 +483,19 @@ func setupConsoleMCPToolRows(item setup.InventoryItem, expandedToolID string) []
 		})
 	}
 	return rows
+}
+
+func setupConsoleSelectedDetail(row SetupConsoleRowModel, inventory []setup.InventoryItem) (SetupConsoleDetailModel, bool) {
+	id := row.ID
+	if row.RowKind == SetupConsoleRowMCPTool {
+		id = row.ParentID
+	}
+	for _, item := range inventory {
+		if item.ID == id {
+			return setupConsoleDetailFromInventory(item), true
+		}
+	}
+	return SetupConsoleDetailModel{}, false
 }
 
 func setupConsoleToolsFromInventory(tools []setup.InventoryTool) []SetupConsoleToolModel {

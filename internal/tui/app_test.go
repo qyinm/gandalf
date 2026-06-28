@@ -322,6 +322,86 @@ func TestMCPEnterExpandsServerToolsAndToolDescription(t *testing.T) {
 	}
 }
 
+func TestMCPSearchShowsMatchingToolRows(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	name := "posthog"
+	app := NewApp(runtime)
+	app.ready = true
+	app.activeSetupTab = SetupConsoleTabMCPServers
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "mcp-posthog",
+		Agent:      types.AgentCursor,
+		Kind:       types.KindMcpServer,
+		Name:       &name,
+		SourcePath: "~/.cursor/mcp.json",
+		Scope:      types.ScopeUser,
+		Metadata: []byte(`{
+			"runtimeStatus": "ready",
+			"toolCount": 2,
+			"tools": [
+				{"name":"dashboard-get","description":"Fetch a dashboard."},
+				{"name":"feature-flag-create","description":"Create a feature flag."}
+			]
+		}`),
+	}}})
+
+	app.setupSearchFocused = true
+	app.activeSetupTabState().searchInput.Focus()
+	if _, handled := app.handleSetupSearchKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("dashboard-get")}); !handled {
+		t.Fatal("search key should be handled")
+	}
+	model := app.currentSetupConsoleViewModel()
+	if len(model.Rows) != 2 {
+		t.Fatalf("mcp search rows = %#v", model.Rows)
+	}
+	if model.Rows[0].RowKind != SetupConsoleRowInventory || model.Rows[1].RowKind != SetupConsoleRowMCPTool {
+		t.Fatalf("mcp search row kinds = %#v", model.Rows)
+	}
+	if model.Rows[1].Name != "dashboard-get" {
+		t.Fatalf("tool row = %#v", model.Rows[1])
+	}
+}
+
+func TestMCPToolSelectionUsesParentServerDetail(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	posthogName := "posthog"
+	otherName := "zcontext7"
+	app := NewApp(runtime)
+	app.ready = true
+	app.activeSetupTab = SetupConsoleTabMCPServers
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{
+		{
+			ID:         "mcp-posthog",
+			Agent:      types.AgentCursor,
+			Kind:       types.KindMcpServer,
+			Name:       &posthogName,
+			SourcePath: "~/.cursor/mcp.json",
+			Scope:      types.ScopeUser,
+			Metadata:   []byte(`{"tools":[{"name":"dashboard-get","description":"Fetch a dashboard."}]}`),
+		},
+		{
+			ID:         "mcp-zcontext7",
+			Agent:      types.AgentCursor,
+			Kind:       types.KindMcpServer,
+			Name:       &otherName,
+			SourcePath: "~/.codex/config.toml",
+			Scope:      types.ScopeUser,
+		},
+	}})
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding MCP server should not return a command")
+	}
+	app.moveInventoryCursor(1)
+	model := app.currentSetupConsoleViewModel()
+	if model.Rows[1].RowKind != SetupConsoleRowMCPTool {
+		t.Fatalf("selected row = %#v", model.Rows[1])
+	}
+	if model.Selected == nil || model.Selected.Title != "posthog" {
+		t.Fatalf("selected detail = %#v", model.Selected)
+	}
+}
+
 func TestInventoryEnterConfirmsActionAndRescans(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newHookInventoryTestApp(t, runtime)
