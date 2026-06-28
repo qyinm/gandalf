@@ -588,6 +588,9 @@ func (a *App) readSkillMarkdown(item setup.InventoryItem) (string, string, error
 		if err != nil {
 			return "", displayPath, fmt.Errorf("Skill markdown symlink target is unreadable: %v", err)
 		}
+		if !pathWithinRootOrResolved(targetPath, a.runtime.HomeDir) {
+			return "", displayPath, fmt.Errorf("Skill markdown path is outside readable global setup roots.")
+		}
 		readPath = targetPath
 		displayPath = displayPath + " -> " + displaySetupPath(targetPath, a.runtime.HomeDir)
 		info, err = os.Stat(readPath)
@@ -631,6 +634,17 @@ func pathWithinRoot(path, root string) bool {
 		return false
 	}
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}
+
+func pathWithinRootOrResolved(path, root string) bool {
+	if pathWithinRoot(path, root) {
+		return true
+	}
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	return pathWithinRoot(path, resolvedRoot)
 }
 
 func displaySetupPath(path, homeDir string) string {
@@ -1134,7 +1148,7 @@ func (a *App) syncSetupConsoleViewports(model *SetupConsoleViewModel, width, hei
 	if model == nil {
 		return
 	}
-	listHeight := setupConsoleListHeight(*model, height)
+	listHeight := setupConsoleListHeight(height)
 	a.setupConsole.rowsViewport.Width = width
 	a.setupConsole.rowsViewport.Height = listHeight
 	lines := make([]string, len(model.Rows))
@@ -1153,14 +1167,11 @@ func (a *App) syncSetupConsoleViewports(model *SetupConsoleViewModel, width, hei
 	model.RowOffset = a.setupConsole.rowsViewport.YOffset
 }
 
-func setupConsoleListHeight(model SetupConsoleViewModel, height int) int {
+func setupConsoleListHeight(height int) int {
 	if height < 12 {
 		height = 12
 	}
 	listHeight := height - 10
-	if model.Selected != nil {
-		listHeight -= 5
-	}
 	if listHeight < 4 {
 		listHeight = 4
 	}

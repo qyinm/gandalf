@@ -125,6 +125,40 @@ func TestSkillsEnterFollowsMarkdownEntrypointSymlink(t *testing.T) {
 	}
 }
 
+func TestSkillsEnterRejectsSymlinkOutsideReadableRoots(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	outsideDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outsideDir, "SKILL.md"), []byte("# Outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(runtime.HomeDir, ".codex", "skills", "outside")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outsideDir, "SKILL.md"), filepath.Join(skillDir, "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	app := newInventoryTestApp(t, runtime)
+	name := "outside"
+	app.evidence[0].Name = &name
+	app.evidence[0].SourcePath = "~/.codex/skills/outside"
+	app.evidence[0].Metadata = []byte(`{"entrypoint":"SKILL.md","entrypointStatus":"symlink_not_followed"}`)
+	app.applyWorkspaceData(bootMsg{evidence: app.evidence})
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding skill row should not return a command")
+	}
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("opening viewer should not return a command")
+	}
+	if app.skillViewer == nil {
+		t.Fatal("expected skill viewer")
+	}
+	if !strings.Contains(app.skillViewer.errorText, "outside readable global setup roots") {
+		t.Fatalf("viewer error = %q", app.skillViewer.errorText)
+	}
+}
+
 func TestMarketplaceEnterReportsUnavailableProvider(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newInventoryTestApp(t, runtime)

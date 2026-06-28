@@ -244,8 +244,12 @@ func renderSetupExpandedRows(row SetupConsoleRow, activeTab string, width int) [
 	if isMCPToolRow(row) {
 		return renderSetupMCPToolExpandedRows(row, width)
 	}
+	agentLabel := strings.TrimSpace(row.AgentLabel)
+	if agentLabel == "" {
+		agentLabel = setupAgentLabelFromMarker(row.AgentMarker)
+	}
 	lines := []string{
-		"    " + truncate(fmt.Sprintf("%s · %s · %s", setupAgentLabelFromMarker(row.AgentMarker), row.ObjectKind, row.Status), max(8, width-4)),
+		"    " + truncate(fmt.Sprintf("%s · %s · %s", agentLabel, row.ObjectKind, row.Status), max(8, width-4)),
 		"    " + truncate("source: "+row.SourcePath, max(8, width-4)),
 	}
 	if isMCPServerRow(row, activeTab) {
@@ -617,7 +621,7 @@ func renderSetupConsoleWithOverlay(background string, overlay SetupMarkdownOverl
 		overlay.Height = max(8, height-2)
 	}
 	box := renderMarkdownOverlayBox(overlay)
-	bgLines := strings.Split(fitHeight(ansi.Strip(background), height), "\n")
+	bgLines := strings.Split(background, "\n")
 	for len(bgLines) < height {
 		bgLines = append(bgLines, "")
 	}

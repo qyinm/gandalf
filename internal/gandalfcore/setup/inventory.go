@@ -66,6 +66,12 @@ func BuildInventory(evidence []types.DiscoveredItem) []InventoryItem {
 		if !ok || !IsInventoryEvidence(item) {
 			continue
 		}
+		metadata := inventoryMetadataMap(item.Metadata)
+		tools := inventoryMetadataTools(metadata)
+		toolCount := inventoryMetadataInt(metadata, "toolCount")
+		if toolCount == 0 {
+			toolCount = len(tools)
+		}
 		items = append(items, InventoryItem{
 			ID:            inventoryItemID(item),
 			EvidenceID:    item.ID,
@@ -75,16 +81,13 @@ func BuildInventory(evidence []types.DiscoveredItem) []InventoryItem {
 			Name:          inventoryItemName(item),
 			SourcePath:    item.SourcePath,
 			Scope:         item.Scope,
-			Entrypoint:    inventoryMetadataString(item.Metadata, "entrypoint"),
-			EntryStatus:   inventoryMetadataString(item.Metadata, "entrypointStatus"),
-			RuntimeStatus: inventoryRuntimeStatus(item.Metadata),
-			Tools:         inventoryMetadataTools(item.Metadata),
-			ToolCount:     inventoryMetadataInt(item.Metadata, "toolCount"),
+			Entrypoint:    inventoryMetadataString(metadata, "entrypoint"),
+			EntryStatus:   inventoryMetadataString(metadata, "entrypointStatus"),
+			RuntimeStatus: inventoryRuntimeStatus(metadata),
+			Tools:         tools,
+			ToolCount:     toolCount,
 			Actions:       defaultActions(item.Scope),
 		})
-		if len(items) > 0 && items[len(items)-1].ToolCount == 0 {
-			items[len(items)-1].ToolCount = len(items[len(items)-1].Tools)
-		}
 	}
 
 	keyedItems := make([]inventoryKeyedItem, len(items))
@@ -202,8 +205,7 @@ func defaultActions(scope types.EvidenceScope) []ActionAvailability {
 	}
 }
 
-func inventoryMetadataString(raw json.RawMessage, key string) string {
-	metadata := inventoryMetadataMap(raw)
+func inventoryMetadataString(metadata map[string]any, key string) string {
 	value, ok := metadata[key].(string)
 	if !ok {
 		return ""
@@ -211,17 +213,16 @@ func inventoryMetadataString(raw json.RawMessage, key string) string {
 	return strings.TrimSpace(value)
 }
 
-func inventoryRuntimeStatus(raw json.RawMessage) string {
+func inventoryRuntimeStatus(metadata map[string]any) string {
 	for _, key := range []string{"runtimeStatus", "readiness", "status"} {
-		if value := inventoryMetadataString(raw, key); value != "" {
+		if value := inventoryMetadataString(metadata, key); value != "" {
 			return value
 		}
 	}
 	return ""
 }
 
-func inventoryMetadataInt(raw json.RawMessage, key string) int {
-	metadata := inventoryMetadataMap(raw)
+func inventoryMetadataInt(metadata map[string]any, key string) int {
 	switch value := metadata[key].(type) {
 	case int:
 		return value
@@ -238,8 +239,7 @@ func inventoryMetadataInt(raw json.RawMessage, key string) int {
 	return 0
 }
 
-func inventoryMetadataTools(raw json.RawMessage) []InventoryTool {
-	metadata := inventoryMetadataMap(raw)
+func inventoryMetadataTools(metadata map[string]any) []InventoryTool {
 	values, ok := metadata["tools"].([]any)
 	if !ok {
 		return nil
