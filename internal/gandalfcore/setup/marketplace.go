@@ -26,10 +26,25 @@ type MarketplaceActionAvailability struct {
 	Reason    string
 }
 
+// MarketplaceSourceKind describes the agent-native structure behind a source.
+type MarketplaceSourceKind string
+
+const (
+	MarketplaceSourceMarketplace MarketplaceSourceKind = "marketplace"
+	MarketplaceSourceCatalog     MarketplaceSourceKind = "catalog"
+	MarketplaceSourceGit         MarketplaceSourceKind = "git_marketplace"
+	MarketplaceSourcePlugin      MarketplaceSourceKind = "plugin_source"
+	MarketplaceSourceExtension   MarketplaceSourceKind = "extension_source"
+	MarketplaceSourcePackage     MarketplaceSourceKind = "package_source"
+	MarketplaceSourceSkill       MarketplaceSourceKind = "skill_source"
+	MarketplaceSourceUnknown     MarketplaceSourceKind = "source"
+)
+
 // MarketplaceSource groups entries from one observed agent ecosystem source.
 type MarketplaceSource struct {
 	ID      string
 	Label   string
+	Kind    MarketplaceSourceKind
 	Agent   types.AgentID
 	Scope   types.EvidenceScope
 	Path    string
@@ -41,6 +56,7 @@ type MarketplaceSource struct {
 type MarketplaceEntry struct {
 	ID          string
 	SourceID    string
+	SourceKind  MarketplaceSourceKind
 	Agent       types.AgentID
 	Name        string
 	Kind        types.EvidenceKind
@@ -64,11 +80,13 @@ func BuildMarketplace(evidence []types.DiscoveredItem) []MarketplaceSource {
 		}
 		meta := metadataMap(item.Metadata)
 		sourceID, sourceLabel, sourcePath := marketplaceSourceIdentity(item, meta)
+		sourceKind := marketplaceSourceKind(item, meta, sourcePath)
 		source, ok := sourcesByID[sourceID]
 		if !ok {
 			source = &MarketplaceSource{
 				ID:      sourceID,
 				Label:   sourceLabel,
+				Kind:    sourceKind,
 				Agent:   item.Agent,
 				Scope:   item.Scope,
 				Path:    sourcePath,
@@ -76,7 +94,10 @@ func BuildMarketplace(evidence []types.DiscoveredItem) []MarketplaceSource {
 			}
 			sourcesByID[sourceID] = source
 		}
-		source.Entries = append(source.Entries, marketplaceEntryFromEvidence(item, sourceID, meta))
+		if metadataBool(meta, "sourceOnly") {
+			continue
+		}
+		source.Entries = append(source.Entries, marketplaceEntryFromEvidence(item, sourceID, source.Kind, meta))
 	}
 
 	sources := make([]MarketplaceSource, 0, len(sourcesByID))
@@ -104,12 +125,18 @@ func isMarketplaceEvidence(item types.DiscoveredItem) bool {
 	}
 	meta := metadataMap(item.Metadata)
 	source := metadataString(meta, "source")
-	return source == "plugin" || metadataString(meta, "sourceRoot") != ""
+	if source == "plugin" || metadataString(meta, "sourceRoot") != "" {
+		return true
+	}
+	return inferredMarketplaceSourceRoot(item) != ""
 }
 
 func marketplaceSourceIdentity(item types.DiscoveredItem, meta map[string]any) (id, label, path string) {
 	sourceKind := metadataString(meta, "source")
 	sourceRoot := metadataString(meta, "sourceRoot")
+	if sourceRoot == "" {
+		sourceRoot = inferredMarketplaceSourceRoot(item)
+	}
 	label = firstNonEmpty(
 		metadataString(meta, "marketplaceSource"),
 		metadataString(meta, "sourceName"),
@@ -127,17 +154,27 @@ func marketplaceSourceIdentity(item types.DiscoveredItem, meta map[string]any) (
 	return id, label, path
 }
 
-func marketplaceEntryFromEvidence(item types.DiscoveredItem, sourceID string, meta map[string]any) MarketplaceEntry {
+func marketplaceEntryFromEvidence(item types.DiscoveredItem, sourceID string, sourceKind MarketplaceSourceKind, meta map[string]any) MarketplaceEntry {
 	name := marketplaceEntryName(item, meta)
+	installed := metadataBoolDefault(meta, "installed", true)
+	status := metadataString(meta, "status")
+	if status == "" {
+		if installed {
+			status = "installed"
+		} else {
+			status = "available"
+		}
+	}
 	return MarketplaceEntry{
 		ID:          item.ID,
 		SourceID:    sourceID,
+		SourceKind:  sourceKind,
 		Agent:       item.Agent,
 		Name:        name,
 		Kind:        item.Kind,
 		SourcePath:  item.SourcePath,
-		Installed:   true,
-		Status:      "installed",
+		Installed:   installed,
+		Status:      status,
 		Description: metadataString(meta, "description"),
 		Author:      firstNonEmpty(metadataString(meta, "author"), metadataString(meta, "publisher")),
 		Category:    metadataString(meta, "category"),
@@ -168,6 +205,153 @@ func marketplaceProvides(item types.DiscoveredItem, meta map[string]any) []strin
 		return values
 	}
 	return []string{item.Kind.String()}
+}
+
+func metadataBool(meta map[string]any, key string) bool {
+	if meta == nil {
+		return false
+	}
+	value, ok := meta[key]
+	if !ok {
+		return false
+	}
+	boolValue, ok := value.(bool)
+	return ok && boolValue
+}
+
+func metadataBoolDefault(meta map[string]any, key string, defaultValue bool) bool {
+	if meta == nil {
+		return defaultValue
+	}
+	value, ok := meta[key]
+	if !ok {
+		return defaultValue
+	}
+	boolValue, ok := value.(bool)
+	if !ok {
+		return defaultValue
+	}
+	return boolValue
+}
+
+func marketplaceSourceKind(item types.DiscoveredItem, meta map[string]any, path string) MarketplaceSourceKind {
+	if explicit := metadataString(meta, "sourceKind"); explicit != "" {
+		return MarketplaceSourceKind(explicit)
+	}
+	source := metadataString(meta, "source")
+	combinedPath := strings.ToLower(path + " " + item.SourcePath)
+	switch item.Agent {
+	case types.AgentClaudeCode:
+		return MarketplaceSourceMarketplace
+	case types.AgentCodex:
+		switch {
+		case strings.Contains(combinedPath, "remote_plugin_catalog"):
+			return MarketplaceSourceCatalog
+		case strings.Contains(combinedPath, ".tmp/marketplaces"):
+			return MarketplaceSourceGit
+		case strings.Contains(combinedPath, ".codex/plugins/cache"):
+			return MarketplaceSourcePlugin
+		default:
+			return MarketplaceSourceSkill
+		}
+	case types.AgentOpencode:
+		if strings.Contains(combinedPath, "plugin") || strings.Contains(combinedPath, "package") {
+			return MarketplaceSourcePlugin
+		}
+		return MarketplaceSourceSkill
+	case types.AgentPiAgent:
+		if item.Kind == types.KindExtension {
+			return MarketplaceSourceExtension
+		}
+		if source == "package" {
+			return MarketplaceSourcePackage
+		}
+		return MarketplaceSourceSkill
+	default:
+		if source == "package" {
+			return MarketplaceSourcePackage
+		}
+		if source == "plugin" {
+			return MarketplaceSourcePlugin
+		}
+	}
+	return MarketplaceSourceUnknown
+}
+
+func inferredMarketplaceSourceRoot(item types.DiscoveredItem) string {
+	sourcePath := strings.TrimSpace(item.SourcePath)
+	if sourcePath == "" {
+		return ""
+	}
+	switch item.Agent {
+	case types.AgentCodex:
+		root := sourceRootBefore(sourcePath, []string{
+			"/skills/",
+			"/hooks/",
+		}, []string{
+			".codex/plugins/cache/",
+			".codex/.tmp/marketplaces/",
+			".codex/cache/remote_plugin_catalog/",
+		})
+		if strings.Contains(root, ".codex/plugins/cache/") {
+			return stripLikelyVersionSegment(root)
+		}
+		return root
+	case types.AgentOpencode:
+		return sourceRootBefore(sourcePath, []string{
+			"/skills/",
+			"/skill/",
+			"/plugins/",
+		}, []string{
+			".config/opencode/plugins/",
+			".cache/opencode/packages/",
+		})
+	}
+	return ""
+}
+
+func stripLikelyVersionSegment(path string) string {
+	trimmed := strings.Trim(path, "/")
+	if trimmed == "" {
+		return path
+	}
+	parts := strings.Split(trimmed, "/")
+	if len(parts) < 2 {
+		return path
+	}
+	last := parts[len(parts)-1]
+	if strings.Contains(last, ".") || len(last) >= 7 && isHexLike(last) {
+		prefix := ""
+		if strings.HasPrefix(path, "/") {
+			prefix = "/"
+		}
+		return prefix + strings.Join(parts[:len(parts)-1], "/")
+	}
+	return path
+}
+
+func isHexLike(value string) bool {
+	for _, r := range value {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+func sourceRootBefore(sourcePath string, separators []string, requiredFragments []string) string {
+	for _, fragment := range requiredFragments {
+		if !strings.Contains(sourcePath, fragment) {
+			continue
+		}
+		for _, separator := range separators {
+			if index := strings.Index(sourcePath, separator); index > 0 {
+				return sourcePath[:index]
+			}
+		}
+		return sourcePath
+	}
+	return ""
 }
 
 func defaultMarketplaceEntryActions() []MarketplaceActionAvailability {

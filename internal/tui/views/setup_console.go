@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -19,6 +18,11 @@ type SetupConsoleTab struct {
 
 // SetupConsoleRow is one setup object row in the active tab.
 type SetupConsoleRow struct {
+	RowKind     string
+	ParentID    string
+	Depth       int
+	Expanded    bool
+	Toggleable  bool
 	AgentMarker string
 	ObjectKind  string
 	Name        string
@@ -58,6 +62,7 @@ type SetupConsoleView struct {
 	ActiveTab     string
 	Tabs          []SetupConsoleTab
 	Rows          []SetupConsoleRow
+	RowOffset     int
 	Search        string
 	SearchInput   string
 	SearchFocused bool
@@ -102,7 +107,7 @@ func RenderSetupConsole(model SetupConsoleView, width, height int) string {
 		lines = append(lines, renderSetupConsoleDetail(*model.Selected, width)...)
 	}
 
-	lines = append(lines, "", renderSetupConsoleHelp(width))
+	lines = append(lines, "", renderSetupConsoleHelp(model, width))
 	return fitHeight(strings.Join(lines, "\n"), height)
 }
 
@@ -133,7 +138,7 @@ func renderSetupConsoleRows(model SetupConsoleView, width, height int) string {
 	if model.EmptyMessage != "" {
 		return mutedStyle.Render(model.EmptyMessage)
 	}
-	rows := make([]string, 0, len(model.Rows))
+	allRows := make([]string, 0, len(model.Rows))
 	for _, row := range model.Rows {
 		prefix := "  "
 		style := mutedStyle
@@ -141,20 +146,40 @@ func renderSetupConsoleRows(model SetupConsoleView, width, height int) string {
 			prefix = "> "
 			style = activeStyle
 		}
-		line := fmt.Sprintf("%s%-2s  %-6s  %-28s  %-10s  %-20s  %s",
+		indicator := " "
+		if row.Toggleable {
+			if row.Expanded {
+				indicator = "-"
+			} else {
+				indicator = "+"
+			}
+		}
+		indent := strings.Repeat("  ", max(0, row.Depth))
+		name := indent + row.Name
+		line := fmt.Sprintf("%s%s %-2s  %-13s  %-28s  %-10s  %-20s  %s",
 			prefix,
+			indicator,
 			row.AgentMarker,
 			row.ObjectKind,
-			row.Name,
+			name,
 			row.Status,
 			row.SourcePath,
 			row.ActionLabel,
 		)
-		rows = append(rows, style.Render(truncate(line, width-2)))
+		allRows = append(allRows, style.Render(truncate(line, width-2)))
 	}
-	vp := viewport.New(width, height)
-	vp.SetContent(strings.Join(rows, "\n"))
-	return strings.TrimRight(vp.View(), "\n")
+	offset := model.RowOffset
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(allRows) {
+		offset = len(allRows)
+	}
+	end := offset + height
+	if end > len(allRows) {
+		end = len(allRows)
+	}
+	return strings.Join(allRows[offset:end], "\n")
 }
 
 func renderSetupConsoleDetail(detail SetupConsoleDetail, width int) []string {
@@ -214,25 +239,47 @@ type setupConsoleKeyMap struct {
 	Search    key.Binding
 	Rescan    key.Binding
 	Action    key.Binding
+	Toggle    key.Binding
 	History   key.Binding
 	Snapshots key.Binding
 	Quit      key.Binding
 }
 
 func (m setupConsoleKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{m.Tabs, m.Search, m.Rescan, m.Action, m.History, m.Snapshots, m.Quit}
+	bindings := []key.Binding{m.Tabs, m.Search, m.Rescan}
+	if m.Toggle.Help().Key != "" {
+		bindings = append(bindings, m.Toggle)
+	}
+	bindings = append(bindings, m.Action, m.History, m.Snapshots, m.Quit)
+	return bindings
 }
 
 func (m setupConsoleKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{m.ShortHelp()}
 }
 
-func renderSetupConsoleHelp(width int) string {
+func renderSetupConsoleHelp(model SetupConsoleView, width int) string {
+	action := key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "action"))
+	toggle := key.NewBinding()
+	if model.SearchFocused {
+		action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "accept search"))
+		toggle = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "blur"))
+	} else if selected := selectedSetupConsoleRow(model.Rows); selected != nil && selected.Toggleable {
+		verb := "expand"
+		if selected.Expanded {
+			verb = "collapse"
+		}
+		action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", verb))
+		toggle = key.NewBinding(key.WithKeys("space"), key.WithHelp("space", verb))
+	} else if strings.EqualFold(model.ActiveTab, "marketplace") {
+		action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "provider gated"))
+	}
 	keyMap := setupConsoleKeyMap{
 		Tabs:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "tabs")),
 		Search:    key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
 		Rescan:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "rescan")),
-		Action:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "action")),
+		Action:    action,
+		Toggle:    toggle,
 		History:   key.NewBinding(key.WithKeys("H"), key.WithHelp("H", "history")),
 		Snapshots: key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "snapshots")),
 		Quit:      key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
@@ -241,4 +288,13 @@ func renderSetupConsoleHelp(width int) string {
 	helpView.Styles.ShortKey = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
 	helpView.Styles.ShortDesc = mutedStyle
 	return truncate(helpView.ShortHelpView(keyMap.ShortHelp()), width)
+}
+
+func selectedSetupConsoleRow(rows []SetupConsoleRow) *SetupConsoleRow {
+	for i := range rows {
+		if rows[i].Selected {
+			return &rows[i]
+		}
+	}
+	return nil
 }

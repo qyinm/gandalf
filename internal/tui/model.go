@@ -106,6 +106,11 @@ type SetupConsoleTabModel struct {
 
 type SetupConsoleRowModel struct {
 	ID          string
+	RowKind     SetupConsoleRowKind
+	ParentID    string
+	Depth       int
+	Expanded    bool
+	Toggleable  bool
 	AgentLabel  string
 	AgentMarker string
 	ObjectKind  string
@@ -116,6 +121,14 @@ type SetupConsoleRowModel struct {
 	ActionLabel string
 	Selected    bool
 }
+
+type SetupConsoleRowKind string
+
+const (
+	SetupConsoleRowInventory         SetupConsoleRowKind = "inventory"
+	SetupConsoleRowMarketplaceSource SetupConsoleRowKind = "marketplace_source"
+	SetupConsoleRowMarketplaceEntry  SetupConsoleRowKind = "marketplace_entry"
+)
 
 type SetupConsoleDetailModel struct {
 	Title        string
@@ -143,6 +156,7 @@ type SetupConsoleViewModel struct {
 	ActiveTab     SetupConsoleTab
 	Tabs          []SetupConsoleTabModel
 	Rows          []SetupConsoleRowModel
+	RowOffset     int
 	Search        string
 	SearchInput   string
 	SearchFocused bool
@@ -160,14 +174,16 @@ type BuildSetupConsoleViewModelInput struct {
 	SearchInput        string
 	SearchFocused      bool
 	SelectedIndex      int
+	ExpandedSources    map[string]bool
 	PendingAction      *setup.ActionPlan
 	ActionError        string
 }
 
 func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupConsoleViewModel {
 	activeTab := normalizeSetupConsoleTab(input.ActiveTab)
+	marketplaceSources := setupConsoleMarketplaceSources(input.MarketplaceSources)
 	counts := setupConsoleTabCounts(input.Inventory)
-	counts[SetupConsoleTabMarketplace] = marketplaceEntryCount(input.MarketplaceSources)
+	counts[SetupConsoleTabMarketplace] = len(marketplaceSources)
 
 	model := SetupConsoleViewModel{
 		ActiveTab:     activeTab,
@@ -179,7 +195,7 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 	}
 
 	if activeTab == SetupConsoleTabMarketplace {
-		rows, details := setupConsoleMarketplaceRows(input.MarketplaceSources, input.Search)
+		rows, details := setupConsoleMarketplaceRows(marketplaceSources, input.Search, input.ExpandedSources)
 		selectedIndex := clampIndex(input.SelectedIndex, len(rows))
 		model.Rows = make([]SetupConsoleRowModel, 0, len(rows))
 		for i := range rows {
@@ -212,30 +228,39 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 	return model
 }
 
-func marketplaceEntryCount(sources []setup.MarketplaceSource) int {
-	count := 0
+func setupConsoleMarketplaceSources(sources []setup.MarketplaceSource) []setup.MarketplaceSource {
+	filtered := make([]setup.MarketplaceSource, 0, len(sources))
 	for _, source := range sources {
-		count += len(source.Entries)
+		if source.Kind == setup.MarketplaceSourceMarketplace {
+			filtered = append(filtered, source)
+		}
 	}
-	return count
+	return filtered
 }
 
-func setupConsoleMarketplaceRows(sources []setup.MarketplaceSource, search string) ([]SetupConsoleRowModel, []SetupConsoleDetailModel) {
+func setupConsoleMarketplaceRows(sources []setup.MarketplaceSource, search string, expandedSources map[string]bool) ([]SetupConsoleRowModel, []SetupConsoleDetailModel) {
 	query := strings.ToLower(strings.TrimSpace(search))
 	var rows []SetupConsoleRowModel
 	var details []SetupConsoleDetailModel
 	for _, source := range sources {
 		sourceMatches := query == "" || marketplaceSourceMatches(source, query)
-		if sourceMatches {
-			rows = append(rows, setupConsoleRowFromMarketplaceSource(source))
-			details = append(details, setupConsoleDetailFromMarketplaceSource(source))
-		}
+		matchingEntries := make([]setup.MarketplaceEntry, 0, len(source.Entries))
 		for _, entry := range source.Entries {
-			if query != "" && !sourceMatches && !marketplaceEntryMatches(entry, source, query) {
-				continue
+			if query == "" || sourceMatches || marketplaceEntryMatches(entry, source, query) {
+				matchingEntries = append(matchingEntries, entry)
 			}
-			rows = append(rows, setupConsoleRowFromMarketplaceEntry(entry))
-			details = append(details, setupConsoleDetailFromMarketplaceEntry(entry))
+		}
+		if query != "" && !sourceMatches && len(matchingEntries) == 0 {
+			continue
+		}
+		expanded := query != "" || expandedSources[source.ID]
+		rows = append(rows, setupConsoleRowFromMarketplaceSource(source, expanded))
+		details = append(details, setupConsoleDetailFromMarketplaceSource(source))
+		if expanded {
+			for _, entry := range matchingEntries {
+				rows = append(rows, setupConsoleRowFromMarketplaceEntry(entry))
+				details = append(details, setupConsoleDetailFromMarketplaceEntry(entry))
+			}
 		}
 	}
 	return rows, details
@@ -246,6 +271,7 @@ func marketplaceSourceMatches(source setup.MarketplaceSource, query string) bool
 		source.ID,
 		source.Label,
 		source.Path,
+		marketplaceSourceKindLabel(source.Kind),
 		string(source.Agent),
 		string(source.Scope),
 	}, " "))
@@ -262,6 +288,8 @@ func marketplaceEntryMatches(entry setup.MarketplaceEntry, source setup.Marketpl
 		entry.Category,
 		entry.Version,
 		entry.Status,
+		marketplaceSourceKindLabel(entry.SourceKind),
+		marketplaceEntryKindLabel(entry),
 		source.Label,
 		string(entry.Agent),
 		string(entry.Kind),
@@ -365,10 +393,11 @@ func setupObjectKindForConsoleTab(tab SetupConsoleTab) (setup.ObjectKind, bool) 
 
 func setupConsoleRowFromInventory(item setup.InventoryItem, selected bool) SetupConsoleRowModel {
 	return SetupConsoleRowModel{
+		RowKind:     SetupConsoleRowInventory,
 		ID:          item.ID,
 		AgentLabel:  FormatAgentLabel(item.Agent),
 		AgentMarker: FormatAgentMarker(item.Agent),
-		ObjectKind:  formatSetupObjectKind(item.ObjectKind),
+		ObjectKind:  formatInventoryObjectKind(item),
 		Name:        item.Name,
 		SourcePath:  item.SourcePath,
 		Scope:       string(item.Scope),
@@ -390,7 +419,7 @@ func setupConsoleDetailFromInventory(item setup.InventoryItem) SetupConsoleDetai
 	return SetupConsoleDetailModel{
 		Title:        item.Name,
 		AgentLabel:   FormatAgentLabel(item.Agent),
-		ObjectKind:   formatSetupObjectKind(item.ObjectKind),
+		ObjectKind:   formatInventoryObjectKind(item),
 		SourcePath:   item.SourcePath,
 		Scope:        string(item.Scope),
 		Status:       setupInventoryStatus(item),
@@ -399,16 +428,19 @@ func setupConsoleDetailFromInventory(item setup.InventoryItem) SetupConsoleDetai
 	}
 }
 
-func setupConsoleRowFromMarketplaceSource(source setup.MarketplaceSource) SetupConsoleRowModel {
+func setupConsoleRowFromMarketplaceSource(source setup.MarketplaceSource, expanded bool) SetupConsoleRowModel {
 	return SetupConsoleRowModel{
 		ID:          source.ID,
+		RowKind:     SetupConsoleRowMarketplaceSource,
+		Expanded:    expanded,
+		Toggleable:  true,
 		AgentLabel:  FormatAgentLabel(source.Agent),
 		AgentMarker: FormatAgentMarker(source.Agent),
-		ObjectKind:  "source",
+		ObjectKind:  marketplaceSourceKindLabel(source.Kind),
 		Name:        source.Label,
 		SourcePath:  source.Path,
 		Scope:       string(source.Scope),
-		Status:      fmt.Sprintf("%d entries", len(source.Entries)),
+		Status:      marketplaceSourceStatus(source),
 		ActionLabel: formatMarketplaceActions(source.Actions),
 	}
 }
@@ -416,10 +448,13 @@ func setupConsoleRowFromMarketplaceSource(source setup.MarketplaceSource) SetupC
 func setupConsoleRowFromMarketplaceEntry(entry setup.MarketplaceEntry) SetupConsoleRowModel {
 	return SetupConsoleRowModel{
 		ID:          entry.ID,
+		RowKind:     SetupConsoleRowMarketplaceEntry,
+		ParentID:    entry.SourceID,
+		Depth:       1,
 		AgentLabel:  FormatAgentLabel(entry.Agent),
 		AgentMarker: FormatAgentMarker(entry.Agent),
-		ObjectKind:  string(entry.Kind),
-		Name:        "  " + entry.Name,
+		ObjectKind:  marketplaceEntryKindLabel(entry),
+		Name:        entry.Name,
 		SourcePath:  entry.SourcePath,
 		Scope:       "",
 		Status:      entry.Status,
@@ -431,20 +466,43 @@ func setupConsoleDetailFromMarketplaceSource(source setup.MarketplaceSource) Set
 	return SetupConsoleDetailModel{
 		Title:        source.Label,
 		AgentLabel:   FormatAgentLabel(source.Agent),
-		ObjectKind:   "marketplace source",
+		ObjectKind:   marketplaceSourceKindLabel(source.Kind),
 		SourcePath:   source.Path,
 		Scope:        string(source.Scope),
-		Status:       fmt.Sprintf("%d entries", len(source.Entries)),
+		Status:       marketplaceSourceStatus(source),
 		Actions:      setupConsoleMarketplaceActions(source.Actions),
 		ConfigTarget: source.Path,
 	}
+}
+
+func formatInventoryObjectKind(item setup.InventoryItem) string {
+	if item.Agent == types.AgentPiAgent && item.EvidenceKind == types.KindExtension {
+		return "extension"
+	}
+	return formatSetupObjectKind(item.ObjectKind)
+}
+
+func marketplaceSourceStatus(source setup.MarketplaceSource) string {
+	installed := 0
+	for _, entry := range source.Entries {
+		if entry.Installed {
+			installed++
+		}
+	}
+	if len(source.Entries) == 0 {
+		return "0 entries"
+	}
+	if installed > 0 {
+		return fmt.Sprintf("%d entries / %d installed", len(source.Entries), installed)
+	}
+	return fmt.Sprintf("%d entries", len(source.Entries))
 }
 
 func setupConsoleDetailFromMarketplaceEntry(entry setup.MarketplaceEntry) SetupConsoleDetailModel {
 	return SetupConsoleDetailModel{
 		Title:        entry.Name,
 		AgentLabel:   FormatAgentLabel(entry.Agent),
-		ObjectKind:   string(entry.Kind),
+		ObjectKind:   marketplaceEntryKindLabel(entry),
 		SourcePath:   entry.SourcePath,
 		Scope:        "",
 		Status:       entry.Status,
@@ -456,6 +514,42 @@ func setupConsoleDetailFromMarketplaceEntry(entry setup.MarketplaceEntry) SetupC
 		Actions:      setupConsoleMarketplaceActions(entry.Actions),
 		ConfigTarget: entry.SourcePath,
 	}
+}
+
+func marketplaceSourceKindLabel(kind setup.MarketplaceSourceKind) string {
+	switch kind {
+	case setup.MarketplaceSourceMarketplace:
+		return "marketplace"
+	case setup.MarketplaceSourceCatalog:
+		return "catalog"
+	case setup.MarketplaceSourceGit:
+		return "git market"
+	case setup.MarketplaceSourcePlugin:
+		return "plugin src"
+	case setup.MarketplaceSourceExtension:
+		return "extension src"
+	case setup.MarketplaceSourcePackage:
+		return "package src"
+	case setup.MarketplaceSourceSkill:
+		return "skill src"
+	default:
+		return "source"
+	}
+}
+
+func marketplaceEntryKindLabel(entry setup.MarketplaceEntry) string {
+	for _, provided := range entry.Provides {
+		if provided == "plugin" {
+			return "plugin"
+		}
+	}
+	if entry.Agent == types.AgentPiAgent && entry.Kind == types.KindExtension {
+		return "extension"
+	}
+	if entry.Agent == types.AgentOpencode && entry.SourceKind == setup.MarketplaceSourcePlugin {
+		return "plugin"
+	}
+	return entry.Kind.String()
 }
 
 func setupConsoleMarketplaceActions(actions []setup.MarketplaceActionAvailability) []SetupConsoleActionModel {
