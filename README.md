@@ -221,7 +221,6 @@ Update notices are off by default.
 | CLI | Go, Cobra |
 | TUI | Bubble Tea, Bubbles, Lip Gloss |
 | Engine | Go packages under `internal/gandalfcore` |
-| Landing | Astro, React islands |
 | Release | GoReleaser, GitHub Releases, Homebrew tap |
 
 ## Development
@@ -239,11 +238,9 @@ make gate2
 
 ### Landing Site
 
-```bash
-bun install
-bun run typecheck
-bun run build
-```
+랜딩 페이지는 별도 저장소에서 관리합니다.
+랜딩 페이지의 빌드/배포/기여는 분리된 랜딩 레포에서 진행하세요.
+[랜딩 레포](https://github.com/qyinm/gandalf-landing)에서 소스 관리하세요.
 
 ## Repository Layout
 
@@ -253,7 +250,6 @@ bun run build
 | `internal/cli` | Cobra command handlers |
 | `internal/gandalfcore` | Canonical Go engine: scan, store, snapshot, diff, restore, bundle, timeline |
 | `internal/tui` | Bubble Tea terminal workspace |
-| `apps/landing` | Astro landing and docs site |
 | `install.sh` | Latest GitHub Release binary installer |
 | `.goreleaser.yaml` | Release assets and Homebrew tap formula generation |
 
@@ -278,7 +274,6 @@ Issues and focused pull requests are welcome. For code changes, run the checks t
 ```bash
 make test
 make gate2
-bun run check
 ```
 
 For release or installer changes, also run:

@@ -342,11 +342,11 @@ Fix: Run `gandalf scan --skip codex` or fix the TOML file.
 
 ### Milestone 0: Validation And Repo Scaffold
 
-- [done] TypeScript CLI scaffold, lockfile, build, and Node test harness.
+- [done] Go CLI scaffold, build, and shell acceptance harness.
 - [done] Shared user-facing error contract implemented and tested.
 - [done] Validation incident template and seed backlog documented.
 - [done] Replace seed incident patterns with 10 real target-operator incidents.
-- [done] Choose TypeScript for fastest parser iteration and CLI distribution.
+- [done] Choose Go for the supported CLI/TUI runtime and distribution path.
 
 ### Milestone 1: Read-Only Scan
 

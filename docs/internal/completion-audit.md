@@ -15,14 +15,14 @@ Objective:
 | Sequential integration work | CLI integration, dogfood, and output-contract fixes were done after module work landed | Done |
 | Update `PLAN.md` after each completed task | `PLAN.md` has `[done]` entries for scaffold, scan, store, graph/diff, audit/provenance, CLI, docs, and dogfood | Done |
 | Commit after each completed task | Git history contains milestone commits for docs, scaffold, errors, evidence model, scan, store, analysis, CLI, reports, dogfood, and audit | Done |
-| TypeScript CLI scaffold, tests, lockfile | `package.json`, `bun.lock`, `tsconfig.json`, `src/cli.ts`, `tests/cli.test.ts` | Done |
-| Shared error contract | `src/errors.ts`, `tests/errors.test.ts` | Done |
-| Shared evidence model | `src/types.ts` | Done |
-| Read-only scan and evidence inventory | `src/scan.ts`, `src/policy.ts`, `src/parsers.ts`, `tests/scan.test.ts` | Done |
-| Metadata-only snapshot store | `src/store.ts`, `tests/store.test.ts` | Done |
-| Normalized graph and semantic diff | `src/graph.ts`, `src/diff.ts`, `tests/analysis.test.ts` | Done |
-| Audit and provenance | `src/audit.ts`, `src/provenance.ts`, `tests/analysis.test.ts` | Done |
-| Markdown/JSON report path | `src/report.ts`, `src/cli.ts`, `tests/cli.test.ts` | Done |
+| Go CLI scaffold, tests, and release build | `cmd/gandalf`, `internal/cli`, `internal/gandalfcore`, `Makefile`, `.github/workflows/ci.yml` | Done |
+| Shared error contract | `internal/gandalfcore` | Done |
+| Shared evidence model | `internal/gandalfcore/types` | Done |
+| Read-only scan and evidence inventory | `internal/gandalfcore/scan` | Done |
+| Metadata-only snapshot store | `internal/gandalfcore/store` | Done |
+| Normalized graph and semantic diff | `internal/gandalfcore/graph`, `internal/gandalfcore/diff` | Done |
+| Audit and provenance | `internal/gandalfcore/audit`, `internal/gandalfcore/provenance` | Done |
+| Markdown/JSON report path | `internal/cli`, `internal/gandalfcore/report` | Done |
 | Copy-paste workflows | `README.md` | Done |
 | Dogfood on three real project directories | `docs/dogfood.md`; scans/reports written under `/tmp/gandalf-dogfood` | Done |
 | Replace seed incident patterns with 10 real target-operator incidents | `docs/validation-incidents.md` contains 10 memory-derived real operator incidents with source pointers | Done |
@@ -30,7 +30,8 @@ Objective:
 ## Verification Commands
 
 ```bash
-bun run check
+make test
+make gate2
 ```
 
 Result: passing.
