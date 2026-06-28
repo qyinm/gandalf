@@ -13,18 +13,54 @@ import (
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
-func TestInventoryEnterReportsUnavailableWhenNoActionProviderExists(t *testing.T) {
+func TestSkillsEnterOpensMarkdownViewerUnavailableWhenNoEntrypointExists(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newInventoryTestApp(t, runtime)
 
 	if cmd := app.handleInventoryEnter(); cmd != nil {
-		t.Fatal("unavailable action should not return a command")
+		t.Fatal("opening viewer should not return a command")
 	}
 	if app.pendingAction != nil {
 		t.Fatalf("pending action = %#v", app.pendingAction)
 	}
-	if app.actionError == "" {
-		t.Fatal("expected action error")
+	if app.actionError != "" {
+		t.Fatalf("action error = %q", app.actionError)
+	}
+	if app.skillViewer == nil {
+		t.Fatal("expected skill viewer")
+	}
+	if app.skillViewer.errorText == "" {
+		t.Fatal("expected viewer error")
+	}
+}
+
+func TestSkillsEnterOpensMarkdownViewerForEntrypoint(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	skillDir := filepath.Join(runtime.HomeDir, ".codex", "skills", "review")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Review\n\nUse this skill."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app := newInventoryTestApp(t, runtime)
+	app.evidence[0].Metadata = []byte(`{"entrypoint":"SKILL.md","entrypointStatus":"captured"}`)
+	app.applyWorkspaceData(bootMsg{evidence: app.evidence})
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("opening viewer should not return a command")
+	}
+	if app.pendingAction != nil {
+		t.Fatalf("pending action = %#v", app.pendingAction)
+	}
+	if app.skillViewer == nil {
+		t.Fatal("expected skill viewer")
+	}
+	if !strings.Contains(app.skillViewer.content, "# Review") {
+		t.Fatalf("viewer content = %q", app.skillViewer.content)
+	}
+	if app.skillViewer.sourcePath != "~/.codex/skills/review/SKILL.md" {
+		t.Fatalf("source path = %q", app.skillViewer.sourcePath)
 	}
 }
 
@@ -122,7 +158,7 @@ func TestMarketplaceSearchClampsCursorAgainstMarketplaceRows(t *testing.T) {
 
 func TestInventoryEnterConfirmsActionAndRescans(t *testing.T) {
 	runtime := makeTestRuntime(t)
-	app := newInventoryTestApp(t, runtime)
+	app := newHookInventoryTestApp(t, runtime)
 	enableInventoryAction(app, setup.ActionEdit)
 
 	if cmd := app.handleInventoryEnter(); cmd != nil {
@@ -131,14 +167,14 @@ func TestInventoryEnterConfirmsActionAndRescans(t *testing.T) {
 	if app.pendingAction == nil {
 		t.Fatal("expected pending action")
 	}
-	if app.pendingAction.TargetName != "review" {
+	if app.pendingAction.TargetName != "session_start" {
 		t.Fatalf("pending action = %#v", app.pendingAction)
 	}
 
 	executed := 0
 	app.actionExecutor = func(_ context.Context, plan setup.ActionPlan) error {
 		executed++
-		if plan.TargetName != "review" {
+		if plan.TargetName != "session_start" {
 			t.Fatalf("executed plan = %#v", plan)
 		}
 		return nil
@@ -164,7 +200,7 @@ func TestInventoryEnterConfirmsActionAndRescans(t *testing.T) {
 
 func TestInventoryActionFailureKeepsUserInContext(t *testing.T) {
 	runtime := makeTestRuntime(t)
-	app := newInventoryTestApp(t, runtime)
+	app := newHookInventoryTestApp(t, runtime)
 	enableInventoryAction(app, setup.ActionEdit)
 
 	app.handleInventoryEnter()
@@ -186,7 +222,7 @@ func TestInventoryActionFailureKeepsUserInContext(t *testing.T) {
 
 func TestInventoryRescanFailureAfterActionClearsPendingAction(t *testing.T) {
 	runtime := makeTestRuntime(t)
-	app := newInventoryTestApp(t, runtime)
+	app := newHookInventoryTestApp(t, runtime)
 	enableInventoryAction(app, setup.ActionEdit)
 	app.handleInventoryEnter()
 
@@ -274,7 +310,6 @@ func TestSetupConsoleSearchFiltersActiveTab(t *testing.T) {
 func TestInventoryKeyboardFlowSwitchesTabsAndCancelsPendingAction(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newInventoryTestApp(t, runtime)
-	enableInventoryAction(app, setup.ActionEdit)
 
 	if !app.inventoryFocus {
 		t.Fatal("inventory should start focused")
@@ -293,6 +328,25 @@ func TestInventoryKeyboardFlowSwitchesTabsAndCancelsPendingAction(t *testing.T) 
 		t.Fatalf("shift+tab should return to skills: %s", app.activeSetupTab)
 	}
 	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if quit {
+		t.Fatal("enter should not quit")
+	}
+	if cmd != nil {
+		t.Fatal("opening viewer should not return a command")
+	}
+	if app.skillViewer == nil {
+		t.Fatal("expected skill viewer")
+	}
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyEsc}); quit {
+		t.Fatal("esc should not quit")
+	}
+	if app.skillViewer != nil {
+		t.Fatalf("skill viewer after esc = %#v", app.skillViewer)
+	}
+
+	app = newHookInventoryTestApp(t, runtime)
+	enableInventoryAction(app, setup.ActionEdit)
+	cmd, quit = app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if quit {
 		t.Fatal("enter should not quit")
 	}
@@ -323,6 +377,23 @@ func newInventoryTestApp(t *testing.T, runtime types.RuntimeOptions) *App {
 		Kind:       types.KindSkill,
 		Name:       &name,
 		SourcePath: "~/.codex/skills/review",
+		Scope:      types.ScopeUser,
+	}}})
+	return app
+}
+
+func newHookInventoryTestApp(t *testing.T, runtime types.RuntimeOptions) *App {
+	t.Helper()
+	name := "session_start"
+	app := NewApp(runtime)
+	app.activeSetupTab = SetupConsoleTabHooks
+	app.ready = true
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "hook-session-start",
+		Agent:      types.AgentCodex,
+		Kind:       types.KindHook,
+		Name:       &name,
+		SourcePath: "~/.codex/hooks.json",
 		Scope:      types.ScopeUser,
 	}}})
 	return app

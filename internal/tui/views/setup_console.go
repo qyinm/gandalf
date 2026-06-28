@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // SetupConsoleTab is one top-level setup console tab.
@@ -57,19 +58,31 @@ type SetupConsoleDetail struct {
 	ConfigTarget string
 }
 
+// SetupMarkdownOverlay is a read-only markdown viewer rendered over the setup console.
+type SetupMarkdownOverlay struct {
+	Title      string
+	Subtitle   string
+	SourcePath string
+	Body       string
+	ErrorText  string
+	Width      int
+	Height     int
+}
+
 // SetupConsoleView contains all data needed to render the setup console.
 type SetupConsoleView struct {
-	ActiveTab     string
-	Tabs          []SetupConsoleTab
-	Rows          []SetupConsoleRow
-	RowOffset     int
-	Search        string
-	SearchInput   string
-	SearchFocused bool
-	EmptyMessage  string
-	Selected      *SetupConsoleDetail
-	Confirmation  *SetupActionConfirmation
-	ActionError   string
+	ActiveTab       string
+	Tabs            []SetupConsoleTab
+	Rows            []SetupConsoleRow
+	RowOffset       int
+	Search          string
+	SearchInput     string
+	SearchFocused   bool
+	EmptyMessage    string
+	Selected        *SetupConsoleDetail
+	Confirmation    *SetupActionConfirmation
+	ActionError     string
+	MarkdownOverlay *SetupMarkdownOverlay
 }
 
 // RenderSetupConsole renders the default top-tab setup console.
@@ -108,7 +121,11 @@ func RenderSetupConsole(model SetupConsoleView, width, height int) string {
 	}
 
 	lines = append(lines, "", renderSetupConsoleHelp(model, width))
-	return fitHeight(strings.Join(lines, "\n"), height)
+	rendered := fitHeight(strings.Join(lines, "\n"), height)
+	if model.MarkdownOverlay != nil {
+		return renderSetupConsoleWithOverlay(rendered, *model.MarkdownOverlay, width, height)
+	}
+	return rendered
 }
 
 func renderSetupTabs(tabs []SetupConsoleTab, width int) string {
@@ -261,7 +278,10 @@ func (m setupConsoleKeyMap) FullHelp() [][]key.Binding {
 func renderSetupConsoleHelp(model SetupConsoleView, width int) string {
 	action := key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "action"))
 	toggle := key.NewBinding()
-	if model.SearchFocused {
+	if model.MarkdownOverlay != nil {
+		action = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close"))
+		toggle = key.NewBinding(key.WithKeys("↑↓/jk"), key.WithHelp("↑↓/jk", "scroll"))
+	} else if model.SearchFocused {
 		action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "accept search"))
 		toggle = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "blur"))
 	} else if selected := selectedSetupConsoleRow(model.Rows); selected != nil && selected.Toggleable {
@@ -273,6 +293,8 @@ func renderSetupConsoleHelp(model SetupConsoleView, width int) string {
 		toggle = key.NewBinding(key.WithKeys("space"), key.WithHelp("space", verb))
 	} else if strings.EqualFold(model.ActiveTab, "marketplace") {
 		action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "provider gated"))
+	} else if strings.EqualFold(model.ActiveTab, "skills") {
+		action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open"))
 	}
 	keyMap := setupConsoleKeyMap{
 		Tabs:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "tabs")),
@@ -288,6 +310,92 @@ func renderSetupConsoleHelp(model SetupConsoleView, width int) string {
 	helpView.Styles.ShortKey = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
 	helpView.Styles.ShortDesc = mutedStyle
 	return truncate(helpView.ShortHelpView(keyMap.ShortHelp()), width)
+}
+
+func renderSetupConsoleWithOverlay(background string, overlay SetupMarkdownOverlay, width, height int) string {
+	if overlay.Width <= 0 || overlay.Width > width {
+		overlay.Width = max(20, width-2)
+	}
+	if overlay.Height <= 0 || overlay.Height > height {
+		overlay.Height = max(8, height-2)
+	}
+	box := renderMarkdownOverlayBox(overlay)
+	bgLines := strings.Split(fitHeight(ansi.Strip(background), height), "\n")
+	for len(bgLines) < height {
+		bgLines = append(bgLines, "")
+	}
+	boxLines := strings.Split(box, "\n")
+	top := max(0, (height-len(boxLines))/2)
+	left := max(0, (width-overlay.Width)/2)
+	for i, boxLine := range boxLines {
+		target := top + i
+		if target < 0 || target >= len(bgLines) {
+			continue
+		}
+		bgLines[target] = overlayLine(bgLines[target], boxLine, left, width)
+	}
+	return strings.Join(bgLines, "\n")
+}
+
+func renderMarkdownOverlayBox(overlay SetupMarkdownOverlay) string {
+	contentWidth := max(10, overlay.Width-4)
+	bodyHeight := max(3, overlay.Height-6)
+	lines := []string{
+		titleStyle.Render(truncate(overlay.Title+"  [x]", contentWidth)),
+		mutedStyle.Render(truncate(overlay.SourcePath, contentWidth)),
+		labelStyle.Render(truncate(overlay.Subtitle, contentWidth)),
+		"",
+	}
+	body := overlay.Body
+	if strings.TrimSpace(body) == "" && overlay.ErrorText != "" {
+		body = overlay.ErrorText
+	}
+	bodyLines := strings.Split(body, "\n")
+	for len(bodyLines) < bodyHeight {
+		bodyLines = append(bodyLines, "")
+	}
+	if len(bodyLines) > bodyHeight {
+		bodyLines = bodyLines[:bodyHeight]
+	}
+	for i := range bodyLines {
+		bodyLines[i] = truncate(bodyLines[i], contentWidth)
+	}
+	lines = append(lines, bodyLines...)
+	lines = append(lines, mutedStyle.Render("↑↓/jk scroll  |  Esc close"))
+	return lipgloss.NewStyle().
+		Width(overlay.Width).
+		Height(overlay.Height).
+		Background(lipgloss.Color("235")).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(0, 1).
+		Render(strings.Join(lines, "\n"))
+}
+
+func overlayLine(background, foreground string, left, width int) string {
+	if left < 0 {
+		left = 0
+	}
+	background = truncate(background, width)
+	prefix := ansi.Cut(background, 0, left)
+	if prefixWidth := ansi.StringWidth(prefix); prefixWidth < left {
+		prefix += strings.Repeat(" ", left-prefixWidth)
+	}
+
+	foregroundWidth := ansi.StringWidth(foreground)
+	if left+foregroundWidth > width {
+		foreground = ansi.Truncate(foreground, width-left, "")
+		foregroundWidth = ansi.StringWidth(foreground)
+	}
+	suffixStart := left + foregroundWidth
+	suffix := ""
+	if suffixStart < width {
+		suffix = ansi.Cut(background, suffixStart, width)
+	}
+	if lineWidth := ansi.StringWidth(prefix + foreground + suffix); lineWidth < width {
+		suffix += strings.Repeat(" ", width-lineWidth)
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, prefix, foreground, suffix)
 }
 
 func selectedSetupConsoleRow(rows []SetupConsoleRow) *SetupConsoleRow {

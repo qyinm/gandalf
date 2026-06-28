@@ -118,6 +118,8 @@ type SetupConsoleRowModel struct {
 	SourcePath  string
 	Scope       string
 	Status      string
+	Entrypoint  string
+	EntryStatus string
 	ActionLabel string
 	Selected    bool
 }
@@ -137,6 +139,8 @@ type SetupConsoleDetailModel struct {
 	SourcePath   string
 	Scope        string
 	Status       string
+	Entrypoint   string
+	EntryStatus  string
 	Description  string
 	Author       string
 	Category     string
@@ -402,6 +406,8 @@ func setupConsoleRowFromInventory(item setup.InventoryItem, selected bool) Setup
 		SourcePath:  item.SourcePath,
 		Scope:       string(item.Scope),
 		Status:      setupInventoryStatus(item),
+		Entrypoint:  item.Entrypoint,
+		EntryStatus: item.EntryStatus,
 		ActionLabel: formatSetupActions(item.Actions),
 		Selected:    selected,
 	}
@@ -423,6 +429,8 @@ func setupConsoleDetailFromInventory(item setup.InventoryItem) SetupConsoleDetai
 		SourcePath:   item.SourcePath,
 		Scope:        string(item.Scope),
 		Status:       setupInventoryStatus(item),
+		Entrypoint:   item.Entrypoint,
+		EntryStatus:  item.EntryStatus,
 		Actions:      actions,
 		ConfigTarget: item.SourcePath,
 	}

@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"encoding/json"
 	"sort"
 	"strings"
 
@@ -43,6 +44,8 @@ type InventoryItem struct {
 	Name         string
 	SourcePath   string
 	Scope        types.EvidenceScope
+	Entrypoint   string
+	EntryStatus  string
 	Actions      []ActionAvailability
 }
 
@@ -63,6 +66,8 @@ func BuildInventory(evidence []types.DiscoveredItem) []InventoryItem {
 			Name:         inventoryItemName(item),
 			SourcePath:   item.SourcePath,
 			Scope:        item.Scope,
+			Entrypoint:   inventoryMetadataString(item.Metadata, "entrypoint"),
+			EntryStatus:  inventoryMetadataString(item.Metadata, "entrypointStatus"),
 			Actions:      defaultActions(item.Scope),
 		})
 	}
@@ -180,4 +185,19 @@ func defaultActions(scope types.EvidenceScope) []ActionAvailability {
 		{Action: ActionEdit, Available: false, Reason: "managed setup cannot be edited directly"},
 		{Action: ActionRemove, Available: false, Reason: "managed setup cannot be removed directly"},
 	}
+}
+
+func inventoryMetadataString(raw json.RawMessage, key string) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return ""
+	}
+	value, ok := metadata[key].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(value)
 }

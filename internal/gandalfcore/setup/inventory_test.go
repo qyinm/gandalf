@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -125,6 +126,28 @@ func TestBuildInventoryMarksManagedActionsUnavailable(t *testing.T) {
 		if action.Reason == "" {
 			t.Fatalf("managed action should explain why unavailable: %#v", action)
 		}
+	}
+}
+
+func TestBuildInventoryCarriesSkillEntrypointMetadata(t *testing.T) {
+	name := "review"
+	items := BuildInventory([]types.DiscoveredItem{
+		{
+			ID:         "skill-review",
+			Agent:      types.AgentCodex,
+			Kind:       types.KindSkill,
+			Name:       &name,
+			SourcePath: "~/.codex/skills/review",
+			Scope:      types.ScopeUser,
+			Metadata:   json.RawMessage(`{"entrypoint":"SKILL.md","entrypointStatus":"captured"}`),
+		},
+	})
+
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	if items[0].Entrypoint != "SKILL.md" || items[0].EntryStatus != "captured" {
+		t.Fatalf("entrypoint metadata = %#v", items[0])
 	}
 }
 
