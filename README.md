@@ -274,7 +274,6 @@ Issues and focused pull requests are welcome. For code changes, run the checks t
 ```bash
 make test
 make gate2
-bun run check
 ```
 
 For release or installer changes, also run:

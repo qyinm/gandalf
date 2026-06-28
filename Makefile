@@ -1,4 +1,4 @@
-.PHONY: build test gate2
+.PHONY: build test gate2 cross-machine-dogfood
 
 BIN := bin/gandalf
 
@@ -10,4 +10,7 @@ test:
 	go test ./...
 
 gate2: build
-	bun run dogfood:gate2
+	./scripts/gate2-acceptance.sh
+
+cross-machine-dogfood: build
+	./scripts/cross-machine-dogfood.sh

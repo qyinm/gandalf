@@ -37,4 +37,4 @@ jobs:
         run: ./scripts/install-smoke.sh
 
       - name: Gate 2 acceptance (Go binary)
-        run: node scripts/gate2-acceptance.mjs
+        run: ./scripts/gate2-acceptance.sh
