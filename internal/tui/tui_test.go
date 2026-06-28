@@ -400,38 +400,59 @@ func TestSetupConsoleViewModelShowsMarketplaceSources(t *testing.T) {
 		}),
 	}
 
+	sources := setup.BuildMarketplace(evidence)
 	model := tui.BuildSetupConsoleViewModel(tui.BuildSetupConsoleViewModelInput{
 		Inventory:          setup.BuildInventory(evidence),
-		MarketplaceSources: setup.BuildMarketplace(evidence),
+		MarketplaceSources: sources,
 		ActiveTab:          tui.SetupConsoleTabMarketplace,
 		SelectedIndex:      1,
 	})
 
-	if len(model.Rows) != 2 {
+	if len(model.Rows) != 1 {
 		t.Fatalf("rows = %#v", model.Rows)
 	}
-	if model.Rows[0].ObjectKind != "marketplace" || model.Rows[1].Status != "installed" {
+	if model.Rows[0].ObjectKind != "marketplace" || model.Rows[0].RowKind != tui.SetupConsoleRowMarketplaceSource || model.Rows[0].Expanded {
 		t.Fatalf("marketplace rows = %#v", model.Rows)
 	}
 	if model.Tabs[2].Count != 1 {
 		t.Fatalf("marketplace tab count = %#v", model.Tabs)
 	}
+	if model.Selected == nil || model.Selected.Title != "openai-codex" {
+		t.Fatalf("selected marketplace source detail = %#v", model.Selected)
+	}
+
+	expanded := tui.BuildSetupConsoleViewModel(tui.BuildSetupConsoleViewModelInput{
+		Inventory:          setup.BuildInventory(evidence),
+		MarketplaceSources: sources,
+		ActiveTab:          tui.SetupConsoleTabMarketplace,
+		SelectedIndex:      1,
+		ExpandedSources:    map[string]bool{sources[0].ID: true},
+	})
+	if len(expanded.Rows) != 2 {
+		t.Fatalf("expanded rows = %#v", expanded.Rows)
+	}
+	if expanded.Rows[0].RowKind != tui.SetupConsoleRowMarketplaceSource || !expanded.Rows[0].Expanded || expanded.Rows[1].RowKind != tui.SetupConsoleRowMarketplaceEntry {
+		t.Fatalf("expanded marketplace rows = %#v", expanded.Rows)
+	}
 	if model.Selected == nil {
 		t.Fatal("selected marketplace detail missing")
 	}
-	if model.Selected.Description != "Use Codex from Claude Code" || model.Selected.Author != "OpenAI" || model.Selected.Version != "1.0.5" {
-		t.Fatalf("selected metadata = %#v", model.Selected)
+	if expanded.Selected == nil {
+		t.Fatal("selected marketplace entry detail missing")
 	}
-	if len(model.Selected.Provides) != 2 || model.Selected.Provides[0] != "skills" {
-		t.Fatalf("provides = %#v", model.Selected.Provides)
+	if expanded.Selected.Description != "Use Codex from Claude Code" || expanded.Selected.Author != "OpenAI" || expanded.Selected.Version != "1.0.5" {
+		t.Fatalf("selected metadata = %#v", expanded.Selected)
 	}
-	if len(model.Selected.Actions) == 0 || model.Selected.Actions[0].Available {
-		t.Fatalf("marketplace actions should be unavailable: %#v", model.Selected.Actions)
+	if len(expanded.Selected.Provides) != 2 || expanded.Selected.Provides[0] != "skills" {
+		t.Fatalf("provides = %#v", expanded.Selected.Provides)
+	}
+	if len(expanded.Selected.Actions) == 0 || expanded.Selected.Actions[0].Available {
+		t.Fatalf("marketplace actions should be unavailable: %#v", expanded.Selected.Actions)
 	}
 
 	filtered := tui.BuildSetupConsoleViewModel(tui.BuildSetupConsoleViewModelInput{
 		Inventory:          setup.BuildInventory(evidence),
-		MarketplaceSources: setup.BuildMarketplace(evidence),
+		MarketplaceSources: sources,
 		ActiveTab:          tui.SetupConsoleTabMarketplace,
 		Search:             "openai-codex",
 	})
@@ -440,7 +461,7 @@ func TestSetupConsoleViewModelShowsMarketplaceSources(t *testing.T) {
 	}
 }
 
-func TestSetupConsoleViewModelClassifiesPiExtensionSources(t *testing.T) {
+func TestSetupConsoleViewModelClassifiesPiExtensionInPluginsAndExcludesMarketplace(t *testing.T) {
 	name := "cmux-session"
 	evidence := []types.DiscoveredItem{
 		discoveredItem(map[string]any{
@@ -450,21 +471,29 @@ func TestSetupConsoleViewModelClassifiesPiExtensionSources(t *testing.T) {
 		}),
 	}
 
-	model := tui.BuildSetupConsoleViewModel(tui.BuildSetupConsoleViewModelInput{
+	plugins := tui.BuildSetupConsoleViewModel(tui.BuildSetupConsoleViewModelInput{
+		Inventory: setup.BuildInventory(evidence),
+		ActiveTab: tui.SetupConsoleTabPlugins,
+	})
+	if len(plugins.Rows) != 1 || plugins.Rows[0].ObjectKind != "extension" {
+		t.Fatalf("plugin rows = %#v", plugins.Rows)
+	}
+
+	marketplace := tui.BuildSetupConsoleViewModel(tui.BuildSetupConsoleViewModelInput{
 		Inventory:          setup.BuildInventory(evidence),
 		MarketplaceSources: setup.BuildMarketplace(evidence),
 		ActiveTab:          tui.SetupConsoleTabMarketplace,
 		SelectedIndex:      1,
 	})
 
-	if len(model.Rows) != 0 {
-		t.Fatalf("rows = %#v", model.Rows)
+	if len(marketplace.Rows) != 0 {
+		t.Fatalf("rows = %#v", marketplace.Rows)
 	}
-	if model.Tabs[2].Count != 0 {
-		t.Fatalf("tab count = %#v", model.Tabs)
+	if marketplace.Tabs[2].Count != 0 {
+		t.Fatalf("tab count = %#v", marketplace.Tabs)
 	}
-	if model.Selected != nil {
-		t.Fatalf("selected detail = %#v", model.Selected)
+	if marketplace.Selected != nil {
+		t.Fatalf("selected detail = %#v", marketplace.Selected)
 	}
 }
 

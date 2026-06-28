@@ -138,10 +138,9 @@ Marketplace is an agent ecosystem source browser, not a Gandalf-owned catalog. I
 Marketplace
 / search
 
-> CX  source  openai-codex          1 entries  ~/.codex/plugins/cache/openai-codex
-  CX  skill   codex                 installed  ~/.codex/plugins/cache/openai-codex/skills/codex
-  PI  source  package               1 entries  ~/.pi/agent/extensions/cmux-session.ts
-  PI  plugin  cmux-session          installed  ~/.pi/agent/extensions/cmux-session.ts
+> CC  marketplace  claude-plugins-official  53 entries / 2 installed  ~/.claude/plugins/marketplaces/claude-plugins-official
+  CC  plugin       github                   installed                 ~/.claude/plugins/marketplaces/claude-plugins-official/github
+  CC  plugin       playwright               available                 ~/.claude/plugins/marketplaces/claude-plugins-official/playwright
 ```
 
 Marketplace actions such as install, update, uninstall, add source, and remove source are provider-gated. If no agent-native provider exists, show the action as unavailable rather than pretending Gandalf can run it.

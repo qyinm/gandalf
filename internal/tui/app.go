@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
@@ -64,9 +65,8 @@ type App struct {
 	inventoryCursor    int
 	inventoryFocus     bool
 	activeSetupTab     SetupConsoleTab
-	setupSearch        string
-	setupSearchInput   textinput.Model
 	setupSearchFocused bool
+	setupConsole       setupConsoleState
 	timelineCursor     int
 
 	undoPlan      *timelineundo.Plan
@@ -84,21 +84,50 @@ type App struct {
 	actionExecutor func(context.Context, setup.ActionPlan) error
 }
 
+type setupConsoleState struct {
+	tabs            map[SetupConsoleTab]*setupConsoleTabState
+	expandedSources map[string]bool
+	rowsViewport    viewport.Model
+}
+
+type setupConsoleTabState struct {
+	cursor      int
+	search      string
+	searchInput textinput.Model
+}
+
 // NewApp creates a TUI app bound to engine runtime options.
 func NewApp(runtime types.RuntimeOptions) *App {
+	setupState := newSetupConsoleState()
+	return &App{
+		runtime:         runtime,
+		screen:          ScreenInventory,
+		selectedProfile: DefaultProfile,
+		inventoryFocus:  true,
+		activeSetupTab:  SetupConsoleTabHooks,
+		setupConsole:    setupState,
+		actionExecutor:  defaultSetupActionExecutor,
+	}
+}
+
+func newSetupConsoleState() setupConsoleState {
+	state := setupConsoleState{
+		tabs:            make(map[SetupConsoleTab]*setupConsoleTabState, len(SetupConsoleTabs)),
+		expandedSources: make(map[string]bool),
+		rowsViewport:    viewport.New(0, 0),
+	}
+	for _, tab := range SetupConsoleTabs {
+		state.tabs[tab] = &setupConsoleTabState{searchInput: newSetupSearchInput()}
+	}
+	return state
+}
+
+func newSetupSearchInput() textinput.Model {
 	searchInput := textinput.New()
 	searchInput.Prompt = "/ "
 	searchInput.Placeholder = "search"
 	searchInput.CharLimit = 120
-	return &App{
-		runtime:          runtime,
-		screen:           ScreenInventory,
-		selectedProfile:  DefaultProfile,
-		inventoryFocus:   true,
-		activeSetupTab:   SetupConsoleTabHooks,
-		setupSearchInput: searchInput,
-		actionExecutor:   defaultSetupActionExecutor,
-	}
+	return searchInput
 }
 
 // Init implements tea.Model.
@@ -162,7 +191,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		a.applyWorkspaceData(typed.data)
-		a.inventoryCursor = clampIndex(a.inventoryCursor, len(a.currentInventory()))
+		a.clampSetupConsoleState()
 		a.pendingAction = nil
 		a.actionError = ""
 		a.notice = "Applied setup action and rescanned global setup."
@@ -233,7 +262,9 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	case "/":
 		if a.screen == ScreenInventory && a.pendingAction == nil {
 			a.setupSearchFocused = true
-			a.setupSearchInput.Focus()
+			state := a.activeSetupTabState()
+			state.searchInput.Focus()
+			a.mirrorActiveSetupTabState()
 			return nil, false
 		}
 	case "tab":
@@ -310,6 +341,10 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		if a.screen == ScreenInventory && a.inventoryFocus {
 			return a.handleInventoryEnter(), false
 		}
+	case " ", "space":
+		if a.screen == ScreenInventory && a.inventoryFocus && a.pendingAction == nil {
+			return a.handleSetupToggle(), false
+		}
 	}
 	return nil, false
 }
@@ -320,17 +355,21 @@ func (a *App) handleSetupSearchKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		return nil, false
 	case "esc":
 		a.setupSearchFocused = false
-		a.setupSearchInput.Blur()
+		a.activeSetupTabState().searchInput.Blur()
+		a.mirrorActiveSetupTabState()
 		return nil, true
 	case "enter":
 		a.setupSearchFocused = false
-		a.setupSearchInput.Blur()
+		a.activeSetupTabState().searchInput.Blur()
+		a.mirrorActiveSetupTabState()
 		return nil, true
 	}
 	var cmd tea.Cmd
-	a.setupSearchInput, cmd = a.setupSearchInput.Update(msg)
-	a.setupSearch = a.setupSearchInput.Value()
-	a.inventoryCursor = clampIndex(a.inventoryCursor, len(a.currentInventory()))
+	tabState := a.activeSetupTabState()
+	tabState.searchInput, cmd = tabState.searchInput.Update(msg)
+	tabState.search = tabState.searchInput.Value()
+	a.mirrorActiveSetupTabState()
+	a.setInventoryCursor(clampIndex(a.activeSetupTabState().cursor, len(a.currentSetupConsoleViewModel().Rows)))
 	a.actionError = ""
 	return cmd, true
 }
@@ -350,8 +389,7 @@ func (a *App) handleInventoryEnter() tea.Cmd {
 	}
 
 	if normalizeSetupConsoleTab(a.activeSetupTab) == SetupConsoleTabMarketplace {
-		a.actionError = "Marketplace actions are unavailable until an agent-native provider is implemented."
-		return nil
+		return a.handleMarketplaceEnter()
 	}
 
 	inventory := a.currentInventory()
@@ -375,8 +413,38 @@ func (a *App) handleInventoryEnter() tea.Cmd {
 	return nil
 }
 
+func (a *App) handleMarketplaceEnter() tea.Cmd {
+	model := a.currentSetupConsoleViewModel()
+	if len(model.Rows) == 0 {
+		a.actionError = "No marketplace source selected."
+		return nil
+	}
+	row := model.Rows[clampIndex(a.activeSetupTabState().cursor, len(model.Rows))]
+	if row.RowKind == SetupConsoleRowMarketplaceSource {
+		a.toggleMarketplaceSource(row.ID)
+		return nil
+	}
+	a.actionError = "Marketplace actions are unavailable until an agent-native provider is implemented."
+	return nil
+}
+
+func (a *App) handleSetupToggle() tea.Cmd {
+	if normalizeSetupConsoleTab(a.activeSetupTab) != SetupConsoleTabMarketplace {
+		return nil
+	}
+	model := a.currentSetupConsoleViewModel()
+	if len(model.Rows) == 0 {
+		return nil
+	}
+	row := model.Rows[clampIndex(a.activeSetupTabState().cursor, len(model.Rows))]
+	if row.RowKind == SetupConsoleRowMarketplaceSource {
+		a.toggleMarketplaceSource(row.ID)
+	}
+	return nil
+}
+
 func (a *App) currentInventory() []setup.InventoryItem {
-	return filterSetupConsoleInventory(a.inventory, normalizeSetupConsoleTab(a.activeSetupTab), a.setupSearch)
+	return filterSetupConsoleInventory(a.inventory, normalizeSetupConsoleTab(a.activeSetupTab), a.activeSetupTabState().search)
 }
 
 func (a *App) applyWorkspaceData(data bootMsg) {
@@ -387,22 +455,23 @@ func (a *App) applyWorkspaceData(data bootMsg) {
 	a.snapshotNames = data.snapshotNames
 	a.cachedNav = nil
 	a.cachedNavKey = ""
+	a.clampSetupConsoleState()
 }
 
 func (a *App) moveInventoryCursor(delta int) {
-	inventory := a.currentInventory()
-	if len(inventory) == 0 {
-		a.inventoryCursor = 0
+	rowCount := len(a.currentSetupConsoleViewModel().Rows)
+	if rowCount == 0 {
+		a.setInventoryCursor(0)
 		return
 	}
 	next := a.inventoryCursor + delta
 	if next < 0 {
-		next = len(inventory) - 1
+		next = rowCount - 1
 	}
-	if next >= len(inventory) {
+	if next >= rowCount {
 		next = 0
 	}
-	a.inventoryCursor = next
+	a.setInventoryCursor(next)
 	a.actionError = ""
 }
 
@@ -423,8 +492,94 @@ func (a *App) moveSetupTab(delta int) {
 		next = 0
 	}
 	a.activeSetupTab = SetupConsoleTabs[next]
-	a.inventoryCursor = clampIndex(a.inventoryCursor, len(a.currentInventory()))
+	a.mirrorActiveSetupTabState()
+	a.setInventoryCursor(clampIndex(a.activeSetupTabState().cursor, len(a.currentSetupConsoleViewModel().Rows)))
 	a.actionError = ""
+}
+
+func (a *App) activeSetupTabState() *setupConsoleTabState {
+	active := normalizeSetupConsoleTab(a.activeSetupTab)
+	if a.setupConsole.tabs == nil {
+		a.setupConsole = newSetupConsoleState()
+	}
+	state, ok := a.setupConsole.tabs[active]
+	if !ok || state == nil {
+		state = &setupConsoleTabState{searchInput: newSetupSearchInput()}
+		a.setupConsole.tabs[active] = state
+	}
+	return state
+}
+
+func (a *App) setInventoryCursor(cursor int) {
+	a.activeSetupTabState().cursor = cursor
+	a.inventoryCursor = cursor
+}
+
+func (a *App) mirrorActiveSetupTabState() {
+	state := a.activeSetupTabState()
+	a.inventoryCursor = state.cursor
+	if a.setupSearchFocused {
+		state.searchInput.Focus()
+	} else {
+		state.searchInput.Blur()
+	}
+}
+
+func (a *App) clampSetupConsoleState() {
+	active := normalizeSetupConsoleTab(a.activeSetupTab)
+	a.pruneExpandedMarketplaceSources()
+	for _, tab := range SetupConsoleTabs {
+		a.activeSetupTab = tab
+		state := a.activeSetupTabState()
+		model := a.currentSetupConsoleViewModel()
+		state.cursor = clampIndex(state.cursor, len(model.Rows))
+	}
+	a.activeSetupTab = active
+	a.mirrorActiveSetupTabState()
+}
+
+func (a *App) pruneExpandedMarketplaceSources() {
+	if len(a.setupConsole.expandedSources) == 0 {
+		return
+	}
+	valid := make(map[string]struct{})
+	for _, source := range setupConsoleMarketplaceSources(setup.BuildMarketplace(a.evidence)) {
+		valid[source.ID] = struct{}{}
+	}
+	for sourceID := range a.setupConsole.expandedSources {
+		if _, ok := valid[sourceID]; !ok {
+			delete(a.setupConsole.expandedSources, sourceID)
+		}
+	}
+}
+
+func (a *App) toggleMarketplaceSource(sourceID string) {
+	if a.setupConsole.expandedSources == nil {
+		a.setupConsole.expandedSources = make(map[string]bool)
+	}
+	if a.setupConsole.expandedSources[sourceID] {
+		delete(a.setupConsole.expandedSources, sourceID)
+	} else {
+		a.setupConsole.expandedSources[sourceID] = true
+	}
+	a.setInventoryCursor(clampIndex(a.inventoryCursor, len(a.currentSetupConsoleViewModel().Rows)))
+	a.actionError = ""
+}
+
+func (a *App) currentSetupConsoleViewModel() SetupConsoleViewModel {
+	state := a.activeSetupTabState()
+	return BuildSetupConsoleViewModel(BuildSetupConsoleViewModelInput{
+		Inventory:          a.inventory,
+		MarketplaceSources: setup.BuildMarketplace(a.evidence),
+		ActiveTab:          a.activeSetupTab,
+		Search:             state.search,
+		SearchInput:        state.searchInput.View(),
+		SearchFocused:      a.setupSearchFocused,
+		SelectedIndex:      state.cursor,
+		ExpandedSources:    a.setupConsole.expandedSources,
+		PendingAction:      a.pendingAction,
+		ActionError:        a.actionError,
+	})
 }
 
 func firstAvailableInventoryAction(item setup.InventoryItem) (setup.ActionKind, bool) {
@@ -515,17 +670,8 @@ func (a *App) renderContent(width, height int) string {
 	now := time.Now()
 	switch a.screen {
 	case ScreenInventory:
-		model := BuildSetupConsoleViewModel(BuildSetupConsoleViewModelInput{
-			Inventory:          a.inventory,
-			MarketplaceSources: setup.BuildMarketplace(a.evidence),
-			ActiveTab:          a.activeSetupTab,
-			Search:             a.setupSearch,
-			SearchInput:        a.setupSearchInput.View(),
-			SearchFocused:      a.setupSearchFocused,
-			SelectedIndex:      a.inventoryCursor,
-			PendingAction:      a.pendingAction,
-			ActionError:        a.actionError,
-		})
+		model := a.currentSetupConsoleViewModel()
+		a.syncSetupConsoleViewports(&model, width, height)
 		return views.RenderSetupConsole(setupConsoleViewFromModel(model), width, height)
 	case ScreenTimeline:
 		model := BuildTimelineViewModel(BuildTimelineViewModelInput{
@@ -594,6 +740,43 @@ func (a *App) renderContent(width, height int) string {
 	default:
 		return "Unsupported screen."
 	}
+}
+
+func (a *App) syncSetupConsoleViewports(model *SetupConsoleViewModel, width, height int) {
+	if model == nil {
+		return
+	}
+	listHeight := setupConsoleListHeight(*model, height)
+	a.setupConsole.rowsViewport.Width = width
+	a.setupConsole.rowsViewport.Height = listHeight
+	lines := make([]string, len(model.Rows))
+	for i := range lines {
+		lines[i] = model.Rows[i].ID
+	}
+	a.setupConsole.rowsViewport.SetContent(strings.Join(lines, "\n"))
+	cursor := clampIndex(a.activeSetupTabState().cursor, len(model.Rows))
+	if cursor < a.setupConsole.rowsViewport.YOffset {
+		a.setupConsole.rowsViewport.SetYOffset(cursor)
+	} else if cursor >= a.setupConsole.rowsViewport.YOffset+listHeight {
+		a.setupConsole.rowsViewport.SetYOffset(cursor - listHeight + 1)
+	} else {
+		a.setupConsole.rowsViewport.SetYOffset(a.setupConsole.rowsViewport.YOffset)
+	}
+	model.RowOffset = a.setupConsole.rowsViewport.YOffset
+}
+
+func setupConsoleListHeight(model SetupConsoleViewModel, height int) int {
+	if height < 12 {
+		height = 12
+	}
+	listHeight := height - 10
+	if model.Selected != nil {
+		listHeight -= 5
+	}
+	if listHeight < 4 {
+		listHeight = 4
+	}
+	return listHeight
 }
 
 func defaultSetupActionExecutor(ctx context.Context, plan setup.ActionPlan) error {
