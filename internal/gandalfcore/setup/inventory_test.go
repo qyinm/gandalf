@@ -151,6 +151,38 @@ func TestBuildInventoryCarriesSkillEntrypointMetadata(t *testing.T) {
 	}
 }
 
+func TestBuildInventoryCarriesMCPToolMetadata(t *testing.T) {
+	name := "posthog"
+	items := BuildInventory([]types.DiscoveredItem{
+		{
+			ID:         "mcp-posthog",
+			Agent:      types.AgentCursor,
+			Kind:       types.KindMcpServer,
+			Name:       &name,
+			SourcePath: "~/.cursor/mcp.json",
+			Scope:      types.ScopeUser,
+			Metadata: json.RawMessage(`{
+				"runtimeStatus": "ready",
+				"toolCount": 2,
+				"tools": [
+					{"name":"dashboard-get","description":"Fetch a dashboard."},
+					"feature-flag-create"
+				]
+			}`),
+		},
+	})
+
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	if items[0].RuntimeStatus != "ready" || items[0].ToolCount != 2 {
+		t.Fatalf("mcp metadata = %#v", items[0])
+	}
+	if len(items[0].Tools) != 2 || items[0].Tools[0].Name != "dashboard-get" || items[0].Tools[0].Description != "Fetch a dashboard." {
+		t.Fatalf("tools = %#v", items[0].Tools)
+	}
+}
+
 func TestBuildInventoryIgnoresNonSetupEvidence(t *testing.T) {
 	configName := "config"
 	items := BuildInventory([]types.DiscoveredItem{

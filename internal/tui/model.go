@@ -105,23 +105,27 @@ type SetupConsoleTabModel struct {
 }
 
 type SetupConsoleRowModel struct {
-	ID          string
-	RowKind     SetupConsoleRowKind
-	ParentID    string
-	Depth       int
-	Expanded    bool
-	Toggleable  bool
-	AgentLabel  string
-	AgentMarker string
-	ObjectKind  string
-	Name        string
-	SourcePath  string
-	Scope       string
-	Status      string
-	Entrypoint  string
-	EntryStatus string
-	ActionLabel string
-	Selected    bool
+	ID            string
+	RowKind       SetupConsoleRowKind
+	ParentID      string
+	Depth         int
+	Expanded      bool
+	Toggleable    bool
+	AgentLabel    string
+	AgentMarker   string
+	ObjectKind    string
+	Name          string
+	SourcePath    string
+	Scope         string
+	Status        string
+	Entrypoint    string
+	EntryStatus   string
+	RuntimeStatus string
+	Tools         []SetupConsoleToolModel
+	ToolCount     int
+	Description   string
+	ActionLabel   string
+	Selected      bool
 }
 
 type SetupConsoleRowKind string
@@ -130,7 +134,13 @@ const (
 	SetupConsoleRowInventory         SetupConsoleRowKind = "inventory"
 	SetupConsoleRowMarketplaceSource SetupConsoleRowKind = "marketplace_source"
 	SetupConsoleRowMarketplaceEntry  SetupConsoleRowKind = "marketplace_entry"
+	SetupConsoleRowMCPTool           SetupConsoleRowKind = "mcp_tool"
 )
+
+type SetupConsoleToolModel struct {
+	Name        string
+	Description string
+}
 
 type SetupConsoleDetailModel struct {
 	Title        string
@@ -179,6 +189,8 @@ type BuildSetupConsoleViewModelInput struct {
 	SearchFocused      bool
 	SelectedIndex      int
 	ExpandedSources    map[string]bool
+	ExpandedRowID      string
+	ExpandedToolID     string
 	PendingAction      *setup.ActionPlan
 	ActionError        string
 }
@@ -214,16 +226,30 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 		}
 	} else {
 		filtered := filterSetupConsoleInventory(input.Inventory, activeTab, input.Search)
-		selectedIndex := clampIndex(input.SelectedIndex, len(filtered))
 		model.Rows = make([]SetupConsoleRowModel, 0, len(filtered))
-		for i, item := range filtered {
-			model.Rows = append(model.Rows, setupConsoleRowFromInventory(item, i == selectedIndex))
+		for _, item := range filtered {
+			row := setupConsoleRowFromInventory(item, false)
+			if activeTab != SetupConsoleTabMarketplace {
+				row.Toggleable = true
+				row.Expanded = item.ID == input.ExpandedRowID
+			}
+			model.Rows = append(model.Rows, row)
+			if activeTab == SetupConsoleTabMCPServers && row.Expanded {
+				model.Rows = append(model.Rows, setupConsoleMCPToolRows(item, input.ExpandedToolID)...)
+			}
+		}
+		selectedIndex := clampIndex(input.SelectedIndex, len(model.Rows))
+		for i := range model.Rows {
+			model.Rows[i].Selected = i == selectedIndex
 		}
 		if len(model.Rows) == 0 {
 			model.EmptyMessage = setupConsoleEmptyMessage(activeTab, input.Search)
 		} else {
-			selected := setupConsoleDetailFromInventory(filtered[selectedIndex])
-			model.Selected = &selected
+			inventoryIndex := min(selectedIndex, len(filtered)-1)
+			if inventoryIndex >= 0 {
+				selected := setupConsoleDetailFromInventory(filtered[inventoryIndex])
+				model.Selected = &selected
+			}
 		}
 	}
 	if input.PendingAction != nil {
@@ -397,20 +423,56 @@ func setupObjectKindForConsoleTab(tab SetupConsoleTab) (setup.ObjectKind, bool) 
 
 func setupConsoleRowFromInventory(item setup.InventoryItem, selected bool) SetupConsoleRowModel {
 	return SetupConsoleRowModel{
-		RowKind:     SetupConsoleRowInventory,
-		ID:          item.ID,
-		AgentLabel:  FormatAgentLabel(item.Agent),
-		AgentMarker: FormatAgentMarker(item.Agent),
-		ObjectKind:  formatInventoryObjectKind(item),
-		Name:        item.Name,
-		SourcePath:  item.SourcePath,
-		Scope:       string(item.Scope),
-		Status:      setupInventoryStatus(item),
-		Entrypoint:  item.Entrypoint,
-		EntryStatus: item.EntryStatus,
-		ActionLabel: formatSetupActions(item.Actions),
-		Selected:    selected,
+		RowKind:       SetupConsoleRowInventory,
+		ID:            item.ID,
+		AgentLabel:    FormatAgentLabel(item.Agent),
+		AgentMarker:   FormatAgentMarker(item.Agent),
+		ObjectKind:    formatInventoryObjectKind(item),
+		Name:          item.Name,
+		SourcePath:    item.SourcePath,
+		Scope:         string(item.Scope),
+		Status:        setupInventoryStatus(item),
+		Entrypoint:    item.Entrypoint,
+		EntryStatus:   item.EntryStatus,
+		RuntimeStatus: item.RuntimeStatus,
+		Tools:         setupConsoleToolsFromInventory(item.Tools),
+		ToolCount:     item.ToolCount,
+		ActionLabel:   formatSetupActions(item.Actions),
+		Selected:      selected,
 	}
+}
+
+func setupConsoleMCPToolRows(item setup.InventoryItem, expandedToolID string) []SetupConsoleRowModel {
+	rows := make([]SetupConsoleRowModel, 0, len(item.Tools))
+	for _, tool := range item.Tools {
+		id := item.ID + ":tool:" + tool.Name
+		rows = append(rows, SetupConsoleRowModel{
+			ID:          id,
+			RowKind:     SetupConsoleRowMCPTool,
+			ParentID:    item.ID,
+			Depth:       1,
+			Toggleable:  true,
+			Expanded:    id == expandedToolID,
+			ObjectKind:  "tool",
+			Name:        tool.Name,
+			Description: tool.Description,
+		})
+	}
+	return rows
+}
+
+func setupConsoleToolsFromInventory(tools []setup.InventoryTool) []SetupConsoleToolModel {
+	if len(tools) == 0 {
+		return nil
+	}
+	models := make([]SetupConsoleToolModel, 0, len(tools))
+	for _, tool := range tools {
+		models = append(models, SetupConsoleToolModel{
+			Name:        tool.Name,
+			Description: tool.Description,
+		})
+	}
+	return models
 }
 
 func setupConsoleDetailFromInventory(item setup.InventoryItem) SetupConsoleDetailModel {

@@ -34,19 +34,28 @@ type ActionAvailability struct {
 	Reason    string
 }
 
+// InventoryTool is one tool exposed by a setup inventory object such as an MCP server.
+type InventoryTool struct {
+	Name        string
+	Description string
+}
+
 // InventoryItem is one global setup object visible in the setup inventory.
 type InventoryItem struct {
-	ID           string
-	EvidenceID   string
-	Agent        types.AgentID
-	ObjectKind   ObjectKind
-	EvidenceKind types.EvidenceKind
-	Name         string
-	SourcePath   string
-	Scope        types.EvidenceScope
-	Entrypoint   string
-	EntryStatus  string
-	Actions      []ActionAvailability
+	ID            string
+	EvidenceID    string
+	Agent         types.AgentID
+	ObjectKind    ObjectKind
+	EvidenceKind  types.EvidenceKind
+	Name          string
+	SourcePath    string
+	Scope         types.EvidenceScope
+	Entrypoint    string
+	EntryStatus   string
+	RuntimeStatus string
+	Tools         []InventoryTool
+	ToolCount     int
+	Actions       []ActionAvailability
 }
 
 // BuildInventory converts discovered evidence into global setup inventory rows.
@@ -58,18 +67,24 @@ func BuildInventory(evidence []types.DiscoveredItem) []InventoryItem {
 			continue
 		}
 		items = append(items, InventoryItem{
-			ID:           inventoryItemID(item),
-			EvidenceID:   item.ID,
-			Agent:        item.Agent,
-			ObjectKind:   objectKind,
-			EvidenceKind: item.Kind,
-			Name:         inventoryItemName(item),
-			SourcePath:   item.SourcePath,
-			Scope:        item.Scope,
-			Entrypoint:   inventoryMetadataString(item.Metadata, "entrypoint"),
-			EntryStatus:  inventoryMetadataString(item.Metadata, "entrypointStatus"),
-			Actions:      defaultActions(item.Scope),
+			ID:            inventoryItemID(item),
+			EvidenceID:    item.ID,
+			Agent:         item.Agent,
+			ObjectKind:    objectKind,
+			EvidenceKind:  item.Kind,
+			Name:          inventoryItemName(item),
+			SourcePath:    item.SourcePath,
+			Scope:         item.Scope,
+			Entrypoint:    inventoryMetadataString(item.Metadata, "entrypoint"),
+			EntryStatus:   inventoryMetadataString(item.Metadata, "entrypointStatus"),
+			RuntimeStatus: inventoryRuntimeStatus(item.Metadata),
+			Tools:         inventoryMetadataTools(item.Metadata),
+			ToolCount:     inventoryMetadataInt(item.Metadata, "toolCount"),
+			Actions:       defaultActions(item.Scope),
 		})
+		if len(items) > 0 && items[len(items)-1].ToolCount == 0 {
+			items[len(items)-1].ToolCount = len(items[len(items)-1].Tools)
+		}
 	}
 
 	keyedItems := make([]inventoryKeyedItem, len(items))
@@ -188,13 +203,84 @@ func defaultActions(scope types.EvidenceScope) []ActionAvailability {
 }
 
 func inventoryMetadataString(raw json.RawMessage, key string) string {
-	if len(raw) == 0 {
+	metadata := inventoryMetadataMap(raw)
+	value, ok := metadata[key].(string)
+	if !ok {
 		return ""
+	}
+	return strings.TrimSpace(value)
+}
+
+func inventoryRuntimeStatus(raw json.RawMessage) string {
+	for _, key := range []string{"runtimeStatus", "readiness", "status"} {
+		if value := inventoryMetadataString(raw, key); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func inventoryMetadataInt(raw json.RawMessage, key string) int {
+	metadata := inventoryMetadataMap(raw)
+	switch value := metadata[key].(type) {
+	case int:
+		return value
+	case float64:
+		if value > 0 {
+			return int(value)
+		}
+	case json.Number:
+		parsed, err := value.Int64()
+		if err == nil && parsed > 0 {
+			return int(parsed)
+		}
+	}
+	return 0
+}
+
+func inventoryMetadataTools(raw json.RawMessage) []InventoryTool {
+	metadata := inventoryMetadataMap(raw)
+	values, ok := metadata["tools"].([]any)
+	if !ok {
+		return nil
+	}
+	tools := make([]InventoryTool, 0, len(values))
+	for _, value := range values {
+		switch tool := value.(type) {
+		case string:
+			name := strings.TrimSpace(tool)
+			if name != "" {
+				tools = append(tools, InventoryTool{Name: name})
+			}
+		case map[string]any:
+			name := metadataMapString(tool, "name")
+			if name == "" {
+				name = metadataMapString(tool, "id")
+			}
+			if name == "" {
+				continue
+			}
+			tools = append(tools, InventoryTool{
+				Name:        name,
+				Description: metadataMapString(tool, "description"),
+			})
+		}
+	}
+	return tools
+}
+
+func inventoryMetadataMap(raw json.RawMessage) map[string]any {
+	if len(raw) == 0 {
+		return nil
 	}
 	var metadata map[string]any
 	if err := json.Unmarshal(raw, &metadata); err != nil {
-		return ""
+		return nil
 	}
+	return metadata
+}
+
+func metadataMapString(metadata map[string]any, key string) string {
 	value, ok := metadata[key].(string)
 	if !ok {
 		return ""

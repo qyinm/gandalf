@@ -18,10 +18,19 @@ func TestSkillsEnterOpensMarkdownViewerUnavailableWhenNoEntrypointExists(t *test
 	app := newInventoryTestApp(t, runtime)
 
 	if cmd := app.handleInventoryEnter(); cmd != nil {
-		t.Fatal("opening viewer should not return a command")
+		t.Fatal("expanding skill row should not return a command")
 	}
 	if app.pendingAction != nil {
 		t.Fatalf("pending action = %#v", app.pendingAction)
+	}
+	if app.skillViewer != nil {
+		t.Fatalf("skill viewer = %#v", app.skillViewer)
+	}
+	if app.expandedSetupRowID(SetupConsoleTabSkills) != "skill-review" {
+		t.Fatalf("expanded skill = %q", app.expandedSetupRowID(SetupConsoleTabSkills))
+	}
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("opening viewer should not return a command")
 	}
 	if app.actionError != "" {
 		t.Fatalf("action error = %q", app.actionError)
@@ -48,10 +57,16 @@ func TestSkillsEnterOpensMarkdownViewerForEntrypoint(t *testing.T) {
 	app.applyWorkspaceData(bootMsg{evidence: app.evidence})
 
 	if cmd := app.handleInventoryEnter(); cmd != nil {
-		t.Fatal("opening viewer should not return a command")
+		t.Fatal("expanding skill row should not return a command")
 	}
 	if app.pendingAction != nil {
 		t.Fatalf("pending action = %#v", app.pendingAction)
+	}
+	if app.skillViewer != nil {
+		t.Fatalf("skill viewer = %#v", app.skillViewer)
+	}
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("opening viewer should not return a command")
 	}
 	if app.skillViewer == nil {
 		t.Fatal("expected skill viewer")
@@ -87,6 +102,12 @@ func TestSkillsEnterFollowsMarkdownEntrypointSymlink(t *testing.T) {
 	app.evidence[0].Metadata = []byte(`{"entrypoint":"SKILL.md","entrypointStatus":"symlink_not_followed"}`)
 	app.applyWorkspaceData(bootMsg{evidence: app.evidence})
 
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding skill row should not return a command")
+	}
+	if app.skillViewer != nil {
+		t.Fatalf("skill viewer = %#v", app.skillViewer)
+	}
 	if cmd := app.handleInventoryEnter(); cmd != nil {
 		t.Fatal("opening viewer should not return a command")
 	}
@@ -196,11 +217,57 @@ func TestMarketplaceSearchClampsCursorAgainstMarketplaceRows(t *testing.T) {
 	}
 }
 
+func TestMCPEnterExpandsServerToolsAndToolDescription(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	name := "posthog"
+	app := NewApp(runtime)
+	app.ready = true
+	app.activeSetupTab = SetupConsoleTabMCPServers
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "mcp-posthog",
+		Agent:      types.AgentCursor,
+		Kind:       types.KindMcpServer,
+		Name:       &name,
+		SourcePath: "~/.cursor/mcp.json",
+		Scope:      types.ScopeUser,
+		Metadata: []byte(`{
+			"runtimeStatus": "ready",
+			"toolCount": 1,
+			"tools": [{"name":"dashboard-get","description":"Fetch a dashboard."}]
+		}`),
+	}}})
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding MCP server should not return a command")
+	}
+	model := app.currentSetupConsoleViewModel()
+	if len(model.Rows) != 2 || !model.Rows[0].Expanded || model.Rows[1].RowKind != SetupConsoleRowMCPTool {
+		t.Fatalf("mcp rows = %#v", model.Rows)
+	}
+	app.moveInventoryCursor(1)
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding MCP tool should not return a command")
+	}
+	model = app.currentSetupConsoleViewModel()
+	if len(model.Rows) != 2 || !model.Rows[1].Expanded {
+		t.Fatalf("mcp tool rows = %#v", model.Rows)
+	}
+}
+
 func TestInventoryEnterConfirmsActionAndRescans(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newHookInventoryTestApp(t, runtime)
 	enableInventoryAction(app, setup.ActionEdit)
 
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding hook row should not return a command")
+	}
+	if app.pendingAction != nil {
+		t.Fatalf("pending action = %#v", app.pendingAction)
+	}
+	if app.expandedSetupRowID(SetupConsoleTabHooks) != "hook-session-start" {
+		t.Fatalf("expanded hook = %q", app.expandedSetupRowID(SetupConsoleTabHooks))
+	}
 	if cmd := app.handleInventoryEnter(); cmd != nil {
 		t.Fatal("opening confirmation should not return a command")
 	}
@@ -244,6 +311,7 @@ func TestInventoryActionFailureKeepsUserInContext(t *testing.T) {
 	enableInventoryAction(app, setup.ActionEdit)
 
 	app.handleInventoryEnter()
+	app.handleInventoryEnter()
 	app.actionExecutor = func(context.Context, setup.ActionPlan) error {
 		return os.ErrPermission
 	}
@@ -264,6 +332,7 @@ func TestInventoryRescanFailureAfterActionClearsPendingAction(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newHookInventoryTestApp(t, runtime)
 	enableInventoryAction(app, setup.ActionEdit)
+	app.handleInventoryEnter()
 	app.handleInventoryEnter()
 
 	model, _ := app.Update(setupActionMsg{data: bootMsg{err: os.ErrPermission}})
@@ -305,6 +374,9 @@ func TestSetupConsoleFirstScreenUsesTopTabsWithoutSidebar(t *testing.T) {
 	view := app.View()
 	if !strings.Contains(view, "Hooks") || !strings.Contains(view, "Plugins") || !strings.Contains(view, "Marketplace") {
 		t.Fatalf("expected top tabs in view:\n%s", view)
+	}
+	if strings.Contains(view, "gandalf tui · setup console") {
+		t.Fatalf("expected no setup console title header in view:\n%s", view)
 	}
 	if strings.Contains(view, "Profiles") || strings.Contains(view, "Agents") || strings.Contains(view, "Inventory\n") {
 		t.Fatalf("expected no persistent sidebar in view:\n%s", view)
@@ -372,6 +444,19 @@ func TestInventoryKeyboardFlowSwitchesTabsAndCancelsPendingAction(t *testing.T) 
 		t.Fatal("enter should not quit")
 	}
 	if cmd != nil {
+		t.Fatal("expanding skill row should not return a command")
+	}
+	if app.skillViewer != nil {
+		t.Fatalf("skill viewer = %#v", app.skillViewer)
+	}
+	if app.expandedSetupRowID(SetupConsoleTabSkills) != "skill-review" {
+		t.Fatalf("expanded skill = %q", app.expandedSetupRowID(SetupConsoleTabSkills))
+	}
+	cmd, quit = app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if quit {
+		t.Fatal("enter should not quit")
+	}
+	if cmd != nil {
 		t.Fatal("opening viewer should not return a command")
 	}
 	if app.skillViewer == nil {
@@ -386,6 +471,16 @@ func TestInventoryKeyboardFlowSwitchesTabsAndCancelsPendingAction(t *testing.T) 
 
 	app = newHookInventoryTestApp(t, runtime)
 	enableInventoryAction(app, setup.ActionEdit)
+	cmd, quit = app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if quit {
+		t.Fatal("enter should not quit")
+	}
+	if cmd != nil {
+		t.Fatal("expanding hook row should not return a command")
+	}
+	if app.pendingAction != nil {
+		t.Fatalf("pending action = %#v", app.pendingAction)
+	}
 	cmd, quit = app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if quit {
 		t.Fatal("enter should not quit")

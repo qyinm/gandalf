@@ -90,6 +90,8 @@ type App struct {
 type setupConsoleState struct {
 	tabs            map[SetupConsoleTab]*setupConsoleTabState
 	expandedSources map[string]bool
+	expandedRows    map[SetupConsoleTab]string
+	expandedMCPTool string
 	rowsViewport    viewport.Model
 }
 
@@ -130,6 +132,7 @@ func newSetupConsoleState() setupConsoleState {
 	state := setupConsoleState{
 		tabs:            make(map[SetupConsoleTab]*setupConsoleTabState, len(SetupConsoleTabs)),
 		expandedSources: make(map[string]bool),
+		expandedRows:    make(map[SetupConsoleTab]string),
 		rowsViewport:    viewport.New(0, 0),
 	}
 	for _, tab := range SetupConsoleTabs {
@@ -246,7 +249,7 @@ func (a *App) View() string {
 	if contentWidth < 40 {
 		contentWidth = 40
 	}
-	contentHeight := a.height - 2
+	contentHeight := a.height
 
 	if !a.ready {
 		if a.errText != "" {
@@ -258,17 +261,25 @@ func (a *App) View() string {
 		return "Loading Gandalf global setup workspace..."
 	}
 
-	content := a.renderContent(contentWidth, contentHeight)
-
-	header := lipgloss.NewStyle().Bold(true).Render("gandalf tui · setup console")
+	statusParts := make([]string, 0, 2)
 	if a.notice != "" {
-		header += "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(a.notice)
+		statusParts = append(statusParts, lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(a.notice))
 	}
 	if a.undoError != "" {
-		header += "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(a.undoError)
+		statusParts = append(statusParts, lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(a.undoError))
+	}
+	if len(statusParts) > 0 {
+		contentHeight--
+	}
+	if contentHeight < 1 {
+		contentHeight = 1
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, lipgloss.NewStyle().Width(contentWidth).Render(content))
+	content := lipgloss.NewStyle().Width(contentWidth).Render(a.renderContent(contentWidth, contentHeight))
+	if len(statusParts) == 0 {
+		return content
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, strings.Join(statusParts, "  "), content)
 }
 
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
@@ -433,8 +444,16 @@ func (a *App) handleInventoryEnter() tea.Cmd {
 	if normalizeSetupConsoleTab(a.activeSetupTab) == SetupConsoleTabMarketplace {
 		return a.handleMarketplaceEnter()
 	}
+	if normalizeSetupConsoleTab(a.activeSetupTab) == SetupConsoleTabMCPServers {
+		a.handleMCPEnter()
+		return nil
+	}
 	if normalizeSetupConsoleTab(a.activeSetupTab) == SetupConsoleTabSkills {
-		a.openSelectedSkillViewer()
+		a.handleSkillEnter()
+		return nil
+	}
+	if !a.selectedSetupInventoryExpanded() {
+		a.expandSelectedSetupInventory()
 		return nil
 	}
 
@@ -469,6 +488,44 @@ func (a *App) openSelectedSkillViewer() {
 	viewer := a.buildSkillMarkdownViewer(item)
 	a.skillViewer = &viewer
 	a.actionError = ""
+}
+
+func (a *App) handleSkillEnter() {
+	inventory := a.currentInventory()
+	if len(inventory) == 0 {
+		a.actionError = "No skill selected."
+		return
+	}
+	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
+	if a.expandedSetupRowID(SetupConsoleTabSkills) == item.ID {
+		a.openSelectedSkillViewer()
+		return
+	}
+	a.setExpandedSetupRowID(SetupConsoleTabSkills, item.ID)
+	a.actionError = ""
+}
+
+func (a *App) handleMCPEnter() {
+	model := a.currentSetupConsoleViewModel()
+	if len(model.Rows) == 0 {
+		a.actionError = "No MCP server selected."
+		return
+	}
+	row := model.Rows[clampIndex(a.inventoryCursor, len(model.Rows))]
+	if row.RowKind == SetupConsoleRowMCPTool {
+		a.toggleMCPTool(row.ID)
+		return
+	}
+	if row.RowKind == SetupConsoleRowInventory {
+		if a.expandedSetupRowID(SetupConsoleTabMCPServers) == row.ID {
+			a.setExpandedSetupRowID(SetupConsoleTabMCPServers, "")
+			a.setupConsole.expandedMCPTool = ""
+		} else {
+			a.setExpandedSetupRowID(SetupConsoleTabMCPServers, row.ID)
+			a.setupConsole.expandedMCPTool = ""
+		}
+		a.actionError = ""
+	}
 }
 
 func (a *App) buildSkillMarkdownViewer(item setup.InventoryItem) skillMarkdownViewerState {
@@ -615,7 +672,23 @@ func (a *App) handleMarketplaceEnter() tea.Cmd {
 }
 
 func (a *App) handleSetupToggle() tea.Cmd {
-	if normalizeSetupConsoleTab(a.activeSetupTab) != SetupConsoleTabMarketplace {
+	activeTab := normalizeSetupConsoleTab(a.activeSetupTab)
+	if activeTab == SetupConsoleTabMCPServers {
+		model := a.currentSetupConsoleViewModel()
+		if len(model.Rows) == 0 {
+			return nil
+		}
+		row := model.Rows[clampIndex(a.inventoryCursor, len(model.Rows))]
+		if row.RowKind == SetupConsoleRowMCPTool {
+			a.toggleMCPTool(row.ID)
+			return nil
+		}
+		a.toggleSelectedSetupInventory()
+		a.setupConsole.expandedMCPTool = ""
+		return nil
+	}
+	if activeTab != SetupConsoleTabMarketplace {
+		a.toggleSelectedSetupInventory()
 		return nil
 	}
 	model := a.currentSetupConsoleViewModel()
@@ -627,6 +700,71 @@ func (a *App) handleSetupToggle() tea.Cmd {
 		a.toggleMarketplaceSource(row.ID)
 	}
 	return nil
+}
+
+func (a *App) selectedSetupInventoryExpanded() bool {
+	inventory := a.currentInventory()
+	if len(inventory) == 0 {
+		return false
+	}
+	activeTab := normalizeSetupConsoleTab(a.activeSetupTab)
+	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
+	return a.expandedSetupRowID(activeTab) == item.ID
+}
+
+func (a *App) expandSelectedSetupInventory() {
+	inventory := a.currentInventory()
+	if len(inventory) == 0 {
+		a.actionError = "No setup item selected."
+		return
+	}
+	activeTab := normalizeSetupConsoleTab(a.activeSetupTab)
+	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
+	a.setExpandedSetupRowID(activeTab, item.ID)
+	a.actionError = ""
+}
+
+func (a *App) toggleSelectedSetupInventory() {
+	inventory := a.currentInventory()
+	if len(inventory) == 0 {
+		return
+	}
+	activeTab := normalizeSetupConsoleTab(a.activeSetupTab)
+	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
+	if a.expandedSetupRowID(activeTab) == item.ID {
+		a.setExpandedSetupRowID(activeTab, "")
+	} else {
+		a.setExpandedSetupRowID(activeTab, item.ID)
+	}
+	a.actionError = ""
+}
+
+func (a *App) expandedSetupRowID(tab SetupConsoleTab) string {
+	if a.setupConsole.expandedRows == nil {
+		return ""
+	}
+	return a.setupConsole.expandedRows[normalizeSetupConsoleTab(tab)]
+}
+
+func (a *App) setExpandedSetupRowID(tab SetupConsoleTab, id string) {
+	if a.setupConsole.expandedRows == nil {
+		a.setupConsole.expandedRows = make(map[SetupConsoleTab]string)
+	}
+	tab = normalizeSetupConsoleTab(tab)
+	if id == "" {
+		delete(a.setupConsole.expandedRows, tab)
+		return
+	}
+	a.setupConsole.expandedRows[tab] = id
+}
+
+func (a *App) toggleMCPTool(id string) {
+	if a.setupConsole.expandedMCPTool == id {
+		a.setupConsole.expandedMCPTool = ""
+	} else {
+		a.setupConsole.expandedMCPTool = id
+	}
+	a.actionError = ""
 }
 
 func (a *App) currentInventory() []setup.InventoryItem {
@@ -763,6 +901,8 @@ func (a *App) currentSetupConsoleViewModel() SetupConsoleViewModel {
 		SearchFocused:      a.setupSearchFocused,
 		SelectedIndex:      state.cursor,
 		ExpandedSources:    a.setupConsole.expandedSources,
+		ExpandedRowID:      a.expandedSetupRowID(a.activeSetupTab),
+		ExpandedToolID:     a.setupConsole.expandedMCPTool,
 		PendingAction:      a.pendingAction,
 		ActionError:        a.actionError,
 	})

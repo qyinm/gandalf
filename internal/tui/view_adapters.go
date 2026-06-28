@@ -55,20 +55,32 @@ func setupConsoleViewFromModel(model SetupConsoleViewModel) views.SetupConsoleVi
 	}
 	for _, row := range model.Rows {
 		view.Rows = append(view.Rows, views.SetupConsoleRow{
-			RowKind:     string(row.RowKind),
-			ParentID:    row.ParentID,
-			Depth:       row.Depth,
-			Expanded:    row.Expanded,
-			Toggleable:  row.Toggleable,
-			AgentMarker: row.AgentMarker,
-			ObjectKind:  row.ObjectKind,
-			Name:        row.Name,
-			SourcePath:  row.SourcePath,
-			Scope:       row.Scope,
-			Status:      row.Status,
-			ActionLabel: row.ActionLabel,
-			Selected:    row.Selected,
+			RowKind:       string(row.RowKind),
+			ParentID:      row.ParentID,
+			Depth:         row.Depth,
+			Expanded:      row.Expanded,
+			Toggleable:    row.Toggleable,
+			AgentLabel:    row.AgentLabel,
+			AgentMarker:   row.AgentMarker,
+			ObjectKind:    row.ObjectKind,
+			Name:          row.Name,
+			SourcePath:    row.SourcePath,
+			Scope:         row.Scope,
+			Status:        row.Status,
+			Entrypoint:    row.Entrypoint,
+			EntryStatus:   row.EntryStatus,
+			RuntimeStatus: row.RuntimeStatus,
+			ToolCount:     row.ToolCount,
+			Description:   row.Description,
+			ActionLabel:   row.ActionLabel,
+			Selected:      row.Selected,
 		})
+		for _, tool := range row.Tools {
+			view.Rows[len(view.Rows)-1].Tools = append(view.Rows[len(view.Rows)-1].Tools, views.SetupConsoleTool{
+				Name:        tool.Name,
+				Description: tool.Description,
+			})
+		}
 	}
 	if model.Selected != nil {
 		detail := views.SetupConsoleDetail{
