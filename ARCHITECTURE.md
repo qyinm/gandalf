@@ -8,7 +8,7 @@ The core architectural rule is simple: scan paths are read-only and policy-aware
 
 `internal/gandalfcore` is the canonical engine. `cmd/gandalf` is the supported CLI entrypoint and `internal/tui` is the Bubble Tea terminal workspace. The default command opens the TUI.
 
-New CLI, engine, and TUI behavior lands in Go. The old Bun/TypeScript CLI, TUI, and core packages have been removed from the supported architecture, and the deprecated Rust engine, CLI, and Tauri desktop transition path are no longer active repository surfaces.
+New CLI, engine, and TUI behavior lands in Go. The old JavaScript CLI, TUI, and core packages have been removed from the supported architecture, and the deprecated Rust engine, CLI, and Tauri desktop transition path are no longer active repository surfaces.
 
 ## System Shape
 
@@ -96,6 +96,6 @@ CI must keep the supported runtime green:
 - Go tests: `go test ./...`
 - Go build: `go build -o bin/gandalf ./cmd/gandalf`
 - install script smoke: `./scripts/install-smoke.sh`
-- Gate 2 acceptance: `node scripts/gate2-acceptance.mjs`
+- Gate 2 acceptance: `./scripts/gate2-acceptance.sh`
 
-Landing-site checks remain for `apps/landing`, but they are not CLI distribution paths.
+Landing-site checks live in the dedicated landing repository, not in this CLI/TUI repository.

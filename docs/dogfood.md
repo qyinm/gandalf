@@ -44,10 +44,10 @@ Only finding: `MEDIUM SECRET_LIKE_VALUE_OMITTED` — expected, from a skill dire
 Command:
 
 ```bash
-bun run dogfood:cross-machine
+make cross-machine-dogfood
 ```
 
-This builds a disposable macOS-side snapshot/bundle, then runs `bundle import --dry-run --json` inside a Linux `node:22-bookworm` Docker container with separate `/home/gandalf`, `/linux/project`, and `/linux/store` paths.
+This builds a disposable macOS-side snapshot/bundle, then runs `bundle import --dry-run --json` inside a Linux `debian:bookworm-slim` Docker container with separate `/home/gandalf`, `/linux/project`, and `/linux/store` paths.
 
 Validation checks:
 
@@ -86,7 +86,7 @@ See `docs/dogfood-reports/2026-06-08-main-daemon-timeline-dogfood.md` for the ea
 Command:
 
 ```bash
-bun run dogfood:gate2
+make gate2
 ```
 
 This validates the launch-path rollback story in a disposable environment:
