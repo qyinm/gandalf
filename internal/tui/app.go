@@ -583,16 +583,18 @@ func (a *App) readSkillMarkdown(item setup.InventoryItem) (string, string, error
 		return "", displayPath, fmt.Errorf("Skill markdown entrypoint is unreadable: %v", err)
 	}
 	readPath := skillPath
+	resolvedPath, err := filepath.EvalSymlinks(skillPath)
+	if err != nil {
+		return "", displayPath, fmt.Errorf("Skill markdown symlink target is unreadable: %v", err)
+	}
+	if !pathWithinRootOrResolved(resolvedPath, a.runtime.HomeDir) {
+		return "", displayPath, fmt.Errorf("Skill markdown path is outside readable global setup roots.")
+	}
+	readPath = resolvedPath
 	if info.Mode()&os.ModeSymlink != 0 {
-		targetPath, err := filepath.EvalSymlinks(skillPath)
-		if err != nil {
-			return "", displayPath, fmt.Errorf("Skill markdown symlink target is unreadable: %v", err)
-		}
-		if !pathWithinRootOrResolved(targetPath, a.runtime.HomeDir) {
-			return "", displayPath, fmt.Errorf("Skill markdown path is outside readable global setup roots.")
-		}
-		readPath = targetPath
-		displayPath = displayPath + " -> " + displaySetupPath(targetPath, a.runtime.HomeDir)
+		displayPath = displayPath + " -> " + displaySetupPath(readPath, a.runtime.HomeDir)
+	}
+	if readPath != skillPath {
 		info, err = os.Stat(readPath)
 		if err != nil {
 			return "", displayPath, fmt.Errorf("Skill markdown symlink target is unreadable: %v", err)
