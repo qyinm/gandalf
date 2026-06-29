@@ -45,9 +45,85 @@ func (c ClaudeCodeScanner) Scan(context *scan.ScannerContext) []types.Discovered
 	}
 	evidence := scan.ScanTargets(targets)
 	if context.Scope == nil || *context.Scope == types.ScopeUser {
+		evidence = append(evidence, scanClaudeInstalledPlugins(context.HomeDir)...)
 		evidence = append(evidence, scanClaudePluginMarketplaces(context.HomeDir)...)
 	}
 	return evidence
+}
+
+type claudeInstalledPlugin struct {
+	Scope       string `json:"scope"`
+	InstallPath string `json:"installPath"`
+	Version     string `json:"version"`
+	LastUpdated string `json:"lastUpdated"`
+}
+
+// scanClaudeInstalledPlugins surfaces installed Claude Code plugins from
+// installed_plugins.json as plugin inventory (distinct from marketplace
+// catalog entries) so they appear in the Plugins tab.
+func scanClaudeInstalledPlugins(homeDir string) []types.DiscoveredItem {
+	installedPath := filepath.Join(homeDir, ".claude", "plugins", "installed_plugins.json")
+	raw, err := os.ReadFile(installedPath)
+	if err != nil {
+		return nil
+	}
+	var registry struct {
+		Plugins map[string][]claudeInstalledPlugin `json:"plugins"`
+	}
+	if err := json.Unmarshal(raw, &registry); err != nil {
+		return nil
+	}
+	evidence := make([]types.DiscoveredItem, 0, len(registry.Plugins))
+	for key, installs := range registry.Plugins {
+		name, marketplace := splitPluginKey(key)
+		if name == "" {
+			continue
+		}
+		install := claudeInstalledPlugin{}
+		if len(installs) > 0 {
+			install = installs[0]
+		}
+		sourcePath := displayClaudePath(filepath.Join(homeDir, ".claude", "plugins", "cache", marketplace, name), homeDir)
+		if install.InstallPath != "" {
+			sourcePath = displayClaudePath(install.InstallPath, homeDir)
+		}
+		metadata, _ := json.Marshal(map[string]any{
+			"present":       true,
+			"name":          name,
+			"marketplace":   marketplace,
+			"version":       install.Version,
+			"installed":     true,
+			"status":        "installed",
+			"inventoryOnly": true,
+		})
+		itemName := name
+		evidence = append(evidence, types.DiscoveredItem{
+			ID:            scan.ScannerItemID(types.ScopeUser, types.AgentClaudeCode, sourcePath, "plugin-"+marketplace+"-"+name),
+			Agent:         types.AgentClaudeCode,
+			Kind:          types.KindExtension,
+			SourcePath:    sourcePath,
+			Scope:         types.ScopeUser,
+			Precedence:    20,
+			Parser:        types.ParserJSON,
+			Sensitivity:   "metadata",
+			ContentPolicy: "metadata_only",
+			RestorePolicy: types.RestoreNotSupported,
+			CaptureStatus: types.CaptureCaptured,
+			Confidence:    types.ConfidenceHigh,
+			Name:          &itemName,
+			Metadata:      metadata,
+		})
+	}
+	return evidence
+}
+
+// splitPluginKey splits a "name@marketplace" plugin registry key.
+func splitPluginKey(key string) (name, marketplace string) {
+	key = strings.TrimSpace(key)
+	if at := strings.LastIndex(key, "@"); at >= 0 {
+		return key[:at], key[at+1:]
+	}
+	return key, ""
 }
 
 type claudeKnownMarketplace struct {
