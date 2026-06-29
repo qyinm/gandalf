@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // SetupConsoleTab is one top-level setup console tab.
@@ -18,19 +19,31 @@ type SetupConsoleTab struct {
 
 // SetupConsoleRow is one setup object row in the active tab.
 type SetupConsoleRow struct {
-	RowKind     string
-	ParentID    string
-	Depth       int
-	Expanded    bool
-	Toggleable  bool
-	AgentMarker string
-	ObjectKind  string
+	RowKind       string
+	ParentID      string
+	Depth         int
+	Expanded      bool
+	Toggleable    bool
+	AgentLabel    string
+	AgentMarker   string
+	ObjectKind    string
+	Name          string
+	SourcePath    string
+	Scope         string
+	Status        string
+	Entrypoint    string
+	EntryStatus   string
+	RuntimeStatus string
+	Tools         []SetupConsoleTool
+	ToolCount     int
+	Description   string
+	ActionLabel   string
+	Selected      bool
+}
+
+type SetupConsoleTool struct {
 	Name        string
-	SourcePath  string
-	Scope       string
-	Status      string
-	ActionLabel string
-	Selected    bool
+	Description string
 }
 
 // SetupConsoleAction is one action exposed in selected-row detail.
@@ -57,19 +70,31 @@ type SetupConsoleDetail struct {
 	ConfigTarget string
 }
 
+// SetupMarkdownOverlay is a read-only markdown viewer rendered over the setup console.
+type SetupMarkdownOverlay struct {
+	Title      string
+	Subtitle   string
+	SourcePath string
+	Body       string
+	ErrorText  string
+	Width      int
+	Height     int
+}
+
 // SetupConsoleView contains all data needed to render the setup console.
 type SetupConsoleView struct {
-	ActiveTab     string
-	Tabs          []SetupConsoleTab
-	Rows          []SetupConsoleRow
-	RowOffset     int
-	Search        string
-	SearchInput   string
-	SearchFocused bool
-	EmptyMessage  string
-	Selected      *SetupConsoleDetail
-	Confirmation  *SetupActionConfirmation
-	ActionError   string
+	ActiveTab       string
+	Tabs            []SetupConsoleTab
+	Rows            []SetupConsoleRow
+	RowOffset       int
+	Search          string
+	SearchInput     string
+	SearchFocused   bool
+	EmptyMessage    string
+	Selected        *SetupConsoleDetail
+	Confirmation    *SetupActionConfirmation
+	ActionError     string
+	MarkdownOverlay *SetupMarkdownOverlay
 }
 
 // RenderSetupConsole renders the default top-tab setup console.
@@ -91,9 +116,6 @@ func RenderSetupConsole(model SetupConsoleView, width, height int) string {
 	}
 
 	listHeight := height - 10
-	if model.Selected != nil {
-		listHeight -= 5
-	}
 	if listHeight < 4 {
 		listHeight = 4
 	}
@@ -102,13 +124,14 @@ func RenderSetupConsole(model SetupConsoleView, width, height int) string {
 	if model.Confirmation != nil {
 		lines = append(lines, "")
 		lines = append(lines, renderSetupActionConfirmation(*model.Confirmation)...)
-	} else if model.Selected != nil {
-		lines = append(lines, "")
-		lines = append(lines, renderSetupConsoleDetail(*model.Selected, width)...)
 	}
 
 	lines = append(lines, "", renderSetupConsoleHelp(model, width))
-	return fitHeight(strings.Join(lines, "\n"), height)
+	rendered := fitHeight(strings.Join(lines, "\n"), height)
+	if model.MarkdownOverlay != nil {
+		return renderSetupConsoleWithOverlay(rendered, *model.MarkdownOverlay, width, height)
+	}
+	return rendered
 }
 
 func renderSetupTabs(tabs []SetupConsoleTab, width int) string {
@@ -138,35 +161,25 @@ func renderSetupConsoleRows(model SetupConsoleView, width, height int) string {
 	if model.EmptyMessage != "" {
 		return mutedStyle.Render(model.EmptyMessage)
 	}
+	return renderSetupCompactRows(model, width, height)
+}
+
+func renderSetupCompactRows(model SetupConsoleView, width, height int) string {
 	allRows := make([]string, 0, len(model.Rows))
 	for _, row := range model.Rows {
-		prefix := "  "
-		style := mutedStyle
+		line := renderSetupCompactRow(row, model.ActiveTab, width)
 		if row.Selected {
-			prefix = "> "
-			style = activeStyle
+			line = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("252")).
+				Background(lipgloss.Color("236")).
+				Render(line)
+		} else {
+			line = mutedStyle.Render(line)
 		}
-		indicator := " "
-		if row.Toggleable {
-			if row.Expanded {
-				indicator = "-"
-			} else {
-				indicator = "+"
-			}
+		allRows = append(allRows, line)
+		if row.Expanded && shouldRenderSetupExpandedDetails(row, model.ActiveTab) {
+			allRows = append(allRows, renderSetupExpandedRows(row, model.ActiveTab, width)...)
 		}
-		indent := strings.Repeat("  ", max(0, row.Depth))
-		name := indent + row.Name
-		line := fmt.Sprintf("%s%s %-2s  %-13s  %-28s  %-10s  %-20s  %s",
-			prefix,
-			indicator,
-			row.AgentMarker,
-			row.ObjectKind,
-			name,
-			row.Status,
-			row.SourcePath,
-			row.ActionLabel,
-		)
-		allRows = append(allRows, style.Render(truncate(line, width-2)))
 	}
 	offset := model.RowOffset
 	if offset < 0 {
@@ -180,6 +193,291 @@ func renderSetupConsoleRows(model SetupConsoleView, width, height int) string {
 		end = len(allRows)
 	}
 	return strings.Join(allRows[offset:end], "\n")
+}
+
+func renderSetupCompactRow(row SetupConsoleRow, activeTab string, width int) string {
+	if width < 20 {
+		width = 20
+	}
+	origin := setupCompactOriginLabel(row, activeTab)
+	prefix := "›"
+	if row.Expanded {
+		prefix = "⌄"
+	}
+	leftParts := []string{prefix}
+	if strings.TrimSpace(row.AgentMarker) != "" && !isAgentOriginCompactTab(activeTab) {
+		leftParts = append(leftParts, row.AgentMarker)
+	}
+	if strings.TrimSpace(row.ObjectKind) != "" && !isSkillsTab(activeTab) && !isAgentOriginCompactTab(activeTab) {
+		leftParts = append(leftParts, row.ObjectKind)
+	}
+	leftPrefix := strings.Join(leftParts, " ")
+	if !strings.HasSuffix(leftPrefix, " ") {
+		leftPrefix += " "
+	}
+	nameWidth := width - ansi.StringWidth(origin) - ansi.StringWidth(leftPrefix) - 2
+	if nameWidth < 8 {
+		nameWidth = width - ansi.StringWidth(leftPrefix)
+		origin = ""
+	}
+	nameValue := strings.Repeat("  ", max(0, row.Depth)) + row.Name
+	if isMCPServerRow(row, activeTab) {
+		nameValue += " " + mcpRuntimeBadge(row)
+	}
+	name := truncate(nameValue, nameWidth)
+	left := leftPrefix + name
+	gap := width - ansi.StringWidth(left) - ansi.StringWidth(origin)
+	if gap < 1 {
+		gap = 1
+	}
+	return truncate(left+strings.Repeat(" ", gap)+origin, width)
+}
+
+func shouldRenderSetupExpandedDetails(row SetupConsoleRow, activeTab string) bool {
+	if strings.EqualFold(activeTab, "marketplace") && row.RowKind == "marketplace_source" {
+		return false
+	}
+	if isMCPServerRow(row, activeTab) {
+		return false
+	}
+	return row.Selected
+}
+
+func renderSetupExpandedRows(row SetupConsoleRow, activeTab string, width int) []string {
+	if isMCPToolRow(row) {
+		return renderSetupMCPToolExpandedRows(row, width)
+	}
+	agentLabel := strings.TrimSpace(row.AgentLabel)
+	if agentLabel == "" {
+		agentLabel = setupAgentLabelFromMarker(row.AgentMarker)
+	}
+	lines := []string{
+		"    " + truncate(fmt.Sprintf("%s · %s · %s", agentLabel, row.ObjectKind, row.Status), max(8, width-4)),
+		"    " + truncate("source: "+row.SourcePath, max(8, width-4)),
+	}
+	if isMCPServerRow(row, activeTab) {
+		if row.ToolCount > 0 {
+			lines = append(lines, "    "+truncate(fmt.Sprintf("%d tools", row.ToolCount), max(8, width-4)))
+		} else {
+			lines = append(lines, "    tools unavailable")
+		}
+	}
+	if isSkillsTab(activeTab) {
+		entrypoint := strings.TrimSpace(row.Entrypoint)
+		if entrypoint == "" {
+			entrypoint = "SKILL.md"
+		}
+		lines = append(lines, "    "+truncate("entry: "+entrypoint, max(8, width-4)))
+		if strings.TrimSpace(row.EntryStatus) != "" {
+			lines = append(lines, "    "+truncate("entry status: "+row.EntryStatus, max(8, width-4)))
+		}
+	}
+	if strings.TrimSpace(row.Scope) != "" {
+		lines = append(lines, "    "+truncate("scope: "+row.Scope, max(8, width-4)))
+	}
+	if strings.TrimSpace(row.ActionLabel) != "" {
+		lines = append(lines, "    "+truncate("actions: "+row.ActionLabel, max(8, width-4)))
+	}
+	footer := "    Enter action  |  Space collapse"
+	if isSkillsTab(activeTab) {
+		footer = "    Enter open markdown  |  Space collapse"
+	} else if strings.EqualFold(activeTab, "mcp_servers") {
+		footer = "    Enter collapse  |  Space collapse"
+	} else if strings.EqualFold(activeTab, "marketplace") {
+		footer = "    Enter collapse  |  Space collapse"
+	}
+	lines = append(lines, mutedStyle.Render(footer))
+	for i := range lines {
+		if i < len(lines)-1 {
+			lines[i] = labelStyle.Render(lines[i])
+		}
+	}
+	return lines
+}
+
+func renderSetupMCPToolExpandedRows(row SetupConsoleRow, width int) []string {
+	description := strings.TrimSpace(row.Description)
+	if description == "" {
+		description = "No description available."
+	}
+	wrapped := wrapText(description, max(16, width-6))
+	if len(wrapped) > 4 {
+		wrapped = wrapped[:4]
+	}
+	lines := make([]string, 0, len(wrapped))
+	for _, line := range wrapped {
+		lines = append(lines, labelStyle.Render("      "+line))
+	}
+	return lines
+}
+
+func setupCompactOriginLabel(row SetupConsoleRow, activeTab string) string {
+	if isSkillsTab(activeTab) {
+		return setupSkillOriginLabel(row)
+	}
+	if isMCPToolRow(row) {
+		return ""
+	}
+	if strings.EqualFold(activeTab, "marketplace") {
+		if strings.TrimSpace(row.Status) != "" {
+			return row.Status
+		}
+	}
+	if agent := strings.TrimSpace(row.AgentLabel); agent != "" {
+		return agent
+	}
+	if agent := setupAgentLabelFromMarker(row.AgentMarker); agent != "Unknown agent" {
+		return agent
+	}
+	return ""
+}
+
+func isMCPServerRow(row SetupConsoleRow, activeTab string) bool {
+	return isMCPServerTab(activeTab) && row.RowKind == "inventory"
+}
+
+func isMCPToolRow(row SetupConsoleRow) bool {
+	return row.RowKind == "mcp_tool"
+}
+
+func isMCPServerTab(activeTab string) bool {
+	return strings.EqualFold(activeTab, "mcp_servers")
+}
+
+func isAgentOriginCompactTab(activeTab string) bool {
+	return strings.EqualFold(activeTab, "hooks") ||
+		strings.EqualFold(activeTab, "marketplace") ||
+		isSkillsTab(activeTab) ||
+		isMCPServerTab(activeTab)
+}
+
+func mcpRuntimeBadge(row SetupConsoleRow) string {
+	status := strings.ToLower(strings.TrimSpace(row.RuntimeStatus))
+	if status == "" {
+		if row.ToolCount > 0 || len(row.Tools) > 0 {
+			status = "ready"
+		} else {
+			status = "unavailable"
+		}
+	}
+	switch status {
+	case "ready", "available", "enabled", "ok":
+		return "[ready]"
+	case "unavailable", "missing", "disabled", "error":
+		return "[unavailable]"
+	default:
+		return "[" + status + "]"
+	}
+}
+
+func wrapText(value string, width int) []string {
+	if width <= 0 {
+		return nil
+	}
+	words := strings.Fields(value)
+	if len(words) == 0 {
+		return nil
+	}
+	var lines []string
+	current := ""
+	for _, word := range words {
+		if current == "" {
+			current = word
+			continue
+		}
+		candidate := current + " " + word
+		if ansi.StringWidth(candidate) > width {
+			lines = append(lines, truncate(current, width))
+			current = word
+		} else {
+			current = candidate
+		}
+	}
+	if current != "" {
+		lines = append(lines, truncate(current, width))
+	}
+	return lines
+}
+
+func setupAgentLabelFromMarker(marker string) string {
+	switch strings.TrimSpace(marker) {
+	case "CC":
+		return "Claude Code"
+	case "CX":
+		return "Codex"
+	case "PI":
+		return "Pi Agent"
+	case "CU":
+		return "Cursor"
+	default:
+		if strings.TrimSpace(marker) == "" {
+			return "Unknown agent"
+		}
+		return marker
+	}
+}
+
+func setupSkillOriginLabel(row SetupConsoleRow) string {
+	if plugin := setupSkillPluginName(row.SourcePath); plugin != "" {
+		return "(plugin: " + plugin + ")"
+	}
+	switch strings.ToLower(strings.TrimSpace(row.Scope)) {
+	case "project":
+		return "(project)"
+	case "managed":
+		return "(managed)"
+	}
+	if strings.TrimSpace(row.SourcePath) == "<built-in>" {
+		return "(built-in)"
+	}
+	return "(local)"
+}
+
+func setupSkillPluginName(sourcePath string) string {
+	normalized := strings.ReplaceAll(strings.TrimSpace(sourcePath), "\\", "/")
+	if normalized == "" || !strings.Contains(normalized, "/plugins/cache/") {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(normalized, "/"), "/")
+	skillsIndex := -1
+	for i, part := range parts {
+		if part == "skills" {
+			skillsIndex = i
+			break
+		}
+	}
+	if skillsIndex <= 0 {
+		return ""
+	}
+	for i := skillsIndex - 1; i >= 0; i-- {
+		part := strings.TrimSpace(parts[i])
+		if part == "" || looksLikePluginVersion(part) {
+			continue
+		}
+		return strings.TrimSuffix(part, "-plugin")
+	}
+	return ""
+}
+
+func looksLikePluginVersion(value string) bool {
+	if value == "" {
+		return false
+	}
+	hasDigit := false
+	for _, r := range value {
+		switch {
+		case r >= '0' && r <= '9':
+			hasDigit = true
+		case r == '.' || r == '-' || r == '_' || (r >= 'a' && r <= 'f'):
+		default:
+			return false
+		}
+	}
+	return hasDigit
+}
+
+func isSkillsTab(activeTab string) bool {
+	return strings.EqualFold(activeTab, "skills")
 }
 
 func renderSetupConsoleDetail(detail SetupConsoleDetail, width int) []string {
@@ -261,18 +559,46 @@ func (m setupConsoleKeyMap) FullHelp() [][]key.Binding {
 func renderSetupConsoleHelp(model SetupConsoleView, width int) string {
 	action := key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "action"))
 	toggle := key.NewBinding()
-	if model.SearchFocused {
+	if model.MarkdownOverlay != nil {
+		action = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close"))
+		toggle = key.NewBinding(key.WithKeys("↑↓/jk"), key.WithHelp("↑↓/jk", "scroll"))
+	} else if model.SearchFocused {
 		action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "accept search"))
 		toggle = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "blur"))
-	} else if selected := selectedSetupConsoleRow(model.Rows); selected != nil && selected.Toggleable {
+	} else if strings.EqualFold(model.ActiveTab, "mcp_servers") {
 		verb := "expand"
-		if selected.Expanded {
+		if selected := selectedSetupConsoleRow(model.Rows); selected != nil && selected.Expanded {
 			verb = "collapse"
 		}
 		action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", verb))
 		toggle = key.NewBinding(key.WithKeys("space"), key.WithHelp("space", verb))
+	} else if strings.EqualFold(model.ActiveTab, "skills") {
+		if selected := selectedSetupConsoleRow(model.Rows); selected != nil && selected.Expanded {
+			action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open markdown"))
+			toggle = key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "collapse"))
+		} else {
+			action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "expand"))
+			toggle = key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "expand"))
+		}
 	} else if strings.EqualFold(model.ActiveTab, "marketplace") {
-		action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "provider gated"))
+		if selected := selectedSetupConsoleRow(model.Rows); selected != nil && selected.Toggleable {
+			verb := "expand"
+			if selected.Expanded {
+				verb = "collapse"
+			}
+			action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", verb))
+			toggle = key.NewBinding(key.WithKeys("space"), key.WithHelp("space", verb))
+		} else {
+			action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "provider gated"))
+		}
+	} else if selected := selectedSetupConsoleRow(model.Rows); selected != nil && selected.Toggleable {
+		if selected.Expanded {
+			action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "action"))
+			toggle = key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "collapse"))
+		} else {
+			action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "expand"))
+			toggle = key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "expand"))
+		}
 	}
 	keyMap := setupConsoleKeyMap{
 		Tabs:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "tabs")),
@@ -288,6 +614,92 @@ func renderSetupConsoleHelp(model SetupConsoleView, width int) string {
 	helpView.Styles.ShortKey = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
 	helpView.Styles.ShortDesc = mutedStyle
 	return truncate(helpView.ShortHelpView(keyMap.ShortHelp()), width)
+}
+
+func renderSetupConsoleWithOverlay(background string, overlay SetupMarkdownOverlay, width, height int) string {
+	if overlay.Width <= 0 || overlay.Width > width {
+		overlay.Width = max(20, width-2)
+	}
+	if overlay.Height <= 0 || overlay.Height > height {
+		overlay.Height = max(8, height-2)
+	}
+	box := renderMarkdownOverlayBox(overlay)
+	bgLines := strings.Split(background, "\n")
+	for len(bgLines) < height {
+		bgLines = append(bgLines, "")
+	}
+	boxLines := strings.Split(box, "\n")
+	top := max(0, (height-len(boxLines))/2)
+	left := max(0, (width-overlay.Width)/2)
+	for i, boxLine := range boxLines {
+		target := top + i
+		if target < 0 || target >= len(bgLines) {
+			continue
+		}
+		bgLines[target] = overlayLine(bgLines[target], boxLine, left, width)
+	}
+	return strings.Join(bgLines, "\n")
+}
+
+func renderMarkdownOverlayBox(overlay SetupMarkdownOverlay) string {
+	contentWidth := max(10, overlay.Width-4)
+	bodyHeight := max(3, overlay.Height-6)
+	lines := []string{
+		titleStyle.Render(truncate(overlay.Title+"  [x]", contentWidth)),
+		mutedStyle.Render(truncate(overlay.SourcePath, contentWidth)),
+		labelStyle.Render(truncate(overlay.Subtitle, contentWidth)),
+		"",
+	}
+	body := overlay.Body
+	if strings.TrimSpace(body) == "" && overlay.ErrorText != "" {
+		body = overlay.ErrorText
+	}
+	bodyLines := strings.Split(body, "\n")
+	for len(bodyLines) < bodyHeight {
+		bodyLines = append(bodyLines, "")
+	}
+	if len(bodyLines) > bodyHeight {
+		bodyLines = bodyLines[:bodyHeight]
+	}
+	for i := range bodyLines {
+		bodyLines[i] = truncate(bodyLines[i], contentWidth)
+	}
+	lines = append(lines, bodyLines...)
+	lines = append(lines, mutedStyle.Render("↑↓/jk scroll  |  Esc close"))
+	return lipgloss.NewStyle().
+		Width(overlay.Width).
+		Height(overlay.Height).
+		Background(lipgloss.Color("235")).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(0, 1).
+		Render(strings.Join(lines, "\n"))
+}
+
+func overlayLine(background, foreground string, left, width int) string {
+	if left < 0 {
+		left = 0
+	}
+	background = truncate(background, width)
+	prefix := ansi.Cut(background, 0, left)
+	if prefixWidth := ansi.StringWidth(prefix); prefixWidth < left {
+		prefix += strings.Repeat(" ", left-prefixWidth)
+	}
+
+	foregroundWidth := ansi.StringWidth(foreground)
+	if left+foregroundWidth > width {
+		foreground = ansi.Truncate(foreground, width-left, "")
+		foregroundWidth = ansi.StringWidth(foreground)
+	}
+	suffixStart := left + foregroundWidth
+	suffix := ""
+	if suffixStart < width {
+		suffix = ansi.Cut(background, suffixStart, width)
+	}
+	if lineWidth := ansi.StringWidth(prefix + foreground + suffix); lineWidth < width {
+		suffix += strings.Repeat(" ", width-lineWidth)
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, prefix, foreground, suffix)
 }
 
 func selectedSetupConsoleRow(rows []SetupConsoleRow) *SetupConsoleRow {

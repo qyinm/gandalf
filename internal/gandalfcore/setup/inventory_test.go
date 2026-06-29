@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -125,6 +126,60 @@ func TestBuildInventoryMarksManagedActionsUnavailable(t *testing.T) {
 		if action.Reason == "" {
 			t.Fatalf("managed action should explain why unavailable: %#v", action)
 		}
+	}
+}
+
+func TestBuildInventoryCarriesSkillEntrypointMetadata(t *testing.T) {
+	name := "review"
+	items := BuildInventory([]types.DiscoveredItem{
+		{
+			ID:         "skill-review",
+			Agent:      types.AgentCodex,
+			Kind:       types.KindSkill,
+			Name:       &name,
+			SourcePath: "~/.codex/skills/review",
+			Scope:      types.ScopeUser,
+			Metadata:   json.RawMessage(`{"entrypoint":"SKILL.md","entrypointStatus":"captured"}`),
+		},
+	})
+
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	if items[0].Entrypoint != "SKILL.md" || items[0].EntryStatus != "captured" {
+		t.Fatalf("entrypoint metadata = %#v", items[0])
+	}
+}
+
+func TestBuildInventoryCarriesMCPToolMetadata(t *testing.T) {
+	name := "posthog"
+	items := BuildInventory([]types.DiscoveredItem{
+		{
+			ID:         "mcp-posthog",
+			Agent:      types.AgentCursor,
+			Kind:       types.KindMcpServer,
+			Name:       &name,
+			SourcePath: "~/.cursor/mcp.json",
+			Scope:      types.ScopeUser,
+			Metadata: json.RawMessage(`{
+				"runtimeStatus": "ready",
+				"toolCount": 2,
+				"tools": [
+					{"name":"dashboard-get","description":"Fetch a dashboard."},
+					"feature-flag-create"
+				]
+			}`),
+		},
+	})
+
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	if items[0].RuntimeStatus != "ready" || items[0].ToolCount != 2 {
+		t.Fatalf("mcp metadata = %#v", items[0])
+	}
+	if len(items[0].Tools) != 2 || items[0].Tools[0].Name != "dashboard-get" || items[0].Tools[0].Description != "Fetch a dashboard." {
+		t.Fatalf("tools = %#v", items[0].Tools)
 	}
 }
 
