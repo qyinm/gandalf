@@ -208,7 +208,7 @@ func TestMarketplaceEnterReportsUnavailableProvider(t *testing.T) {
 	}
 }
 
-func TestMarketplaceEnterTogglesSourceAndChildActionIsProviderGated(t *testing.T) {
+func TestMarketplaceEnterTogglesSourceAndChildOpensReviewAction(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := NewApp(runtime)
 	app.ready = true
@@ -239,12 +239,35 @@ func TestMarketplaceEnterTogglesSourceAndChildActionIsProviderGated(t *testing.T
 
 	app.moveInventoryCursor(1)
 	if cmd := app.handleInventoryEnter(); cmd != nil {
-		t.Fatal("provider-gated child action should not return a command")
+		t.Fatal("opening marketplace review should not return a command")
 	}
-	if !strings.Contains(app.actionError, "provider") {
+	if app.actionError != "" {
 		t.Fatalf("action error = %q", app.actionError)
 	}
+	if app.pendingMarketplaceReview == nil {
+		t.Fatal("expected pending marketplace review")
+	}
+	if !strings.Contains(app.pendingMarketplaceReview.Instructions, "non-mutating") {
+		t.Fatalf("pending marketplace review = %#v", app.pendingMarketplaceReview)
+	}
 
+	result, err := setup.ExecuteMarketplaceReviewPlan(*app.pendingMarketplaceReview, setup.BuildMarketplace(app.evidence))
+	if err != nil {
+		t.Fatal(err)
+	}
+	teaModel, _ := app.Update(marketplaceReviewMsg{data: bootMsg{evidence: app.evidence}, result: &result})
+	updated := teaModel.(*App)
+	if updated.pendingMarketplaceReview != nil {
+		t.Fatalf("pending marketplace review was not cleared: %#v", updated.pendingMarketplaceReview)
+	}
+	if updated.marketplaceReviewResult == nil {
+		t.Fatal("expected marketplace review result")
+	}
+	if strings.Contains(updated.notice, "Applied setup action") {
+		t.Fatalf("notice should not claim an apply: %q", updated.notice)
+	}
+
+	app = updated
 	app.moveInventoryCursor(-1)
 	if cmd := app.handleSetupToggle(); cmd != nil {
 		t.Fatal("space toggle should not return a command")

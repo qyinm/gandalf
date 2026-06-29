@@ -5,7 +5,7 @@
 Source: [PRODUCT.md](PRODUCT.md)
 
 Status: superseded plan, current direction summarized here
-Last updated: 2026-06-29
+Last updated: 2026-06-30
 
 ## Current Direction
 
@@ -20,12 +20,13 @@ Gate 2 now means:
 - installed inventory for current Codex and Claude Code support
 - user-global setup tabs for skills, hooks, MCP servers, plugins, and agent-native marketplace/source entries
 - agent-native marketplace/source browsing rather than a Gandalf-owned marketplace or registry
+- marketplace-originated non-mutating Review Actions where source metadata is sufficient
 - truthful action availability, including unavailable reasons when no provider-backed action exists
 - Review Changes before mutation
 - at least one provider-backed safe action
 - restore safety as a backing regression, not the product definition
 
-The current `scripts/gate2-acceptance.sh` still protects restore safety. It should be renamed or split in a later code PR; this docs plan does not rename scripts.
+Restore safety and Gate 2 are now separate acceptance checks: `scripts/restore-safety-regression.sh` protects rollback/restore behavior, and `scripts/gate2-console-acceptance.sh` protects the setup-console contract.
 
 ## Current Support Boundary
 
@@ -45,6 +46,7 @@ Current:
 - read-only global setup discovery for current Codex and Claude Code support
 - normalized Setup Console inventory across skills, hooks, MCP servers, plugins, and agent-native marketplace/source entries
 - Review Changes before any mutating provider-backed action or restore-backed apply
+- non-mutating marketplace-originated Review Actions for source-backed setup guidance
 - explicit unavailable reasons for unsupported actions and unsupported restore items
 - content-backed snapshots and restore safety for supported Codex and Claude Code user-global files
 - Go CLI and Bubble Tea TUI distributed through GitHub Releases, `install.sh`, Homebrew, and source builds
@@ -54,9 +56,9 @@ Not current:
 - scanning and capturing additional agents as the product promise
 - project-local setup management
 - Gandalf-owned marketplace, skill registry, or trust-certified catalog
-- new marketplace install/update/uninstall actions without concrete provider-backed implementation
+- marketplace install/update/uninstall/add-source/remove-source actions without concrete provider-backed implementation
 - local profiles, profile switching, team profiles, cloud sync, desktop launch, or background daemon
-- release automation, script renames, or v0.5.0 tagging as part of this alignment work
+- release automation beyond the current v0.5.0 GitHub Releases and Homebrew tap path
 
 ## Architecture Translation
 
@@ -71,10 +73,9 @@ The current implementation should preserve these boundaries:
 
 ## Near-Term Follow-Ups
 
-- Rename or split `scripts/gate2-acceptance.sh` so restore-safety regression and setup-console acceptance are separate code checks.
-- Split helper boundaries only when code work requires it; do not do it as part of docs alignment.
+- Keep restore-safety regression and setup-console Gate 2 acceptance separate as their coverage grows.
 - Add new provider-backed actions only with concrete previews, execution paths, unavailable reasons, and tests.
-- Revisit release planning after docs and code boundaries are aligned.
+- Complete v0.5.0 release validation after docs and code boundaries are aligned.
 
 ## Retained Historical Context
 

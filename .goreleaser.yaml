@@ -42,7 +42,7 @@ brews:
       token: "{{ .Env.GORELEASER_GITHUB_TOKEN }}"
     directory: Formula
     homepage: https://github.com/qyinm/gandalf
-    description: Manage global agent skills, hooks, MCP servers, and plugins
+    description: Local control console for AI agent setup
     license: MIT
     install: |
       bin.install "gandalf"

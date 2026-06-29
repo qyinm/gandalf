@@ -1,4 +1,4 @@
-.PHONY: build test gate2 cross-machine-dogfood
+.PHONY: build test restore-safety gate2 cross-machine-dogfood
 
 BIN := bin/gandalf
 
@@ -9,8 +9,11 @@ build:
 test:
 	go test ./...
 
+restore-safety: build
+	./scripts/restore-safety-regression.sh
+
 gate2: build
-	./scripts/gate2-acceptance.sh
+	./scripts/gate2-console-acceptance.sh
 
 cross-machine-dogfood: build
 	./scripts/cross-machine-dogfood.sh

@@ -44,6 +44,7 @@ The active architecture has five boundaries:
 - **Read-only global setup discovery**: scanners inspect current Codex and Claude Code user-global setup without executing MCP commands, hooks, scripts, plugins, agent tools, or network calls.
 - **Normalized setup console**: discovered setup becomes unified inventory rows for skills, hooks, MCP servers, plugins, and agent-native marketplace/source entries before the TUI renders it.
 - **Provider-backed action boundary**: a visible row is not automatically editable or installable. Mutating actions are available only when a setup action provider can produce a concrete preview and execution path.
+- **Marketplace-originated review boundary**: marketplace/source entries can produce non-mutating reviewed setup guidance when source metadata is sufficient, but install/update/uninstall/add-source/remove-source stay unavailable without mutation providers.
 - **Review Changes before mutation**: restore-backed applies and provider-backed setup actions must show reviewed changes before writing and must refresh or revalidate the underlying plan before apply.
 - **Restore safety backing workflow**: content-backed snapshots, restore planning, path confinement, symlink refusal, rollback, and unsupported-item reporting preserve the trust contract behind the console.
 
@@ -82,7 +83,7 @@ Scanner plugins should emit typed evidence without executing referenced MCP comm
 
 Setup action providers are the only layer that can mark an inventory action available. A provider-backed action must describe the target, expected effect, Review Changes preview, and execution mechanism before the TUI or CLI can offer it as executable.
 
-Rows without providers can still appear in inventory and source browsing. Their edit, remove, install, update, uninstall, add-source, or remove-source actions must be unavailable with a concrete reason rather than falling through to a descriptive no-op.
+Rows without providers can still appear in inventory and source browsing. Their edit, remove, install, update, uninstall, add-source, or remove-source actions must be unavailable with a concrete reason rather than falling through to a descriptive no-op. Marketplace-originated Review Actions are allowed only when they remain non-mutating, revalidate fresh source data before completion, and treat source-provided text as untrusted display data.
 
 ## Restore Pipeline
 
@@ -96,7 +97,7 @@ Restore remains conservative:
 - rollback paths are created where supported;
 - unsupported evidence kinds stay observe-only rather than falling back to generic mutation.
 
-Restore is the backing safety workflow for the local control console. It should not be used as the sole product definition, and the current Gate 2 acceptance script should remain a restore-safety regression until a follow-up code PR renames or splits it.
+Restore is the backing safety workflow for the local control console. It should not be used as the sole product definition. Restore-safety regression and Gate 2 setup-console acceptance are separate checks.
 
 The Trust Contract in `README.md` is the user-facing version of these rules.
 
@@ -117,6 +118,7 @@ CI must keep the supported runtime green:
 - Go tests: `go test ./...`
 - Go build: `go build -o bin/gandalf ./cmd/gandalf`
 - install script smoke: `./scripts/install-smoke.sh`
-- Gate 2 restore-safety regression: `./scripts/gate2-acceptance.sh` (current script name retained until a follow-up code PR renames or splits it)
+- Restore-safety regression: `./scripts/restore-safety-regression.sh`
+- Gate 2 setup-console acceptance: `./scripts/gate2-console-acceptance.sh`
 
 Landing-site checks live in the dedicated landing repository, not in this CLI/TUI repository.

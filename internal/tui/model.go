@@ -74,6 +74,19 @@ type SetupActionConfirmationModel struct {
 	Command      string
 }
 
+type MarketplaceReviewModel struct {
+	Title          string
+	Status         string
+	AgentLabel     string
+	SourceLabel    string
+	SourcePath     string
+	TargetName     string
+	Operation      string
+	ExpectedEffect string
+	Instructions   string
+	Pending        bool
+}
+
 // SetupConsoleTab identifies the active top-level setup console tab.
 type SetupConsoleTab string
 
@@ -166,34 +179,37 @@ type SetupConsoleActionModel struct {
 }
 
 type SetupConsoleViewModel struct {
-	ActiveTab     SetupConsoleTab
-	Tabs          []SetupConsoleTabModel
-	Rows          []SetupConsoleRowModel
-	Baseline      *BaselineStatusViewModel
-	RowOffset     int
-	Search        string
-	SearchInput   string
-	SearchFocused bool
-	EmptyMessage  string
-	Selected      *SetupConsoleDetailModel
-	Confirmation  *SetupActionConfirmationModel
-	ActionError   string
+	ActiveTab         SetupConsoleTab
+	Tabs              []SetupConsoleTabModel
+	Rows              []SetupConsoleRowModel
+	Baseline          *BaselineStatusViewModel
+	RowOffset         int
+	Search            string
+	SearchInput       string
+	SearchFocused     bool
+	EmptyMessage      string
+	Selected          *SetupConsoleDetailModel
+	Confirmation      *SetupActionConfirmationModel
+	MarketplaceReview *MarketplaceReviewModel
+	ActionError       string
 }
 
 type BuildSetupConsoleViewModelInput struct {
-	Inventory          []setup.InventoryItem
-	MarketplaceSources []setup.MarketplaceSource
-	ActiveTab          SetupConsoleTab
-	Search             string
-	SearchInput        string
-	SearchFocused      bool
-	SelectedIndex      int
-	ExpandedSources    map[string]bool
-	ExpandedRowID      string
-	ExpandedToolID     string
-	PendingAction      *setup.ActionPlan
-	ActionError        string
-	BaselineStatus     *baseline.Status
+	Inventory                []setup.InventoryItem
+	MarketplaceSources       []setup.MarketplaceSource
+	ActiveTab                SetupConsoleTab
+	Search                   string
+	SearchInput              string
+	SearchFocused            bool
+	SelectedIndex            int
+	ExpandedSources          map[string]bool
+	ExpandedRowID            string
+	ExpandedToolID           string
+	PendingAction            *setup.ActionPlan
+	PendingMarketplaceReview *setup.MarketplaceReviewPlan
+	MarketplaceReviewResult  *setup.MarketplaceReviewResult
+	ActionError              string
+	BaselineStatus           *baseline.Status
 }
 
 func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupConsoleViewModel {
@@ -261,6 +277,14 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 	}
 	if input.PendingAction != nil {
 		model.Confirmation = buildSetupActionConfirmation(*input.PendingAction)
+	}
+	if input.PendingMarketplaceReview != nil {
+		review := buildMarketplaceReviewModel(*input.PendingMarketplaceReview, true)
+		model.MarketplaceReview = &review
+	} else if input.MarketplaceReviewResult != nil {
+		review := buildMarketplaceReviewModel(input.MarketplaceReviewResult.Plan, false)
+		review.Instructions = input.MarketplaceReviewResult.Instructions
+		model.MarketplaceReview = &review
 	}
 	return model
 }
@@ -573,18 +597,19 @@ func setupConsoleRowFromMarketplaceSource(source setup.MarketplaceSource, expand
 
 func setupConsoleRowFromMarketplaceEntry(entry setup.MarketplaceEntry) SetupConsoleRowModel {
 	return SetupConsoleRowModel{
-		ID:          entry.ID,
-		RowKind:     SetupConsoleRowMarketplaceEntry,
-		ParentID:    entry.SourceID,
-		Depth:       1,
-		AgentLabel:  FormatAgentLabel(entry.Agent),
-		AgentMarker: FormatAgentMarker(entry.Agent),
-		ObjectKind:  marketplaceEntryKindLabel(entry),
-		Name:        entry.Name,
-		SourcePath:  entry.SourcePath,
-		Scope:       "",
-		Status:      entry.Status,
-		ActionLabel: formatMarketplaceActions(entry.Actions),
+		ID:            entry.ID,
+		RowKind:       SetupConsoleRowMarketplaceEntry,
+		ParentID:      entry.SourceID,
+		Depth:         1,
+		AgentLabel:    FormatAgentLabel(entry.Agent),
+		AgentMarker:   FormatAgentMarker(entry.Agent),
+		ObjectKind:    marketplaceEntryKindLabel(entry),
+		Name:          entry.Name,
+		SourcePath:    entry.SourcePath,
+		Scope:         "",
+		Status:        entry.Status,
+		ActionLabel:   formatMarketplaceActions(entry.Actions),
+		ToggleControl: marketplaceActionAvailable(entry.Actions, setup.MarketplaceActionReview),
 	}
 }
 
@@ -688,6 +713,15 @@ func setupConsoleMarketplaceActions(actions []setup.MarketplaceActionAvailabilit
 		})
 	}
 	return models
+}
+
+func marketplaceActionAvailable(actions []setup.MarketplaceActionAvailability, action setup.MarketplaceActionKind) bool {
+	for _, availability := range actions {
+		if availability.Action == action {
+			return availability.Available
+		}
+	}
+	return false
 }
 
 func setupInventoryStatus(item setup.InventoryItem) string {

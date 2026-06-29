@@ -1,7 +1,7 @@
 # Gandalf Product Definition
 
 Status: working product document
-Last updated: 2026-06-29
+Last updated: 2026-06-30
 
 ## Current Product Contract
 
@@ -36,6 +36,7 @@ In scope now:
 - read-only global setup discovery for current Codex and Claude Code support
 - normalized setup console rows for skills, hooks, MCP servers, plugins, and agent-native marketplace/source entries
 - provider-backed action previews and execution where a concrete provider exists
+- marketplace-originated non-mutating Review Actions where source metadata is sufficient
 - unavailable action reasons where no provider-backed action exists yet
 - content-backed snapshots for supported Codex and Claude Code user-global files
 - byte-exact restore for supported non-secret content as a backing safety workflow
@@ -53,9 +54,9 @@ Not in scope now:
 - Gandalf-owned marketplace, registry, or trust-certified catalog
 - new marketplace install/update/uninstall actions without provider-backed implementation
 - Cursor, OpenCode, or Pi Agent current product support
-- release automation or v0.5.0 tagging
+- release automation beyond the current v0.5.0 GitHub Releases and Homebrew tap path
 
-The current `scripts/gate2-acceptance.sh` remains the restore-safety regression for supported Codex and Claude Code restore behavior. It should be renamed or split in a follow-up code PR; this docs alignment must not rename it.
+Restore-safety regression and Gate 2 setup-console acceptance are separate checks. `scripts/restore-safety-regression.sh` preserves supported Codex and Claude Code restore behavior, while `scripts/gate2-console-acceptance.sh` protects the Unified Agent Setup Console contract.
 
 ## One-Line Definition
 

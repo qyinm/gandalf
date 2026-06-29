@@ -16,7 +16,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24.2"
+          go-version: "1.25.8"
 
       - name: GoReleaser config check
         uses: goreleaser/goreleaser-action@v6
@@ -36,5 +36,8 @@ jobs:
       - name: Install script smoke
         run: ./scripts/install-smoke.sh
 
-      - name: Gate 2 acceptance (Go binary)
-        run: ./scripts/gate2-acceptance.sh
+      - name: Restore-safety regression
+        run: ./scripts/restore-safety-regression.sh
+
+      - name: Gate 2 setup-console acceptance
+        run: ./scripts/gate2-console-acceptance.sh

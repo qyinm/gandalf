@@ -45,6 +45,12 @@ type setupActionMsg struct {
 	err  error
 }
 
+type marketplaceReviewMsg struct {
+	data   bootMsg
+	result *setup.MarketplaceReviewResult
+	err    error
+}
+
 type baselineCreateMsg struct {
 	data    bootMsg
 	created []string
@@ -101,13 +107,15 @@ type App struct {
 	snapshotCursor     int
 	environments       environmentState
 
-	undoPlan       *timelineundo.Plan
-	undoError      string
-	notice         string
-	actionError    string
-	pendingAction  *setup.ActionPlan
-	skillViewer    *skillMarkdownViewerState
-	rollbackReview *rollbackReview
+	undoPlan                 *timelineundo.Plan
+	undoError                string
+	notice                   string
+	actionError              string
+	pendingAction            *setup.ActionPlan
+	pendingMarketplaceReview *setup.MarketplaceReviewPlan
+	marketplaceReviewResult  *setup.MarketplaceReviewResult
+	skillViewer              *skillMarkdownViewerState
+	rollbackReview           *rollbackReview
 
 	compareModel   *CompareViewModel
 	saveSetupModel *SaveSetupViewModel
@@ -246,6 +254,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.undoPlan = nil
 		a.undoError = ""
 		a.pendingAction = nil
+		a.pendingMarketplaceReview = nil
+		a.marketplaceReviewResult = nil
 		a.actionError = ""
 		a.notice = "Rescanned global setup."
 		return a, nil
@@ -263,8 +273,37 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.applyWorkspaceData(typed.data)
 		a.clampSetupConsoleState()
 		a.pendingAction = nil
+		a.marketplaceReviewResult = nil
 		a.actionError = ""
 		a.notice = "Applied setup action and rescanned global setup."
+		return a, nil
+
+	case marketplaceReviewMsg:
+		if typed.err != nil {
+			if typed.data.err == nil && typed.data.evidence != nil {
+				a.applyWorkspaceData(typed.data)
+			}
+			a.pendingMarketplaceReview = nil
+			a.marketplaceReviewResult = nil
+			a.actionError = typed.err.Error()
+			return a, nil
+		}
+		if typed.data.err != nil {
+			a.actionError = "Reviewed marketplace guidance, but failed to refresh setup data: " + typed.data.err.Error()
+			a.pendingMarketplaceReview = nil
+			a.marketplaceReviewResult = typed.result
+			return a, nil
+		}
+		a.applyWorkspaceData(typed.data)
+		a.clampSetupConsoleState()
+		a.pendingMarketplaceReview = nil
+		a.marketplaceReviewResult = typed.result
+		a.actionError = ""
+		if typed.result != nil {
+			a.notice = fmt.Sprintf("Reviewed marketplace guidance for %s. No files changed.", typed.result.Plan.EntryName)
+		} else {
+			a.notice = "Reviewed marketplace guidance. No files changed."
+		}
 		return a, nil
 
 	case baselineCreateMsg:
@@ -409,12 +448,17 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.pendingAction = nil
 			a.actionError = ""
 		}
+		if a.pendingMarketplaceReview != nil || a.marketplaceReviewResult != nil {
+			a.pendingMarketplaceReview = nil
+			a.marketplaceReviewResult = nil
+			a.actionError = ""
+		}
 		if a.rollbackReview != nil {
 			a.rollbackReview = nil
 			a.actionError = ""
 		}
 	case "/":
-		if a.screen == ScreenInventory && a.pendingAction == nil {
+		if a.screen == ScreenInventory && !a.hasPendingSetupReview() {
 			a.setupSearchFocused = true
 			state := a.activeSetupTabState()
 			state.searchInput.Focus()
@@ -426,7 +470,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.environments.cycleFocus()
 			return nil, false
 		}
-		if a.screen == ScreenInventory && a.pendingAction == nil {
+		if a.screen == ScreenInventory && !a.hasPendingSetupReview() {
 			a.moveSetupTab(1)
 		}
 	case "shift+tab":
@@ -434,7 +478,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.environments.cycleFocus()
 			return nil, false
 		}
-		if a.screen == ScreenInventory && a.pendingAction == nil {
+		if a.screen == ScreenInventory && !a.hasPendingSetupReview() {
 			a.moveSetupTab(-1)
 		}
 	case "r":
@@ -443,7 +487,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return rescanMsg(data)
 		}, false
 	case "B":
-		if a.screen == ScreenInventory && a.pendingAction == nil {
+		if a.screen == ScreenInventory && !a.hasPendingSetupReview() {
 			return func() tea.Msg {
 				created, err := a.createMissingBaselines()
 				if err != nil {
@@ -521,7 +565,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return undoPreviewMsg{plan: plan, corruptEvents: corrupt}
 		}, false
 	case "up", "k":
-		if a.screen == ScreenInventory && a.inventoryFocus && a.pendingAction == nil {
+		if a.screen == ScreenInventory && a.inventoryFocus && !a.hasPendingSetupReview() {
 			a.moveInventoryCursor(-1)
 			return nil, false
 		}
@@ -535,7 +579,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 		a.moveNavCursor(-1)
 	case "down", "j":
-		if a.screen == ScreenInventory && a.inventoryFocus && a.pendingAction == nil {
+		if a.screen == ScreenInventory && a.inventoryFocus && !a.hasPendingSetupReview() {
 			a.moveInventoryCursor(1)
 			return nil, false
 		}
@@ -574,7 +618,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return a.handleInventoryEnter(), false
 		}
 	case " ", "space":
-		if a.screen == ScreenInventory && a.inventoryFocus && a.pendingAction == nil {
+		if a.screen == ScreenInventory && a.inventoryFocus && !a.hasPendingSetupReview() {
 			return a.handleSetupToggle(), false
 		}
 	}
@@ -634,6 +678,20 @@ func (a *App) handleInventoryEnter() tea.Cmd {
 				return setupActionMsg{err: err}
 			}
 			return setupActionMsg{data: a.fetchWorkspaceData()}
+		}
+	}
+	if a.pendingMarketplaceReview != nil {
+		plan := *a.pendingMarketplaceReview
+		return func() tea.Msg {
+			data := a.fetchWorkspaceData()
+			if data.err != nil {
+				return marketplaceReviewMsg{data: data, err: data.err}
+			}
+			result, err := setup.ExecuteMarketplaceReviewPlan(plan, setup.BuildMarketplace(data.evidence))
+			if err != nil {
+				return marketplaceReviewMsg{data: data, err: err}
+			}
+			return marketplaceReviewMsg{data: data, result: &result}
 		}
 	}
 
@@ -879,7 +937,19 @@ func (a *App) handleMarketplaceEnter() tea.Cmd {
 		a.toggleMarketplaceSource(row.ID)
 		return nil
 	}
-	a.actionError = "Marketplace actions are unavailable until an agent-native provider is implemented."
+	source, entry, ok := a.marketplaceEntryByID(row.ID)
+	if !ok {
+		a.actionError = "Marketplace entry was not found in current scan data."
+		return nil
+	}
+	plan := setup.PlanMarketplaceEntryAction(source, entry, setup.MarketplaceActionReview)
+	if !plan.Available {
+		a.actionError = plan.UnavailableReason
+		return nil
+	}
+	a.pendingMarketplaceReview = &plan
+	a.marketplaceReviewResult = nil
+	a.actionError = ""
 	return nil
 }
 
@@ -1016,6 +1086,21 @@ func (a *App) currentInventory() []setup.InventoryItem {
 	return filterSetupConsoleInventory(a.inventory, normalizeSetupConsoleTab(a.activeSetupTab), a.activeSetupTabState().search)
 }
 
+func (a *App) hasPendingSetupReview() bool {
+	return a.pendingAction != nil || a.pendingMarketplaceReview != nil
+}
+
+func (a *App) marketplaceEntryByID(entryID string) (setup.MarketplaceSource, setup.MarketplaceEntry, bool) {
+	for _, source := range setupConsoleMarketplaceSources(setup.BuildMarketplace(a.evidence)) {
+		for _, entry := range source.Entries {
+			if entry.ID == entryID {
+				return source, entry, true
+			}
+		}
+	}
+	return setup.MarketplaceSource{}, setup.MarketplaceEntry{}, false
+}
+
 func (a *App) applyWorkspaceData(data bootMsg) {
 	a.evidence = data.evidence
 	a.inventory = setup.BuildInventory(data.evidence)
@@ -1141,19 +1226,21 @@ func (a *App) toggleMarketplaceSource(sourceID string) {
 func (a *App) currentSetupConsoleViewModel() SetupConsoleViewModel {
 	state := a.activeSetupTabState()
 	return BuildSetupConsoleViewModel(BuildSetupConsoleViewModelInput{
-		Inventory:          a.inventory,
-		MarketplaceSources: setup.BuildMarketplace(a.evidence),
-		ActiveTab:          a.activeSetupTab,
-		Search:             state.search,
-		SearchInput:        state.searchInput.View(),
-		SearchFocused:      a.setupSearchFocused,
-		SelectedIndex:      state.cursor,
-		ExpandedSources:    a.setupConsole.expandedSources,
-		ExpandedRowID:      a.expandedSetupRowID(a.activeSetupTab),
-		ExpandedToolID:     a.setupConsole.expandedMCPTool,
-		PendingAction:      a.pendingAction,
-		ActionError:        a.actionError,
-		BaselineStatus:     baselineStatusPtr(a.baselineStatus),
+		Inventory:                a.inventory,
+		MarketplaceSources:       setup.BuildMarketplace(a.evidence),
+		ActiveTab:                a.activeSetupTab,
+		Search:                   state.search,
+		SearchInput:              state.searchInput.View(),
+		SearchFocused:            a.setupSearchFocused,
+		SelectedIndex:            state.cursor,
+		ExpandedSources:          a.setupConsole.expandedSources,
+		ExpandedRowID:            a.expandedSetupRowID(a.activeSetupTab),
+		ExpandedToolID:           a.setupConsole.expandedMCPTool,
+		PendingAction:            a.pendingAction,
+		PendingMarketplaceReview: a.pendingMarketplaceReview,
+		MarketplaceReviewResult:  a.marketplaceReviewResult,
+		ActionError:              a.actionError,
+		BaselineStatus:           baselineStatusPtr(a.baselineStatus),
 	})
 }
 

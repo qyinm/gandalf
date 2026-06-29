@@ -34,6 +34,9 @@ A marketplace, registry, plugin repository, or source exposed by an agent ecosys
 ### Provider-Backed Action
 A setup action backed by a provider that can describe the target, expected effect, Review Changes preview, and execution mechanism. Inventory visibility does not imply action executability; Gandalf can truthfully mark an action available only when a provider-backed action exists.
 
+### Marketplace-Originated Review Action
+A Review Changes-style flow that starts from an agent-native marketplace/source entry. The first safe version can produce non-mutating setup instructions or source-backed guidance, but install, update, uninstall, add-source, and remove-source remain unavailable until an agent-native provider can preview and execute a concrete effect.
+
 ### Setup Action Provider
 The component that turns a visible setup inventory item into a provider-backed edit, remove, add, install, update, uninstall, or dry-run action.
 
