@@ -212,7 +212,7 @@ func assertInventoryItem(t *testing.T, item InventoryItem, agent types.AgentID, 
 	if item.Name != name {
 		t.Fatalf("name = %q", item.Name)
 	}
-	if len(item.Actions) != 2 {
+	if len(item.Actions) != 3 {
 		t.Fatalf("actions = %#v", item.Actions)
 	}
 	for _, action := range item.Actions {

@@ -41,11 +41,12 @@ Agent power users constantly change their local environment:
 - edit prompts, instructions, hooks, and permissions
 - let an agent modify the setup on their behalf
 
-Those changes usually have no clean management layer. Gandalf opens as a TUI-first setup console for skills, hooks, MCP servers, plugins, and agent marketplace sources across supported agents. Snapshot, diff, bundle, and restore remain the safety layer behind that workflow:
+Those changes usually have no clean management layer. Gandalf opens as a TUI-first setup console for skills, hooks, MCP servers, plugins, and agent marketplace sources across Codex and Claude Code. Snapshot, diff, bundle, and restore remain the safety layer behind that workflow:
 
 ```bash
 gandalf
 gandalf snapshot create --name baseline --agent codex --scope user --project .
+gandalf snapshot create --name baseline-claude --agent claude-code --scope user --project .
 gandalf diff baseline current --agent codex --scope user --project .
 ```
 
@@ -56,8 +57,8 @@ Use it before you let an agent change config, install skills, edit hooks, or rew
 - **Local history** for AI agent environment experiments.
 - **Top-tab TUI setup console** for user-global skills, hooks, MCP servers, plugins, and agent marketplace sources.
 - **Human-readable diffs** for config, skills, hooks, and MCP servers.
-- **Dry-run first restores** with explicit apply flags before writing content.
-- **Content-backed snapshots** for the current Codex user-global launch path.
+- **Review Changes before restores** with explicit apply flags before writing content.
+- **Content-backed snapshots** for current Codex and Claude Code user-global setup.
 - **Portable bundles** for exporting, verifying, inspecting, and previewing setup state on another machine.
 - **Go CLI and Bubble Tea TUI** shipped as a single binary.
 - **No npm distribution path**. Gandalf ships through GitHub Releases, `install.sh`, and Homebrew.
@@ -94,41 +95,42 @@ Open the global setup console:
 gandalf
 ```
 
-Create a safe baseline before changing your agent environment. The current safety path uses user-global setup:
+Create safe baselines before changing your agent environment. The current safety path uses user-global Codex and Claude Code setup:
 
 ```bash
 gandalf snapshot create --name clean-codex --agent codex --scope user --project .
+gandalf snapshot create --name clean-claude --agent claude-code --scope user --project .
 ```
 
 Compare the baseline with your current setup:
 
 ```bash
 gandalf diff clean-codex current --agent codex --scope user --project .
+gandalf diff clean-claude current --agent claude-code --scope user --project .
 ```
 
-Preview the rollback plan:
+Review changes before rollback:
 
 ```bash
 gandalf restore --snapshot clean-codex --dry-run --agent codex --scope user --project .
+gandalf restore --snapshot clean-claude --dry-run --agent claude-code --scope user --project .
 ```
 
-Apply only after the plan is correct:
+Apply only after Review Changes is correct:
 
 ```bash
 gandalf restore --snapshot clean-codex --apply --experimental --agent codex --scope user --project .
+gandalf restore --snapshot clean-claude --apply --experimental --agent claude-code --scope user --project .
 ```
 
 ## What Gandalf Tracks
 
-| Surface | Supported setup inventory |
+| Surface | Current supported setup inventory |
 |---|---|
 | Codex | user-global `~/.codex/config.toml`, user hooks, user skills, managed plugin skill inventory |
-| Claude Code | user-global settings, skills, hooks, agents |
-| Cursor | user-global MCP servers, skills, hooks |
-| OpenCode | user-global config and skills |
-| Pi Agent | user-global settings, extensions, skills, themes, prompts, agents, models |
+| Claude Code | user-global `~/.claude/settings.json`, skills, hooks, marketplace source metadata, unsupported agent directories as observe-only |
 
-Project-local files such as repo `.mcp.json`, `AGENTS.md`, and `.env` are not part of the current product scope. Broader team sync and cloud workflows are future direction.
+Cursor, OpenCode, and Pi Agent scanners may exist as legacy parser code, but they are not current supported product surfaces. Project-local files such as repo `.mcp.json`, `AGENTS.md`, and `.env` are not part of the current product scope. Broader team sync and cloud workflows are future direction.
 
 ## Commands
 
@@ -142,6 +144,7 @@ gandalf scan --project . --json
 
 # Save point-in-time state
 gandalf snapshot create --name baseline --agent codex --scope user --project .
+gandalf snapshot create --name baseline-claude --agent claude-code --scope user --project .
 gandalf snapshot create --name baseline --metadata-only --project .
 gandalf snapshot list
 gandalf snapshot show baseline --json
@@ -149,11 +152,14 @@ gandalf snapshot show baseline --json
 # Compare saved setup with current setup
 gandalf diff baseline current --agent codex --scope user --project .
 gandalf diff baseline current --agent codex --scope user --project . --json
+gandalf diff baseline-claude current --agent claude-code --scope user --project .
 
-# Restore with preview
+# Restore with Review Changes
 gandalf restore --snapshot baseline --dry-run --agent codex --scope user --project .
 gandalf restore --snapshot baseline --apply --experimental --agent codex --scope user --project .
 gandalf restore --snapshot baseline --apply --rollback --experimental --agent codex --scope user --project .
+gandalf restore --snapshot baseline-claude --dry-run --agent claude-code --scope user --project .
+gandalf restore --snapshot baseline-claude --apply --experimental --agent claude-code --scope user --project .
 ```
 
 ### Terminal Workspace
@@ -165,7 +171,7 @@ gandalf timeline undo <id> --dry-run --json
 gandalf tui --project .
 ```
 
-`gandalf` and `gandalf tui` open the global setup console first. The console uses top tabs for Hooks, Plugins, Marketplace, Skills, and MCP Servers. History, snapshots, and timeline undo remain available as secondary safety workflows; timeline undo is dry-run preview only for stored history entries and reports `writesFiles=false`.
+`gandalf` and `gandalf tui` open the global setup console first. The console uses top tabs for Hooks, Plugins, Marketplace, Skills, and MCP Servers, and shows Codex/Claude Code baseline status. History, snapshots, Review Changes, and timeline undo remain available as secondary safety workflows; timeline undo is dry-run preview only for stored history entries and reports `writesFiles=false`.
 
 ### Bundles
 

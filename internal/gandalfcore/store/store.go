@@ -419,14 +419,18 @@ func ListSnapshots(storeDir string, agent *types.AgentID) ([]string, error) {
 		if !isSafeSnapshotName(name) {
 			continue
 		}
-		if agent != nil {
-			names = append(names, name)
-		} else if pathExistsBool(filepath.Join(baseDir, name, "manifest.json")) {
+		if pathExistsBool(filepath.Join(baseDir, name, "manifest.json")) {
 			names = append(names, name)
 		}
 	}
 	sort.Strings(names)
 	return names, nil
+}
+
+// IsRestorePointSnapshotName reports whether a snapshot was captured as an
+// automatic safety restore point rather than a user-selected baseline.
+func IsRestorePointSnapshotName(name string) bool {
+	return strings.HasPrefix(name, "pre-apply-")
 }
 
 func SnapshotExists(storeDir, name string, agent *types.AgentID) (bool, error) {

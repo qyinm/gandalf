@@ -24,6 +24,7 @@ var (
 	agentPathPattern        = regexp.MustCompile(`^[a-z_]+:`)
 	safeFileNamePattern     = regexp.MustCompile(`[^A-Za-z0-9_.-]+`)
 	secretAssignmentPattern = regexp.MustCompile(`(?i)(?:api[_-]?key|token|secret|password|passwd|credential|private[_-]?key|auth|bearer)\s*=`)
+	secretKeyPattern        = regexp.MustCompile(`(?i)(api[_-]?key|token|secret|password|passwd|credential|private[_-]?key|auth|bearer)`)
 )
 
 type contentCapture struct {
@@ -125,8 +126,8 @@ func captureContentBackedEvidence(evidence []types.DiscoveredItem, options *type
 		storagePath := fmt.Sprintf("content/%s.txt", safeContentFileName(item.ID, checksum))
 
 		var entry types.SnapshotContentEntry
-		if containsSecretLikeAssignment(text) {
-			reason := "secret_like_assignment"
+		if containsSecretLikeContent(text) {
+			reason := "secret_like_content"
 			entry = types.SnapshotContentEntry{
 				EvidenceID:    item.ID,
 				SourcePath:    item.SourcePath,
@@ -287,8 +288,36 @@ func safeContentFileName(evidenceID, checksum string) string {
 	return strings.Trim(strings.ToLower(name), ".")
 }
 
-func containsSecretLikeAssignment(text string) bool {
-	return secretAssignmentPattern.MatchString(text)
+func containsSecretLikeContent(text string) bool {
+	if secretAssignmentPattern.MatchString(text) {
+		return true
+	}
+	var parsed any
+	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
+		return false
+	}
+	return jsonValueContainsSecretLikeKey(parsed)
+}
+
+func jsonValueContainsSecretLikeKey(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, nested := range typed {
+			if secretKeyPattern.MatchString(key) {
+				return true
+			}
+			if jsonValueContainsSecretLikeKey(nested) {
+				return true
+			}
+		}
+	case []any:
+		for _, nested := range typed {
+			if jsonValueContainsSecretLikeKey(nested) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func sha256Checksum(text string) string {

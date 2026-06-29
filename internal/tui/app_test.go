@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
+	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -322,6 +324,69 @@ func TestMCPEnterExpandsServerToolsAndToolDescription(t *testing.T) {
 	}
 }
 
+func TestMCPSpaceTogglesDisabledFlagOnDisk(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	cfgPath := filepath.Join(runtime.HomeDir, ".mcp.json")
+	if err := os.WriteFile(cfgPath, []byte(`{"mcpServers":{"postgres":{"command":"pg-mcp"}}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	name := "postgres"
+	app := NewApp(runtime)
+	app.ready = true
+	app.activeSetupTab = SetupConsoleTabMCPServers
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "mcp-postgres",
+		Agent:      types.AgentClaudeCode,
+		Kind:       types.KindMcpServer,
+		Name:       &name,
+		SourcePath: "~/.mcp.json",
+		Scope:      types.ScopeUser,
+		Value:      []byte(`{"command":"pg-mcp"}`),
+	}}})
+
+	cmd := app.handleSetupToggle()
+	if cmd == nil {
+		t.Fatal("toggling a JSON MCP server should return a command")
+	}
+	msg := cmd()
+	if actionMsg, ok := msg.(setupActionMsg); ok && actionMsg.err != nil {
+		t.Fatalf("toggle command failed: %v", actionMsg.err)
+	}
+
+	raw, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"disabled": true`) {
+		t.Fatalf("expected disabled flag written to config:\n%s", raw)
+	}
+}
+
+func TestMCPSpaceToggleGatedForTOMLServer(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	name := "github"
+	app := NewApp(runtime)
+	app.ready = true
+	app.activeSetupTab = SetupConsoleTabMCPServers
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "mcp-github",
+		Agent:      types.AgentCodex,
+		Kind:       types.KindMcpServer,
+		Name:       &name,
+		SourcePath: "~/.codex/config.toml",
+		Scope:      types.ScopeUser,
+		Value:      []byte(`{"command":"gh-mcp"}`),
+	}}})
+
+	if cmd := app.handleSetupToggle(); cmd != nil {
+		t.Fatal("TOML-backed MCP server should not run a real toggle command")
+	}
+	if app.actionError == "" {
+		t.Fatal("expected a gated reason for TOML MCP toggle")
+	}
+}
+
 func TestMCPSearchShowsMatchingToolRows(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	name := "posthog"
@@ -494,6 +559,187 @@ func TestInventoryRescanFailureAfterActionClearsPendingAction(t *testing.T) {
 	}
 }
 
+func TestCreateMissingBaselinesWritesAgentScopedSnapshots(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	codexConfig := filepath.Join(runtime.HomeDir, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(codexConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codexConfig, []byte("model = \"gpt-5\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	claudeSettings := filepath.Join(runtime.HomeDir, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(claudeSettings), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(claudeSettings, []byte(`{"permissions":{"allow":["Bash(echo hi)"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := NewApp(runtime)
+	created, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created) != 2 {
+		t.Fatalf("created = %#v", created)
+	}
+	for _, agent := range []types.AgentID{types.AgentClaudeCode, types.AgentCodex} {
+		names, err := store.ListSnapshots(runtime.StoreDir, &agent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(names) != 1 {
+			t.Fatalf("%s snapshots = %#v", agent, names)
+		}
+		snap, err := store.ReadSnapshot(runtime.StoreDir, names[0], &agent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snap.Manifest.Security.RedactionPolicy != "content-backed" {
+			t.Fatalf("%s redaction policy = %q", agent, snap.Manifest.Security.RedactionPolicy)
+		}
+	}
+
+	createdAgain, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(createdAgain) != 0 {
+		t.Fatalf("expected no duplicate baselines, got %#v", createdAgain)
+	}
+}
+
+func TestSnapshotEnterBuildsRollbackReview(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	configPath := writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	app := NewApp(runtime)
+	created, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	codexBaseline := findCreatedSnapshot(t, created, "baseline-codex-")
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5.1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app.applyWorkspaceData(app.fetchWorkspaceData())
+	app.screen = ScreenSnapshots
+	app.snapshotCursor = findSnapshotRefIndex(t, app.snapshotRefs, codexBaseline, types.AgentCodex)
+
+	cmd := app.handleSnapshotEnter()
+	if cmd == nil {
+		t.Fatal("expected preview command")
+	}
+	model, _ := app.Update(cmd())
+	updated := model.(*App)
+	if updated.rollbackReview == nil {
+		t.Fatal("expected rollback review")
+	}
+	if updated.rollbackReview.SnapshotName != codexBaseline || len(updated.rollbackReview.Items) == 0 {
+		t.Fatalf("review = %#v", updated.rollbackReview)
+	}
+}
+
+func TestRollbackApplyBlocksWhenRestorePointFails(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	configPath := writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	app := NewApp(runtime)
+	created, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	codexBaseline := findCreatedSnapshot(t, created, "baseline-codex-")
+	changed := "model = \"gpt-5.1\"\n"
+	if err := os.WriteFile(configPath, []byte(changed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	review, err := app.buildRollbackReview(snapshotRef{Name: codexBaseline, Agent: types.AgentCodex})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.restorePointCreator = func(types.AgentID) (string, error) {
+		return "", os.ErrPermission
+	}
+
+	msg := app.applyRollbackReview(review)
+	if msg.err == nil {
+		t.Fatal("expected restore point failure")
+	}
+	got, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != changed {
+		t.Fatalf("config changed despite restore point failure: %q", got)
+	}
+}
+
+func TestRollbackApplyRestoresConfigAndVerifies(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	configPath := writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	app := NewApp(runtime)
+	created, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	codexBaseline := findCreatedSnapshot(t, created, "baseline-codex-")
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5.1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	review, err := app.buildRollbackReview(snapshotRef{Name: codexBaseline, Agent: types.AgentCodex})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg := app.applyRollbackReview(review)
+	if msg.err != nil {
+		t.Fatal(msg.err)
+	}
+	if !strings.Contains(msg.verify, "Verified") {
+		t.Fatalf("verify = %q", msg.verify)
+	}
+	got, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "model = \"gpt-5\"\n" {
+		t.Fatalf("config = %q", got)
+	}
+}
+
+func TestRollbackApplyRejectsStaleReview(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	configPath := writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	app := NewApp(runtime)
+	created, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	codexBaseline := findCreatedSnapshot(t, created, "baseline-codex-")
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5.1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	review, err := app.buildRollbackReview(snapshotRef{Name: codexBaseline, Agent: types.AgentCodex})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5.2\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	msg := app.applyRollbackReview(review)
+	if msg.err == nil || !strings.Contains(msg.err.Error(), "stale") {
+		t.Fatalf("expected stale review error, got %v", msg.err)
+	}
+	got, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "model = \"gpt-5.2\"\n" {
+		t.Fatalf("stale review should not write config, got %q", got)
+	}
+}
+
 func TestUndoPreviewMessageUpdatesCorruptEventsInUpdate(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := NewApp(runtime)
@@ -510,6 +756,135 @@ func TestUndoPreviewMessageUpdatesCorruptEventsInUpdate(t *testing.T) {
 	updated = model.(*App)
 	if len(updated.corruptEvents) != 0 {
 		t.Fatalf("corrupt events should clear: %#v", updated.corruptEvents)
+	}
+}
+
+func TestEnvironmentsModeOpensAndListsPerAgentDrift(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	app.width = 120
+	app.height = 32
+	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{
+		{Agent: types.AgentClaudeCode, HasBaseline: true, BaselineName: "base-cc"},
+		{Agent: types.AgentCodex, HasBaseline: true, BaselineName: "base-cx", SemanticChangeCount: 2},
+	}}
+
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("E")}); quit {
+		t.Fatal("E should not quit")
+	}
+	if app.screen != ScreenEnvironments {
+		t.Fatalf("expected environments screen, got %s", app.screen)
+	}
+	view := app.View()
+	if !strings.Contains(view, "Environments") {
+		t.Fatalf("expected environments title:\n%s", view)
+	}
+	if !strings.Contains(view, "Claude Code") || !strings.Contains(view, "Codex") {
+		t.Fatalf("expected per-agent rows:\n%s", view)
+	}
+	if !strings.Contains(view, "2 changes") {
+		t.Fatalf("expected drift count for changed agent:\n%s", view)
+	}
+
+	// Navigating down moves the focused agent.
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if app.environments.agentCursor != 1 {
+		t.Fatalf("expected environment cursor to advance, got %d", app.environments.agentCursor)
+	}
+}
+
+func TestEnvironmentsKeysMoveFocusSurfacesDiffAndHunks(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	app.width = 140
+	app.height = 36
+	sourcePath := "~/.codex/config.toml"
+	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{{
+		Agent: types.AgentCodex, HasBaseline: true, BaselineName: "base-cx", SemanticChangeCount: 2,
+		Diff: diff.GraphDiff{SemanticChanges: []diff.SemanticChange{
+			{
+				Code:       diff.SemanticAgentConfigChanged,
+				EntityKind: types.KindAgentConfig,
+				EntityName: "config",
+				Before:     []byte(`{"field00":"old","field01":"same","field02":"same","field03":"same","field04":"same","field05":"same","field06":"same","field07":"old"}`),
+				After:      []byte(`{"field00":"new","field01":"same","field02":"same","field03":"same","field04":"same","field05":"same","field06":"same","field07":"new"}`),
+				Details: diff.SemanticChangeDetails{
+					ChangedFields: []string{"field00", "field07"},
+					SourcePath:    &sourcePath,
+				},
+			},
+			{
+				Code:       diff.SemanticMcpAdded,
+				EntityKind: types.KindMcpServer,
+				EntityName: "postgres",
+				After:      []byte(`{"command":"pg-mcp"}`),
+				Details:    diff.SemanticChangeDetails{SourcePath: &sourcePath},
+			},
+		}},
+	}}}
+
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("E")})
+	if app.screen != ScreenEnvironments {
+		t.Fatalf("screen = %s", app.screen)
+	}
+	if app.environments.focus != EnvironmentFocusAgents {
+		t.Fatalf("focus = %s", app.environments.focus)
+	}
+
+	app.handleKey(tea.KeyMsg{Type: tea.KeyTab})
+	if app.environments.focus != EnvironmentFocusSurfaces {
+		t.Fatalf("focus after tab = %s", app.environments.focus)
+	}
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if app.environments.surfaceCursor != 1 || app.environments.agentCursor != 0 {
+		t.Fatalf("surface cursor = %d agent cursor = %d", app.environments.surfaceCursor, app.environments.agentCursor)
+	}
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	if app.environments.surfaceCursor != 0 {
+		t.Fatalf("surface cursor after k = %d", app.environments.surfaceCursor)
+	}
+
+	app.handleKey(tea.KeyMsg{Type: tea.KeyTab})
+	if app.environments.focus != EnvironmentFocusDiff {
+		t.Fatalf("focus after second tab = %s", app.environments.focus)
+	}
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	if app.environments.hunkCursor != 1 {
+		t.Fatalf("hunk cursor after n = %d", app.environments.hunkCursor)
+	}
+	model := app.currentEnvironmentsViewModel()
+	if !environmentModelHasCurrentHunk(model, 1) {
+		t.Fatalf("expected hunk 1 selected: %#v", model.Diff.Rows)
+	}
+
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
+	if app.environments.mode != EnvironmentRenderModeUnified {
+		t.Fatalf("mode after v = %s", app.environments.mode)
+	}
+}
+
+func environmentModelHasCurrentHunk(model EnvironmentsViewModel, index int) bool {
+	for _, row := range model.Diff.Rows {
+		if row.Kind == EnvironmentDiffRowHunk && row.HunkIndex == index && row.CurrentHunk {
+			return true
+		}
+	}
+	return false
+}
+
+func TestEnvironmentsRestoreWithoutSnapshotIsGated(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{
+		{Agent: types.AgentClaudeCode, HasBaseline: false},
+	}}
+	app.screen = ScreenEnvironments
+
+	if cmd := app.restoreFocusedEnvironment(); cmd != nil {
+		t.Fatal("restore should be gated when no snapshot exists for the agent")
+	}
+	if app.actionError == "" {
+		t.Fatal("expected a gated reason when restoring without a snapshot")
 	}
 }
 
@@ -705,4 +1080,38 @@ func makeTestRuntime(t *testing.T) types.RuntimeOptions {
 		HomeDir:     homeDir,
 		StoreDir:    storeDir,
 	}
+}
+
+func writeCodexConfig(t *testing.T, homeDir, content string) string {
+	t.Helper()
+	configPath := filepath.Join(homeDir, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return configPath
+}
+
+func findCreatedSnapshot(t *testing.T, names []string, prefix string) string {
+	t.Helper()
+	for _, name := range names {
+		if strings.HasPrefix(name, prefix) {
+			return name
+		}
+	}
+	t.Fatalf("missing created snapshot with prefix %q in %#v", prefix, names)
+	return ""
+}
+
+func findSnapshotRefIndex(t *testing.T, refs []snapshotRef, name string, agent types.AgentID) int {
+	t.Helper()
+	for i, ref := range refs {
+		if ref.Name == name && ref.Agent == agent {
+			return i
+		}
+	}
+	t.Fatalf("missing snapshot ref %s/%s in %#v", agent, name, refs)
+	return 0
 }

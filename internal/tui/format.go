@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/qyinm/gandalf/internal/gandalfcore/agents"
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -76,24 +77,28 @@ func FormatTimelineTimestamp(value string, now time.Time) string {
 	return fmt.Sprintf("%s %s", date.Format("Jan 2"), formatClock(date))
 }
 
-// TruncateText truncates text to width with an ellipsis suffix.
+// TruncateText truncates text to a display width with an ellipsis suffix.
+// It is display-width aware so it does not corrupt wide-rune or ANSI content.
 func TruncateText(value string, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	if len(value) <= width {
+	if ansi.StringWidth(value) <= width {
 		return value
 	}
 	if width <= 3 {
-		return strings.Repeat(".", width)
+		return "..."
 	}
-	return value[:width-3] + "..."
+	return ansi.Truncate(value, width, "...")
 }
 
-// PadDisplay truncates then pads text to width.
+// PadDisplay truncates then pads text to a display width.
 func PadDisplay(value string, width int) string {
 	truncated := TruncateText(value, width)
-	return truncated + strings.Repeat(" ", max(0, width-len(truncated)))
+	if pad := width - ansi.StringWidth(truncated); pad > 0 {
+		return truncated + strings.Repeat(" ", pad)
+	}
+	return truncated
 }
 
 // FormatInventorySourceRoot returns a compact source-root label for inventory rows.

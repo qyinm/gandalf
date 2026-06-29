@@ -56,6 +56,32 @@ OPENAI_API_KEY = "secret"
 	}
 }
 
+func TestCodexPluginKeysFromTOML(t *testing.T) {
+	text := `model = "gpt-5"
+
+[plugins."vercel@openai-curated"]
+
+[plugins."documents@openai-primary-runtime"]
+
+[projects."/Users/x/some-plugin-thing"]
+
+[mcp_servers.context7]
+command = "npx"
+`
+	keys := codexPluginKeysFromTOML(text)
+	if len(keys) != 2 {
+		t.Fatalf("expected 2 plugin keys, got %#v", keys)
+	}
+	if keys[0] != "vercel@openai-curated" || keys[1] != "documents@openai-primary-runtime" {
+		t.Fatalf("plugin keys = %#v", keys)
+	}
+
+	name, marketplace := splitPluginKey(keys[0])
+	if name != "vercel" || marketplace != "openai-curated" {
+		t.Fatalf("split = %q %q", name, marketplace)
+	}
+}
+
 func TestCodexInlineHookItemsFromTOML(t *testing.T) {
 	text := `model = "gpt-5"
 

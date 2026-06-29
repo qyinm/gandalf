@@ -61,6 +61,7 @@ func (c CodexScanner) Scan(context *scan.ScannerContext) []types.DiscoveredItem 
 
 	if context.Scope == nil || (context.Scope != nil && *context.Scope == types.ScopeUser) {
 		evidence = append(evidence, scanCodexMCPServers(context.HomeDir, base)...)
+		evidence = append(evidence, scanCodexInstalledPlugins(context.HomeDir)...)
 	}
 
 	evidence = append(evidence, scanCodexHooks(context.ProjectPath, context.HomeDir, context.Scope, base)...)
@@ -109,6 +110,74 @@ func scanCodexMCPServers(homeDir string, base scan.ScannerBase) []types.Discover
 		evidence = append(evidence, item)
 	}
 	return evidence
+}
+
+// scanCodexInstalledPlugins surfaces installed Codex plugins declared as
+// [plugins."name@source"] sections in config.toml so they appear in the
+// Plugins tab alongside Claude Code plugins.
+func scanCodexInstalledPlugins(homeDir string) []types.DiscoveredItem {
+	configPath := filepath.Join(homeDir, ".codex", "config.toml")
+	text, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil
+	}
+	cacheRoot := filepath.Join(homeDir, ".codex", "plugins", "cache")
+	var evidence []types.DiscoveredItem
+	seen := make(map[string]struct{})
+	for _, key := range codexPluginKeysFromTOML(string(text)) {
+		name, marketplace := splitPluginKey(key)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		sourcePath := displayClaudePath(filepath.Join(cacheRoot, marketplace, name), homeDir)
+		metadata, _ := json.Marshal(map[string]any{
+			"present":       true,
+			"name":          name,
+			"marketplace":   marketplace,
+			"installed":     true,
+			"status":        "installed",
+			"inventoryOnly": true,
+		})
+		itemName := name
+		evidence = append(evidence, types.DiscoveredItem{
+			ID:            scan.ScannerItemID(types.ScopeUser, types.AgentCodex, sourcePath, "plugin-"+marketplace+"-"+name),
+			Agent:         types.AgentCodex,
+			Kind:          types.KindExtension,
+			SourcePath:    sourcePath,
+			Scope:         types.ScopeUser,
+			Precedence:    20,
+			Parser:        types.ParserToml,
+			Sensitivity:   "metadata",
+			ContentPolicy: "metadata_only",
+			RestorePolicy: types.RestoreNotSupported,
+			CaptureStatus: types.CaptureCaptured,
+			Confidence:    types.ConfidenceHigh,
+			Name:          &itemName,
+			Metadata:      metadata,
+		})
+	}
+	return evidence
+}
+
+// codexPluginKeysFromTOML extracts plugin keys from [plugins."key"] sections.
+func codexPluginKeysFromTOML(text string) []string {
+	var keys []string
+	for _, raw := range strings.Split(text, "\n") {
+		line := strings.TrimSpace(stripTOMLComment(raw))
+		if !strings.HasPrefix(line, "[plugins.") || !strings.HasSuffix(line, "]") {
+			continue
+		}
+		inner := strings.TrimSuffix(strings.TrimPrefix(line, "[plugins."), "]")
+		inner = strings.Trim(inner, "\"")
+		if inner != "" {
+			keys = append(keys, inner)
+		}
+	}
+	return keys
 }
 
 func codexMCPServersFromTOML(text string) map[string]map[string]any {

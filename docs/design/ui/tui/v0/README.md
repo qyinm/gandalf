@@ -2,14 +2,14 @@
 
 ## Product Frame
 
-Gandalf v0 is a global setup manager for AI coding agent setups.
+Gandalf v0 is a global setup manager for Codex and Claude Code setups.
 
 The TUI should help a power user answer four questions quickly:
 
 1. What user-global skills, hooks, MCP servers, and plugins are installed right now?
 2. Which agent does each setup object belong to?
 3. Can I add, remove, or edit an item through the agent's native setup path?
-4. Can I still use snapshots and history as a rollback safety layer?
+4. Can I review changes and roll back supported setup safely?
 
 The app is not primarily a marketplace, security dashboard, or brand page. It is a user-global setup manager with history and restore as secondary safety workflows.
 
@@ -22,7 +22,7 @@ The app is not primarily a marketplace, security dashboard, or brand page. It is
 | Saved state in a profile | commit | Snapshot / saved setup |
 | Local setup history event | log entry | Timeline event / change |
 | Change list between states | diff | Compare |
-| Revert to saved state | checkout/reset | Restore |
+| Revert to saved state | checkout/reset | Review Changes / Restore |
 | Portable bundle | archive | `.gandalf` file |
 
 ### Profile
@@ -42,16 +42,14 @@ MVP starts with one default profile. Users can add more profiles later.
 
 ### Snapshot
 
-A snapshot is one saved point inside a profile. It captures user-global setup, not only one agent.
+A snapshot is one saved point inside a profile. In the current loop, rollback baselines are agent-scoped for Codex and Claude Code.
 
 The snapshot contains:
 
 - Claude Code state
 - Codex state
-- Cursor state
-- OpenCode/Pi Agent state when supported
 
-Agent screens show filtered history, but the saved unit is the global setup. Project-local setup files are outside the current product scope.
+Project-local setup files are outside the current product scope. Cursor, OpenCode, and Pi Agent are not current product-visible TUI surfaces.
 
 ### Deterministic Snapshot Titles
 
@@ -68,7 +66,6 @@ Priority order:
 Examples:
 
 - `add github mcp to Claude Code`
-- `remove playwright mcp from Cursor`
 - `install react-review skill`
 - `update Claude Code permissions`
 - `change 2 MCPs and 1 skill`
@@ -85,17 +82,18 @@ Timeline, snapshots, and rollback workflows remain available as secondary screen
 ┌───────────────────────────────────────────────────────────────────────────────┐
 │ Hooks 13   Plugins 4   Marketplace 5   Skills 570   MCP Servers 3            │
 │ / search                                                                      │
+│ CC  missing baseline  baseline -                    -                        │
+│ CX  changed           baseline baseline-codex        2 changes                │
 │                                                                               │
 │ > CC  hook    PostToolUse.Write      user       ~/.claude/settings.json       │
 │   CX  hook    SessionStart           user       ~/.codex/hooks.json           │
-│   CU  hook    beforeShellExecution   user       ~/.cursor/hooks.json          │
 │                                                                               │
 │ PostToolUse.Write                                                             │
 │ Claude Code · hook · user                                                     │
 │ source: ~/.claude/settings.json                                               │
 │ actions: edit:unavailable, remove:unavailable                                 │
 │                                                                               │
-│ Tab tabs  / search  r rescan  Enter action  H history  S snapshots  q quit    │
+│ Tab tabs  / search  r rescan  B baseline  Enter action  H history  S snapshots│
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -123,12 +121,16 @@ Shown first. Non-marketplace tabs list user-global skills, hooks, MCP servers, a
 Hooks 13   Plugins 4   Marketplace 5   Skills 570   MCP Servers 3
 / search
 
+CC  missing baseline  baseline -                    -
+CX  changed           baseline baseline-codex        2 changes
+
 > CC  hook    PostToolUse.Write      user       ~/.claude/settings.json
   CX  hook    SessionStart           user       ~/.codex/hooks.json
-  CU  hook    beforeShellExecution   user       ~/.cursor/hooks.json
 ```
 
 Each row shows agent marker, object kind, name, source, status, and available actions. Unsupported actions remain visible as unavailable. Selecting a row reveals in-place detail with the target, agent, operation or command, and global config target.
+
+Baseline status rows summarize whether Codex and Claude Code have an agent-scoped baseline and whether current setup differs from that baseline. `B` creates missing baselines. The Snapshots screen opens Review Changes before applying rollback.
 
 ### Marketplace
 
@@ -250,12 +252,12 @@ Profiles
 
 ● default
   12 snapshots
-  Claude Code, Codex, Cursor
+  Claude Code, Codex
   changed Today 14:22
 
   frontend
   5 snapshots
-  Claude Code, Cursor
+  Codex
   changed Yesterday
 
   clean-baseline
@@ -472,8 +474,7 @@ Save a setup to start local history.
 ```text
 No supported agent setup found.
 
-Gandalf looks for Claude Code, Codex, Cursor, OpenCode, Pi Agent,
-and project instruction files.
+Gandalf looks for Claude Code and Codex user-global setup.
 
 Run from a project directory or install one supported agent first.
 ```

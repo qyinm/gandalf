@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // TimelineRow is a rendered timeline list row.
@@ -76,34 +75,6 @@ type HistoryView struct {
 	UndoPreview    *UndoPreview
 }
 
-// NavItem is a sidebar navigation item.
-type NavItem struct {
-	ID            string
-	Label         string
-	EvidenceCount int
-}
-
-// NavSection is a sidebar section.
-type NavSection struct {
-	Label string
-	Items []NavItem
-}
-
-// SidebarView is render input for the left navigation column.
-type SidebarView struct {
-	Sections []NavSection
-	FlatIDs  []string
-	Cursor   int
-}
-
-var (
-	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
-	labelStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	activeStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
-	warnStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	mutedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-)
-
 // RenderHistory renders the History > All changes workspace panel.
 func RenderHistory(model HistoryView, width, height int) string {
 	if width < 40 {
@@ -161,49 +132,6 @@ func RenderHistory(model HistoryView, width, height int) string {
 		lines = lines[:height]
 	}
 	return strings.Join(lines, "\n")
-}
-
-// RenderSidebar renders the left navigation column.
-func RenderSidebar(nav SidebarView, width, height int) string {
-	if width < 20 {
-		width = 20
-	}
-	var lines []string
-	lines = append(lines, titleStyle.Render("Gandalf"))
-	lines = append(lines, "")
-
-	selectedID := ""
-	if nav.Cursor >= 0 && nav.Cursor < len(nav.FlatIDs) {
-		selectedID = nav.FlatIDs[nav.Cursor]
-	}
-
-	for _, section := range nav.Sections {
-		lines = append(lines, labelStyle.Render(section.Label))
-		for _, item := range section.Items {
-			prefix := "  "
-			style := mutedStyle
-			if item.ID == selectedID {
-				prefix = "▸ "
-				style = activeStyle
-			}
-			count := ""
-			if item.EvidenceCount > 0 {
-				count = fmt.Sprintf(" (%d)", item.EvidenceCount)
-			}
-			lines = append(lines, style.Render(prefix+item.Label+count))
-		}
-		lines = append(lines, "")
-	}
-
-	lines = append(lines, mutedStyle.Render("↑↓/jk nav · Enter select"))
-	lines = append(lines, mutedStyle.Render("h/l timeline · r rescan · u undo"))
-	lines = append(lines, mutedStyle.Render("q quit"))
-
-	parts := strings.Split(strings.Join(lines, "\n"), "\n")
-	if len(parts) > height {
-		parts = parts[:height]
-	}
-	return lipgloss.NewStyle().Width(width).Render(strings.Join(parts, "\n"))
 }
 
 func renderCurrentSetup(model CurrentSetup, width int) []string {

@@ -23,11 +23,13 @@ func RootsFromPaths(homeDir, projectPath *string) *Roots {
 	case homeDir == nil && projectPath == nil:
 		return nil
 	case homeDir != nil && projectPath != nil:
-		return &Roots{HomeDir: *homeDir, ProjectPath: *projectPath}
+		return &Roots{HomeDir: filepath.Clean(*homeDir), ProjectPath: filepath.Clean(*projectPath)}
 	case homeDir != nil:
-		return &Roots{HomeDir: *homeDir, ProjectPath: *homeDir}
+		cleanHome := filepath.Clean(*homeDir)
+		return &Roots{HomeDir: cleanHome, ProjectPath: cleanHome}
 	default:
-		return &Roots{HomeDir: *projectPath, ProjectPath: *projectPath}
+		cleanProject := filepath.Clean(*projectPath)
+		return &Roots{HomeDir: cleanProject, ProjectPath: cleanProject}
 	}
 }
 

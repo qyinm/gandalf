@@ -34,6 +34,20 @@ func TestAllowsPathsUnderHome(t *testing.T) {
 	}
 }
 
+func TestRootsFromPathsCleansRootsBeforeValidation(t *testing.T) {
+	t.Parallel()
+	home := "/tmp//gandalf/home"
+	project := "/tmp//gandalf/project"
+	roots := pathconfinement.RootsFromPaths(&home, &project)
+	got, err := pathconfinement.ValidateConstrainedWritePath("/tmp/gandalf/home/.codex/config.toml", roots)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "/tmp/gandalf/home/.codex/config.toml" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestValidateHomeRelativeImportSegment(t *testing.T) {
 	t.Parallel()
 	if err := pathconfinement.ValidateHomeRelativeImportSegment(".codex/config.toml"); err != nil {

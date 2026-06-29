@@ -89,6 +89,30 @@ func TestInvalidAgentReturnsExitOne(t *testing.T) {
 	if !strings.Contains(stderr, "GANDALF_INVALID_AGENT") {
 		t.Fatalf("expected GANDALF_INVALID_AGENT in stderr, got %q", stderr)
 	}
+	if !strings.Contains(stderr, "Valid agents: claude-code, codex") {
+		t.Fatalf("expected current supported agent list, got %q", stderr)
+	}
+}
+
+func TestUnsupportedCurrentAgentReturnsExitOne(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, _ := makeSandbox(t)
+
+	_, stderr, code := runCLI(t,
+		"scan",
+		"--project", projectPath,
+		"--home", homeDir,
+		"--agent", "cursor",
+	)
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr, "GANDALF_INVALID_AGENT") {
+		t.Fatalf("expected GANDALF_INVALID_AGENT in stderr, got %q", stderr)
+	}
+	if !strings.Contains(stderr, "Valid agents: claude-code, codex") {
+		t.Fatalf("expected current supported agent list, got %q", stderr)
+	}
 }
 
 func TestInvalidScopeReturnsExitOne(t *testing.T) {
@@ -154,6 +178,54 @@ func TestSnapshotCreateRequiresMetadataOnlyByDefault(t *testing.T) {
 	if !strings.Contains(stderr, "GANDALF_METADATA_ONLY_REQUIRED") {
 		t.Fatalf("expected metadata-only error, got %q", stderr)
 	}
+}
+
+func TestSnapshotCreateClaudeCodeUserScopeIsContentBacked(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, storeDir := makeSandbox(t)
+	settingsPath := filepath.Join(homeDir, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settings := `{"permissions":{"allow":["Bash(echo hi)"]}}`
+	if err := os.WriteFile(settingsPath, []byte(settings), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := runCLI(t,
+		"snapshot", "create",
+		"--name", "clean-claude",
+		"--agent", "claude-code",
+		"--scope", "user",
+		"--project", projectPath,
+		"--home", homeDir,
+		"--store", storeDir,
+	)
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", code, stderr)
+	}
+	if !strings.Contains(stdout, "Created content-backed snapshot: clean-claude (agent: claude-code) (scope: user)") {
+		t.Fatalf("unexpected stdout: %q", stdout)
+	}
+
+	agent := types.AgentClaudeCode
+	snap, err := store.ReadSnapshot(storeDir, "clean-claude", &agent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range snap.Content {
+		if entry.SourcePath == "~/.claude/settings.json" && entry.CaptureStatus == "captured" {
+			got, err := store.ReadSnapshotContent(storeDir, "clean-claude", entry, &agent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got == settings {
+				return
+			}
+			t.Fatalf("settings content = %q, want %q", got, settings)
+		}
+	}
+	t.Fatalf("expected content-backed Claude settings entry, got %#v", snap.Content)
 }
 
 func TestDiffCurrentJSONExitsZero(t *testing.T) {

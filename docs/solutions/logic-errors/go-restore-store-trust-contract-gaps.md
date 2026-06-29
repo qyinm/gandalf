@@ -1,6 +1,7 @@
 ---
 title: Go Restore/Store Trust-Contract Gaps Found in Code Review
 date: 2026-06-26
+last_updated: 2026-06-29
 category: logic-errors
 module: gandalf-go-restore-store
 problem_type: logic_error
@@ -9,6 +10,7 @@ symptoms:
   - "Restore apply could validate `item.Dest` but still write MCP state to a different metadata-derived path."
   - "Snapshot replacement could leave updated metadata next to missing or partial content blobs after a mid-write failure."
   - "Plan/apply tests kept calling `ApplyRestoreItems` without confinement roots, so they no longer modeled real CLI apply behavior."
+  - "Acceptance restore failed when the declared home root contained redundant separators but the destination path was clean."
 root_cause: logic_error
 resolution_type: code_fix
 severity: high
@@ -37,12 +39,14 @@ Two failures mattered most: `mcp_server` apply could ignore the validated destin
 - Rollback for the same MCP item could follow the override path rather than the path that had actually been applied.
 - `WriteSnapshot` wrote fresh manifest/evidence files first, then deleted and rewrote `content/`, so a later failure could leave the snapshot half-updated.
 - After `ApplyRestoreItems` was changed to fail closed without confinement roots, several plan/apply tests started needing explicit `HomeDir` and `ProjectPath` to reflect real CLI execution.
+- A Gate 2 acceptance run could reject an otherwise valid restore target when `HomeDir` was spelled with redundant separators and the destination path had already been cleaned.
 
 ## What Didn't Work
 
 - Validating only `item.Dest` was not enough. The confinement check happened before dispatch, but `ApplyMCPServer` derived the real write path from metadata afterward, which reopened the boundary.
 - In-place snapshot replacement (`remove old content/`, then write new blobs, then write `content-index.json`) assumed every write would succeed. That is fine only when partial failure is impossible, which is exactly the assumption a persistence layer should not make.
 - The existing plan tests exercised restore behavior through `ApplyRestoreItems`, but they omitted roots in `ApplyOptions`. Once apply correctly failed closed, those tests no longer described the real CLI path and had to be fixed.
+- Comparing a cleaned destination path against uncleaned confinement roots was too literal. The filesystem target was inside the allowed root, but the string-prefix check could not prove it when the root was spelled differently.
 - Session-history extraction was attempted for this run, but no relevant prior restore/store sessions were found in accessible local history. The referenced Grok session was not present in local storage, so it could not be used as evidence.
 
 ## Solution
@@ -117,11 +121,24 @@ if err := os.Rename(tempDir, targetDir); err != nil {
 
 The plan/apply tests that call `ApplyRestoreItems` directly now pass `HomeDir` and `ProjectPath` explicitly, matching the CLI path and preserving the fail-closed behavior under test.
 
+### 5. Normalize confinement roots before comparisons
+
+`RootsFromPaths` now cleans the declared roots before they are used by `ValidateConstrainedWritePath`:
+
+```go
+case homeDir != nil && projectPath != nil:
+	return &Roots{HomeDir: filepath.Clean(*homeDir), ProjectPath: filepath.Clean(*projectPath)}
+```
+
+This keeps the root spelling and destination spelling in the same canonical form before the strict prefix check runs.
+
 ## Why This Works
 
 The trust contract only holds if the **actual write target** is the same one that was validated. By deriving MCP writes from `item.Dest` and making rollback prefer the path that was actually applied, the code removes the metadata escape hatch that existed after validation.
 
 The snapshot-store fix works for the same reason at a different layer: readers should either see the old snapshot or the fully-written new snapshot, never a mixture. Staging under a temp directory and swapping at the end restores that all-or-nothing property.
+
+Root normalization preserves the same trust boundary without making it looser. It does not authorize new paths; it makes the allowed roots comparable to the already-cleaned destination path so equivalent filesystem spellings do not produce false rejections.
 
 The test updates matter because they keep the regression net aligned with production semantics. Once apply requires roots, tests that omit roots are no longer realistic; they are accidental bypasses.
 
@@ -132,9 +149,11 @@ The test updates matter because they keep the regression net aligned with produc
   - run the same confinement validation again on the derived path.
 - Persistence code for the snapshot store should stage complete replacements and swap them into place, rather than mutating live snapshot directories in place.
 - Direct `ApplyRestoreItems` tests must pass `HomeDir` and `ProjectPath` so they exercise the same confinement contract as `internal/cli/restore.go`.
+- Normalize both sides of any path-confinement comparison before applying strict prefix checks. Acceptance scripts should canonicalize temporary roots too, so path-spelling drift fails in the smallest possible place.
 - Keep regression tests that prove:
   - metadata path overrides do not redirect writes,
   - rollback restores the applied path rather than an override path,
+  - redundant separators in declared roots do not reject valid in-root destinations,
   - failed snapshot replacement leaves the previous version readable.
 - Treat `ARCHITECTURE.md`'s Gate 2 trust contract as a concrete checklist for write-path reviews: fail-closed roots, symlink refusal, validated destinations, and atomic persistence.
 

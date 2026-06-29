@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -52,6 +53,35 @@ func TestWritesAgentConfigContentWithoutAppendingNewline(t *testing.T) {
 	}
 	if string(got) != "model = \"gpt-5\"" {
 		t.Fatalf("got %q", string(got))
+	}
+}
+
+func TestApplyAgentConfigPreservesExistingFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix permissions test")
+	}
+	t.Parallel()
+	_, homeDir, _ := makeRestoreSandbox(t)
+	configPath := filepath.Join(homeDir, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte("model = \"old\""), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	action := types.RestoreActionUpdate
+	content, _ := json.Marshal("model = \"gpt-5\"")
+	item := makeItem("config", "agent_config", configPath, action, content, nil)
+	if err := restore.ApplyAgentConfig(&item); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("mode = %o, want 0600", got)
 	}
 }
 

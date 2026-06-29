@@ -129,7 +129,14 @@ func FormatApplySummary(summary *types.ApplySummary) string {
 }
 
 func writeFileAtomically(filePath, content string) error {
-	return fsutil.WriteTextAtomically(filePath, content, 0o644)
+	mode := os.FileMode(0o644)
+	if info, err := os.Lstat(filePath); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing to write through symlink destination: %s", filePath)
+		}
+		mode = info.Mode().Perm()
+	}
+	return fsutil.WriteTextAtomically(filePath, content, mode)
 }
 
 func recordApplyFailure(item *types.RestoreItem, summary *types.ApplySummary, reason string) {
