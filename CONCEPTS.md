@@ -5,31 +5,37 @@
 ## Product Identity
 
 ### Gandalf
-The selected new product identity for Gandalf. Gandalf is the wizard for AI agent setup: it guides setup changes, captures working agent environments into portable setup containers, and makes those containers rollbackable across machines.
+The selected product identity for Gandalf. Gandalf is a local control console for AI agent setup: it inspects installed capabilities, browses agent-native marketplace/source entries, and runs reviewed provider-backed changes.
 
 ### Setup Container
-A portable, rollbackable captured AI agent setup state managed by Gandalf. This is the product-level container concept behind snapshots, bundles, profile states, and cross-machine restore flows; it should not imply an OS container or remote agent runtime.
+A historical/future portability concept for captured AI agent setup state. It can describe snapshots or bundles, but it is not the current product identity and should not imply an OS container, remote agent runtime, or active profile system.
+
+### Local Control Console
+The current product direction for Gandalf: a local TUI-first console for user-global AI agent setup. It separates installed inventory, agent-native marketplace/source browsing, and provider-backed actions.
 
 ### Global Agent Setup Manager
-The current product direction for Gandalf: a TUI-first manager for user-global agent skills, hooks, MCP servers, and plugins across supported agents. It excludes project-local setup surfaces from the core product scope.
+Older wording for the current local control console direction. Prefer "local control console" in new product docs; the scope remains user-global agent skills, hooks, MCP servers, plugins, and agent-native marketplace/source entries across currently supported agents.
 
 ### Current Supported Agent Set
-The product-visible agent boundary for the current Gandalf loop. Gandalf may keep legacy scanners or type constants for compatibility, but the default TUI, CLI help, active scan path, and documentation should only present Codex and Claude Code as currently supported agents until broader support is intentionally reintroduced.
+The product-visible agent boundary for the current Gandalf loop. Gandalf may keep legacy scanners or type constants for compatibility, but the default TUI, CLI help, active scan path, and documentation should only present current Codex and Claude Code support until broader support is intentionally reintroduced.
 
 ### Unified Inventory
 The normalized cross-agent setup inventory used by the setup console. It presents skills, hooks, MCP servers, and plugins as global/user setup rows with compact agent identity rather than forcing users through an agent picker first.
 
 ### Setup Console
-The current target information structure for Gandalf's default TUI. It uses top-level setup tabs for hooks, plugins, marketplace, skills, and MCP servers while preserving cross-agent rows inside each tab.
+The current target information structure for Gandalf's default TUI. It uses top-level setup tabs for hooks, plugins, agent-native marketplace/source browsing, skills, and MCP servers while preserving cross-agent rows inside each tab.
 
 ### Environment Diff Surface
 A TUI-visible unit of environment drift for one semantic setup object or raw source artifact. It exists so semantic object changes and raw source changes both remain navigable and cannot be hidden behind a clean summary.
 
-### Agent Marketplace Source
-A marketplace or plugin source exposed by an agent ecosystem and browsed through Gandalf. Gandalf can group and display source-backed entries, but install, update, uninstall, add-source, and remove-source actions are available only through agent-native providers; Gandalf does not own or certify the catalog itself.
+### Agent-Native Marketplace/Source
+A marketplace, registry, plugin repository, or source exposed by an agent ecosystem and browsed through Gandalf. Gandalf can group and display source-backed entries, but install, update, uninstall, add-source, and remove-source actions are available only through agent-native provider-backed actions; Gandalf does not own or certify the catalog itself.
+
+### Provider-Backed Action
+A setup action backed by a provider that can describe the target, expected effect, Review Changes preview, and execution mechanism. Inventory visibility does not imply action executability; Gandalf can truthfully mark an action available only when a provider-backed action exists.
 
 ### Setup Action Provider
-The component that turns a visible setup inventory item into a concrete edit, remove, add, or dry-run action. Inventory visibility does not imply action executability; a provider must describe the target, expected effect, and execution mechanism before Gandalf can truthfully mark an action available.
+The component that turns a visible setup inventory item into a provider-backed edit, remove, add, install, update, uninstall, or dry-run action.
 
 ### Skill Markdown Overlay Viewer
 A read-only Setup Console overlay that opens from a selected skill and renders its `SKILL.md` entrypoint as terminal markdown. It makes inspection the primary Skills tab `Enter` behavior while keeping setup mutations behind explicit provider-backed actions.
@@ -68,7 +74,7 @@ The trust boundary that restricts restore and bundle writes to declared home and
 A named capture of project and user-global evidence at a point in time. Snapshots may be metadata-only or content-backed depending on capture policy.
 
 ### Content-Backed Snapshot
-A snapshot whose store entry includes captured file bytes in addition to metadata and structured evidence. Gate 2 restore depends on content-backed snapshots when byte-exact restoration of agent config files is required.
+A snapshot whose store entry includes captured file bytes in addition to metadata and structured evidence. Restore safety depends on content-backed snapshots when byte-exact restoration of agent config files is required.
 
 ### Store
 The on-disk persistence layer for snapshots, timeline entries, and related Gandalf state. CLI and TUI surfaces read the same store APIs for snapshot listing and changelog, so snapshot replacement must be atomic enough that readers never observe new metadata paired with partial or missing content blobs.

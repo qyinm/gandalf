@@ -1,16 +1,16 @@
 <h1 align="center">Gandalf</h1>
 
 <p align="center">
-  <img alt="Gandalf - AI agent environment management" src="https://shieldcn.dev/header/surface.svg?title=Gandalf&subtitle=AI%20agent%20environment%20management&align=center">
+  <img alt="Gandalf - AI agent setup control console" src="https://shieldcn.dev/header/surface.svg?title=Gandalf&subtitle=AI%20agent%20setup%20control%20console&align=center">
 </p>
 
 <p align="center">
-  <strong>AI agent environment management.</strong>
+  <strong>Local control console for AI agent setup.</strong>
 </p>
 
 <p align="center">
-  Manage the user-global setup layer Git does not track:
-  MCP servers, skills, hooks, prompts, permissions, and agent config.
+  Inspect installed capabilities, browse agent-native marketplace/source entries, and run reviewed
+  provider-backed changes for the user-global setup layer Git does not track.
 </p>
 
 <p align="center">
@@ -28,11 +28,14 @@
 - [Highlights](#highlights)
 - [Install](#install)
 - [Quick Start](#quick-start)
+- [Current Support Matrix](#current-support-matrix)
 - [Commands](#commands)
 - [Trust Contract](#trust-contract)
 - [Development](#development)
 
 ## Why Gandalf
+
+Gandalf is a local control console for AI agent setup: it inspects installed capabilities, browses agent-native marketplace/source entries, and runs reviewed provider-backed changes.
 
 Agent power users constantly change their local environment:
 
@@ -41,7 +44,7 @@ Agent power users constantly change their local environment:
 - edit prompts, instructions, hooks, and permissions
 - let an agent modify the setup on their behalf
 
-Those changes usually have no clean management layer. Gandalf opens as a TUI-first setup console for skills, hooks, MCP servers, plugins, and agent marketplace sources across Codex and Claude Code. Snapshot, diff, bundle, and restore remain the safety layer behind that workflow:
+Those changes usually have no clean management layer. Gandalf opens as a TUI-first setup console for skills, hooks, MCP servers, plugins, and agent-native marketplace/source entries across Codex and Claude Code. Snapshot, diff, bundle, and restore remain the safety layer behind that workflow:
 
 ```bash
 gandalf
@@ -54,10 +57,10 @@ Use it before you let an agent change config, install skills, edit hooks, or rew
 
 ## Highlights
 
-- **Local history** for AI agent environment experiments.
-- **Top-tab TUI setup console** for user-global skills, hooks, MCP servers, plugins, and agent marketplace sources.
+- **Local control console** for installed AI agent setup capabilities.
+- **Top-tab TUI setup console** for user-global skills, hooks, MCP servers, plugins, and agent-native marketplace/source browsing.
 - **Human-readable diffs** for config, skills, hooks, and MCP servers.
-- **Review Changes before restores** with explicit apply flags before writing content.
+- **Review Changes** before restore-backed rollback or provider-backed actions write content.
 - **Content-backed snapshots** for current Codex and Claude Code user-global setup.
 - **Portable bundles** for exporting, verifying, inspecting, and previewing setup state on another machine.
 - **Go CLI and Bubble Tea TUI** shipped as a single binary.
@@ -123,12 +126,14 @@ gandalf restore --snapshot clean-codex --apply --experimental --agent codex --sc
 gandalf restore --snapshot clean-claude --apply --experimental --agent claude-code --scope user --project .
 ```
 
-## What Gandalf Tracks
+## Current Support Matrix
 
-| Surface | Current supported setup inventory |
-|---|---|
-| Codex | user-global `~/.codex/config.toml`, user hooks, user skills, managed plugin skill inventory |
-| Claude Code | user-global `~/.claude/settings.json`, skills, hooks, marketplace source metadata, unsupported agent directories as observe-only |
+| Capability | Current Codex support | Current Claude Code support | Boundary |
+|---|---|---|---|
+| Discovery and inventory | User-global `~/.codex/config.toml`, user hooks, user skills, managed plugin skill inventory | User-global `~/.claude/settings.json`, skills, hooks, marketplace source metadata, unsupported agent directories as observe-only | Read-only global setup discovery; project-local files are out of scope |
+| Agent-native marketplace/source browsing | Browse and inspect managed plugin skill inventory and source-backed entries where discovered | Browse and inspect source metadata and installed/source-backed entries where discovered | Gandalf does not own, certify, or replace agent catalogs |
+| Provider-backed actions | Available only where a concrete action provider can preview and execute the change | Available only where a concrete action provider can preview and execute the change | Unavailable actions must show reasons instead of pretending to mutate |
+| Review Changes and restore safety | Content-backed snapshot, dry-run restore, apply with explicit flags, rollback where supported | Content-backed snapshot, dry-run restore, apply with explicit flags, rollback where supported | Restore is a backing trust workflow, not the whole product identity |
 
 Cursor, OpenCode, and Pi Agent scanners may exist as legacy parser code, but they are not current supported product surfaces. Project-local files such as repo `.mcp.json`, `AGENTS.md`, and `.env` are not part of the current product scope. Broader team sync and cloud workflows are future direction.
 
@@ -266,10 +271,10 @@ make gate2
 | Read-only scan, diff, audit, provenance, report | v0.1 |
 | Bundle export/import (`.gandalf` format) | v0.2 experimental |
 | Restore engine: dry-run, apply, rollback | v0.2 experimental |
-| TUI setup console | v0.4 preview |
-| Codex user-global content-backed restore | current launch path |
+| Unified Agent Setup Console | current Gate 2 direction |
+| Codex and Claude Code user-global content-backed restore | current safety path |
 | Local multi-profile persistence | future |
-| MCP/skills add-remove manager | future |
+| Additional provider-backed setup actions | future |
 | Background setup-change daemon | future |
 | Cloud profiles and multi-machine sync | future |
 
