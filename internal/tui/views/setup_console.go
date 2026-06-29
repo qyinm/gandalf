@@ -94,19 +94,20 @@ type SetupMarkdownOverlay struct {
 
 // SetupConsoleView contains all data needed to render the setup console.
 type SetupConsoleView struct {
-	ActiveTab       string
-	Tabs            []SetupConsoleTab
-	Rows            []SetupConsoleRow
-	BaselineRows    []SetupConsoleBaselineRow
-	RowOffset       int
-	Search          string
-	SearchInput     string
-	SearchFocused   bool
-	EmptyMessage    string
-	Selected        *SetupConsoleDetail
-	Confirmation    *SetupActionConfirmation
-	ActionError     string
-	MarkdownOverlay *SetupMarkdownOverlay
+	ActiveTab         string
+	Tabs              []SetupConsoleTab
+	Rows              []SetupConsoleRow
+	BaselineRows      []SetupConsoleBaselineRow
+	RowOffset         int
+	Search            string
+	SearchInput       string
+	SearchFocused     bool
+	EmptyMessage      string
+	Selected          *SetupConsoleDetail
+	Confirmation      *SetupActionConfirmation
+	MarketplaceReview *SetupMarketplaceReview
+	ActionError       string
+	MarkdownOverlay   *SetupMarkdownOverlay
 }
 
 // RenderSetupConsole renders the default top-tab setup console.
@@ -161,6 +162,10 @@ func RenderSetupConsole(model SetupConsoleView, width, height int) string {
 	if model.Confirmation != nil {
 		lines = append(lines, "")
 		lines = append(lines, renderSetupActionConfirmation(*model.Confirmation)...)
+	}
+	if model.MarketplaceReview != nil {
+		lines = append(lines, "")
+		lines = append(lines, renderSetupMarketplaceReview(*model.MarketplaceReview, listWidth)...)
 	}
 
 	body := strings.Join(lines, "\n")
@@ -704,8 +709,13 @@ func renderSetupConsoleHelp(model SetupConsoleView, width int) string {
 			if selected.Expanded {
 				verb = "collapse"
 			}
+			if selected.RowKind == "marketplace_entry" {
+				verb = "review"
+				toggle = key.NewBinding()
+			} else {
+				toggle = key.NewBinding(key.WithKeys("space"), key.WithHelp("space", verb))
+			}
 			action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", verb))
-			toggle = key.NewBinding(key.WithKeys("space"), key.WithHelp("space", verb))
 		} else {
 			action = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "provider gated"))
 		}

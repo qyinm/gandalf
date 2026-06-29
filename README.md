@@ -59,6 +59,7 @@ Use it before you let an agent change config, install skills, edit hooks, or rew
 
 - **Local control console** for installed AI agent setup capabilities.
 - **Top-tab TUI setup console** for user-global skills, hooks, MCP servers, plugins, and agent-native marketplace/source browsing.
+- **Marketplace-originated Review Action** for non-mutating setup guidance when source metadata is sufficient.
 - **Human-readable diffs** for config, skills, hooks, and MCP servers.
 - **Review Changes** before restore-backed rollback or provider-backed actions write content.
 - **Content-backed snapshots** for current Codex and Claude Code user-global setup.
@@ -133,6 +134,7 @@ gandalf restore --snapshot clean-claude --apply --experimental --agent claude-co
 | Discovery and inventory | User-global `~/.codex/config.toml`, user hooks, user skills, managed plugin skill inventory | User-global `~/.claude/settings.json`, skills, hooks, marketplace source metadata, unsupported agent directories as observe-only | Read-only global setup discovery; project-local files are out of scope |
 | Agent-native marketplace/source browsing | Browse and inspect managed plugin skill inventory and source-backed entries where discovered | Browse and inspect source metadata and installed/source-backed entries where discovered | Gandalf does not own, certify, or replace agent catalogs |
 | Provider-backed actions | Available only where a concrete action provider can preview and execute the change | Available only where a concrete action provider can preview and execute the change | Unavailable actions must show reasons instead of pretending to mutate |
+| Marketplace-originated Review Action | Non-mutating setup guidance where source metadata is sufficient | Non-mutating setup guidance where source metadata is sufficient | Install/update/uninstall/add-source/remove-source stay unavailable without mutation providers |
 | Review Changes and restore safety | Content-backed snapshot, dry-run restore, apply with explicit flags, rollback where supported | Content-backed snapshot, dry-run restore, apply with explicit flags, rollback where supported | Restore is a backing trust workflow, not the whole product identity |
 
 Cursor, OpenCode, and Pi Agent scanners may exist as legacy parser code, but they are not current supported product surfaces. Project-local files such as repo `.mcp.json`, `AGENTS.md`, and `.env` are not part of the current product scope. Broader team sync and cloud workflows are future direction.
@@ -243,6 +245,7 @@ git clone git@github.com:qyinm/gandalf.git
 cd gandalf
 make test
 make build
+make restore-safety
 make gate2
 ./bin/gandalf scan --project .
 ```
@@ -271,7 +274,8 @@ make gate2
 | Read-only scan, diff, audit, provenance, report | v0.1 |
 | Bundle export/import (`.gandalf` format) | v0.2 experimental |
 | Restore engine: dry-run, apply, rollback | v0.2 experimental |
-| Unified Agent Setup Console | current Gate 2 direction |
+| Unified Agent Setup Console | v0.5.0 target |
+| Marketplace-originated non-mutating Review Action | v0.5.0 target |
 | Codex and Claude Code user-global content-backed restore | current safety path |
 | Local multi-profile persistence | future |
 | Additional provider-backed setup actions | future |
@@ -284,6 +288,7 @@ Issues and focused pull requests are welcome. For code changes, run the checks t
 
 ```bash
 make test
+make restore-safety
 make gate2
 ```
 

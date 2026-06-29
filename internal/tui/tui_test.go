@@ -14,6 +14,7 @@ import (
 	timelineundo "github.com/qyinm/gandalf/internal/gandalfcore/timeline_undo"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 	"github.com/qyinm/gandalf/internal/tui"
+	"github.com/qyinm/gandalf/internal/tui/views"
 )
 
 func timelineEntry(overrides map[string]any) types.TimelineEntry {
@@ -483,8 +484,11 @@ func TestSetupConsoleViewModelShowsMarketplaceSources(t *testing.T) {
 	if len(expanded.Selected.Provides) != 2 || expanded.Selected.Provides[0] != "skills" {
 		t.Fatalf("provides = %#v", expanded.Selected.Provides)
 	}
-	if len(expanded.Selected.Actions) == 0 || expanded.Selected.Actions[0].Available {
-		t.Fatalf("marketplace actions should be unavailable: %#v", expanded.Selected.Actions)
+	if len(expanded.Selected.Actions) == 0 || expanded.Selected.Actions[0].Label != "review" || !expanded.Selected.Actions[0].Available {
+		t.Fatalf("marketplace review action should be available: %#v", expanded.Selected.Actions)
+	}
+	if expanded.Selected.Actions[1].Available {
+		t.Fatalf("mutating marketplace actions should be unavailable: %#v", expanded.Selected.Actions)
 	}
 
 	filtered := tui.BuildSetupConsoleViewModel(tui.BuildSetupConsoleViewModelInput{
@@ -495,6 +499,42 @@ func TestSetupConsoleViewModelShowsMarketplaceSources(t *testing.T) {
 	})
 	if len(filtered.Rows) != 2 {
 		t.Fatalf("source search should keep source and entries: %#v", filtered.Rows)
+	}
+}
+
+func TestSetupConsoleRendersMarketplaceReviewResultAsNonMutating(t *testing.T) {
+	rendered := views.RenderSetupConsole(views.SetupConsoleView{
+		ActiveTab: "marketplace",
+		Tabs: []views.SetupConsoleTab{
+			{Label: "Marketplace", Count: 1, Selected: true},
+		},
+		Rows: []views.SetupConsoleRow{{
+			RowKind:       "marketplace_entry",
+			Name:          "codex",
+			Status:        "available",
+			ToggleControl: true,
+			Selected:      true,
+		}},
+		MarketplaceReview: &views.SetupMarketplaceReview{
+			Title:          "Marketplace Review Action",
+			Status:         "reviewed guidance",
+			AgentLabel:     "Claude Code",
+			SourceLabel:    "openai-codex",
+			TargetName:     "codex",
+			Operation:      "review marketplace setup guidance",
+			ExpectedEffect: "non-mutating setup guidance only",
+			Instructions:   "Description: red plugin\nEffect: no files changed",
+		},
+	}, 100, 32)
+
+	if !strings.Contains(rendered, "Marketplace Review Action") || !strings.Contains(rendered, "No files changed") {
+		t.Fatalf("review result not rendered:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Applied setup action") {
+		t.Fatalf("review result should not claim apply:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "[31m") {
+		t.Fatalf("source terminal control leaked into render:\n%s", rendered)
 	}
 }
 

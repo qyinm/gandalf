@@ -87,6 +87,20 @@ func setupConsoleViewFromModel(model SetupConsoleViewModel) views.SetupConsoleVi
 			Command:      model.Confirmation.Command,
 		}
 	}
+	if model.MarketplaceReview != nil {
+		view.MarketplaceReview = &views.SetupMarketplaceReview{
+			Title:          model.MarketplaceReview.Title,
+			Status:         model.MarketplaceReview.Status,
+			AgentLabel:     model.MarketplaceReview.AgentLabel,
+			SourceLabel:    model.MarketplaceReview.SourceLabel,
+			SourcePath:     model.MarketplaceReview.SourcePath,
+			TargetName:     model.MarketplaceReview.TargetName,
+			Operation:      model.MarketplaceReview.Operation,
+			ExpectedEffect: model.MarketplaceReview.ExpectedEffect,
+			Instructions:   model.MarketplaceReview.Instructions,
+			Pending:        model.MarketplaceReview.Pending,
+		}
+	}
 	return view
 }
 

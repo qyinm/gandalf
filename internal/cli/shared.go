@@ -486,7 +486,7 @@ func printRootHelp(w io.Writer) {
 	help := []string{
 		"gandalf",
 		"",
-		"Manage global agent skills, hooks, MCP servers, plugins, and marketplace sources.",
+		"Local control console for AI agent setup.",
 		"",
 		"Interactive workspace:",
 		"  gandalf",

@@ -297,3 +297,22 @@ func buildSetupActionConfirmation(plan setup.ActionPlan) *SetupActionConfirmatio
 		Command:      command,
 	}
 }
+
+func buildMarketplaceReviewModel(plan setup.MarketplaceReviewPlan, pending bool) MarketplaceReviewModel {
+	status := "reviewed guidance"
+	if pending {
+		status = "pending review"
+	}
+	return MarketplaceReviewModel{
+		Title:          "Marketplace Review Action",
+		Status:         status,
+		AgentLabel:     FormatAgentLabel(types.AgentID(plan.Agent)),
+		SourceLabel:    plan.SourceLabel,
+		SourcePath:     plan.SourcePath,
+		TargetName:     plan.EntryName,
+		Operation:      plan.Operation,
+		ExpectedEffect: plan.ExpectedEffect,
+		Instructions:   plan.Instructions,
+		Pending:        pending,
+	}
+}

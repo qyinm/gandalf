@@ -12,6 +12,7 @@ import (
 type MarketplaceActionKind string
 
 const (
+	MarketplaceActionReview       MarketplaceActionKind = "review"
 	MarketplaceActionInstall      MarketplaceActionKind = "install"
 	MarketplaceActionUpdate       MarketplaceActionKind = "update"
 	MarketplaceActionUninstall    MarketplaceActionKind = "uninstall"
@@ -168,7 +169,7 @@ func marketplaceEntryFromEvidence(item types.DiscoveredItem, sourceID string, so
 			status = "available"
 		}
 	}
-	return MarketplaceEntry{
+	entry := MarketplaceEntry{
 		ID:          item.ID,
 		SourceID:    sourceID,
 		SourceKind:  sourceKind,
@@ -183,8 +184,9 @@ func marketplaceEntryFromEvidence(item types.DiscoveredItem, sourceID string, so
 		Category:    metadataString(meta, "category"),
 		Version:     metadataString(meta, "version"),
 		Provides:    marketplaceProvides(item, meta),
-		Actions:     defaultMarketplaceEntryActions(),
 	}
+	entry.Actions = marketplaceEntryActions(entry)
+	return entry
 }
 
 func marketplaceEntryName(item types.DiscoveredItem, meta map[string]any) string {
@@ -357,13 +359,22 @@ func sourceRootBefore(sourcePath string, separators []string, requiredFragments 
 	return ""
 }
 
-func defaultMarketplaceEntryActions() []MarketplaceActionAvailability {
+func marketplaceEntryActions(entry MarketplaceEntry) []MarketplaceActionAvailability {
 	reason := "agent-native marketplace action provider is not implemented yet"
-	return []MarketplaceActionAvailability{
+	actions := []MarketplaceActionAvailability{
+		{
+			Action:    MarketplaceActionReview,
+			Available: marketplaceEntryReviewAvailable(entry),
+			Reason:    marketplaceEntryReviewUnavailableReason(entry),
+		},
 		{Action: MarketplaceActionInstall, Available: false, Reason: reason},
 		{Action: MarketplaceActionUpdate, Available: false, Reason: reason},
 		{Action: MarketplaceActionUninstall, Available: false, Reason: reason},
 	}
+	if actions[0].Available {
+		actions[0].Reason = ""
+	}
+	return actions
 }
 
 func defaultMarketplaceSourceActions() []MarketplaceActionAvailability {

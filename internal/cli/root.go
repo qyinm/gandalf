@@ -28,7 +28,7 @@ func NewRootCmd() *cobra.Command {
 
 	root := &cobra.Command{
 		Use:           "gandalf",
-		Short:         "Manage global agent skills, hooks, MCP servers, plugins, and marketplace sources.",
+		Short:         "Local control console for AI agent setup.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
