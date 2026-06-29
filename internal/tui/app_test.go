@@ -13,18 +13,183 @@ import (
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
-func TestInventoryEnterReportsUnavailableWhenNoActionProviderExists(t *testing.T) {
+func TestSkillsEnterOpensMarkdownViewerUnavailableWhenNoEntrypointExists(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newInventoryTestApp(t, runtime)
 
 	if cmd := app.handleInventoryEnter(); cmd != nil {
-		t.Fatal("unavailable action should not return a command")
+		t.Fatal("expanding skill row should not return a command")
 	}
 	if app.pendingAction != nil {
 		t.Fatalf("pending action = %#v", app.pendingAction)
 	}
-	if app.actionError == "" {
-		t.Fatal("expected action error")
+	if app.skillViewer != nil {
+		t.Fatalf("skill viewer = %#v", app.skillViewer)
+	}
+	if app.expandedSetupRowID(SetupConsoleTabSkills) != "skill-review" {
+		t.Fatalf("expanded skill = %q", app.expandedSetupRowID(SetupConsoleTabSkills))
+	}
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("opening viewer should not return a command")
+	}
+	if app.actionError != "" {
+		t.Fatalf("action error = %q", app.actionError)
+	}
+	if app.skillViewer == nil {
+		t.Fatal("expected skill viewer")
+	}
+	if app.skillViewer.errorText == "" {
+		t.Fatal("expected viewer error")
+	}
+}
+
+func TestSkillsEnterOpensMarkdownViewerForEntrypoint(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	skillDir := filepath.Join(runtime.HomeDir, ".codex", "skills", "review")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Review\n\nUse this skill."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app := newInventoryTestApp(t, runtime)
+	app.evidence[0].Metadata = []byte(`{"entrypoint":"SKILL.md","entrypointStatus":"captured"}`)
+	app.applyWorkspaceData(bootMsg{evidence: app.evidence})
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding skill row should not return a command")
+	}
+	if app.pendingAction != nil {
+		t.Fatalf("pending action = %#v", app.pendingAction)
+	}
+	if app.skillViewer != nil {
+		t.Fatalf("skill viewer = %#v", app.skillViewer)
+	}
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("opening viewer should not return a command")
+	}
+	if app.skillViewer == nil {
+		t.Fatal("expected skill viewer")
+	}
+	if !strings.Contains(app.skillViewer.content, "# Review") {
+		t.Fatalf("viewer content = %q", app.skillViewer.content)
+	}
+	if app.skillViewer.sourcePath != "~/.codex/skills/review/SKILL.md" {
+		t.Fatalf("source path = %q", app.skillViewer.sourcePath)
+	}
+}
+
+func TestSkillsEnterFollowsMarkdownEntrypointSymlink(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	targetDir := filepath.Join(runtime.HomeDir, "gstack", "diagram")
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(targetDir, "SKILL.md"), []byte("# Diagram\n\nRender diagrams."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(runtime.HomeDir, ".codex", "skills", "diagram")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(targetDir, "SKILL.md"), filepath.Join(skillDir, "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	app := newInventoryTestApp(t, runtime)
+	name := "diagram"
+	app.evidence[0].Name = &name
+	app.evidence[0].SourcePath = "~/.codex/skills/diagram"
+	app.evidence[0].Metadata = []byte(`{"entrypoint":"SKILL.md","entrypointStatus":"symlink_not_followed"}`)
+	app.applyWorkspaceData(bootMsg{evidence: app.evidence})
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding skill row should not return a command")
+	}
+	if app.skillViewer != nil {
+		t.Fatalf("skill viewer = %#v", app.skillViewer)
+	}
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("opening viewer should not return a command")
+	}
+	if app.skillViewer == nil {
+		t.Fatal("expected skill viewer")
+	}
+	if app.skillViewer.errorText != "" {
+		t.Fatalf("viewer error = %q", app.skillViewer.errorText)
+	}
+	if !strings.Contains(app.skillViewer.content, "# Diagram") {
+		t.Fatalf("viewer content = %q", app.skillViewer.content)
+	}
+	if app.skillViewer.sourcePath != "~/.codex/skills/diagram/SKILL.md -> ~/gstack/diagram/SKILL.md" {
+		t.Fatalf("source path = %q", app.skillViewer.sourcePath)
+	}
+}
+
+func TestSkillsEnterRejectsSymlinkOutsideReadableRoots(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	outsideDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outsideDir, "SKILL.md"), []byte("# Outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(runtime.HomeDir, ".codex", "skills", "outside")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outsideDir, "SKILL.md"), filepath.Join(skillDir, "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	app := newInventoryTestApp(t, runtime)
+	name := "outside"
+	app.evidence[0].Name = &name
+	app.evidence[0].SourcePath = "~/.codex/skills/outside"
+	app.evidence[0].Metadata = []byte(`{"entrypoint":"SKILL.md","entrypointStatus":"symlink_not_followed"}`)
+	app.applyWorkspaceData(bootMsg{evidence: app.evidence})
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding skill row should not return a command")
+	}
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("opening viewer should not return a command")
+	}
+	if app.skillViewer == nil {
+		t.Fatal("expected skill viewer")
+	}
+	if !strings.Contains(app.skillViewer.errorText, "outside readable global setup roots") {
+		t.Fatalf("viewer error = %q", app.skillViewer.errorText)
+	}
+}
+
+func TestSkillsEnterRejectsSymlinkedSkillDirectoryOutsideReadableRoots(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	outsideDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outsideDir, "SKILL.md"), []byte("# Outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	parentDir := filepath.Join(runtime.HomeDir, ".codex", "skills")
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideDir, filepath.Join(parentDir, "outside-dir")); err != nil {
+		t.Fatal(err)
+	}
+	app := newInventoryTestApp(t, runtime)
+	name := "outside-dir"
+	app.evidence[0].Name = &name
+	app.evidence[0].SourcePath = "~/.codex/skills/outside-dir"
+	app.evidence[0].Metadata = []byte(`{"entrypoint":"SKILL.md","entrypointStatus":"captured"}`)
+	app.applyWorkspaceData(bootMsg{evidence: app.evidence})
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding skill row should not return a command")
+	}
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("opening viewer should not return a command")
+	}
+	if app.skillViewer == nil {
+		t.Fatal("expected skill viewer")
+	}
+	if !strings.Contains(app.skillViewer.errorText, "outside readable global setup roots") {
+		t.Fatalf("viewer error = %q", app.skillViewer.errorText)
 	}
 }
 
@@ -120,25 +285,151 @@ func TestMarketplaceSearchClampsCursorAgainstMarketplaceRows(t *testing.T) {
 	}
 }
 
+func TestMCPEnterExpandsServerToolsAndToolDescription(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	name := "posthog"
+	app := NewApp(runtime)
+	app.ready = true
+	app.activeSetupTab = SetupConsoleTabMCPServers
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "mcp-posthog",
+		Agent:      types.AgentCursor,
+		Kind:       types.KindMcpServer,
+		Name:       &name,
+		SourcePath: "~/.cursor/mcp.json",
+		Scope:      types.ScopeUser,
+		Metadata: []byte(`{
+			"runtimeStatus": "ready",
+			"toolCount": 1,
+			"tools": [{"name":"dashboard-get","description":"Fetch a dashboard."}]
+		}`),
+	}}})
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding MCP server should not return a command")
+	}
+	model := app.currentSetupConsoleViewModel()
+	if len(model.Rows) != 2 || !model.Rows[0].Expanded || model.Rows[1].RowKind != SetupConsoleRowMCPTool {
+		t.Fatalf("mcp rows = %#v", model.Rows)
+	}
+	app.moveInventoryCursor(1)
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding MCP tool should not return a command")
+	}
+	model = app.currentSetupConsoleViewModel()
+	if len(model.Rows) != 2 || !model.Rows[1].Expanded {
+		t.Fatalf("mcp tool rows = %#v", model.Rows)
+	}
+}
+
+func TestMCPSearchShowsMatchingToolRows(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	name := "posthog"
+	app := NewApp(runtime)
+	app.ready = true
+	app.activeSetupTab = SetupConsoleTabMCPServers
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "mcp-posthog",
+		Agent:      types.AgentCursor,
+		Kind:       types.KindMcpServer,
+		Name:       &name,
+		SourcePath: "~/.cursor/mcp.json",
+		Scope:      types.ScopeUser,
+		Metadata: []byte(`{
+			"runtimeStatus": "ready",
+			"toolCount": 2,
+			"tools": [
+				{"name":"dashboard-get","description":"Fetch a dashboard."},
+				{"name":"feature-flag-create","description":"Create a feature flag."}
+			]
+		}`),
+	}}})
+
+	app.setupSearchFocused = true
+	app.activeSetupTabState().searchInput.Focus()
+	if _, handled := app.handleSetupSearchKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("dashboard-get")}); !handled {
+		t.Fatal("search key should be handled")
+	}
+	model := app.currentSetupConsoleViewModel()
+	if len(model.Rows) != 2 {
+		t.Fatalf("mcp search rows = %#v", model.Rows)
+	}
+	if model.Rows[0].RowKind != SetupConsoleRowInventory || model.Rows[1].RowKind != SetupConsoleRowMCPTool {
+		t.Fatalf("mcp search row kinds = %#v", model.Rows)
+	}
+	if model.Rows[1].Name != "dashboard-get" {
+		t.Fatalf("tool row = %#v", model.Rows[1])
+	}
+}
+
+func TestMCPToolSelectionUsesParentServerDetail(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	posthogName := "posthog"
+	otherName := "zcontext7"
+	app := NewApp(runtime)
+	app.ready = true
+	app.activeSetupTab = SetupConsoleTabMCPServers
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{
+		{
+			ID:         "mcp-posthog",
+			Agent:      types.AgentCursor,
+			Kind:       types.KindMcpServer,
+			Name:       &posthogName,
+			SourcePath: "~/.cursor/mcp.json",
+			Scope:      types.ScopeUser,
+			Metadata:   []byte(`{"tools":[{"name":"dashboard-get","description":"Fetch a dashboard."}]}`),
+		},
+		{
+			ID:         "mcp-zcontext7",
+			Agent:      types.AgentCursor,
+			Kind:       types.KindMcpServer,
+			Name:       &otherName,
+			SourcePath: "~/.codex/config.toml",
+			Scope:      types.ScopeUser,
+		},
+	}})
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding MCP server should not return a command")
+	}
+	app.moveInventoryCursor(1)
+	model := app.currentSetupConsoleViewModel()
+	if model.Rows[1].RowKind != SetupConsoleRowMCPTool {
+		t.Fatalf("selected row = %#v", model.Rows[1])
+	}
+	if model.Selected == nil || model.Selected.Title != "posthog" {
+		t.Fatalf("selected detail = %#v", model.Selected)
+	}
+}
+
 func TestInventoryEnterConfirmsActionAndRescans(t *testing.T) {
 	runtime := makeTestRuntime(t)
-	app := newInventoryTestApp(t, runtime)
+	app := newHookInventoryTestApp(t, runtime)
 	enableInventoryAction(app, setup.ActionEdit)
 
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("expanding hook row should not return a command")
+	}
+	if app.pendingAction != nil {
+		t.Fatalf("pending action = %#v", app.pendingAction)
+	}
+	if app.expandedSetupRowID(SetupConsoleTabHooks) != "hook-session-start" {
+		t.Fatalf("expanded hook = %q", app.expandedSetupRowID(SetupConsoleTabHooks))
+	}
 	if cmd := app.handleInventoryEnter(); cmd != nil {
 		t.Fatal("opening confirmation should not return a command")
 	}
 	if app.pendingAction == nil {
 		t.Fatal("expected pending action")
 	}
-	if app.pendingAction.TargetName != "review" {
+	if app.pendingAction.TargetName != "session_start" {
 		t.Fatalf("pending action = %#v", app.pendingAction)
 	}
 
 	executed := 0
 	app.actionExecutor = func(_ context.Context, plan setup.ActionPlan) error {
 		executed++
-		if plan.TargetName != "review" {
+		if plan.TargetName != "session_start" {
 			t.Fatalf("executed plan = %#v", plan)
 		}
 		return nil
@@ -164,9 +455,10 @@ func TestInventoryEnterConfirmsActionAndRescans(t *testing.T) {
 
 func TestInventoryActionFailureKeepsUserInContext(t *testing.T) {
 	runtime := makeTestRuntime(t)
-	app := newInventoryTestApp(t, runtime)
+	app := newHookInventoryTestApp(t, runtime)
 	enableInventoryAction(app, setup.ActionEdit)
 
+	app.handleInventoryEnter()
 	app.handleInventoryEnter()
 	app.actionExecutor = func(context.Context, setup.ActionPlan) error {
 		return os.ErrPermission
@@ -186,8 +478,9 @@ func TestInventoryActionFailureKeepsUserInContext(t *testing.T) {
 
 func TestInventoryRescanFailureAfterActionClearsPendingAction(t *testing.T) {
 	runtime := makeTestRuntime(t)
-	app := newInventoryTestApp(t, runtime)
+	app := newHookInventoryTestApp(t, runtime)
 	enableInventoryAction(app, setup.ActionEdit)
+	app.handleInventoryEnter()
 	app.handleInventoryEnter()
 
 	model, _ := app.Update(setupActionMsg{data: bootMsg{err: os.ErrPermission}})
@@ -229,6 +522,9 @@ func TestSetupConsoleFirstScreenUsesTopTabsWithoutSidebar(t *testing.T) {
 	view := app.View()
 	if !strings.Contains(view, "Hooks") || !strings.Contains(view, "Plugins") || !strings.Contains(view, "Marketplace") {
 		t.Fatalf("expected top tabs in view:\n%s", view)
+	}
+	if strings.Contains(view, "gandalf tui · setup console") {
+		t.Fatalf("expected no setup console title header in view:\n%s", view)
 	}
 	if strings.Contains(view, "Profiles") || strings.Contains(view, "Agents") || strings.Contains(view, "Inventory\n") {
 		t.Fatalf("expected no persistent sidebar in view:\n%s", view)
@@ -274,7 +570,6 @@ func TestSetupConsoleSearchFiltersActiveTab(t *testing.T) {
 func TestInventoryKeyboardFlowSwitchesTabsAndCancelsPendingAction(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newInventoryTestApp(t, runtime)
-	enableInventoryAction(app, setup.ActionEdit)
 
 	if !app.inventoryFocus {
 		t.Fatal("inventory should start focused")
@@ -293,6 +588,48 @@ func TestInventoryKeyboardFlowSwitchesTabsAndCancelsPendingAction(t *testing.T) 
 		t.Fatalf("shift+tab should return to skills: %s", app.activeSetupTab)
 	}
 	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if quit {
+		t.Fatal("enter should not quit")
+	}
+	if cmd != nil {
+		t.Fatal("expanding skill row should not return a command")
+	}
+	if app.skillViewer != nil {
+		t.Fatalf("skill viewer = %#v", app.skillViewer)
+	}
+	if app.expandedSetupRowID(SetupConsoleTabSkills) != "skill-review" {
+		t.Fatalf("expanded skill = %q", app.expandedSetupRowID(SetupConsoleTabSkills))
+	}
+	cmd, quit = app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if quit {
+		t.Fatal("enter should not quit")
+	}
+	if cmd != nil {
+		t.Fatal("opening viewer should not return a command")
+	}
+	if app.skillViewer == nil {
+		t.Fatal("expected skill viewer")
+	}
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyEsc}); quit {
+		t.Fatal("esc should not quit")
+	}
+	if app.skillViewer != nil {
+		t.Fatalf("skill viewer after esc = %#v", app.skillViewer)
+	}
+
+	app = newHookInventoryTestApp(t, runtime)
+	enableInventoryAction(app, setup.ActionEdit)
+	cmd, quit = app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if quit {
+		t.Fatal("enter should not quit")
+	}
+	if cmd != nil {
+		t.Fatal("expanding hook row should not return a command")
+	}
+	if app.pendingAction != nil {
+		t.Fatalf("pending action = %#v", app.pendingAction)
+	}
+	cmd, quit = app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if quit {
 		t.Fatal("enter should not quit")
 	}
@@ -323,6 +660,23 @@ func newInventoryTestApp(t *testing.T, runtime types.RuntimeOptions) *App {
 		Kind:       types.KindSkill,
 		Name:       &name,
 		SourcePath: "~/.codex/skills/review",
+		Scope:      types.ScopeUser,
+	}}})
+	return app
+}
+
+func newHookInventoryTestApp(t *testing.T, runtime types.RuntimeOptions) *App {
+	t.Helper()
+	name := "session_start"
+	app := NewApp(runtime)
+	app.activeSetupTab = SetupConsoleTabHooks
+	app.ready = true
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "hook-session-start",
+		Agent:      types.AgentCodex,
+		Kind:       types.KindHook,
+		Name:       &name,
+		SourcePath: "~/.codex/hooks.json",
 		Scope:      types.ScopeUser,
 	}}})
 	return app

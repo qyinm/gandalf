@@ -25,6 +25,9 @@ A marketplace or plugin source exposed by an agent ecosystem and browsed through
 ### Setup Action Provider
 The component that turns a visible setup inventory item into a concrete edit, remove, add, or dry-run action. Inventory visibility does not imply action executability; a provider must describe the target, expected effect, and execution mechanism before Gandalf can truthfully mark an action available.
 
+### Skill Markdown Overlay Viewer
+A read-only Setup Console overlay that opens from a selected skill and renders its `SKILL.md` entrypoint as terminal markdown. It makes inspection the primary Skills tab `Enter` behavior while keeping setup mutations behind explicit provider-backed actions.
+
 ## Restore
 
 ### Trust Contract

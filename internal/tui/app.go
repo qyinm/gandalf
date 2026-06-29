@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"charm.land/glamour/v2"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -74,6 +76,7 @@ type App struct {
 	notice        string
 	actionError   string
 	pendingAction *setup.ActionPlan
+	skillViewer   *skillMarkdownViewerState
 
 	compareModel   *CompareViewModel
 	saveSetupModel *SaveSetupViewModel
@@ -87,6 +90,8 @@ type App struct {
 type setupConsoleState struct {
 	tabs            map[SetupConsoleTab]*setupConsoleTabState
 	expandedSources map[string]bool
+	expandedRows    map[SetupConsoleTab]string
+	expandedMCPTool string
 	rowsViewport    viewport.Model
 }
 
@@ -94,6 +99,19 @@ type setupConsoleTabState struct {
 	cursor      int
 	search      string
 	searchInput textinput.Model
+}
+
+type skillMarkdownViewerState struct {
+	title       string
+	agentLabel  string
+	objectKind  string
+	status      string
+	sourcePath  string
+	content     string
+	rendered    string
+	errorText   string
+	viewport    viewport.Model
+	renderWidth int
 }
 
 // NewApp creates a TUI app bound to engine runtime options.
@@ -114,6 +132,7 @@ func newSetupConsoleState() setupConsoleState {
 	state := setupConsoleState{
 		tabs:            make(map[SetupConsoleTab]*setupConsoleTabState, len(SetupConsoleTabs)),
 		expandedSources: make(map[string]bool),
+		expandedRows:    make(map[SetupConsoleTab]string),
 		rowsViewport:    viewport.New(0, 0),
 	}
 	for _, tab := range SetupConsoleTabs {
@@ -144,6 +163,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case tea.KeyMsg:
+		if a.screen == ScreenInventory && a.skillViewer != nil {
+			if cmd, handled := a.handleSkillViewerKey(typed); handled {
+				return a, cmd
+			}
+		}
 		if a.screen == ScreenInventory && a.setupSearchFocused {
 			if cmd, handled := a.handleSetupSearchKey(typed); handled {
 				return a, cmd
@@ -225,7 +249,7 @@ func (a *App) View() string {
 	if contentWidth < 40 {
 		contentWidth = 40
 	}
-	contentHeight := a.height - 2
+	contentHeight := a.height
 
 	if !a.ready {
 		if a.errText != "" {
@@ -237,17 +261,25 @@ func (a *App) View() string {
 		return "Loading Gandalf global setup workspace..."
 	}
 
-	content := a.renderContent(contentWidth, contentHeight)
-
-	header := lipgloss.NewStyle().Bold(true).Render("gandalf tui · setup console")
+	statusParts := make([]string, 0, 2)
 	if a.notice != "" {
-		header += "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(a.notice)
+		statusParts = append(statusParts, lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(a.notice))
 	}
 	if a.undoError != "" {
-		header += "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(a.undoError)
+		statusParts = append(statusParts, lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(a.undoError))
+	}
+	if len(statusParts) > 0 {
+		contentHeight--
+	}
+	if contentHeight < 1 {
+		contentHeight = 1
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, lipgloss.NewStyle().Width(contentWidth).Render(content))
+	content := lipgloss.NewStyle().Width(contentWidth).Render(a.renderContent(contentWidth, contentHeight))
+	if len(statusParts) == 0 {
+		return content
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, strings.Join(statusParts, "  "), content)
 }
 
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
@@ -255,6 +287,11 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	case "ctrl+c", "q":
 		return nil, true
 	case "esc":
+		if a.skillViewer != nil {
+			a.skillViewer = nil
+			a.actionError = ""
+			return nil, false
+		}
 		if a.pendingAction != nil {
 			a.pendingAction = nil
 			a.actionError = ""
@@ -374,6 +411,22 @@ func (a *App) handleSetupSearchKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	return cmd, true
 }
 
+func (a *App) handleSkillViewerKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	if a.skillViewer == nil {
+		return nil, false
+	}
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return nil, false
+	case "esc":
+		a.skillViewer = nil
+		return nil, true
+	}
+	var cmd tea.Cmd
+	a.skillViewer.viewport, cmd = a.skillViewer.viewport.Update(msg)
+	return cmd, true
+}
+
 func (a *App) handleInventoryEnter() tea.Cmd {
 	if a.pendingAction != nil {
 		plan := *a.pendingAction
@@ -390,6 +443,18 @@ func (a *App) handleInventoryEnter() tea.Cmd {
 
 	if normalizeSetupConsoleTab(a.activeSetupTab) == SetupConsoleTabMarketplace {
 		return a.handleMarketplaceEnter()
+	}
+	if normalizeSetupConsoleTab(a.activeSetupTab) == SetupConsoleTabMCPServers {
+		a.handleMCPEnter()
+		return nil
+	}
+	if normalizeSetupConsoleTab(a.activeSetupTab) == SetupConsoleTabSkills {
+		a.handleSkillEnter()
+		return nil
+	}
+	if !a.selectedSetupInventoryExpanded() {
+		a.expandSelectedSetupInventory()
+		return nil
 	}
 
 	inventory := a.currentInventory()
@@ -413,6 +478,200 @@ func (a *App) handleInventoryEnter() tea.Cmd {
 	return nil
 }
 
+func (a *App) openSelectedSkillViewer() {
+	inventory := a.currentInventory()
+	if len(inventory) == 0 {
+		a.actionError = "No skill selected."
+		return
+	}
+	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
+	viewer := a.buildSkillMarkdownViewer(item)
+	a.skillViewer = &viewer
+	a.actionError = ""
+}
+
+func (a *App) handleSkillEnter() {
+	inventory := a.currentInventory()
+	if len(inventory) == 0 {
+		a.actionError = "No skill selected."
+		return
+	}
+	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
+	if a.expandedSetupRowID(SetupConsoleTabSkills) == item.ID {
+		a.openSelectedSkillViewer()
+		return
+	}
+	a.setExpandedSetupRowID(SetupConsoleTabSkills, item.ID)
+	a.actionError = ""
+}
+
+func (a *App) handleMCPEnter() {
+	model := a.currentSetupConsoleViewModel()
+	if len(model.Rows) == 0 {
+		a.actionError = "No MCP server selected."
+		return
+	}
+	row := model.Rows[clampIndex(a.inventoryCursor, len(model.Rows))]
+	if row.RowKind == SetupConsoleRowMCPTool {
+		a.toggleMCPTool(row.ID)
+		return
+	}
+	if row.RowKind == SetupConsoleRowInventory {
+		if a.expandedSetupRowID(SetupConsoleTabMCPServers) == row.ID {
+			a.setExpandedSetupRowID(SetupConsoleTabMCPServers, "")
+			a.setupConsole.expandedMCPTool = ""
+		} else {
+			a.setExpandedSetupRowID(SetupConsoleTabMCPServers, row.ID)
+			a.setupConsole.expandedMCPTool = ""
+		}
+		a.actionError = ""
+	}
+}
+
+func (a *App) buildSkillMarkdownViewer(item setup.InventoryItem) skillMarkdownViewerState {
+	content, resolvedPath, err := a.readSkillMarkdown(item)
+	viewer := skillMarkdownViewerState{
+		title:      item.Name,
+		agentLabel: FormatAgentLabel(item.Agent),
+		objectKind: formatInventoryObjectKind(item),
+		status:     setupInventoryStatus(item),
+		sourcePath: resolvedPath,
+		content:    content,
+		viewport:   viewport.New(0, 0),
+	}
+	if viewer.sourcePath == "" {
+		viewer.sourcePath = item.SourcePath
+	}
+	if err != nil {
+		viewer.errorText = err.Error()
+		viewer.rendered = viewer.errorText
+		viewer.viewport.SetContent(viewer.rendered)
+	}
+	return viewer
+}
+
+func (a *App) readSkillMarkdown(item setup.InventoryItem) (string, string, error) {
+	if item.ObjectKind != setup.ObjectSkill {
+		return "", item.SourcePath, fmt.Errorf("Selected setup item is not a skill.")
+	}
+
+	entrypoint := strings.TrimSpace(item.Entrypoint)
+	if entrypoint == "" {
+		entrypoint = "SKILL.md"
+	}
+	if filepath.IsAbs(entrypoint) || strings.Contains(filepath.ToSlash(entrypoint), "/") {
+		return "", item.SourcePath, fmt.Errorf("Skill markdown entrypoint is unsupported: %s", entrypoint)
+	}
+
+	basePath, ok := a.resolveSetupSourcePath(item.SourcePath)
+	if !ok {
+		return "", item.SourcePath, fmt.Errorf("Skill markdown path is outside readable global setup roots.")
+	}
+	skillPath := basePath
+	if !strings.EqualFold(filepath.Base(skillPath), entrypoint) {
+		skillPath = filepath.Join(skillPath, entrypoint)
+	}
+	if !pathWithinRoot(skillPath, a.runtime.HomeDir) {
+		return "", item.SourcePath, fmt.Errorf("Skill markdown path is outside readable global setup roots.")
+	}
+	displayPath := displaySetupPath(skillPath, a.runtime.HomeDir)
+	info, err := os.Lstat(skillPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", displayPath, fmt.Errorf("Skill markdown entrypoint was not found.")
+		}
+		return "", displayPath, fmt.Errorf("Skill markdown entrypoint is unreadable: %v", err)
+	}
+	readPath := skillPath
+	resolvedPath, err := filepath.EvalSymlinks(skillPath)
+	if err != nil {
+		return "", displayPath, fmt.Errorf("Skill markdown symlink target is unreadable: %v", err)
+	}
+	if !pathWithinRootOrResolved(resolvedPath, a.runtime.HomeDir) {
+		return "", displayPath, fmt.Errorf("Skill markdown path is outside readable global setup roots.")
+	}
+	readPath = resolvedPath
+	if info.Mode()&os.ModeSymlink != 0 {
+		displayPath = displayPath + " -> " + displaySetupPath(readPath, a.runtime.HomeDir)
+	}
+	if readPath != skillPath {
+		info, err = os.Stat(readPath)
+		if err != nil {
+			return "", displayPath, fmt.Errorf("Skill markdown symlink target is unreadable: %v", err)
+		}
+	}
+	if !info.Mode().IsRegular() {
+		return "", displayPath, fmt.Errorf("Skill markdown entrypoint is not a regular file.")
+	}
+	content, err := os.ReadFile(readPath)
+	if err != nil {
+		return "", displayPath, fmt.Errorf("Skill markdown entrypoint is unreadable: %v", err)
+	}
+	return string(content), displayPath, nil
+}
+
+func (a *App) resolveSetupSourcePath(sourcePath string) (string, bool) {
+	sourcePath = strings.TrimSpace(sourcePath)
+	if sourcePath == "" || strings.HasPrefix(sourcePath, "<") {
+		return "", false
+	}
+	if strings.HasPrefix(sourcePath, "~/") {
+		rel := strings.TrimPrefix(sourcePath, "~/")
+		return filepath.Join(a.runtime.HomeDir, filepath.FromSlash(rel)), true
+	}
+	if filepath.IsAbs(sourcePath) && pathWithinRoot(sourcePath, a.runtime.HomeDir) {
+		return filepath.Clean(sourcePath), true
+	}
+	return "", false
+}
+
+func pathWithinRoot(path, root string) bool {
+	if strings.TrimSpace(root) == "" {
+		return false
+	}
+	cleanPath := filepath.Clean(path)
+	cleanRoot := filepath.Clean(root)
+	rel, err := filepath.Rel(cleanRoot, cleanPath)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}
+
+func pathWithinRootOrResolved(path, root string) bool {
+	if pathWithinRoot(path, root) {
+		return true
+	}
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	return pathWithinRoot(path, resolvedRoot)
+}
+
+func displaySetupPath(path, homeDir string) string {
+	if displayPath, ok := displayPathWithinRoot(path, homeDir); ok {
+		return displayPath
+	}
+	if resolvedHome, err := filepath.EvalSymlinks(homeDir); err == nil {
+		if displayPath, ok := displayPathWithinRoot(path, resolvedHome); ok {
+			return displayPath
+		}
+	}
+	return filepath.ToSlash(path)
+}
+
+func displayPathWithinRoot(path, root string) (string, bool) {
+	if !pathWithinRoot(path, root) {
+		return "", false
+	}
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
+	if err != nil {
+		return "", false
+	}
+	return "~/" + filepath.ToSlash(rel), true
+}
+
 func (a *App) handleMarketplaceEnter() tea.Cmd {
 	model := a.currentSetupConsoleViewModel()
 	if len(model.Rows) == 0 {
@@ -429,7 +688,23 @@ func (a *App) handleMarketplaceEnter() tea.Cmd {
 }
 
 func (a *App) handleSetupToggle() tea.Cmd {
-	if normalizeSetupConsoleTab(a.activeSetupTab) != SetupConsoleTabMarketplace {
+	activeTab := normalizeSetupConsoleTab(a.activeSetupTab)
+	if activeTab == SetupConsoleTabMCPServers {
+		model := a.currentSetupConsoleViewModel()
+		if len(model.Rows) == 0 {
+			return nil
+		}
+		row := model.Rows[clampIndex(a.inventoryCursor, len(model.Rows))]
+		if row.RowKind == SetupConsoleRowMCPTool {
+			a.toggleMCPTool(row.ID)
+			return nil
+		}
+		a.toggleSelectedSetupInventory()
+		a.setupConsole.expandedMCPTool = ""
+		return nil
+	}
+	if activeTab != SetupConsoleTabMarketplace {
+		a.toggleSelectedSetupInventory()
 		return nil
 	}
 	model := a.currentSetupConsoleViewModel()
@@ -441,6 +716,71 @@ func (a *App) handleSetupToggle() tea.Cmd {
 		a.toggleMarketplaceSource(row.ID)
 	}
 	return nil
+}
+
+func (a *App) selectedSetupInventoryExpanded() bool {
+	inventory := a.currentInventory()
+	if len(inventory) == 0 {
+		return false
+	}
+	activeTab := normalizeSetupConsoleTab(a.activeSetupTab)
+	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
+	return a.expandedSetupRowID(activeTab) == item.ID
+}
+
+func (a *App) expandSelectedSetupInventory() {
+	inventory := a.currentInventory()
+	if len(inventory) == 0 {
+		a.actionError = "No setup item selected."
+		return
+	}
+	activeTab := normalizeSetupConsoleTab(a.activeSetupTab)
+	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
+	a.setExpandedSetupRowID(activeTab, item.ID)
+	a.actionError = ""
+}
+
+func (a *App) toggleSelectedSetupInventory() {
+	inventory := a.currentInventory()
+	if len(inventory) == 0 {
+		return
+	}
+	activeTab := normalizeSetupConsoleTab(a.activeSetupTab)
+	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
+	if a.expandedSetupRowID(activeTab) == item.ID {
+		a.setExpandedSetupRowID(activeTab, "")
+	} else {
+		a.setExpandedSetupRowID(activeTab, item.ID)
+	}
+	a.actionError = ""
+}
+
+func (a *App) expandedSetupRowID(tab SetupConsoleTab) string {
+	if a.setupConsole.expandedRows == nil {
+		return ""
+	}
+	return a.setupConsole.expandedRows[normalizeSetupConsoleTab(tab)]
+}
+
+func (a *App) setExpandedSetupRowID(tab SetupConsoleTab, id string) {
+	if a.setupConsole.expandedRows == nil {
+		a.setupConsole.expandedRows = make(map[SetupConsoleTab]string)
+	}
+	tab = normalizeSetupConsoleTab(tab)
+	if id == "" {
+		delete(a.setupConsole.expandedRows, tab)
+		return
+	}
+	a.setupConsole.expandedRows[tab] = id
+}
+
+func (a *App) toggleMCPTool(id string) {
+	if a.setupConsole.expandedMCPTool == id {
+		a.setupConsole.expandedMCPTool = ""
+	} else {
+		a.setupConsole.expandedMCPTool = id
+	}
+	a.actionError = ""
 }
 
 func (a *App) currentInventory() []setup.InventoryItem {
@@ -577,6 +917,8 @@ func (a *App) currentSetupConsoleViewModel() SetupConsoleViewModel {
 		SearchFocused:      a.setupSearchFocused,
 		SelectedIndex:      state.cursor,
 		ExpandedSources:    a.setupConsole.expandedSources,
+		ExpandedRowID:      a.expandedSetupRowID(a.activeSetupTab),
+		ExpandedToolID:     a.setupConsole.expandedMCPTool,
 		PendingAction:      a.pendingAction,
 		ActionError:        a.actionError,
 	})
@@ -672,7 +1014,9 @@ func (a *App) renderContent(width, height int) string {
 	case ScreenInventory:
 		model := a.currentSetupConsoleViewModel()
 		a.syncSetupConsoleViewports(&model, width, height)
-		return views.RenderSetupConsole(setupConsoleViewFromModel(model), width, height)
+		view := setupConsoleViewFromModel(model)
+		a.syncSkillViewer(&view, width, height)
+		return views.RenderSetupConsole(view, width, height)
 	case ScreenTimeline:
 		model := BuildTimelineViewModel(BuildTimelineViewModelInput{
 			Entries:       a.filteredTimeline(),
@@ -742,11 +1086,71 @@ func (a *App) renderContent(width, height int) string {
 	}
 }
 
+func (a *App) syncSkillViewer(view *views.SetupConsoleView, width, height int) {
+	if a.skillViewer == nil || view == nil {
+		return
+	}
+	overlayWidth := width - 2
+	if overlayWidth < 34 {
+		overlayWidth = max(20, width-2)
+	}
+	bodyWidth := overlayWidth - 4
+	if bodyWidth < 20 {
+		bodyWidth = 20
+	}
+	overlayHeight := height - 3
+	if overlayHeight < 8 {
+		overlayHeight = max(6, height-2)
+	}
+	bodyHeight := overlayHeight - 6
+	if bodyHeight < 3 {
+		bodyHeight = 3
+	}
+
+	rendered := a.skillViewer.rendered
+	if a.skillViewer.errorText == "" && a.skillViewer.renderWidth != bodyWidth {
+		rendered = renderSkillMarkdown(a.skillViewer.content, bodyWidth)
+		a.skillViewer.rendered = rendered
+		a.skillViewer.renderWidth = bodyWidth
+		a.skillViewer.viewport.SetContent(rendered)
+	}
+	if a.skillViewer.errorText != "" && a.skillViewer.rendered == "" {
+		a.skillViewer.rendered = a.skillViewer.errorText
+		a.skillViewer.viewport.SetContent(a.skillViewer.rendered)
+	}
+	a.skillViewer.viewport.Width = bodyWidth
+	a.skillViewer.viewport.Height = bodyHeight
+	view.MarkdownOverlay = &views.SetupMarkdownOverlay{
+		Title:      a.skillViewer.title,
+		Subtitle:   strings.Join([]string{a.skillViewer.agentLabel, a.skillViewer.objectKind, a.skillViewer.status}, " · "),
+		SourcePath: a.skillViewer.sourcePath,
+		Body:       a.skillViewer.viewport.View(),
+		ErrorText:  a.skillViewer.errorText,
+		Width:      overlayWidth,
+		Height:     overlayHeight,
+	}
+}
+
+func renderSkillMarkdown(content string, width int) string {
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStylePath("dark"),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return content
+	}
+	rendered, err := renderer.Render(content)
+	if err != nil {
+		return content
+	}
+	return strings.TrimRight(rendered, "\n")
+}
+
 func (a *App) syncSetupConsoleViewports(model *SetupConsoleViewModel, width, height int) {
 	if model == nil {
 		return
 	}
-	listHeight := setupConsoleListHeight(*model, height)
+	listHeight := setupConsoleListHeight(height)
 	a.setupConsole.rowsViewport.Width = width
 	a.setupConsole.rowsViewport.Height = listHeight
 	lines := make([]string, len(model.Rows))
@@ -765,14 +1169,11 @@ func (a *App) syncSetupConsoleViewports(model *SetupConsoleViewModel, width, hei
 	model.RowOffset = a.setupConsole.rowsViewport.YOffset
 }
 
-func setupConsoleListHeight(model SetupConsoleViewModel, height int) int {
+func setupConsoleListHeight(height int) int {
 	if height < 12 {
 		height = 12
 	}
 	listHeight := height - 10
-	if model.Selected != nil {
-		listHeight -= 5
-	}
 	if listHeight < 4 {
 		listHeight = 4
 	}
