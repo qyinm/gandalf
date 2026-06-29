@@ -3,14 +3,16 @@
 Status: working product document
 Last updated: 2026-06-29
 
-## Current Safe Action Loop
+## Current Product Contract
 
-The current implementation target is not the full profile/cloud/team product described below.
+Gandalf is a local control console for AI agent setup: it inspects installed capabilities, browses agent-native marketplace/source entries, and runs reviewed provider-backed changes.
 
-The current product loop supports Codex and Claude Code user-global setup:
+The current implementation target is not the full profile/cloud/team product explored later in this document. Restore safety remains a core trust layer, but Codex/Claude rollback is not the whole product identity.
+
+Current support covers Codex and Claude Code user-global setup:
 
 ```text
-baseline -> changes since baseline -> Review Changes -> Apply -> Verify -> Rollback where supported
+inspect installed setup -> browse agent-native marketplace/source entries -> Review Changes -> Apply provider-backed change -> Verify -> Rollback where supported
 scope: --agent codex --scope user
 scope: --agent claude-code --scope user
 surface: supported ~/.codex/ and ~/.claude/ user-global setup only
@@ -19,12 +21,24 @@ public install paths: install.sh and Homebrew tap
 source repository: qyinm/gandalf
 ```
 
+Gate 2 is the **Unified Agent Setup Console**:
+
+- installed inventory for current Codex and Claude Code support
+- agent-native marketplace/source browsing, not a Gandalf-owned catalog
+- truthful action availability with unavailable reasons
+- Review Changes before mutation
+- at least one provider-backed safe action
+
 Gandalf is distributed as a Go binary. The supported install paths are the latest-release `install.sh` flow and the personal Homebrew tap command `brew install qyinm/tap/gandalf`. npm is no longer a supported product distribution channel; external package deletion is handled outside this repository.
 
 In scope now:
 
+- read-only global setup discovery for current Codex and Claude Code support
+- normalized setup console rows for skills, hooks, MCP servers, plugins, and agent-native marketplace/source entries
+- provider-backed action previews and execution where a concrete provider exists
+- unavailable action reasons where no provider-backed action exists yet
 - content-backed snapshots for supported Codex and Claude Code user-global files
-- byte-exact restore for supported non-secret content
+- byte-exact restore for supported non-secret content as a backing safety workflow
 - explicit unsupported reasons for surfaces Gandalf cannot safely restore yet
 - tests that prove rollback from damaged `~/.codex/config.toml` and `~/.claude/settings.json`
 - TUI Review Changes before restore-backed rollback apply
@@ -36,21 +50,24 @@ Not in scope now:
 - team/cloud sync
 - broad multi-agent restore
 - repo-local setup management
+- Gandalf-owned marketplace, registry, or trust-certified catalog
+- new marketplace install/update/uninstall actions without provider-backed implementation
 - Cursor, OpenCode, or Pi Agent current product support
+- release automation or v0.5.0 tagging
 
-The larger "Git branches for agent setups" product direction remains useful, but implementation should not expand into it until the Codex and Claude Code loop is credible.
+The current `scripts/gate2-acceptance.sh` remains the restore-safety regression for supported Codex and Claude Code restore behavior. It should be renamed or split in a follow-up code PR; this docs alignment must not rename it.
 
 ## One-Line Definition
 
-Gandalf lets developers inspect Codex and Claude Code setup, review risky changes, and roll back supported user-global setup after experiments.
+Gandalf lets developers inspect local AI agent setup, browse agent-native marketplace/source entries, and apply only reviewed provider-backed changes.
 
 Korean:
 
-> 내 Mac의 Codex와 Claude Code 설정 변경을 확인하고, 비교하고, 필요하면 되돌리세요.
+> 내 Mac의 AI 에이전트 설정을 확인하고, 에이전트 네이티브 소스를 살펴보고, 검토된 변경만 적용하세요.
 
 ## Product Thesis
 
-AI coding agents are becoming part of a developer's local operating environment. For the current loop, Gandalf focuses on Codex and Claude Code: global config, MCP setup, skills, hooks, permissions, and env key inventory together form a real setup layer.
+AI coding agents are becoming part of a developer's local operating environment. For the current loop, Gandalf focuses on Codex and Claude Code: global config, MCP setup, skills, hooks, permissions, plugins, marketplace/source metadata, and env key inventory together form a real setup layer.
 
 That setup layer is powerful, but it is easy to lose control of:
 
@@ -61,24 +78,25 @@ That setup layer is powerful, but it is easy to lose control of:
 - new machines require setup reconstruction
 - team onboarding requires a consistent agent environment
 
-Gandalf exists because this layer needs the same basic safety primitive developers already expect from source code:
+Gandalf exists because this layer needs one local console that separates three facts:
 
 ```text
-branch
-diff
-commit/save
-checkout/switch
-rollback
-remote/team profile
+what is installed
+what the agent ecosystem exposes for browsing
+what Gandalf can safely change through a provider-backed action
 ```
 
 Gandalf's core product idea is:
 
-> Safe actions for local agent setups.
+> Reviewed local control for AI agent setup.
 
-The product should not be understood as a scanner, backup tool, audit dashboard, or marketplace. Those are implementation capabilities or adjacent surfaces. The user-facing product is a setup branch manager and safety layer for AI coding agent environments.
+The product should not be understood as a scanner, backup tool, audit dashboard, Git branch manager, or Gandalf-owned marketplace. Those are implementation capabilities, historical explorations, or adjacent surfaces. The user-facing product is a local control console for inspecting setup, browsing agent-native marketplace/source entries, and applying provider-backed changes only after Review Changes.
 
-## Decision Log
+## Historical / Non-Current Material
+
+Everything below this line is retained as historical product exploration. It includes older Git branch/profile, Time Machine, desktop, cloud, team, and broad multi-agent direction. Do not treat those sections as active implementation direction unless a newer current-contract document explicitly revalidates them.
+
+## Historical Decision Log
 
 ### D1. MVP Is Global-Only
 
@@ -624,7 +642,7 @@ That future feature should be explicit, opt-in, and separate from default profil
 
 ### D15. MVP Agent Support Was Codex-Only
 
-Status: superseded by the current Codex and Claude Code safe action loop.
+Status: superseded by the current Codex and Claude Code product contract.
 
 The earlier productized MVP narrowed to Codex only.
 
