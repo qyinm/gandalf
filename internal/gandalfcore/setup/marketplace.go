@@ -120,6 +120,9 @@ func isMarketplaceEvidence(item types.DiscoveredItem) bool {
 	if item.Agent == types.AgentProject || item.Scope == types.ScopeProject {
 		return false
 	}
+	if metadataBool(metadataMap(item.Metadata), "inventoryOnly") {
+		return false
+	}
 	if item.Kind == types.KindExtension {
 		return true
 	}

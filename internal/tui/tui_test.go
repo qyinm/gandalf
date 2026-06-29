@@ -2,10 +2,12 @@ package tui_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
@@ -234,6 +236,41 @@ func TestFormattersAndSourceRootLabels(t *testing.T) {
 	}
 	if got := tui.FormatInventoryNameWithSource("github", mcpServer); got != "github (project: .mcp.json)" {
 		t.Fatalf("name with source: got %q", got)
+	}
+}
+
+func TestBuildBaselineStatusViewModel(t *testing.T) {
+	model := tui.BuildBaselineStatusViewModel(baseline.Status{
+		Agents: []baseline.AgentStatus{
+			{
+				Agent:               types.AgentClaudeCode,
+				HasBaseline:         false,
+				UnsupportedCount:    2,
+				OmittedContentCount: 1,
+			},
+			{
+				Agent:               types.AgentCodex,
+				HasBaseline:         true,
+				BaselineName:        "baseline-codex",
+				SemanticChangeCount: 1,
+			},
+		},
+	})
+
+	if !model.HasMissing || !model.HasChanges {
+		t.Fatalf("model flags = %#v", model)
+	}
+	if len(model.Rows) != 2 {
+		t.Fatalf("rows = %#v", model.Rows)
+	}
+	if model.Rows[0].Status != "missing baseline" || model.Rows[0].Baseline != "-" {
+		t.Fatalf("missing row = %#v", model.Rows[0])
+	}
+	if model.Rows[0].Unsupported != "2 unsupported, 1 omitted" {
+		t.Fatalf("unsupported label = %q", model.Rows[0].Unsupported)
+	}
+	if model.Rows[1].Status != "changed" || model.Rows[1].Changes != "1 changes" {
+		t.Fatalf("changed row = %#v", model.Rows[1])
 	}
 }
 
@@ -553,6 +590,183 @@ func TestCompareScopeAndLabels(t *testing.T) {
 	if len(model.Sections) == 0 || model.Sections[0].Title != "Claude Code" {
 		t.Fatalf("sections: got %#v", model.Sections)
 	}
+}
+
+func TestEnvironmentsViewModelBuildsStructuredDiffSurface(t *testing.T) {
+	sourcePath := "~/.codex/config.toml"
+	model := tui.BuildEnvironmentsViewModel(tui.BuildEnvironmentsViewModelInput{
+		Status: baseline.Status{Agents: []baseline.AgentStatus{{
+			Agent:               types.AgentCodex,
+			HasBaseline:         true,
+			BaselineName:        "baseline-codex",
+			SemanticChangeCount: 1,
+			Diff: diff.GraphDiff{SemanticChanges: []diff.SemanticChange{{
+				Code:       diff.SemanticMcpChanged,
+				EntityKind: types.KindMcpServer,
+				EntityName: "aside",
+				Severity:   types.SeverityMedium,
+				Before:     json.RawMessage(`{"args":["--old"],"command":"old-aside","env":{"A":"1"},"removed":true}`),
+				After:      json.RawMessage(`{"args":["--new"],"command":"new-aside","env":{"A":"1"},"timeout":30}`),
+				Details: diff.SemanticChangeDetails{
+					ChangedFields: []string{"command", "args", "removed", "timeout"},
+					SourcePath:    &sourcePath,
+				},
+			}}},
+		}}},
+	})
+
+	if len(model.Surfaces) != 1 {
+		t.Fatalf("surfaces = %#v", model.Surfaces)
+	}
+	surface := model.Surfaces[0]
+	if surface.Marker != "~" || surface.Kind != "MCP" || surface.Name != "aside" || !surface.Selected {
+		t.Fatalf("surface = %#v", surface)
+	}
+	if surface.SourcePath != sourcePath {
+		t.Fatalf("source path = %q", surface.SourcePath)
+	}
+	if model.Diff.Title != "MCP aside" || model.Diff.SourcePath != sourcePath {
+		t.Fatalf("diff = %#v", model.Diff)
+	}
+	if !hasEnvironmentHunk(model.Diff.Rows) {
+		t.Fatalf("expected hunk row: %#v", model.Diff.Rows)
+	}
+	if !hasEnvironmentPair(model.Diff.Rows, `command: "old-aside"`, `command: "new-aside"`) {
+		t.Fatalf("expected command pair: %#v", model.Diff.Rows)
+	}
+	if !hasEnvironmentPair(model.Diff.Rows, `args: ["--old"]`, `args: ["--new"]`) {
+		t.Fatalf("expected args pair: %#v", model.Diff.Rows)
+	}
+	if !hasEnvironmentLeftOnly(model.Diff.Rows, `removed: true`) {
+		t.Fatalf("expected removed left-only row: %#v", model.Diff.Rows)
+	}
+	if !hasEnvironmentRightOnly(model.Diff.Rows, `timeout: 30`) {
+		t.Fatalf("expected added right-only row: %#v", model.Diff.Rows)
+	}
+	if !hasEnvironmentContext(model.Diff.Rows, `env: {"A":"1"}`) {
+		t.Fatalf("expected unchanged context row near hunk: %#v", model.Diff.Rows)
+	}
+}
+
+func TestEnvironmentsViewModelDoesNotHideLargeDiffBehindSummary(t *testing.T) {
+	before := map[string]any{}
+	after := map[string]any{}
+	changedFields := make([]string, 0, 12)
+	for i := 0; i < 12; i++ {
+		field := fmt.Sprintf("field%02d", i)
+		before[field] = i
+		after[field] = i + 100
+		changedFields = append(changedFields, field)
+	}
+	beforeJSON, _ := json.Marshal(before)
+	afterJSON, _ := json.Marshal(after)
+
+	model := tui.BuildEnvironmentsViewModel(tui.BuildEnvironmentsViewModelInput{
+		Status: baseline.Status{Agents: []baseline.AgentStatus{{
+			Agent: types.AgentCodex, HasBaseline: true, SemanticChangeCount: 1,
+			Diff: diff.GraphDiff{SemanticChanges: []diff.SemanticChange{{
+				Code: diff.SemanticAgentConfigChanged, EntityKind: types.KindAgentConfig, EntityName: "config",
+				Before: beforeJSON, After: afterJSON,
+				Details: diff.SemanticChangeDetails{ChangedFields: changedFields},
+			}}},
+		}}},
+	})
+
+	if len(model.Diff.Rows) == 0 {
+		t.Fatal("expected diff rows")
+	}
+	for _, row := range model.Diff.Rows {
+		if strings.Contains(row.Left.Text, "... +") || strings.Contains(row.Right.Text, "... +") || strings.Contains(row.HunkTitle, "... +") {
+			t.Fatalf("diff rows must not hide changes behind summary: %#v", row)
+		}
+	}
+	if !hasEnvironmentPair(model.Diff.Rows, "field11: 11", "field11: 111") {
+		t.Fatalf("expected later changed field to remain visible: %#v", model.Diff.Rows)
+	}
+}
+
+func TestEnvironmentsViewModelShowsRawOnlyChanges(t *testing.T) {
+	beforeID := "codex.config.old"
+	afterID := "codex.config.new"
+	beforeChecksum := "sha256:old"
+	afterChecksum := "sha256:new"
+	model := tui.BuildEnvironmentsViewModel(tui.BuildEnvironmentsViewModelInput{
+		Status: baseline.Status{Agents: []baseline.AgentStatus{{
+			Agent:          types.AgentCodex,
+			HasBaseline:    true,
+			RawChangeCount: 1,
+			Diff: diff.GraphDiff{RawSourceChanges: []diff.RawSourceChange{{
+				SourcePath:       "~/.codex/config.toml",
+				BeforeEvidenceID: &beforeID,
+				AfterEvidenceID:  &afterID,
+				BeforeChecksum:   &beforeChecksum,
+				AfterChecksum:    &afterChecksum,
+				Status:           "changed",
+			}}},
+		}}},
+	})
+
+	if model.ChangesEmpty != "" {
+		t.Fatalf("raw-only diff should not be reported clean: %q", model.ChangesEmpty)
+	}
+	if len(model.Surfaces) != 1 {
+		t.Fatalf("surfaces = %#v", model.Surfaces)
+	}
+	surface := model.Surfaces[0]
+	if surface.Kind != "Source" || surface.Marker != "~" || surface.Name != "~/.codex/config.toml" {
+		t.Fatalf("surface = %#v", surface)
+	}
+	if !hasEnvironmentPair(model.Diff.Rows, "checksum: sha256:old", "checksum: sha256:new") {
+		t.Fatalf("expected raw checksum diff: %#v", model.Diff.Rows)
+	}
+	if !hasEnvironmentPair(model.Diff.Rows, "status: baseline", "status: current") {
+		t.Fatalf("expected raw status diff: %#v", model.Diff.Rows)
+	}
+}
+
+func hasEnvironmentHunk(rows []tui.EnvironmentDiffRowModel) bool {
+	for _, row := range rows {
+		if row.Kind == tui.EnvironmentDiffRowHunk && strings.HasPrefix(row.HunkTitle, "@@") {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEnvironmentPair(rows []tui.EnvironmentDiffRowModel, left, right string) bool {
+	for _, row := range rows {
+		if row.Left.Text == left && row.Right.Text == right {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEnvironmentLeftOnly(rows []tui.EnvironmentDiffRowModel, left string) bool {
+	for _, row := range rows {
+		if row.Left.Text == left && row.Right.Text == "" {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEnvironmentRightOnly(rows []tui.EnvironmentDiffRowModel, right string) bool {
+	for _, row := range rows {
+		if row.Left.Text == "" && row.Right.Text == right {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEnvironmentContext(rows []tui.EnvironmentDiffRowModel, text string) bool {
+	for _, row := range rows {
+		if row.Kind == tui.EnvironmentDiffRowContext && row.Left.Text == text && row.Right.Text == text {
+			return true
+		}
+	}
+	return false
 }
 
 func TestSaveSetupTitlePreview(t *testing.T) {

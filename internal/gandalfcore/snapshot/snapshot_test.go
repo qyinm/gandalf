@@ -123,6 +123,77 @@ func TestCapturesClaudeUserGlobalSettingsWithContentBacking(t *testing.T) {
 	}
 }
 
+func TestOmitsClaudeUserGlobalSettingsWhenJSONContainsSecretKey(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, storeDir := makeSandbox(t)
+	claudeDir := filepath.Join(homeDir, ".claude")
+	if err := os.MkdirAll(claudeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settings := `{"env":{"OPENAI_API_KEY":"sk-test"},"permissions":{"allow":["Bash(echo hi)"]}}`
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(settings), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := types.AgentClaudeCode
+	scope := types.ScopeUser
+	state, err := snapshot.CaptureCurrentState(&types.RuntimeOptions{
+		ProjectPath:    projectPath,
+		HomeDir:        homeDir,
+		StoreDir:       storeDir,
+		Agent:          &agent,
+		Scope:          &scope,
+		CaptureContent: true,
+	}, "claude-baseline")
+	if err != nil {
+		t.Fatalf("CaptureCurrentState: %v", err)
+	}
+
+	foundOmitted := false
+	for _, entry := range state.Snapshot.Content {
+		if entry.SourcePath != "~/.claude/settings.json" {
+			continue
+		}
+		foundOmitted = true
+		if entry.CaptureStatus != "omitted" {
+			t.Fatalf("capture status = %q, want omitted", entry.CaptureStatus)
+		}
+		if entry.Content != nil {
+			t.Fatalf("secret-bearing content must not be retained: %#v", entry.Content)
+		}
+		if entry.Reason == nil || *entry.Reason != "secret_like_content" {
+			t.Fatalf("reason = %v, want secret_like_content", entry.Reason)
+		}
+	}
+	if !foundOmitted {
+		t.Fatal("expected omitted Claude settings.json content entry")
+	}
+
+	var settingsEvidence *types.DiscoveredItem
+	for i := range state.Scan.Evidence {
+		item := &state.Scan.Evidence[i]
+		if item.Agent == types.AgentClaudeCode &&
+			item.Kind == types.KindAgentConfig &&
+			item.SourcePath == "~/.claude/settings.json" {
+			settingsEvidence = item
+			break
+		}
+	}
+	if settingsEvidence == nil {
+		t.Fatal("settings evidence not found")
+	}
+	var meta map[string]any
+	if err := json.Unmarshal(settingsEvidence.Metadata, &meta); err != nil {
+		t.Fatal(err)
+	}
+	if meta["contentCaptureStatus"] != "omitted" {
+		t.Fatalf("contentCaptureStatus = %#v", meta["contentCaptureStatus"])
+	}
+	if meta["contentCaptureReason"] != "secret_like_content" {
+		t.Fatalf("contentCaptureReason = %#v", meta["contentCaptureReason"])
+	}
+}
+
 func TestSkipsClaudeJSONMetadataOnlyFromContentCapture(t *testing.T) {
 	t.Parallel()
 	projectPath, homeDir, storeDir := makeSandbox(t)

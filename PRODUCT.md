@@ -1,18 +1,19 @@
 # Gandalf Product Definition
 
 Status: working product document
-Last updated: 2026-06-12
+Last updated: 2026-06-29
 
-## Current Gate 2 CLI Wedge
+## Current Safe Action Loop
 
 The current implementation target is not the full profile/cloud/team product described below.
 
-Gate 2 is a Codex-only rollback demand test:
+The current product loop supports Codex and Claude Code user-global setup:
 
 ```text
-snapshot -> diff -> restore
+baseline -> changes since baseline -> Review Changes -> Apply -> Verify -> Rollback where supported
 scope: --agent codex --scope user
-surface: ~/.codex/ user-global setup only
+scope: --agent claude-code --scope user
+surface: supported ~/.codex/ and ~/.claude/ user-global setup only
 distribution: CLI first
 public install paths: install.sh and Homebrew tap
 source repository: qyinm/gandalf
@@ -22,10 +23,11 @@ Gandalf is distributed as a Go binary. The supported install paths are the lates
 
 In scope now:
 
-- content-backed snapshots for supported Codex user-global files
+- content-backed snapshots for supported Codex and Claude Code user-global files
 - byte-exact restore for supported non-secret content
 - explicit unsupported reasons for surfaces Gandalf cannot safely restore yet
-- tests that prove rollback from a damaged `~/.codex/config.toml`
+- tests that prove rollback from damaged `~/.codex/config.toml` and `~/.claude/settings.json`
+- TUI Review Changes before restore-backed rollback apply
 
 Not in scope now:
 
@@ -34,20 +36,21 @@ Not in scope now:
 - team/cloud sync
 - broad multi-agent restore
 - repo-local setup management
+- Cursor, OpenCode, or Pi Agent current product support
 
-The larger "Git branches for Codex setups" product direction remains useful, but implementation should not expand into it until the rollback demand test clears.
+The larger "Git branches for agent setups" product direction remains useful, but implementation should not expand into it until the Codex and Claude Code loop is credible.
 
 ## One-Line Definition
 
-Gandalf lets developers snapshot, diff, and roll back their user-global Codex setup after risky setup experiments.
+Gandalf lets developers inspect Codex and Claude Code setup, review risky changes, and roll back supported user-global setup after experiments.
 
 Korean:
 
-> 내 Mac의 Codex 설정 변경을 저장하고, 비교하고, 필요하면 되돌리세요.
+> 내 Mac의 Codex와 Claude Code 설정 변경을 확인하고, 비교하고, 필요하면 되돌리세요.
 
 ## Product Thesis
 
-AI coding agents are becoming part of a developer's local operating environment. For MVP, Gandalf focuses on Codex: global config, MCP setup, instructions, permissions, and env key inventory together form a real setup layer.
+AI coding agents are becoming part of a developer's local operating environment. For the current loop, Gandalf focuses on Codex and Claude Code: global config, MCP setup, skills, hooks, permissions, and env key inventory together form a real setup layer.
 
 That setup layer is powerful, but it is easy to lose control of:
 
@@ -71,7 +74,7 @@ remote/team profile
 
 Gandalf's core product idea is:
 
-> Git branches for Codex setups.
+> Safe actions for local agent setups.
 
 The product should not be understood as a scanner, backup tool, audit dashboard, or marketplace. Those are implementation capabilities or adjacent surfaces. The user-facing product is a setup branch manager and safety layer for AI coding agent environments.
 
@@ -86,7 +89,6 @@ Gandalf should not manage, scan, diff, risk-score, switch, or restore repo-local
 Out of scope for MVP:
 
 ```text
-.claude user-global setup
 .cursor user-global setup
 .mcp.json
 .cursor/mcp.json inside a repo
@@ -101,6 +103,9 @@ In scope for MVP:
 ```text
 ~/.codex/config.toml
 other supported Codex user-global config
+~/.claude/settings.json
+supported ~/.claude/skills content
+Claude Code unsupported metadata as observe-only
 ```
 
 Product implication:
@@ -617,11 +622,13 @@ Future option:
 
 That future feature should be explicit, opt-in, and separate from default profile sync.
 
-### D15. MVP Agent Support Is Codex-Only
+### D15. MVP Agent Support Was Codex-Only
 
-Productized MVP should support Codex only.
+Status: superseded by the current Codex and Claude Code safe action loop.
 
-MVP in scope:
+The earlier productized MVP narrowed to Codex only.
+
+Earlier MVP in scope:
 
 ```text
 ~/.codex/config.toml
@@ -630,10 +637,9 @@ Codex instructions/settings when supported
 Codex-related env key inventory
 ```
 
-MVP out of scope:
+Earlier MVP out of scope:
 
 ```text
-Claude Code
 Cursor
 OpenCode
 Pi Agent
@@ -650,7 +656,7 @@ Codex-only MVP
 = clearer product dogfooding
 ```
 
-Claude Code and Cursor remain important expansion targets, but they should not block the first productized MVP.
+Claude Code has since moved into the current supported agent set. Cursor, OpenCode, and Pi Agent remain outside the current product-visible support boundary.
 
 ### D16. Automatic Snapshots Use Stable Debounced Groups
 

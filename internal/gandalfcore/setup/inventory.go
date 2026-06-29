@@ -25,6 +25,7 @@ const (
 	ActionAdd    ActionKind = "add"
 	ActionRemove ActionKind = "remove"
 	ActionEdit   ActionKind = "edit"
+	ActionToggle ActionKind = "toggle"
 )
 
 // ActionAvailability describes whether an inventory action can currently run.
@@ -55,6 +56,7 @@ type InventoryItem struct {
 	RuntimeStatus string
 	Tools         []InventoryTool
 	ToolCount     int
+	Disabled      bool
 	Actions       []ActionAvailability
 }
 
@@ -86,7 +88,8 @@ func BuildInventory(evidence []types.DiscoveredItem) []InventoryItem {
 			RuntimeStatus: inventoryRuntimeStatus(metadata),
 			Tools:         tools,
 			ToolCount:     toolCount,
-			Actions:       defaultActions(item.Scope),
+			Disabled:      mcpDisabledFromValue(objectKind, item.Value),
+			Actions:       defaultActions(item.Scope, objectKind, item.SourcePath),
 		})
 	}
 
@@ -192,17 +195,67 @@ func inventoryItemName(item types.DiscoveredItem) string {
 	return item.Kind.String()
 }
 
-func defaultActions(scope types.EvidenceScope) []ActionAvailability {
+func defaultActions(scope types.EvidenceScope, objectKind ObjectKind, sourcePath string) []ActionAvailability {
+	actions := make([]ActionAvailability, 0, 3)
+	actions = append(actions, toggleAvailability(scope, objectKind, sourcePath))
 	if scope == types.ScopeUser {
-		return []ActionAvailability{
-			{Action: ActionEdit, Available: false, Reason: "edit action provider is not implemented yet"},
-			{Action: ActionRemove, Available: false, Reason: "remove action provider is not implemented yet"},
-		}
+		actions = append(actions,
+			ActionAvailability{Action: ActionEdit, Available: false, Reason: "edit action provider is not implemented yet"},
+			ActionAvailability{Action: ActionRemove, Available: false, Reason: "remove action provider is not implemented yet"},
+		)
+		return actions
 	}
-	return []ActionAvailability{
-		{Action: ActionEdit, Available: false, Reason: "managed setup cannot be edited directly"},
-		{Action: ActionRemove, Available: false, Reason: "managed setup cannot be removed directly"},
+	actions = append(actions,
+		ActionAvailability{Action: ActionEdit, Available: false, Reason: "managed setup cannot be edited directly"},
+		ActionAvailability{Action: ActionRemove, Available: false, Reason: "managed setup cannot be removed directly"},
+	)
+	return actions
+}
+
+// toggleAvailability reports whether the enable/disable toggle can run.
+// Only JSON-backed MCP servers under user scope expose a real toggle today,
+// because their "off" state is a well-defined, reversible `disabled` flag.
+func toggleAvailability(scope types.EvidenceScope, objectKind ObjectKind, sourcePath string) ActionAvailability {
+	if objectKind != ObjectMCPServer {
+		return ActionAvailability{Action: ActionToggle, Available: false, Reason: "enable/disable is only supported for MCP servers"}
 	}
+	if scope != types.ScopeUser {
+		return ActionAvailability{Action: ActionToggle, Available: false, Reason: "managed MCP servers cannot be toggled directly"}
+	}
+	if !isJSONMCPSource(sourcePath) {
+		return ActionAvailability{Action: ActionToggle, Available: false, Reason: "enable/disable requires a JSON MCP config (.mcp.json)"}
+	}
+	return ActionAvailability{Action: ActionToggle, Available: true}
+}
+
+// isJSONMCPSource reports whether the MCP server is backed by a JSON config file
+// whose entries support a `disabled` flag.
+func isJSONMCPSource(sourcePath string) bool {
+	trimmed := strings.TrimSpace(sourcePath)
+	if trimmed == "" || strings.HasPrefix(trimmed, "<") {
+		return false
+	}
+	return strings.HasSuffix(trimmed, ".mcp.json") ||
+		strings.HasSuffix(trimmed, "/mcp.json") ||
+		trimmed == "mcp.json"
+}
+
+// mcpDisabledFromValue reads the persisted disabled/enabled flag for an MCP server.
+func mcpDisabledFromValue(objectKind ObjectKind, value json.RawMessage) bool {
+	if objectKind != ObjectMCPServer || len(value) == 0 {
+		return false
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(value, &parsed); err != nil {
+		return false
+	}
+	if disabled, ok := parsed["disabled"].(bool); ok {
+		return disabled
+	}
+	if enabled, ok := parsed["enabled"].(bool); ok {
+		return !enabled
+	}
+	return false
 }
 
 func inventoryMetadataString(metadata map[string]any, key string) string {

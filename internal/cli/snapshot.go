@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/qyinm/gandalf/internal/gandalfcore/agents"
 	"github.com/qyinm/gandalf/internal/gandalfcore/snapshot"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -90,22 +91,21 @@ func runSnapshotCreate(cmd *cobra.Command, common *CommonFlags, name string, met
 		return writeError(cmd.ErrOrStderr(), snapErr)
 	}
 
-	contentBackedCodexUser := runtime.Agent != nil &&
-		*runtime.Agent == types.AgentCodex &&
+	contentBackedUser := runtime.Agent != nil &&
 		runtime.Scope != nil &&
-		*runtime.Scope == types.ScopeUser
+		agents.SupportsContentBackedUserSnapshot(*runtime.Agent, *runtime.Scope)
 
-	if !metadataOnly && !contentBackedCodexUser {
+	if !metadataOnly && !contentBackedUser {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
 			Code:    "GANDALF_METADATA_ONLY_REQUIRED",
 			Problem: "Snapshots are metadata-only.",
 			Cause:   "`snapshot create` was called without `--metadata-only`.",
-			Fix:     "Add `--metadata-only`, or use `--agent codex --scope user` for the Codex rollback safety-net path.",
+			Fix:     "Add `--metadata-only`, or use `--agent codex --scope user` or `--agent claude-code --scope user` for the supported rollback safety-net path.",
 		})
 	}
 
 	captureRuntime := runtime
-	captureRuntime.CaptureContent = !metadataOnly && contentBackedCodexUser
+	captureRuntime.CaptureContent = !metadataOnly && contentBackedUser
 
 	state, err := snapshot.CaptureCurrentState(&captureRuntime, name)
 	if err != nil {

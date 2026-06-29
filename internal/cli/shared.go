@@ -18,16 +18,6 @@ import (
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
-var validAgents = []string{
-	"claude-code",
-	"codex",
-	"cursor",
-	"opencode",
-	"pi-agent",
-	"project",
-	"unknown",
-}
-
 var validScopes = []string{"user", "project", "managed", "unknown"}
 
 // CommonFlags are shared CLI options across commands.
@@ -85,22 +75,15 @@ func resolveRuntime(flags *CommonFlags) (types.RuntimeOptions, *types.SnapError)
 
 	var agent *types.AgentID
 	if flags.Agent != "" {
-		valid := false
-		for _, candidate := range validAgents {
-			if candidate == flags.Agent {
-				valid = true
-				break
-			}
-		}
-		if !valid {
+		parsed := types.ParseAgentID(flags.Agent)
+		if !agents.IsCurrentSupported(parsed) || parsed.String() != flags.Agent {
 			return types.RuntimeOptions{}, &types.SnapError{
 				Code:    "GANDALF_INVALID_AGENT",
 				Problem: fmt.Sprintf("Invalid agent: %q.", flags.Agent),
 				Cause:   "An unsupported agent identifier was provided.",
-				Fix:     fmt.Sprintf("Valid agents: %s", strings.Join(validAgents, ", ")),
+				Fix:     fmt.Sprintf("Valid agents: %s", strings.Join(agents.CurrentSupportedNames(), ", ")),
 			}
 		}
-		parsed := types.ParseAgentID(flags.Agent)
 		agent = &parsed
 	}
 

@@ -525,7 +525,7 @@ OPENAI_API_KEY = "secret"
 	return os.WriteFile(filepath.Join(sb.projectPath, ".env"), []byte("GANDALF_MODE=local\n"), 0o644)
 }
 
-func TestMultiAgentSandboxDiscoversAtLeastFourAgents(t *testing.T) {
+func TestDefaultScanDiscoversOnlyCurrentSupportedAgents(t *testing.T) {
 	sb := makeSandbox(t)
 	if err := seedVerificationFixture(sb); err != nil {
 		t.Fatal(err)
@@ -537,19 +537,18 @@ func TestMultiAgentSandboxDiscoversAtLeastFourAgents(t *testing.T) {
 		agents[item.Agent] = struct{}{}
 	}
 
-	required := []types.AgentID{
+	want := []types.AgentID{
 		types.AgentClaudeCode,
 		types.AgentCodex,
-		types.AgentCursor,
-		types.AgentOpencode,
-		types.AgentPiAgent,
 	}
-	for _, agent := range required {
+	for _, agent := range want {
 		if _, ok := agents[agent]; !ok {
 			t.Fatalf("missing agent %q in %#v", agent, agents)
 		}
 	}
-	if len(agents) < 4 {
-		t.Fatalf("expected at least 4 agents, got %d", len(agents))
+	for agent := range agents {
+		if agent != types.AgentClaudeCode && agent != types.AgentCodex {
+			t.Fatalf("default scan included unsupported current agent %q in %#v", agent, agents)
+		}
 	}
 }

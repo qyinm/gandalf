@@ -2,40 +2,6 @@ package tui
 
 import "github.com/qyinm/gandalf/internal/tui/views"
 
-func setupInventoryViewFromModel(model SetupInventoryViewModel) views.SetupInventoryView {
-	view := views.SetupInventoryView{
-		Skills:       model.Skills,
-		McpServers:   model.McpServers,
-		Hooks:        model.Hooks,
-		Plugins:      model.Plugins,
-		EmptyMessage: model.EmptyMessage,
-	}
-	for _, row := range model.Rows {
-		view.Rows = append(view.Rows, views.SetupInventoryRow{
-			AgentLabel:  row.AgentLabel,
-			AgentMarker: row.AgentMarker,
-			ObjectKind:  row.ObjectKind,
-			Name:        row.Name,
-			SourcePath:  row.SourcePath,
-			ActionLabel: row.ActionLabel,
-			Selected:    row.Selected,
-		})
-	}
-	if model.Confirmation != nil {
-		view.Confirmation = &views.SetupActionConfirmation{
-			Action:       model.Confirmation.Action,
-			AgentLabel:   model.Confirmation.AgentLabel,
-			ObjectKind:   model.Confirmation.ObjectKind,
-			TargetName:   model.Confirmation.TargetName,
-			Operation:    model.Confirmation.Operation,
-			ConfigTarget: model.Confirmation.ConfigTarget,
-			Command:      model.Confirmation.Command,
-		}
-	}
-	view.ActionError = model.ActionError
-	return view
-}
-
 func setupConsoleViewFromModel(model SetupConsoleViewModel) views.SetupConsoleView {
 	view := views.SetupConsoleView{
 		ActiveTab:     string(model.ActiveTab),
@@ -46,6 +12,8 @@ func setupConsoleViewFromModel(model SetupConsoleViewModel) views.SetupConsoleVi
 		EmptyMessage:  model.EmptyMessage,
 		ActionError:   model.ActionError,
 	}
+	// Per-agent baseline/drift now lives in the persistent app header, so the
+	// console body no longer renders its own baseline rows.
 	for _, tab := range model.Tabs {
 		view.Tabs = append(view.Tabs, views.SetupConsoleTab{
 			Label:    tab.Label,
@@ -73,6 +41,8 @@ func setupConsoleViewFromModel(model SetupConsoleViewModel) views.SetupConsoleVi
 			ToolCount:     row.ToolCount,
 			Description:   row.Description,
 			ActionLabel:   row.ActionLabel,
+			ToggleControl: row.ToggleControl,
+			Disabled:      row.Disabled,
 			Selected:      row.Selected,
 		})
 		for _, tool := range row.Tools {
@@ -184,23 +154,6 @@ func historyViewFromModel(model TimelineViewModel) views.HistoryView {
 	return view
 }
 
-func sidebarViewFromModel(nav NavigationModel) views.SidebarView {
-	view := views.SidebarView{Cursor: nav.Cursor}
-	for _, section := range nav.Sections {
-		navSection := views.NavSection{Label: section.Label}
-		for _, item := range section.Items {
-			navSection.Items = append(navSection.Items, views.NavItem{
-				ID:            item.ID,
-				Label:         item.Label,
-				EvidenceCount: item.EvidenceCount,
-			})
-			view.FlatIDs = append(view.FlatIDs, item.ID)
-		}
-		view.Sections = append(view.Sections, navSection)
-	}
-	return view
-}
-
 func agentDetailViewFromModel(model AgentDetailViewModel) views.AgentDetailView {
 	view := views.AgentDetailView{
 		Title:        model.Title,
@@ -253,6 +206,65 @@ func compareViewFromModel(model CompareViewModel) views.CompareView {
 			})
 		}
 		view.Sections = append(view.Sections, navSection)
+	}
+	return view
+}
+
+func environmentsViewFromModel(model EnvironmentsViewModel) views.EnvironmentsView {
+	view := views.EnvironmentsView{
+		FocusAgent:   model.FocusAgent,
+		Focus:        string(model.Focus),
+		Mode:         string(model.Mode),
+		DiffOffset:   model.DiffOffset,
+		ChangesEmpty: model.ChangesEmpty,
+		EmptyMessage: model.EmptyMessage,
+	}
+	for _, row := range model.Rows {
+		view.Rows = append(view.Rows, views.EnvironmentRow{
+			AgentLabel:   row.AgentLabel,
+			AgentMarker:  row.AgentMarker,
+			State:        row.State,
+			BaselineName: row.BaselineName,
+			BaselineDate: row.BaselineDate,
+			Detail:       row.Detail,
+			Selected:     row.Selected,
+		})
+	}
+	for _, surface := range model.Surfaces {
+		view.Surfaces = append(view.Surfaces, views.EnvironmentSurface{
+			ID:          surface.ID,
+			Marker:      surface.Marker,
+			Kind:        surface.Kind,
+			Name:        surface.Name,
+			Detail:      surface.Detail,
+			SourcePath:  surface.SourcePath,
+			ChangeCount: surface.ChangeCount,
+			Selected:    surface.Selected,
+		})
+	}
+	view.Diff = views.EnvironmentDiff{
+		SurfaceID:  model.Diff.SurfaceID,
+		Title:      model.Diff.Title,
+		SourcePath: model.Diff.SourcePath,
+	}
+	for _, row := range model.Diff.Rows {
+		view.Diff.Rows = append(view.Diff.Rows, views.EnvironmentDiffRow{
+			ID:          row.ID,
+			Kind:        string(row.Kind),
+			HunkIndex:   row.HunkIndex,
+			HunkTitle:   row.HunkTitle,
+			CurrentHunk: row.CurrentHunk,
+			Left: views.EnvironmentDiffSide{
+				LineNumber: row.Left.LineNumber,
+				Marker:     row.Left.Marker,
+				Text:       row.Left.Text,
+			},
+			Right: views.EnvironmentDiffSide{
+				LineNumber: row.Right.LineNumber,
+				Marker:     row.Right.Marker,
+				Text:       row.Right.Text,
+			},
+		})
 	}
 	return view
 }

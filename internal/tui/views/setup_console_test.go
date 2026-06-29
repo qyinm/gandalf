@@ -204,6 +204,41 @@ func TestRenderSetupConsoleShowsCompactPluginSkillRows(t *testing.T) {
 	}
 }
 
+func TestRenderSetupConsoleShowsPluginRowsWithoutDuplicatePrefix(t *testing.T) {
+	view := SetupConsoleView{
+		ActiveTab: "plugins",
+		Tabs: []SetupConsoleTab{
+			{Label: "Plugins", Count: 2, Selected: true},
+		},
+		Rows: []SetupConsoleRow{
+			{
+				RowKind:     "inventory",
+				AgentLabel:  "Claude Code",
+				AgentMarker: "CC",
+				ObjectKind:  "plugin",
+				Name:        "codex",
+				Selected:    true,
+			},
+			{
+				RowKind:     "inventory",
+				AgentLabel:  "Codex",
+				AgentMarker: "CX",
+				ObjectKind:  "plugin",
+				Name:        "vercel",
+			},
+		},
+	}
+
+	rendered := ansi.Strip(RenderSetupConsole(view, 100, 18))
+	if !strings.Contains(rendered, "codex") || !strings.Contains(rendered, "Claude Code") ||
+		!strings.Contains(rendered, "vercel") || !strings.Contains(rendered, "Codex") {
+		t.Fatalf("expected plugin names with agent origin labels:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "CC plugin") || strings.Contains(rendered, "CX plugin") {
+		t.Fatalf("expected plugin rows without duplicated agent/kind prefix:\n%s", rendered)
+	}
+}
+
 func TestRenderSetupConsoleShowsExpandedSkillRowDetails(t *testing.T) {
 	view := SetupConsoleView{
 		ActiveTab: "skills",
@@ -265,10 +300,10 @@ func TestRenderSetupConsoleShowsAgentOriginForMCPRows(t *testing.T) {
 	}
 
 	rendered := ansi.Strip(RenderSetupConsole(view, 100, 18))
-	if !strings.Contains(rendered, "› context7 [ready]") || !strings.Contains(rendered, "Codex") {
+	if !strings.Contains(rendered, "context7 [ready]") || !strings.Contains(rendered, "Codex") {
 		t.Fatalf("expected Codex MCP origin in view:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "› posthog [unavailable]") || !strings.Contains(rendered, "Cursor") {
+	if !strings.Contains(rendered, "posthog [unavailable]") || !strings.Contains(rendered, "Cursor") {
 		t.Fatalf("expected Cursor MCP origin in view:\n%s", rendered)
 	}
 	if strings.Contains(rendered, "~/.codex/config.toml") || strings.Contains(rendered, "~/.cursor/mcp.json") {
@@ -309,8 +344,8 @@ func TestRenderSetupConsoleShowsMCPToolRowsAndDescription(t *testing.T) {
 	}
 
 	rendered := ansi.Strip(RenderSetupConsole(view, 110, 24))
-	if !strings.Contains(rendered, "⌄ posthog [ready]") ||
-		!strings.Contains(rendered, "⌄   apm-attributes-list") ||
+	if !strings.Contains(rendered, "posthog [ready]") ||
+		!strings.Contains(rendered, "apm-attributes-list") ||
 		!strings.Contains(rendered, "List available span or resource attribute names") {
 		t.Fatalf("expected MCP tools and description in view:\n%s", rendered)
 	}
@@ -368,5 +403,88 @@ func TestOverlayLinePreservesBackgroundOutsideOverlay(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "3456789 right-side") {
 		t.Fatalf("expected right background to remain: %q", rendered)
+	}
+}
+
+func TestRenderSetupConsoleShowsDetailPaneWhenWide(t *testing.T) {
+	view := SetupConsoleView{
+		ActiveTab: "skills",
+		Tabs:      []SetupConsoleTab{{Label: "Skills", Count: 1, Selected: true}},
+		Rows: []SetupConsoleRow{
+			{RowKind: "inventory", AgentMarker: "CC", ObjectKind: "skill", Name: "code-review", Selected: true},
+		},
+		Selected: &SetupConsoleDetail{
+			Title:      "code-review",
+			AgentLabel: "Claude Code",
+			ObjectKind: "skill",
+			Status:     "user",
+			SourcePath: "~/.claude/skills/code-review",
+		},
+	}
+
+	rendered := ansi.Strip(RenderSetupConsole(view, 120, 24))
+	if !strings.Contains(rendered, "code-review") {
+		t.Fatalf("expected detail title in wide render:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "~/.claude/skills/code-review") {
+		t.Fatalf("expected detail source path in wide render:\n%s", rendered)
+	}
+}
+
+func TestRenderSetupConsoleShowsMCPStateDot(t *testing.T) {
+	view := SetupConsoleView{
+		ActiveTab: "mcp_servers",
+		Tabs:      []SetupConsoleTab{{Label: "MCP Servers", Count: 2, Selected: true}},
+		Rows: []SetupConsoleRow{
+			{RowKind: "inventory", AgentMarker: "CC", ObjectKind: "mcp", Name: "postgres", ToggleControl: true, Disabled: false, Selected: true},
+			{RowKind: "inventory", AgentMarker: "CX", ObjectKind: "mcp", Name: "redis", ToggleControl: true, Disabled: true},
+		},
+	}
+
+	rendered := ansi.Strip(RenderSetupConsole(view, 80, 20))
+	if !strings.Contains(rendered, "●") {
+		t.Fatalf("expected enabled dot for MCP row:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "○") {
+		t.Fatalf("expected disabled dot for MCP row:\n%s", rendered)
+	}
+}
+
+func TestMCPStateDotUsesRedForUnavailableRuntime(t *testing.T) {
+	unavailable := SetupConsoleRow{RowKind: "inventory", ObjectKind: "mcp", Name: "aside"}
+	if got, want := rowStateDot(unavailable, "mcp_servers"), removedStyle.Render("●"); got != want {
+		t.Fatalf("unavailable dot = %q, want %q", got, want)
+	}
+
+	ready := SetupConsoleRow{RowKind: "inventory", ObjectKind: "mcp", Name: "context7", ToolCount: 1}
+	if got, want := rowStateDot(ready, "mcp_servers"), cleanStyle.Render("●"); got != want {
+		t.Fatalf("ready dot = %q, want %q", got, want)
+	}
+
+	disabled := SetupConsoleRow{RowKind: "inventory", ObjectKind: "mcp", Name: "postgres", Disabled: true}
+	if got, want := rowStateDot(disabled, "mcp_servers"), changedStyle.Render("○"); got != want {
+		t.Fatalf("disabled dot = %q, want %q", got, want)
+	}
+}
+
+func TestRenderSetupConsoleShowsBaselineStatus(t *testing.T) {
+	view := SetupConsoleView{
+		Tabs: []SetupConsoleTab{{Label: "Hooks", Count: 0, Selected: true}},
+		BaselineRows: []SetupConsoleBaselineRow{
+			{AgentMarker: "CC", Status: "missing baseline", Baseline: "-", Changes: "-"},
+			{AgentMarker: "CX", Status: "changed", Baseline: "baseline-codex", Changes: "2 changes"},
+		},
+		EmptyMessage: "No global hooks found.",
+	}
+
+	rendered := ansi.Strip(RenderSetupConsole(view, 100, 24))
+	if !strings.Contains(rendered, "CC  missing baseline  baseline -") {
+		t.Fatalf("expected missing baseline row:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "CX  changed  baseline baseline-codex  2 changes") {
+		t.Fatalf("expected changed baseline row:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "B baseline") {
+		t.Fatalf("expected baseline key help:\n%s", rendered)
 	}
 }

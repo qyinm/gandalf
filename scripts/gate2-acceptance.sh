@@ -10,6 +10,7 @@ if [[ ! -x "$GANDALF" ]]; then
 fi
 
 ROOT="$(mktemp -d "${TMPDIR:-/tmp}/gandalf-gate2-acceptance-XXXXXX")"
+ROOT="$(cd "$ROOT" && pwd -P)"
 if [[ "${GANDALF_KEEP_GATE2_ACCEPTANCE:-}" != "1" ]]; then
 	trap 'rm -rf "$ROOT"' EXIT
 fi
@@ -18,10 +19,13 @@ PROJECT="$ROOT/project"
 HOME_DIR="$ROOT/home"
 STORE="$ROOT/store"
 CODEX_DIR="$HOME_DIR/.codex"
+CLAUDE_DIR="$HOME_DIR/.claude"
 CONFIG_PATH="$CODEX_DIR/config.toml"
 ORIGINAL_CONFIG="$ROOT/original-config.toml"
+CLAUDE_SETTINGS="$CLAUDE_DIR/settings.json"
+ORIGINAL_CLAUDE_SETTINGS="$ROOT/original-claude-settings.json"
 
-mkdir -p "$PROJECT" "$CODEX_DIR"
+mkdir -p "$PROJECT" "$CODEX_DIR" "$CLAUDE_DIR"
 
 cat >"$ORIGINAL_CONFIG" <<'EOF'
 model = "gpt-5"
@@ -32,6 +36,16 @@ command = "gh"
 args = ["mcp", "server"]
 EOF
 cp "$ORIGINAL_CONFIG" "$CONFIG_PATH"
+cat >"$ORIGINAL_CLAUDE_SETTINGS" <<'EOF'
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo hi)"
+    ]
+  }
+}
+EOF
+cp "$ORIGINAL_CLAUDE_SETTINGS" "$CLAUDE_SETTINGS"
 printf 'Disposable Gate 2 acceptance project.\n' >"$PROJECT/README.md"
 
 run_gandalf() {
@@ -39,7 +53,7 @@ run_gandalf() {
 	HOME="$HOME_DIR" GANDALF_STORE="$STORE" GANDALF_UPDATE_CHECK=0 "$GANDALF" "$@"
 }
 
-printf 'Gate 2 deterministic Codex rollback acceptance\n'
+printf 'Gate 2 deterministic Codex and Claude Code rollback acceptance\n'
 printf 'HOME=%s\n' "$HOME_DIR"
 printf 'GANDALF_STORE=%s\n' "$STORE"
 printf 'project=%s\n' "$PROJECT"
@@ -47,6 +61,7 @@ printf 'binary=%s\n' "$GANDALF"
 
 cd "$PROJECT"
 run_gandalf snapshot create --name clean-codex --agent codex --scope user --project "$PROJECT"
+run_gandalf snapshot create --name clean-claude --agent claude-code --scope user --project "$PROJECT"
 
 : >"$CONFIG_PATH"
 ADDED_SKILL="$CODEX_DIR/skills/synthetic-harness/SKILL.md"
@@ -69,4 +84,21 @@ if [[ -e "$ADDED_SKILL" ]]; then
 	exit 1
 fi
 
-printf '\nGate 2 acceptance passed: config restored and synthetic skill removed.\n'
+cat >"$CLAUDE_SETTINGS" <<'EOF'
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)"
+    ]
+  }
+}
+EOF
+printf '\n# Synthetic harness changed Claude Code settings permissions.\n'
+
+run_gandalf diff clean-claude current --agent claude-code --scope user --project "$PROJECT"
+run_gandalf restore --snapshot clean-claude --dry-run --agent claude-code --scope user --project "$PROJECT"
+run_gandalf restore --snapshot clean-claude --apply --experimental --agent claude-code --scope user --project "$PROJECT"
+
+cmp "$ORIGINAL_CLAUDE_SETTINGS" "$CLAUDE_SETTINGS"
+
+printf '\nGate 2 acceptance passed: Codex config restored, synthetic skill removed, and Claude Code settings restored.\n'
