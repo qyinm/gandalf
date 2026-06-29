@@ -540,6 +540,28 @@ func TestWritesAndReadsSnapshotsPerAgent(t *testing.T) {
 	}
 }
 
+func TestListSnapshotsSkipsAgentScopedDirsWithoutManifest(t *testing.T) {
+	root := tempStore(t)
+	agent := types.AgentCodex
+	if err := WriteSnapshot(root, StoreSnapshotFrom(testSnapshot("baseline")), &agent); err != nil {
+		t.Fatalf("WriteSnapshot: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "codex", "pre-apply-tmp"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "codex", "baseline.bak"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	names, err := ListSnapshots(root, &agent)
+	if err != nil {
+		t.Fatalf("ListSnapshots: %v", err)
+	}
+	if !reflect.DeepEqual(names, []string{"baseline"}) {
+		t.Fatalf("names = %v, want [baseline]", names)
+	}
+}
+
 func TestListAgentsReturnsAgentsWithSnapshots(t *testing.T) {
 	root := tempStore(t)
 	cc := types.AgentClaudeCode

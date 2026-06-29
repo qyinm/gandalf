@@ -145,6 +145,13 @@ func ExecuteMCPToggle(plan ActionPlan, homeDir, serverName, configPath string) (
 	if err != nil {
 		return ToggleResult{}, fmt.Errorf("read MCP config: %w", err)
 	}
+	mode := os.FileMode(0o600)
+	if info, err := os.Lstat(resolved); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return ToggleResult{}, fmt.Errorf("refusing to write through symlink destination: %s", resolved)
+		}
+		mode = info.Mode().Perm()
+	}
 	var config map[string]any
 	if err := json.Unmarshal(raw, &config); err != nil {
 		return ToggleResult{}, fmt.Errorf("parse MCP config: %w", err)
@@ -171,7 +178,7 @@ func ExecuteMCPToggle(plan ActionPlan, homeDir, serverName, configPath string) (
 	if err != nil {
 		return ToggleResult{}, err
 	}
-	if err := fsutil.WriteTextAtomically(resolved, string(serialized)+"\n", 0o644); err != nil {
+	if err := fsutil.WriteTextAtomically(resolved, string(serialized)+"\n", mode); err != nil {
 		return ToggleResult{}, fmt.Errorf("write MCP config: %w", err)
 	}
 	return ToggleResult{ServerName: serverName, Disabled: nextDisabled, ConfigPath: resolved}, nil

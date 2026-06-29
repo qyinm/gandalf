@@ -87,11 +87,17 @@ func latestSnapshot(storeDir string, agent types.AgentID) (*types.Snapshot, erro
 
 	snapshots := make([]types.Snapshot, 0, len(names))
 	for _, name := range names {
+		if store.IsRestorePointSnapshotName(name) {
+			continue
+		}
 		snap, err := store.ReadSnapshot(storeDir, name, &agent)
 		if err != nil {
 			return nil, err
 		}
 		snapshots = append(snapshots, snap)
+	}
+	if len(snapshots) == 0 {
+		return nil, nil
 	}
 	sort.Slice(snapshots, func(i, j int) bool {
 		return snapshots[i].Manifest.CreatedAt > snapshots[j].Manifest.CreatedAt

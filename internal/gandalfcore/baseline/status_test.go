@@ -106,6 +106,102 @@ func TestBuildStatusReportsAgentScopedBaselineAndChanges(t *testing.T) {
 	}
 }
 
+func TestBuildStatusIgnoresPreApplyRestorePoints(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, storeDir := makeSandbox(t)
+	codexConfig := filepath.Join(homeDir, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(codexConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codexConfig, []byte("model = \"gpt-5\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := types.AgentCodex
+	scope := types.ScopeUser
+	runtime := &types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+		Agent:       &agent,
+		Scope:       &scope,
+	}
+	baselineState, err := snapshot.CaptureCurrentState(runtime, "baseline-codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	baselineSnapshot := baselineState.Snapshot
+	baselineSnapshot.Manifest.CreatedAt = "2026-06-29T01:00:00Z"
+	if err := store.WriteSnapshot(storeDir, store.StoreSnapshotFrom(baselineSnapshot), &agent); err != nil {
+		t.Fatal(err)
+	}
+
+	restorePointState, err := snapshot.CaptureCurrentState(runtime, "pre-apply-codex-20260629-020000-000000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	restorePoint := restorePointState.Snapshot
+	restorePoint.Manifest.CreatedAt = "2026-06-29T02:00:00Z"
+	if err := store.WriteSnapshot(storeDir, store.StoreSnapshotFrom(restorePoint), &agent); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := baseline.BuildStatus(types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex := findAgentStatus(t, status, types.AgentCodex)
+	if !codex.HasBaseline || codex.BaselineName != "baseline-codex" {
+		t.Fatalf("codex baseline = %#v, want baseline-codex", codex)
+	}
+}
+
+func TestBuildStatusDoesNotTreatOnlyPreApplySnapshotAsBaseline(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, storeDir := makeSandbox(t)
+	codexConfig := filepath.Join(homeDir, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(codexConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codexConfig, []byte("model = \"gpt-5\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := types.AgentCodex
+	scope := types.ScopeUser
+	runtime := &types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+		Agent:       &agent,
+		Scope:       &scope,
+	}
+	state, err := snapshot.CaptureCurrentState(runtime, "pre-apply-codex-20260629-020000-000000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WriteSnapshot(storeDir, store.StoreSnapshotFrom(state.Snapshot), &agent); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := baseline.BuildStatus(types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex := findAgentStatus(t, status, types.AgentCodex)
+	if codex.HasBaseline {
+		t.Fatalf("pre-apply restore point should not count as baseline: %#v", codex)
+	}
+}
+
 func TestBuildStatusCountsOmittedContent(t *testing.T) {
 	t.Parallel()
 	projectPath, homeDir, storeDir := makeSandbox(t)

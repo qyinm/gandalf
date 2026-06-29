@@ -7,6 +7,7 @@ import (
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/scan"
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
 func TestClaudeCodeScannerDiscoversPluginMarketplaces(t *testing.T) {
@@ -108,6 +109,37 @@ func TestClaudeCodeScannerEmitsInstalledPluginsAsInventory(t *testing.T) {
 	// Installed plugins are inventory, not extra marketplace sources.
 	if sources := setup.BuildMarketplace(evidence); len(sources) != 0 {
 		t.Fatalf("installed plugins must not appear as marketplace sources: %#v", sources)
+	}
+}
+
+func TestClaudeCodeInstalledPluginInventoryOnlyUsesUserScope(t *testing.T) {
+	homeDir := t.TempDir()
+	writeFile(t, filepath.Join(homeDir, ".claude/plugins/installed_plugins.json"), `{
+		"version": 2,
+		"plugins": {
+			"project-only@openai-codex": [{"scope": "project", "version": "1.0.0"}],
+			"user-install@openai-codex": [{"scope": "project", "version": "0.1.0"}, {"scope": "user", "version": "1.2.0"}]
+		}
+	}`)
+
+	evidence := ClaudeCodeScanner{}.Scan(&scan.ScannerContext{
+		ProjectPath: t.TempDir(),
+		HomeDir:     homeDir,
+	})
+	inventory := setup.BuildInventory(evidence)
+	plugins := make(map[string]setup.InventoryItem)
+	for _, item := range inventory {
+		if item.ObjectKind == setup.ObjectPlugin {
+			plugins[item.Name] = item
+		}
+	}
+	if _, ok := plugins["project-only"]; ok {
+		t.Fatalf("project-scoped plugin should not be user inventory: %#v", plugins["project-only"])
+	}
+	if item, ok := plugins["user-install"]; !ok {
+		t.Fatalf("expected user-scoped install in inventory: %#v", plugins)
+	} else if item.Scope != types.ScopeUser {
+		t.Fatalf("scope = %s, want user", item.Scope)
 	}
 }
 

@@ -79,9 +79,9 @@ func scanClaudeInstalledPlugins(homeDir string) []types.DiscoveredItem {
 		if name == "" {
 			continue
 		}
-		install := claudeInstalledPlugin{}
-		if len(installs) > 0 {
-			install = installs[0]
+		install, ok := userScopedClaudeInstall(installs)
+		if !ok {
+			continue
 		}
 		sourcePath := displayClaudePath(filepath.Join(homeDir, ".claude", "plugins", "cache", marketplace, name), homeDir)
 		if install.InstallPath != "" {
@@ -92,6 +92,7 @@ func scanClaudeInstalledPlugins(homeDir string) []types.DiscoveredItem {
 			"name":          name,
 			"marketplace":   marketplace,
 			"version":       install.Version,
+			"scope":         install.Scope,
 			"installed":     true,
 			"status":        "installed",
 			"inventoryOnly": true,
@@ -115,6 +116,15 @@ func scanClaudeInstalledPlugins(homeDir string) []types.DiscoveredItem {
 		})
 	}
 	return evidence
+}
+
+func userScopedClaudeInstall(installs []claudeInstalledPlugin) (claudeInstalledPlugin, bool) {
+	for _, install := range installs {
+		if install.Scope == "" || strings.EqualFold(install.Scope, "user") {
+			return install, true
+		}
+	}
+	return claudeInstalledPlugin{}, false
 }
 
 // splitPluginKey splits a "name@marketplace" plugin registry key.

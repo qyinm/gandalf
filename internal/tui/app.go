@@ -1314,7 +1314,7 @@ func (a *App) restoreFocusedEnvironment() tea.Cmd {
 	}
 	var ref *snapshotRef
 	for i := range a.snapshotRefs {
-		if a.snapshotRefs[i].Agent == agent {
+		if a.snapshotRefs[i].Agent == agent && !store.IsRestorePointSnapshotName(a.snapshotRefs[i].Name) {
 			ref = &a.snapshotRefs[i]
 			break
 		}

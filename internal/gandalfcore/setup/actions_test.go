@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -243,6 +244,11 @@ func TestExecuteMCPToggleFlipsDisabledFlag(t *testing.T) {
 	if err := os.WriteFile(cfgPath, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(cfgPath, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	item := BuildInventory([]types.DiscoveredItem{{
 		ID: "mcp-pg", Agent: types.AgentClaudeCode, Kind: types.KindMcpServer,
@@ -264,6 +270,15 @@ func TestExecuteMCPToggleFlipsDisabledFlag(t *testing.T) {
 	if got := mcpServerDisabledOnDisk(t, cfgPath, "postgres"); !got {
 		t.Fatal("disabled flag not written")
 	}
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(cfgPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != 0o600 {
+			t.Fatalf("mode = %o, want 0600", got)
+		}
+	}
 
 	// Enable again (flag removed).
 	res, err = ExecuteMCPToggle(plan, home, "postgres", item.SourcePath)
@@ -283,6 +298,33 @@ func TestExecuteMCPToggleRefusesPathOutsideHome(t *testing.T) {
 	plan := ActionPlan{Action: ActionToggle, ObjectKind: ObjectMCPServer, Available: true}
 	if _, err := ExecuteMCPToggle(plan, home, "postgres", "/etc/evil.mcp.json"); err == nil {
 		t.Fatal("expected confinement error for path outside home")
+	}
+}
+
+func TestExecuteMCPToggleRefusesSymlinkConfig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test")
+	}
+	home := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.mcp.json")
+	if err := os.WriteFile(outside, []byte(`{"mcpServers":{"postgres":{"command":"pg-mcp"}}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(home, ".claude", ".mcp.json")
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, cfgPath); err != nil {
+		t.Fatal(err)
+	}
+
+	item := BuildInventory([]types.DiscoveredItem{{
+		ID: "mcp-pg", Agent: types.AgentClaudeCode, Kind: types.KindMcpServer,
+		Name: stringPtr("postgres"), SourcePath: "~/.claude/.mcp.json", Scope: types.ScopeUser,
+	}})[0]
+	plan := PlanItemAction(item, ActionToggle)
+	if _, err := ExecuteMCPToggle(plan, home, "postgres", item.SourcePath); err == nil {
+		t.Fatal("expected symlink toggle to be rejected")
 	}
 }
 
