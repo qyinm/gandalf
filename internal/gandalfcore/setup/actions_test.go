@@ -293,6 +293,44 @@ func TestExecuteMCPToggleFlipsDisabledFlag(t *testing.T) {
 	}
 }
 
+func TestExecuteActionPlanRunsMCPTogglePlan(t *testing.T) {
+	home := t.TempDir()
+	cfgPath := filepath.Join(home, ".claude", ".mcp.json")
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfgPath, []byte(`{"mcpServers":{"postgres":{"command":"pg-mcp"}}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item := BuildInventory([]types.DiscoveredItem{{
+		ID: "mcp-pg", Agent: types.AgentClaudeCode, Kind: types.KindMcpServer,
+		Name: stringPtr("postgres"), SourcePath: "~/.claude/.mcp.json", Scope: types.ScopeUser,
+	}})[0]
+	plan := PlanItemAction(item, ActionToggle)
+	if plan.MCPToggle == nil {
+		t.Fatalf("toggle plan missing execution spec: %#v", plan)
+	}
+
+	if _, err := ExecuteActionPlan(context.Background(), plan, nil, WithHomeDir(home)); err != nil {
+		t.Fatal(err)
+	}
+	if got := mcpServerDisabledOnDisk(t, cfgPath, "postgres"); !got {
+		t.Fatal("disabled flag not written through generic action executor")
+	}
+}
+
+func TestExecuteActionPlanMCPToggleRequiresHomeDir(t *testing.T) {
+	item := BuildInventory([]types.DiscoveredItem{{
+		ID: "mcp-pg", Agent: types.AgentClaudeCode, Kind: types.KindMcpServer,
+		Name: stringPtr("postgres"), SourcePath: "~/.claude/.mcp.json", Scope: types.ScopeUser,
+	}})[0]
+	plan := PlanItemAction(item, ActionToggle)
+	if _, err := ExecuteActionPlan(context.Background(), plan, nil); err == nil {
+		t.Fatal("expected missing home dir error")
+	}
+}
+
 func TestExecuteMCPToggleRefusesPathOutsideHome(t *testing.T) {
 	home := t.TempDir()
 	plan := ActionPlan{Action: ActionToggle, ObjectKind: ObjectMCPServer, Available: true}

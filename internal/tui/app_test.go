@@ -707,6 +707,39 @@ func TestRollbackApplyRestoresConfigAndVerifies(t *testing.T) {
 	}
 }
 
+func TestRollbackApplyRejectsStaleReview(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	configPath := writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	app := NewApp(runtime)
+	created, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	codexBaseline := findCreatedSnapshot(t, created, "baseline-codex-")
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5.1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	review, err := app.buildRollbackReview(snapshotRef{Name: codexBaseline, Agent: types.AgentCodex})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5.2\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	msg := app.applyRollbackReview(review)
+	if msg.err == nil || !strings.Contains(msg.err.Error(), "stale") {
+		t.Fatalf("expected stale review error, got %v", msg.err)
+	}
+	got, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "model = \"gpt-5.2\"\n" {
+		t.Fatalf("stale review should not write config, got %q", got)
+	}
+}
+
 func TestUndoPreviewMessageUpdatesCorruptEventsInUpdate(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := NewApp(runtime)

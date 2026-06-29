@@ -23,6 +23,13 @@ type CommandPlan struct {
 	Args    []string
 }
 
+// MCPTogglePlan describes the built-in file mutation for enabling/disabling
+// JSON-backed MCP servers.
+type MCPTogglePlan struct {
+	ServerName string
+	ConfigPath string
+}
+
 // ActionPlan is a concrete setup action proposal for confirmation and execution.
 type ActionPlan struct {
 	ID                string
@@ -33,6 +40,7 @@ type ActionPlan struct {
 	Operation         string
 	ConfigTarget      string
 	Command           *CommandPlan
+	MCPToggle         *MCPTogglePlan
 	Available         bool
 	UnavailableReason string
 }
@@ -82,6 +90,7 @@ func PlanItemAction(item InventoryItem, action ActionKind) ActionPlan {
 		} else {
 			plan.Operation = "disable MCP server in config"
 		}
+		plan.MCPToggle = &MCPTogglePlan{ServerName: item.Name, ConfigPath: item.SourcePath}
 	default:
 		return unavailablePlan(plan, "unknown setup action")
 	}
@@ -89,13 +98,45 @@ func PlanItemAction(item InventoryItem, action ActionKind) ActionPlan {
 	return plan
 }
 
+type actionExecutionOptions struct {
+	HomeDir string
+}
+
+// ActionExecutionOption configures ExecuteActionPlan.
+type ActionExecutionOption func(*actionExecutionOptions)
+
+// WithHomeDir supplies the home root required by built-in file mutations.
+func WithHomeDir(homeDir string) ActionExecutionOption {
+	return func(options *actionExecutionOptions) {
+		options.HomeDir = homeDir
+	}
+}
+
 // ExecuteActionPlan runs a concrete setup action plan.
-func ExecuteActionPlan(ctx context.Context, plan ActionPlan, runner CommandRunner) (ActionResult, error) {
+func ExecuteActionPlan(ctx context.Context, plan ActionPlan, runner CommandRunner, opts ...ActionExecutionOption) (ActionResult, error) {
 	if !plan.Available {
 		return ActionResult{}, fmt.Errorf("%w: %s", ErrActionUnavailable, plan.UnavailableReason)
 	}
 	if plan.ConfigTarget == "" {
 		return ActionResult{}, errors.New("setup action requires a global config target")
+	}
+	var options actionExecutionOptions
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
+	}
+	if plan.Action == ActionToggle {
+		if plan.MCPToggle == nil {
+			return ActionResult{}, errors.New("toggle action requires an MCP toggle plan")
+		}
+		if strings.TrimSpace(options.HomeDir) == "" {
+			return ActionResult{}, errors.New("toggle action requires home directory")
+		}
+		if _, err := ExecuteMCPToggle(plan, options.HomeDir, plan.MCPToggle.ServerName, plan.MCPToggle.ConfigPath); err != nil {
+			return ActionResult{}, err
+		}
+		return ActionResult{ExecutedCommand: false}, nil
 	}
 	if plan.Command == nil {
 		return ActionResult{}, errors.New("setup action requires an executable command plan")

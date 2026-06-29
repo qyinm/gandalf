@@ -685,6 +685,45 @@ func TestEnvironmentsViewModelDoesNotHideLargeDiffBehindSummary(t *testing.T) {
 	}
 }
 
+func TestEnvironmentsViewModelShowsRawOnlyChanges(t *testing.T) {
+	beforeID := "codex.config.old"
+	afterID := "codex.config.new"
+	beforeChecksum := "sha256:old"
+	afterChecksum := "sha256:new"
+	model := tui.BuildEnvironmentsViewModel(tui.BuildEnvironmentsViewModelInput{
+		Status: baseline.Status{Agents: []baseline.AgentStatus{{
+			Agent:          types.AgentCodex,
+			HasBaseline:    true,
+			RawChangeCount: 1,
+			Diff: diff.GraphDiff{RawSourceChanges: []diff.RawSourceChange{{
+				SourcePath:       "~/.codex/config.toml",
+				BeforeEvidenceID: &beforeID,
+				AfterEvidenceID:  &afterID,
+				BeforeChecksum:   &beforeChecksum,
+				AfterChecksum:    &afterChecksum,
+				Status:           "changed",
+			}}},
+		}}},
+	})
+
+	if model.ChangesEmpty != "" {
+		t.Fatalf("raw-only diff should not be reported clean: %q", model.ChangesEmpty)
+	}
+	if len(model.Surfaces) != 1 {
+		t.Fatalf("surfaces = %#v", model.Surfaces)
+	}
+	surface := model.Surfaces[0]
+	if surface.Kind != "Source" || surface.Marker != "~" || surface.Name != "~/.codex/config.toml" {
+		t.Fatalf("surface = %#v", surface)
+	}
+	if !hasEnvironmentPair(model.Diff.Rows, "checksum: sha256:old", "checksum: sha256:new") {
+		t.Fatalf("expected raw checksum diff: %#v", model.Diff.Rows)
+	}
+	if !hasEnvironmentPair(model.Diff.Rows, "status: baseline", "status: current") {
+		t.Fatalf("expected raw status diff: %#v", model.Diff.Rows)
+	}
+}
+
 func hasEnvironmentHunk(rows []tui.EnvironmentDiffRowModel) bool {
 	for _, row := range rows {
 		if row.Kind == tui.EnvironmentDiffRowHunk && strings.HasPrefix(row.HunkTitle, "@@") {

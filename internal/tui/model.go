@@ -1574,8 +1574,9 @@ func BuildEnvironmentsViewModel(input BuildEnvironmentsViewModelInput) Environme
 		model.ChangesEmpty = "No baseline yet. Press s to save the current environment as a baseline."
 		return model
 	}
-	surfaceIndex := clampIndex(input.SelectedSurfaceIndex, len(focus.Diff.SemanticChanges))
-	model.Surfaces = buildEnvironmentSurfaces(focus.Diff.SemanticChanges, surfaceIndex, input.CurrentHunkIndex)
+	totalSurfaces := len(focus.Diff.SemanticChanges) + len(focus.Diff.RawSourceChanges)
+	surfaceIndex := clampIndex(input.SelectedSurfaceIndex, totalSurfaces)
+	model.Surfaces = buildEnvironmentSurfaces(focus.Diff, surfaceIndex, input.CurrentHunkIndex)
 	if len(model.Surfaces) == 0 {
 		model.ChangesEmpty = "Current environment matches the baseline."
 		return model
@@ -1602,9 +1603,9 @@ func environmentChangeDetail(change diff.SemanticChange) string {
 	}
 }
 
-func buildEnvironmentSurfaces(changes []diff.SemanticChange, selectedSurfaceIndex, currentHunkIndex int) []EnvironmentSurfaceModel {
-	surfaces := make([]EnvironmentSurfaceModel, 0, len(changes))
-	for index, change := range changes {
+func buildEnvironmentSurfaces(graphDiff diff.GraphDiff, selectedSurfaceIndex, currentHunkIndex int) []EnvironmentSurfaceModel {
+	surfaces := make([]EnvironmentSurfaceModel, 0, len(graphDiff.SemanticChanges)+len(graphDiff.RawSourceChanges))
+	for index, change := range graphDiff.SemanticChanges {
 		sourcePath := ""
 		if change.Details.SourcePath != nil {
 			sourcePath = *change.Details.SourcePath
@@ -1639,7 +1640,89 @@ func buildEnvironmentSurfaces(changes []diff.SemanticChange, selectedSurfaceInde
 			Diff:        diffModel,
 		})
 	}
+	for index, change := range graphDiff.RawSourceChanges {
+		globalIndex := len(graphDiff.SemanticChanges) + index
+		id := fmt.Sprintf("raw:%s:%d", change.SourcePath, index)
+		changeCount := countEnvironmentRawChanges(change)
+		var diffModel EnvironmentDiffModel
+		if globalIndex == selectedSurfaceIndex {
+			diffModel = buildEnvironmentRawDiffModel(id, change, currentHunkIndex)
+		}
+		surfaces = append(surfaces, EnvironmentSurfaceModel{
+			ID:          id,
+			Marker:      markerForRawSourceChange(change),
+			Kind:        "Source",
+			Name:        change.SourcePath,
+			Detail:      rawSourceChangeDetail(change),
+			SourcePath:  change.SourcePath,
+			ChangeCount: changeCount,
+			Diff:        diffModel,
+		})
+	}
 	return surfaces
+}
+
+func buildEnvironmentRawDiffModel(surfaceID string, change diff.RawSourceChange, currentHunkIndex int) EnvironmentDiffModel {
+	title := "Source " + change.SourcePath
+	model := EnvironmentDiffModel{
+		SurfaceID:  surfaceID,
+		Title:      title,
+		SourcePath: change.SourcePath,
+	}
+	rows := []EnvironmentDiffRowModel{{
+		ID:          surfaceID + ":hunk:0",
+		Kind:        EnvironmentDiffRowHunk,
+		HunkIndex:   0,
+		HunkTitle:   environmentHunkTitle(title, change.SourcePath),
+		CurrentHunk: currentHunkIndex == 0,
+	}}
+	addRawPair := func(field string, before, after *string) {
+		if before == nil && after == nil {
+			return
+		}
+		row := EnvironmentDiffRowModel{
+			ID:        surfaceID + ":" + field,
+			Kind:      EnvironmentDiffRowContext,
+			HunkIndex: 0,
+			Left: EnvironmentDiffSideModel{
+				LineNumber: 1,
+				Marker:     " ",
+			},
+			Right: EnvironmentDiffSideModel{
+				LineNumber: 1,
+				Marker:     " ",
+			},
+		}
+		if before != nil {
+			row.Left.Text = field + ": " + *before
+		}
+		if after != nil {
+			row.Right.Text = field + ": " + *after
+		}
+		if stringPtrValue(before) != stringPtrValue(after) {
+			switch {
+			case before != nil && after != nil:
+				row.Kind = EnvironmentDiffRowChanged
+				row.Left.Marker = "-"
+				row.Right.Marker = "+"
+			case before != nil:
+				row.Kind = EnvironmentDiffRowRemoved
+				row.Left.Marker = "-"
+				row.Right = EnvironmentDiffSideModel{}
+			case after != nil:
+				row.Kind = EnvironmentDiffRowAdded
+				row.Left = EnvironmentDiffSideModel{}
+				row.Right.Marker = "+"
+			}
+		}
+		rows = append(rows, row)
+	}
+	addRawPair("evidence", change.BeforeEvidenceID, change.AfterEvidenceID)
+	addRawPair("checksum", change.BeforeChecksum, change.AfterChecksum)
+	beforeStatus, afterStatus := rawStatusPair(change.Status)
+	addRawPair("status", beforeStatus, afterStatus)
+	model.Rows = rows
+	return model
 }
 
 func buildEnvironmentDiffModel(surfaceID, title, sourcePath string, change diff.SemanticChange, currentHunkIndex int) EnvironmentDiffModel {
@@ -1881,6 +1964,72 @@ func countEnvironmentChanges(change diff.SemanticChange) int {
 		return 0
 	}
 	return 1
+}
+
+func countEnvironmentRawChanges(change diff.RawSourceChange) int {
+	count := 0
+	if stringPtrValue(change.BeforeEvidenceID) != stringPtrValue(change.AfterEvidenceID) {
+		count++
+	}
+	if stringPtrValue(change.BeforeChecksum) != stringPtrValue(change.AfterChecksum) {
+		count++
+	}
+	if count == 0 && strings.TrimSpace(change.Status) != "" {
+		count = 1
+	}
+	return count
+}
+
+func rawSourceChangeDetail(change diff.RawSourceChange) string {
+	switch strings.ToLower(strings.TrimSpace(change.Status)) {
+	case "added":
+		return "added"
+	case "removed":
+		return "removed"
+	case "changed", "modified":
+		return "changed"
+	default:
+		if change.BeforeEvidenceID == nil {
+			return "added"
+		}
+		if change.AfterEvidenceID == nil {
+			return "removed"
+		}
+		return "changed"
+	}
+}
+
+func markerForRawSourceChange(change diff.RawSourceChange) string {
+	switch rawSourceChangeDetail(change) {
+	case "added":
+		return "+"
+	case "removed":
+		return "-"
+	default:
+		return "~"
+	}
+}
+
+func rawStatusPair(status string) (*string, *string) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "added":
+		after := "present"
+		return nil, &after
+	case "removed":
+		before := "present"
+		return &before, nil
+	default:
+		before := "baseline"
+		after := "current"
+		return &before, &after
+	}
+}
+
+func stringPtrValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func hasVisibleFieldDiff(before any, beforeOK bool, after any, afterOK bool) bool {

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -170,7 +171,6 @@ func NewApp(runtime types.RuntimeOptions) *App {
 		inventoryFocus:  true,
 		activeSetupTab:  SetupConsoleTabHooks,
 		setupConsole:    setupState,
-		actionExecutor:  defaultSetupActionExecutor,
 	}
 }
 
@@ -625,11 +625,12 @@ func (a *App) handleSkillViewerKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 func (a *App) handleInventoryEnter() tea.Cmd {
 	if a.pendingAction != nil {
 		plan := *a.pendingAction
+		executor := a.actionExecutor
+		if executor == nil {
+			executor = a.defaultSetupActionExecutor
+		}
 		return func() tea.Msg {
-			if a.actionExecutor == nil {
-				return setupActionMsg{err: fmt.Errorf("setup action executor is unavailable")}
-			}
-			if err := a.actionExecutor(context.Background(), plan); err != nil {
+			if err := executor(context.Background(), plan); err != nil {
 				return setupActionMsg{err: err}
 			}
 			return setupActionMsg{data: a.fetchWorkspaceData()}
@@ -925,11 +926,12 @@ func (a *App) toggleSelectedMCPServer(rowID string) tea.Cmd {
 		a.actionError = plan.UnavailableReason
 		return nil
 	}
-	home := a.runtime.HomeDir
-	serverName := item.Name
-	configPath := item.SourcePath
 	return func() tea.Msg {
-		if _, err := setup.ExecuteMCPToggle(plan, home, serverName, configPath); err != nil {
+		executor := a.actionExecutor
+		if executor == nil {
+			executor = a.defaultSetupActionExecutor
+		}
+		if err := executor(context.Background(), plan); err != nil {
 			return setupActionMsg{err: err}
 		}
 		return setupActionMsg{data: a.fetchWorkspaceData()}
@@ -1626,8 +1628,8 @@ func setupConsoleListHeight(height int) int {
 	return listHeight
 }
 
-func defaultSetupActionExecutor(ctx context.Context, plan setup.ActionPlan) error {
-	_, err := setup.ExecuteActionPlan(ctx, plan, nil)
+func (a *App) defaultSetupActionExecutor(ctx context.Context, plan setup.ActionPlan) error {
+	_, err := setup.ExecuteActionPlan(ctx, plan, nil, setup.WithHomeDir(a.runtime.HomeDir))
 	return err
 }
 
@@ -1764,6 +1766,14 @@ func (a *App) buildRollbackReview(ref snapshotRef) (*rollbackReview, error) {
 }
 
 func (a *App) applyRollbackReview(review *rollbackReview) rollbackApplyMsg {
+	fresh, err := a.buildRollbackReview(snapshotRef{Name: review.SnapshotName, Agent: review.Agent})
+	if err != nil {
+		return rollbackApplyMsg{err: fmt.Errorf("failed to refresh rollback review before apply: %w", err)}
+	}
+	if !rollbackReviewMatches(review, fresh) {
+		return rollbackApplyMsg{err: fmt.Errorf("review changes are stale; reopen Review Changes before applying")}
+	}
+
 	createRestorePoint := a.createPreApplyRestorePoint
 	if a.restorePointCreator != nil {
 		createRestorePoint = a.restorePointCreator
@@ -1827,6 +1837,125 @@ func (a *App) verifyRollback(review *rollbackReview) string {
 		return "Verified selected baseline."
 	}
 	return fmt.Sprintf("Verification found %d remaining supported changes.", len(next.Plan.Items))
+}
+
+type rollbackReviewFingerprint struct {
+	Items       []rollbackReviewItemFingerprint        `json:"items"`
+	Unsupported []rollbackReviewUnsupportedFingerprint `json:"unsupported"`
+}
+
+type rollbackReviewItemFingerprint struct {
+	Agent        types.AgentID                `json:"agent"`
+	Kind         types.EvidenceKind           `json:"kind"`
+	SourcePath   string                       `json:"sourcePath"`
+	Action       types.RestoreAction          `json:"action"`
+	CurrentState *rollbackEvidenceFingerprint `json:"currentState,omitempty"`
+	TargetState  *rollbackEvidenceFingerprint `json:"targetState,omitempty"`
+}
+
+type rollbackReviewUnsupportedFingerprint struct {
+	Agent      types.AgentID      `json:"agent"`
+	Kind       types.EvidenceKind `json:"kind"`
+	SourcePath string             `json:"sourcePath"`
+	Reason     string             `json:"reason"`
+}
+
+type rollbackEvidenceFingerprint struct {
+	ID         string               `json:"id"`
+	Agent      types.AgentID        `json:"agent"`
+	Kind       types.EvidenceKind   `json:"kind"`
+	SourcePath string               `json:"sourcePath"`
+	Scope      types.EvidenceScope  `json:"scope"`
+	Parser     types.EvidenceParser `json:"parser"`
+	Name       string               `json:"name,omitempty"`
+	Value      string               `json:"value,omitempty"`
+	Checksum   string               `json:"checksum,omitempty"`
+	Metadata   string               `json:"metadata,omitempty"`
+}
+
+func rollbackReviewMatches(left, right *rollbackReview) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	return rollbackReviewFingerprintForPlan(left.Plan) == rollbackReviewFingerprintForPlan(right.Plan)
+}
+
+func rollbackReviewFingerprintForPlan(plan *types.RestorePlan) string {
+	if plan == nil {
+		return ""
+	}
+	fingerprint := rollbackReviewFingerprint{
+		Items:       make([]rollbackReviewItemFingerprint, 0, len(plan.Items)),
+		Unsupported: make([]rollbackReviewUnsupportedFingerprint, 0, len(plan.UnsupportedItems)),
+	}
+	for _, item := range plan.Items {
+		fingerprint.Items = append(fingerprint.Items, rollbackReviewItemFingerprint{
+			Agent:        item.Agent,
+			Kind:         item.Kind,
+			SourcePath:   item.SourcePath,
+			Action:       item.Action,
+			CurrentState: rollbackEvidenceFingerprintFor(item.CurrentState),
+			TargetState:  rollbackEvidenceFingerprintFor(item.TargetState),
+		})
+	}
+	for _, unsupported := range plan.UnsupportedItems {
+		fingerprint.Unsupported = append(fingerprint.Unsupported, rollbackReviewUnsupportedFingerprint{
+			Agent:      unsupported.Agent,
+			Kind:       unsupported.Kind,
+			SourcePath: unsupported.SourcePath,
+			Reason:     unsupported.Reason,
+		})
+	}
+	sort.Slice(fingerprint.Items, func(i, j int) bool {
+		left, _ := json.Marshal(fingerprint.Items[i])
+		right, _ := json.Marshal(fingerprint.Items[j])
+		return string(left) < string(right)
+	})
+	sort.Slice(fingerprint.Unsupported, func(i, j int) bool {
+		left, _ := json.Marshal(fingerprint.Unsupported[i])
+		right, _ := json.Marshal(fingerprint.Unsupported[j])
+		return string(left) < string(right)
+	})
+	raw, _ := json.Marshal(fingerprint)
+	return string(raw)
+}
+
+func rollbackEvidenceFingerprintFor(item *types.DiscoveredItem) *rollbackEvidenceFingerprint {
+	if item == nil {
+		return nil
+	}
+	out := &rollbackEvidenceFingerprint{
+		ID:         item.ID,
+		Agent:      item.Agent,
+		Kind:       item.Kind,
+		SourcePath: item.SourcePath,
+		Scope:      item.Scope,
+		Parser:     item.Parser,
+		Value:      canonicalRawJSON(item.Value),
+		Metadata:   canonicalRawJSON(item.Metadata),
+	}
+	if item.Name != nil {
+		out.Name = *item.Name
+	}
+	if item.Checksum != nil {
+		out.Checksum = *item.Checksum
+	}
+	return out
+}
+
+func canonicalRawJSON(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var parsed any
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return strings.TrimSpace(string(raw))
+	}
+	canonical, err := json.Marshal(parsed)
+	if err != nil {
+		return strings.TrimSpace(string(raw))
+	}
+	return string(canonical)
 }
 
 // Run launches the interactive TUI and returns an exit code.

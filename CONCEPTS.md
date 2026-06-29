@@ -22,6 +22,9 @@ The normalized cross-agent setup inventory used by the setup console. It present
 ### Setup Console
 The current target information structure for Gandalf's default TUI. It uses top-level setup tabs for hooks, plugins, marketplace, skills, and MCP servers while preserving cross-agent rows inside each tab.
 
+### Environment Diff Surface
+A TUI-visible unit of environment drift for one semantic setup object or raw source artifact. It exists so semantic object changes and raw source changes both remain navigable and cannot be hidden behind a clean summary.
+
 ### Agent Marketplace Source
 A marketplace or plugin source exposed by an agent ecosystem and browsed through Gandalf. Gandalf can group and display source-backed entries, but install, update, uninstall, add-source, and remove-source actions are available only through agent-native providers; Gandalf does not own or certify the catalog itself.
 
@@ -47,6 +50,8 @@ The diff-shaped output of comparing a baseline snapshot to current state. Lists 
 
 ### Review Changes
 The user-facing preview step before a mutating action applies. Internally it can be backed by a restore plan or action preview, but product language should describe the concrete changes, unsupported items, rollback availability, and required apply confirmation rather than asking users to learn a separate plan concept.
+
+A Review Changes surface is not itself apply authority. Mutating flows that depend on it must refresh or revalidate the underlying plan at apply time so the action still matches what the user reviewed.
 
 ### Restore Item
 An executable unit derived from a restore plan item. Carries resolved destination path, structured `target_content`, handler `item_type`, and rollback state after apply.
