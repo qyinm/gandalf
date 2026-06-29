@@ -312,6 +312,10 @@ func rowStateDot(row SetupConsoleRow, activeTab string) string {
 	if row.Disabled {
 		return changedStyle.Render("○")
 	}
+	switch mcpRuntimeState(row) {
+	case "unavailable", "missing", "disabled", "error":
+		return removedStyle.Render("●")
+	}
 	return cleanStyle.Render("●")
 }
 
@@ -435,14 +439,7 @@ func isAgentOriginCompactTab(activeTab string) bool {
 }
 
 func mcpRuntimeBadge(row SetupConsoleRow) string {
-	status := strings.ToLower(strings.TrimSpace(row.RuntimeStatus))
-	if status == "" {
-		if row.ToolCount > 0 || len(row.Tools) > 0 {
-			status = "ready"
-		} else {
-			status = "unavailable"
-		}
-	}
+	status := mcpRuntimeState(row)
 	switch status {
 	case "ready", "available", "enabled", "ok":
 		return "[ready]"
@@ -451,6 +448,17 @@ func mcpRuntimeBadge(row SetupConsoleRow) string {
 	default:
 		return "[" + status + "]"
 	}
+}
+
+func mcpRuntimeState(row SetupConsoleRow) string {
+	status := strings.ToLower(strings.TrimSpace(row.RuntimeStatus))
+	if status != "" {
+		return status
+	}
+	if row.ToolCount > 0 || len(row.Tools) > 0 {
+		return "ready"
+	}
+	return "unavailable"
 }
 
 func wrapText(value string, width int) []string {

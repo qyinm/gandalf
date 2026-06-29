@@ -450,6 +450,23 @@ func TestRenderSetupConsoleShowsMCPStateDot(t *testing.T) {
 	}
 }
 
+func TestMCPStateDotUsesRedForUnavailableRuntime(t *testing.T) {
+	unavailable := SetupConsoleRow{RowKind: "inventory", ObjectKind: "mcp", Name: "aside"}
+	if got, want := rowStateDot(unavailable, "mcp_servers"), removedStyle.Render("●"); got != want {
+		t.Fatalf("unavailable dot = %q, want %q", got, want)
+	}
+
+	ready := SetupConsoleRow{RowKind: "inventory", ObjectKind: "mcp", Name: "context7", ToolCount: 1}
+	if got, want := rowStateDot(ready, "mcp_servers"), cleanStyle.Render("●"); got != want {
+		t.Fatalf("ready dot = %q, want %q", got, want)
+	}
+
+	disabled := SetupConsoleRow{RowKind: "inventory", ObjectKind: "mcp", Name: "postgres", Disabled: true}
+	if got, want := rowStateDot(disabled, "mcp_servers"), changedStyle.Render("○"); got != want {
+		t.Fatalf("disabled dot = %q, want %q", got, want)
+	}
+}
+
 func TestRenderSetupConsoleShowsBaselineStatus(t *testing.T) {
 	view := SetupConsoleView{
 		Tabs: []SetupConsoleTab{{Label: "Hooks", Count: 0, Selected: true}},
