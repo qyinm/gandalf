@@ -265,10 +265,10 @@ func TestRenderSetupConsoleShowsAgentOriginForMCPRows(t *testing.T) {
 	}
 
 	rendered := ansi.Strip(RenderSetupConsole(view, 100, 18))
-	if !strings.Contains(rendered, "› context7 [ready]") || !strings.Contains(rendered, "Codex") {
+	if !strings.Contains(rendered, "context7 [ready]") || !strings.Contains(rendered, "Codex") {
 		t.Fatalf("expected Codex MCP origin in view:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "› posthog [unavailable]") || !strings.Contains(rendered, "Cursor") {
+	if !strings.Contains(rendered, "posthog [unavailable]") || !strings.Contains(rendered, "Cursor") {
 		t.Fatalf("expected Cursor MCP origin in view:\n%s", rendered)
 	}
 	if strings.Contains(rendered, "~/.codex/config.toml") || strings.Contains(rendered, "~/.cursor/mcp.json") {
@@ -309,8 +309,8 @@ func TestRenderSetupConsoleShowsMCPToolRowsAndDescription(t *testing.T) {
 	}
 
 	rendered := ansi.Strip(RenderSetupConsole(view, 110, 24))
-	if !strings.Contains(rendered, "⌄ posthog [ready]") ||
-		!strings.Contains(rendered, "⌄   apm-attributes-list") ||
+	if !strings.Contains(rendered, "posthog [ready]") ||
+		!strings.Contains(rendered, "apm-attributes-list") ||
 		!strings.Contains(rendered, "List available span or resource attribute names") {
 		t.Fatalf("expected MCP tools and description in view:\n%s", rendered)
 	}
@@ -368,6 +368,50 @@ func TestOverlayLinePreservesBackgroundOutsideOverlay(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "3456789 right-side") {
 		t.Fatalf("expected right background to remain: %q", rendered)
+	}
+}
+
+func TestRenderSetupConsoleShowsDetailPaneWhenWide(t *testing.T) {
+	view := SetupConsoleView{
+		ActiveTab: "skills",
+		Tabs:      []SetupConsoleTab{{Label: "Skills", Count: 1, Selected: true}},
+		Rows: []SetupConsoleRow{
+			{RowKind: "inventory", AgentMarker: "CC", ObjectKind: "skill", Name: "code-review", Selected: true},
+		},
+		Selected: &SetupConsoleDetail{
+			Title:      "code-review",
+			AgentLabel: "Claude Code",
+			ObjectKind: "skill",
+			Status:     "user",
+			SourcePath: "~/.claude/skills/code-review",
+		},
+	}
+
+	rendered := ansi.Strip(RenderSetupConsole(view, 120, 24))
+	if !strings.Contains(rendered, "code-review") {
+		t.Fatalf("expected detail title in wide render:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "~/.claude/skills/code-review") {
+		t.Fatalf("expected detail source path in wide render:\n%s", rendered)
+	}
+}
+
+func TestRenderSetupConsoleShowsMCPStateDot(t *testing.T) {
+	view := SetupConsoleView{
+		ActiveTab: "mcp_servers",
+		Tabs:      []SetupConsoleTab{{Label: "MCP Servers", Count: 2, Selected: true}},
+		Rows: []SetupConsoleRow{
+			{RowKind: "inventory", AgentMarker: "CC", ObjectKind: "mcp", Name: "postgres", ToggleControl: true, Disabled: false, Selected: true},
+			{RowKind: "inventory", AgentMarker: "CX", ObjectKind: "mcp", Name: "redis", ToggleControl: true, Disabled: true},
+		},
+	}
+
+	rendered := ansi.Strip(RenderSetupConsole(view, 80, 20))
+	if !strings.Contains(rendered, "●") {
+		t.Fatalf("expected enabled dot for MCP row:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "○") {
+		t.Fatalf("expected disabled dot for MCP row:\n%s", rendered)
 	}
 }
 

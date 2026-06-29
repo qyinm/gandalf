@@ -23,13 +23,14 @@ var VisibleAgents = agents.CurrentSupportedIDs()
 type Screen string
 
 const (
-	ScreenInventory   Screen = "inventory"
-	ScreenTimeline    Screen = "timeline"
-	ScreenSnapshots   Screen = "snapshots"
-	ScreenAgentDetail Screen = "agent-detail"
-	ScreenProfile     Screen = "profile"
-	ScreenCompare     Screen = "compare"
-	ScreenSaveSetup   Screen = "save-setup"
+	ScreenInventory    Screen = "inventory"
+	ScreenTimeline     Screen = "timeline"
+	ScreenSnapshots    Screen = "snapshots"
+	ScreenEnvironments Screen = "environments"
+	ScreenAgentDetail  Screen = "agent-detail"
+	ScreenProfile      Screen = "profile"
+	ScreenCompare      Screen = "compare"
+	ScreenSaveSetup    Screen = "save-setup"
 )
 
 const (
@@ -121,6 +122,8 @@ type SetupConsoleRowModel struct {
 	ToolCount     int
 	Description   string
 	ActionLabel   string
+	ToggleControl bool
+	Disabled      bool
 	Selected      bool
 }
 
@@ -463,8 +466,19 @@ func setupConsoleRowFromInventory(item setup.InventoryItem, selected bool) Setup
 		Tools:         setupConsoleToolsFromInventory(item.Tools),
 		ToolCount:     item.ToolCount,
 		ActionLabel:   formatSetupActions(item.Actions),
+		ToggleControl: inventoryActionAvailable(item, setup.ActionToggle),
+		Disabled:      item.Disabled,
 		Selected:      selected,
 	}
+}
+
+func inventoryActionAvailable(item setup.InventoryItem, action setup.ActionKind) bool {
+	for _, availability := range item.Actions {
+		if availability.Action == action {
+			return availability.Available
+		}
+	}
+	return false
 }
 
 func setupConsoleMCPToolRows(item setup.InventoryItem, expandedToolID string, search string) []SetupConsoleRowModel {
@@ -1417,6 +1431,143 @@ func BuildSaveSetupViewModel(input BuildSaveSetupViewModelInput) SaveSetupViewMo
 		},
 		NoChanges: noChanges,
 	}
+}
+
+// --- Environments (snapshot workspace) view model ---
+
+type EnvironmentRowModel struct {
+	Agent        types.AgentID
+	AgentLabel   string
+	AgentMarker  string
+	State        string // "clean" | "changed" | "missing"
+	BaselineName string
+	BaselineDate string
+	Detail       string
+	Selected     bool
+}
+
+type EnvironmentChangeModel struct {
+	Marker string // + - ~
+	Kind   string
+	Name   string
+	Detail string
+}
+
+type EnvironmentsViewModel struct {
+	Rows         []EnvironmentRowModel
+	FocusAgent   string
+	Changes      []EnvironmentChangeModel
+	ChangesEmpty string
+	EmptyMessage string
+}
+
+type BuildEnvironmentsViewModelInput struct {
+	Status        baseline.Status
+	SelectedIndex int
+}
+
+// BuildEnvironmentsViewModel builds the per-agent snapshot workspace view.
+func BuildEnvironmentsViewModel(input BuildEnvironmentsViewModelInput) EnvironmentsViewModel {
+	model := EnvironmentsViewModel{}
+	if len(input.Status.Agents) == 0 {
+		model.EmptyMessage = "No supported agents detected."
+		return model
+	}
+	selected := clampIndex(input.SelectedIndex, len(input.Status.Agents))
+	for i, agentStatus := range input.Status.Agents {
+		row := EnvironmentRowModel{
+			Agent:        agentStatus.Agent,
+			AgentLabel:   FormatAgentLabel(agentStatus.Agent),
+			AgentMarker:  FormatAgentMarker(agentStatus.Agent),
+			BaselineName: agentStatus.BaselineName,
+			BaselineDate: formatDate(agentStatus.BaselineCreatedAt),
+			Selected:     i == selected,
+		}
+		switch {
+		case !agentStatus.HasBaseline:
+			row.State = "missing"
+			row.Detail = "no baseline"
+		case agentStatus.ChangeCount() == 0:
+			row.State = "clean"
+			row.Detail = "clean"
+		default:
+			row.State = "changed"
+			count := agentStatus.ChangeCount()
+			suffix := "s"
+			if count == 1 {
+				suffix = ""
+			}
+			row.Detail = fmt.Sprintf("%d change%s", count, suffix)
+		}
+		model.Rows = append(model.Rows, row)
+	}
+
+	focus := input.Status.Agents[selected]
+	model.FocusAgent = FormatAgentLabel(focus.Agent)
+	if !focus.HasBaseline {
+		model.ChangesEmpty = "No baseline yet. Press s to save the current environment as a baseline."
+		return model
+	}
+	for _, change := range focus.Diff.SemanticChanges {
+		model.Changes = append(model.Changes, EnvironmentChangeModel{
+			Marker: markerForChange(change.Code),
+			Kind:   entityKindLabel(change.EntityKind),
+			Name:   change.EntityName,
+			Detail: environmentChangeDetail(change),
+		})
+	}
+	if len(model.Changes) == 0 {
+		model.ChangesEmpty = "Current environment matches the baseline."
+	}
+	return model
+}
+
+func environmentChangeDetail(change diff.SemanticChange) string {
+	if len(change.Details.ChangedFields) > 0 {
+		return strings.Join(change.Details.ChangedFields, ", ") + " changed"
+	}
+	s := string(change.Code)
+	switch {
+	case strings.HasSuffix(s, "_ADDED"):
+		return "added"
+	case strings.HasSuffix(s, "_REMOVED"):
+		return "removed"
+	default:
+		return "changed"
+	}
+}
+
+// HeaderChipModel is one per-agent drift indicator for the app header.
+type HeaderChipModel struct {
+	AgentMarker string
+	State       string
+	Detail      string
+}
+
+// BuildHeaderChips converts baseline status into per-agent header chips.
+func BuildHeaderChips(status baseline.Status) []HeaderChipModel {
+	chips := make([]HeaderChipModel, 0, len(status.Agents))
+	for _, agentStatus := range status.Agents {
+		chip := HeaderChipModel{AgentMarker: FormatAgentMarker(agentStatus.Agent)}
+		switch {
+		case !agentStatus.HasBaseline:
+			chip.State = "missing"
+			chip.Detail = "no baseline"
+		case agentStatus.ChangeCount() == 0:
+			chip.State = "clean"
+			chip.Detail = "clean"
+		default:
+			chip.State = "changed"
+			count := agentStatus.ChangeCount()
+			suffix := "s"
+			if count == 1 {
+				suffix = ""
+			}
+			chip.Detail = fmt.Sprintf("%d change%s", count, suffix)
+		}
+		chips = append(chips, chip)
+	}
+	return chips
 }
 
 // BuildBaselineStatusViewModel converts core baseline status into compact TUI rows.

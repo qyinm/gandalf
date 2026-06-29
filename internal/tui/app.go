@@ -98,6 +98,7 @@ type App struct {
 	setupConsole       setupConsoleState
 	timelineCursor     int
 	snapshotCursor     int
+	environmentCursor  int
 
 	undoPlan       *timelineundo.Plan
 	undoError      string
@@ -350,6 +351,7 @@ func (a *App) View() string {
 		return "Loading Gandalf global setup workspace..."
 	}
 
+	header := views.RenderHeader(a.headerView(), contentWidth)
 	statusParts := make([]string, 0, 2)
 	if a.notice != "" {
 		statusParts = append(statusParts, lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(a.notice))
@@ -357,18 +359,40 @@ func (a *App) View() string {
 	if a.undoError != "" {
 		statusParts = append(statusParts, lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(a.undoError))
 	}
-	if len(statusParts) > 0 {
-		contentHeight--
+	status := strings.Join(statusParts, "  ")
+
+	// Reserve header (1) + divider (1) for the body height.
+	headerLines := strings.Count(header, "\n") + 1
+	bodyHeight := contentHeight - headerLines - 1
+	if status != "" {
+		bodyHeight--
 	}
-	if contentHeight < 1 {
-		contentHeight = 1
+	if bodyHeight < 1 {
+		bodyHeight = 1
 	}
 
-	content := lipgloss.NewStyle().Width(contentWidth).Render(a.renderContent(contentWidth, contentHeight))
-	if len(statusParts) == 0 {
-		return content
+	body := a.renderContent(contentWidth, bodyHeight)
+	return views.RenderFrame(header, body, status, contentWidth, contentHeight)
+}
+
+func (a *App) headerView() views.HeaderView {
+	scope := "~/"
+	if a.runtime.HomeDir != "" {
+		scope = a.runtime.HomeDir
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, strings.Join(statusParts, "  "), content)
+	chips := make([]views.HeaderChip, 0)
+	for _, chip := range BuildHeaderChips(a.baselineStatus) {
+		chips = append(chips, views.HeaderChip{
+			AgentMarker: chip.AgentMarker,
+			State:       chip.State,
+			Detail:      chip.Detail,
+		})
+	}
+	return views.HeaderView{
+		Title: "Gandalf",
+		Scope: scope,
+		Chips: chips,
+	}
 }
 
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
@@ -429,6 +453,20 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		if a.screen == ScreenInventory {
 			a.screen = ScreenSnapshots
 		}
+	case "E":
+		if a.screen == ScreenInventory || a.screen == ScreenSnapshots || a.screen == ScreenTimeline {
+			a.screen = ScreenEnvironments
+			a.environmentCursor = clampIndex(a.environmentCursor, len(a.baselineStatus.Agents))
+			a.actionError = ""
+		}
+	case "s":
+		if a.screen == ScreenEnvironments {
+			return a.saveFocusedEnvironment(), false
+		}
+	case "R":
+		if a.screen == ScreenEnvironments {
+			return a.restoreFocusedEnvironment(), false
+		}
 	case "i":
 		if a.screen != ScreenInventory {
 			a.screen = ScreenInventory
@@ -466,6 +504,10 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.moveSnapshotCursor(-1)
 			return nil, false
 		}
+		if a.screen == ScreenEnvironments {
+			a.moveEnvironmentCursor(-1)
+			return nil, false
+		}
 		a.moveNavCursor(-1)
 	case "down", "j":
 		if a.screen == ScreenInventory && a.inventoryFocus && a.pendingAction == nil {
@@ -474,6 +516,10 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 		if a.screen == ScreenSnapshots {
 			a.moveSnapshotCursor(1)
+			return nil, false
+		}
+		if a.screen == ScreenEnvironments {
+			a.moveEnvironmentCursor(1)
 			return nil, false
 		}
 		a.moveNavCursor(1)
@@ -813,9 +859,7 @@ func (a *App) handleSetupToggle() tea.Cmd {
 			a.toggleMCPTool(row.ID)
 			return nil
 		}
-		a.toggleSelectedSetupInventory()
-		a.setupConsole.expandedMCPTool = ""
-		return nil
+		return a.toggleSelectedMCPServer(row.ID)
 	}
 	if activeTab != SetupConsoleTabMarketplace {
 		a.toggleSelectedSetupInventory()
@@ -830,6 +874,40 @@ func (a *App) handleSetupToggle() tea.Cmd {
 		a.toggleMarketplaceSource(row.ID)
 	}
 	return nil
+}
+
+// toggleSelectedMCPServer flips the enable/disable state of the selected MCP
+// server. Available only for JSON-backed user-scope servers; otherwise it
+// surfaces the gated reason without mutating anything.
+func (a *App) toggleSelectedMCPServer(rowID string) tea.Cmd {
+	item, ok := a.inventoryItemByID(rowID)
+	if !ok {
+		a.actionError = "No MCP server selected."
+		return nil
+	}
+	plan := setup.PlanItemAction(item, setup.ActionToggle)
+	if !plan.Available {
+		a.actionError = plan.UnavailableReason
+		return nil
+	}
+	home := a.runtime.HomeDir
+	serverName := item.Name
+	configPath := item.SourcePath
+	return func() tea.Msg {
+		if _, err := setup.ExecuteMCPToggle(plan, home, serverName, configPath); err != nil {
+			return setupActionMsg{err: err}
+		}
+		return setupActionMsg{data: a.fetchWorkspaceData()}
+	}
+}
+
+func (a *App) inventoryItemByID(id string) (setup.InventoryItem, bool) {
+	for _, item := range a.currentInventory() {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return setup.InventoryItem{}, false
 }
 
 func (a *App) selectedSetupInventoryExpanded() bool {
@@ -1111,6 +1189,93 @@ func (a *App) moveSnapshotCursor(delta int) {
 	a.actionError = ""
 }
 
+func (a *App) moveEnvironmentCursor(delta int) {
+	agents := a.baselineStatus.Agents
+	if len(agents) == 0 {
+		a.environmentCursor = 0
+		return
+	}
+	next := a.environmentCursor + delta
+	if next < 0 {
+		next = len(agents) - 1
+	}
+	if next >= len(agents) {
+		next = 0
+	}
+	a.environmentCursor = next
+	a.actionError = ""
+}
+
+func (a *App) focusedEnvironmentAgent() (types.AgentID, bool) {
+	agents := a.baselineStatus.Agents
+	if len(agents) == 0 {
+		return "", false
+	}
+	return agents[clampIndex(a.environmentCursor, len(agents))].Agent, true
+}
+
+// saveFocusedEnvironment captures the focused agent's current setup as a new
+// snapshot, reusing the same capture path as baseline creation.
+func (a *App) saveFocusedEnvironment() tea.Cmd {
+	agent, ok := a.focusedEnvironmentAgent()
+	if !ok {
+		a.actionError = "No environment selected."
+		return nil
+	}
+	return func() tea.Msg {
+		scope := types.ScopeUser
+		runtime := a.runtime
+		runtime.Agent = &agent
+		runtime.Scope = &scope
+		runtime.CaptureContent = agents.SupportsContentBackedUserSnapshot(agent, scope)
+		name := fmt.Sprintf("snapshot-%s-%s", agent.String(), time.Now().UTC().Format("20060102-150405-000000000"))
+		state, err := snapshot.CaptureCurrentState(&runtime, name)
+		if err != nil {
+			return baselineCreateMsg{err: err}
+		}
+		if err := store.WriteSnapshot(runtime.StoreDir, store.StoreSnapshotFrom(state.Snapshot), &agent); err != nil {
+			return baselineCreateMsg{err: err}
+		}
+		return baselineCreateMsg{created: []string{name}, data: a.fetchWorkspaceData()}
+	}
+}
+
+// restoreFocusedEnvironment opens a rollback review for the focused agent's
+// latest snapshot, routing into the existing review/apply safety flow.
+func (a *App) restoreFocusedEnvironment() tea.Cmd {
+	agent, ok := a.focusedEnvironmentAgent()
+	if !ok {
+		a.actionError = "No environment selected."
+		return nil
+	}
+	var ref *snapshotRef
+	for i := range a.snapshotRefs {
+		if a.snapshotRefs[i].Agent == agent {
+			ref = &a.snapshotRefs[i]
+			break
+		}
+	}
+	if ref == nil {
+		a.actionError = "No saved snapshot for this agent yet. Press s to save one."
+		return nil
+	}
+	selected := *ref
+	a.screen = ScreenSnapshots
+	for i := range a.snapshotRefs {
+		if a.snapshotRefs[i].Name == selected.Name && a.snapshotRefs[i].Agent == selected.Agent {
+			a.snapshotCursor = i
+			break
+		}
+	}
+	return func() tea.Msg {
+		review, err := a.buildRollbackReview(selected)
+		if err != nil {
+			return rollbackPreviewMsg{err: err}
+		}
+		return rollbackPreviewMsg{review: review}
+	}
+}
+
 func (a *App) handleSnapshotEnter() tea.Cmd {
 	if a.rollbackReview != nil {
 		review := *a.rollbackReview
@@ -1131,21 +1296,6 @@ func (a *App) handleSnapshotEnter() tea.Cmd {
 		}
 		return rollbackPreviewMsg{review: review}
 	}
-}
-
-func (a *App) activateNavItem() {
-	nav := a.navigationModel()
-	if len(nav.FlatItems) == 0 {
-		return
-	}
-	item := nav.FlatItems[a.navCursor]
-	selection := SelectNavItem(item, a.screen, a.selectedAgent, a.selectedProfile)
-	a.screen = selection.Screen
-	a.selectedAgent = selection.SelectedAgent
-	a.selectedProfile = selection.SelectedProfile
-	a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
-	a.undoPlan = nil
-	a.undoError = ""
 }
 
 func (a *App) navigationModel() NavigationModel {
@@ -1219,6 +1369,12 @@ func (a *App) renderContent(width, height int) string {
 		return views.RenderSaveSetup(saveSetupViewFromModel(*a.saveSetupModel), width, height)
 	case ScreenSnapshots:
 		return a.renderSnapshots(width, height)
+	case ScreenEnvironments:
+		model := BuildEnvironmentsViewModel(BuildEnvironmentsViewModelInput{
+			Status:        a.baselineStatus,
+			SelectedIndex: a.environmentCursor,
+		})
+		return views.RenderEnvironments(environmentsViewFromModel(model), width, height)
 	case ScreenProfile:
 		agentLabels := make([]string, 0)
 		seen := make(map[types.AgentID]struct{})

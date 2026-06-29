@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -319,6 +320,69 @@ func TestMCPEnterExpandsServerToolsAndToolDescription(t *testing.T) {
 	model = app.currentSetupConsoleViewModel()
 	if len(model.Rows) != 2 || !model.Rows[1].Expanded {
 		t.Fatalf("mcp tool rows = %#v", model.Rows)
+	}
+}
+
+func TestMCPSpaceTogglesDisabledFlagOnDisk(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	cfgPath := filepath.Join(runtime.HomeDir, ".mcp.json")
+	if err := os.WriteFile(cfgPath, []byte(`{"mcpServers":{"postgres":{"command":"pg-mcp"}}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	name := "postgres"
+	app := NewApp(runtime)
+	app.ready = true
+	app.activeSetupTab = SetupConsoleTabMCPServers
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "mcp-postgres",
+		Agent:      types.AgentClaudeCode,
+		Kind:       types.KindMcpServer,
+		Name:       &name,
+		SourcePath: "~/.mcp.json",
+		Scope:      types.ScopeUser,
+		Value:      []byte(`{"command":"pg-mcp"}`),
+	}}})
+
+	cmd := app.handleSetupToggle()
+	if cmd == nil {
+		t.Fatal("toggling a JSON MCP server should return a command")
+	}
+	msg := cmd()
+	if actionMsg, ok := msg.(setupActionMsg); ok && actionMsg.err != nil {
+		t.Fatalf("toggle command failed: %v", actionMsg.err)
+	}
+
+	raw, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"disabled": true`) {
+		t.Fatalf("expected disabled flag written to config:\n%s", raw)
+	}
+}
+
+func TestMCPSpaceToggleGatedForTOMLServer(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	name := "github"
+	app := NewApp(runtime)
+	app.ready = true
+	app.activeSetupTab = SetupConsoleTabMCPServers
+	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
+		ID:         "mcp-github",
+		Agent:      types.AgentCodex,
+		Kind:       types.KindMcpServer,
+		Name:       &name,
+		SourcePath: "~/.codex/config.toml",
+		Scope:      types.ScopeUser,
+		Value:      []byte(`{"command":"gh-mcp"}`),
+	}}})
+
+	if cmd := app.handleSetupToggle(); cmd != nil {
+		t.Fatal("TOML-backed MCP server should not run a real toggle command")
+	}
+	if app.actionError == "" {
+		t.Fatal("expected a gated reason for TOML MCP toggle")
 	}
 }
 
@@ -658,6 +722,56 @@ func TestUndoPreviewMessageUpdatesCorruptEventsInUpdate(t *testing.T) {
 	updated = model.(*App)
 	if len(updated.corruptEvents) != 0 {
 		t.Fatalf("corrupt events should clear: %#v", updated.corruptEvents)
+	}
+}
+
+func TestEnvironmentsModeOpensAndListsPerAgentDrift(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	app.width = 120
+	app.height = 32
+	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{
+		{Agent: types.AgentClaudeCode, HasBaseline: true, BaselineName: "base-cc"},
+		{Agent: types.AgentCodex, HasBaseline: true, BaselineName: "base-cx", SemanticChangeCount: 2},
+	}}
+
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("E")}); quit {
+		t.Fatal("E should not quit")
+	}
+	if app.screen != ScreenEnvironments {
+		t.Fatalf("expected environments screen, got %s", app.screen)
+	}
+	view := app.View()
+	if !strings.Contains(view, "Environments") {
+		t.Fatalf("expected environments title:\n%s", view)
+	}
+	if !strings.Contains(view, "Claude Code") || !strings.Contains(view, "Codex") {
+		t.Fatalf("expected per-agent rows:\n%s", view)
+	}
+	if !strings.Contains(view, "2 changes") {
+		t.Fatalf("expected drift count for changed agent:\n%s", view)
+	}
+
+	// Navigating down moves the focused agent.
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if app.environmentCursor != 1 {
+		t.Fatalf("expected environment cursor to advance, got %d", app.environmentCursor)
+	}
+}
+
+func TestEnvironmentsRestoreWithoutSnapshotIsGated(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{
+		{Agent: types.AgentClaudeCode, HasBaseline: false},
+	}}
+	app.screen = ScreenEnvironments
+
+	if cmd := app.restoreFocusedEnvironment(); cmd != nil {
+		t.Fatal("restore should be gated when no snapshot exists for the agent")
+	}
+	if app.actionError == "" {
+		t.Fatal("expected a gated reason when restoring without a snapshot")
 	}
 }
 

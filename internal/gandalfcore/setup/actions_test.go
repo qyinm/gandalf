@@ -2,7 +2,10 @@ package setup
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -198,6 +201,114 @@ func TestExecuteActionPlanRejectsIncompleteCommandPlans(t *testing.T) {
 	}, nil); err == nil {
 		t.Fatal("expected nil runner error")
 	}
+}
+
+func TestToggleAvailabilityGatedToJSONMCPUserScope(t *testing.T) {
+	jsonMCP := BuildInventory([]types.DiscoveredItem{{
+		ID: "mcp-pg", Agent: types.AgentClaudeCode, Kind: types.KindMcpServer,
+		Name: stringPtr("postgres"), SourcePath: "~/.claude/.mcp.json", Scope: types.ScopeUser,
+	}})[0]
+	if !hasAvailableAction(jsonMCP, ActionToggle) {
+		t.Fatalf("JSON MCP user scope should expose a real toggle: %#v", jsonMCP.Actions)
+	}
+
+	tomlMCP := BuildInventory([]types.DiscoveredItem{{
+		ID: "mcp-cx", Agent: types.AgentCodex, Kind: types.KindMcpServer,
+		Name: stringPtr("github"), SourcePath: "~/.codex/config.toml", Scope: types.ScopeUser,
+	}})[0]
+	if hasAvailableAction(tomlMCP, ActionToggle) {
+		t.Fatalf("TOML MCP should not expose a real toggle: %#v", tomlMCP.Actions)
+	}
+
+	skill := BuildInventory([]types.DiscoveredItem{{
+		ID: "skill-a", Agent: types.AgentCodex, Kind: types.KindSkill,
+		Name: stringPtr("review"), SourcePath: "~/.codex/skills/review", Scope: types.ScopeUser,
+	}})[0]
+	if hasAvailableAction(skill, ActionToggle) {
+		t.Fatalf("non-MCP object should not expose a toggle: %#v", skill.Actions)
+	}
+}
+
+func TestExecuteMCPToggleFlipsDisabledFlag(t *testing.T) {
+	home := t.TempDir()
+	cfgPath := filepath.Join(home, ".claude", ".mcp.json")
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	original := `{
+  "mcpServers": {
+    "postgres": { "command": "pg-mcp" }
+  }
+}` + "\n"
+	if err := os.WriteFile(cfgPath, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item := BuildInventory([]types.DiscoveredItem{{
+		ID: "mcp-pg", Agent: types.AgentClaudeCode, Kind: types.KindMcpServer,
+		Name: stringPtr("postgres"), SourcePath: "~/.claude/.mcp.json", Scope: types.ScopeUser,
+	}})[0]
+	plan := PlanItemAction(item, ActionToggle)
+	if !plan.Available {
+		t.Fatalf("toggle plan should be available: %#v", plan)
+	}
+
+	// Disable.
+	res, err := ExecuteMCPToggle(plan, home, "postgres", item.SourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Disabled {
+		t.Fatalf("expected disabled after first toggle: %#v", res)
+	}
+	if got := mcpServerDisabledOnDisk(t, cfgPath, "postgres"); !got {
+		t.Fatal("disabled flag not written")
+	}
+
+	// Enable again (flag removed).
+	res, err = ExecuteMCPToggle(plan, home, "postgres", item.SourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Disabled {
+		t.Fatalf("expected enabled after second toggle: %#v", res)
+	}
+	if got := mcpServerDisabledOnDisk(t, cfgPath, "postgres"); got {
+		t.Fatal("disabled flag should be cleared")
+	}
+}
+
+func TestExecuteMCPToggleRefusesPathOutsideHome(t *testing.T) {
+	home := t.TempDir()
+	plan := ActionPlan{Action: ActionToggle, ObjectKind: ObjectMCPServer, Available: true}
+	if _, err := ExecuteMCPToggle(plan, home, "postgres", "/etc/evil.mcp.json"); err == nil {
+		t.Fatal("expected confinement error for path outside home")
+	}
+}
+
+func hasAvailableAction(item InventoryItem, action ActionKind) bool {
+	for _, a := range item.Actions {
+		if a.Action == action {
+			return a.Available
+		}
+	}
+	return false
+}
+
+func mcpServerDisabledOnDisk(t *testing.T, path, server string) bool {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	servers, _ := cfg["mcpServers"].(map[string]any)
+	entry, _ := servers[server].(map[string]any)
+	disabled, _ := entry["disabled"].(bool)
+	return disabled
 }
 
 func TestExecuteActionPlanPropagatesRunnerFailure(t *testing.T) {

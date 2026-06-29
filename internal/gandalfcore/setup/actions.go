@@ -2,10 +2,15 @@ package setup
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/qyinm/gandalf/internal/gandalfcore/fsutil"
+	"github.com/qyinm/gandalf/internal/gandalfcore/pathconfinement"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
@@ -71,6 +76,12 @@ func PlanItemAction(item InventoryItem, action ActionKind) ActionPlan {
 		plan.Operation = "edit global setup target"
 	case ActionRemove:
 		plan.Operation = "remove global setup object from target"
+	case ActionToggle:
+		if item.Disabled {
+			plan.Operation = "enable MCP server in config"
+		} else {
+			plan.Operation = "disable MCP server in config"
+		}
 	default:
 		return unavailablePlan(plan, "unknown setup action")
 	}
@@ -99,6 +110,104 @@ func ExecuteActionPlan(ctx context.Context, plan ActionPlan, runner CommandRunne
 		return ActionResult{}, err
 	}
 	return ActionResult{ExecutedCommand: true}, nil
+}
+
+// ToggleResult reports the new state after an MCP enable/disable toggle.
+type ToggleResult struct {
+	ServerName string
+	Disabled   bool
+	ConfigPath string
+}
+
+// ExecuteMCPToggle flips the `disabled` flag for an MCP server in its JSON
+// config. The write is confined to homeDir using the same guard restore uses.
+// homeDir must be the absolute user home directory; serverName is the MCP
+// server key; configPath is the source path from the inventory item
+// (absolute or "~/"-relative).
+func ExecuteMCPToggle(plan ActionPlan, homeDir, serverName, configPath string) (ToggleResult, error) {
+	if plan.Action != ActionToggle || !plan.Available {
+		return ToggleResult{}, fmt.Errorf("%w: %s", ErrActionUnavailable, plan.UnavailableReason)
+	}
+	if plan.ObjectKind != ObjectMCPServer {
+		return ToggleResult{}, errors.New("toggle is only supported for MCP servers")
+	}
+	serverName = strings.TrimSpace(serverName)
+	if serverName == "" {
+		return ToggleResult{}, errors.New("toggle requires an MCP server name")
+	}
+
+	resolved, err := resolveConfinedMCPPath(configPath, homeDir)
+	if err != nil {
+		return ToggleResult{}, err
+	}
+
+	raw, err := os.ReadFile(resolved)
+	if err != nil {
+		return ToggleResult{}, fmt.Errorf("read MCP config: %w", err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal(raw, &config); err != nil {
+		return ToggleResult{}, fmt.Errorf("parse MCP config: %w", err)
+	}
+	servers, ok := config["mcpServers"].(map[string]any)
+	if !ok {
+		return ToggleResult{}, fmt.Errorf("MCP config has no mcpServers object")
+	}
+	entry, ok := servers[serverName].(map[string]any)
+	if !ok {
+		return ToggleResult{}, fmt.Errorf("MCP server %q not found in config", serverName)
+	}
+
+	nextDisabled := !mcpEntryDisabled(entry)
+	if nextDisabled {
+		entry["disabled"] = true
+	} else {
+		delete(entry, "disabled")
+		delete(entry, "enabled")
+	}
+	servers[serverName] = entry
+
+	serialized, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return ToggleResult{}, err
+	}
+	if err := fsutil.WriteTextAtomically(resolved, string(serialized)+"\n", 0o644); err != nil {
+		return ToggleResult{}, fmt.Errorf("write MCP config: %w", err)
+	}
+	return ToggleResult{ServerName: serverName, Disabled: nextDisabled, ConfigPath: resolved}, nil
+}
+
+func mcpEntryDisabled(entry map[string]any) bool {
+	if disabled, ok := entry["disabled"].(bool); ok {
+		return disabled
+	}
+	if enabled, ok := entry["enabled"].(bool); ok {
+		return !enabled
+	}
+	return false
+}
+
+func resolveConfinedMCPPath(configPath, homeDir string) (string, error) {
+	configPath = strings.TrimSpace(configPath)
+	if configPath == "" {
+		return "", errors.New("toggle requires an MCP config path")
+	}
+	if strings.HasPrefix(configPath, "~/") {
+		if strings.TrimSpace(homeDir) == "" {
+			return "", errors.New("home directory is required to resolve MCP config path")
+		}
+		configPath = strings.TrimPrefix(configPath, "~/")
+		configPath = filepath.Join(homeDir, filepath.FromSlash(configPath))
+	}
+	roots := pathconfinement.RootsFromPaths(&homeDir, nil)
+	if roots == nil {
+		return "", errors.New("home root is required for path confinement")
+	}
+	resolved, err := pathconfinement.ValidateConstrainedWritePath(configPath, roots)
+	if err != nil {
+		return "", err
+	}
+	return resolved, nil
 }
 
 func unavailablePlan(plan ActionPlan, reason string) ActionPlan {
