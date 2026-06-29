@@ -213,6 +213,9 @@ func compareViewFromModel(model CompareViewModel) views.CompareView {
 func environmentsViewFromModel(model EnvironmentsViewModel) views.EnvironmentsView {
 	view := views.EnvironmentsView{
 		FocusAgent:   model.FocusAgent,
+		Focus:        string(model.Focus),
+		Mode:         string(model.Mode),
+		DiffOffset:   model.DiffOffset,
 		ChangesEmpty: model.ChangesEmpty,
 		EmptyMessage: model.EmptyMessage,
 	}
@@ -227,12 +230,40 @@ func environmentsViewFromModel(model EnvironmentsViewModel) views.EnvironmentsVi
 			Selected:     row.Selected,
 		})
 	}
-	for _, change := range model.Changes {
-		view.Changes = append(view.Changes, views.EnvironmentChange{
-			Marker: change.Marker,
-			Kind:   change.Kind,
-			Name:   change.Name,
-			Detail: change.Detail,
+	for _, surface := range model.Surfaces {
+		view.Surfaces = append(view.Surfaces, views.EnvironmentSurface{
+			ID:          surface.ID,
+			Marker:      surface.Marker,
+			Kind:        surface.Kind,
+			Name:        surface.Name,
+			Detail:      surface.Detail,
+			SourcePath:  surface.SourcePath,
+			ChangeCount: surface.ChangeCount,
+			Selected:    surface.Selected,
+		})
+	}
+	view.Diff = views.EnvironmentDiff{
+		SurfaceID:  model.Diff.SurfaceID,
+		Title:      model.Diff.Title,
+		SourcePath: model.Diff.SourcePath,
+	}
+	for _, row := range model.Diff.Rows {
+		view.Diff.Rows = append(view.Diff.Rows, views.EnvironmentDiffRow{
+			ID:          row.ID,
+			Kind:        string(row.Kind),
+			HunkIndex:   row.HunkIndex,
+			HunkTitle:   row.HunkTitle,
+			CurrentHunk: row.CurrentHunk,
+			Left: views.EnvironmentDiffSide{
+				LineNumber: row.Left.LineNumber,
+				Marker:     row.Left.Marker,
+				Text:       row.Left.Text,
+			},
+			Right: views.EnvironmentDiffSide{
+				LineNumber: row.Right.LineNumber,
+				Marker:     row.Right.Marker,
+				Text:       row.Right.Text,
+			},
 		})
 	}
 	return view

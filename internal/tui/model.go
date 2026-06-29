@@ -1446,58 +1446,124 @@ type EnvironmentRowModel struct {
 	Selected     bool
 }
 
-type EnvironmentChangeModel struct {
-	Marker string // + - ~
-	Kind   string
-	Name   string
-	Detail string
+type EnvironmentFocus string
+
+const (
+	EnvironmentFocusAgents   EnvironmentFocus = "agents"
+	EnvironmentFocusSurfaces EnvironmentFocus = "surfaces"
+	EnvironmentFocusDiff     EnvironmentFocus = "diff"
+)
+
+type EnvironmentRenderMode string
+
+const (
+	EnvironmentRenderModeSideBySide EnvironmentRenderMode = "side_by_side"
+	EnvironmentRenderModeUnified    EnvironmentRenderMode = "unified"
+)
+
+type EnvironmentSurfaceModel struct {
+	ID          string
+	Marker      string // + - ~
+	Kind        string
+	Name        string
+	Detail      string
+	SourcePath  string
+	ChangeCount int
+	Selected    bool
+	Diff        EnvironmentDiffModel
+}
+
+type EnvironmentDiffRowKind string
+
+const (
+	EnvironmentDiffRowHunk    EnvironmentDiffRowKind = "hunk"
+	EnvironmentDiffRowContext EnvironmentDiffRowKind = "context"
+	EnvironmentDiffRowRemoved EnvironmentDiffRowKind = "removed"
+	EnvironmentDiffRowAdded   EnvironmentDiffRowKind = "added"
+	EnvironmentDiffRowChanged EnvironmentDiffRowKind = "changed"
+)
+
+type EnvironmentDiffSideModel struct {
+	LineNumber int
+	Marker     string
+	Text       string
+}
+
+type EnvironmentDiffRowModel struct {
+	ID          string
+	Kind        EnvironmentDiffRowKind
+	HunkIndex   int
+	HunkTitle   string
+	CurrentHunk bool
+	Left        EnvironmentDiffSideModel
+	Right       EnvironmentDiffSideModel
+}
+
+type EnvironmentDiffModel struct {
+	SurfaceID  string
+	Title      string
+	SourcePath string
+	Rows       []EnvironmentDiffRowModel
 }
 
 type EnvironmentsViewModel struct {
 	Rows         []EnvironmentRowModel
 	FocusAgent   string
-	Changes      []EnvironmentChangeModel
+	Focus        EnvironmentFocus
+	Mode         EnvironmentRenderMode
+	Surfaces     []EnvironmentSurfaceModel
+	Diff         EnvironmentDiffModel
+	DiffOffset   int
 	ChangesEmpty string
 	EmptyMessage string
 }
 
 type BuildEnvironmentsViewModelInput struct {
-	Status        baseline.Status
-	SelectedIndex int
+	Status               baseline.Status
+	SelectedIndex        int
+	SelectedSurfaceIndex int
+	Focus                EnvironmentFocus
+	Mode                 EnvironmentRenderMode
+	CurrentHunkIndex     int
+	DiffOffset           int
 }
 
 // BuildEnvironmentsViewModel builds the per-agent snapshot workspace view.
 func BuildEnvironmentsViewModel(input BuildEnvironmentsViewModelInput) EnvironmentsViewModel {
-	model := EnvironmentsViewModel{}
+	model := EnvironmentsViewModel{
+		Focus:      input.Focus,
+		Mode:       input.Mode,
+		DiffOffset: input.DiffOffset,
+	}
+	if model.Focus == "" {
+		model.Focus = EnvironmentFocusAgents
+	}
+	if model.Mode == "" {
+		model.Mode = EnvironmentRenderModeSideBySide
+	}
 	if len(input.Status.Agents) == 0 {
 		model.EmptyMessage = "No supported agents detected."
 		return model
 	}
 	selected := clampIndex(input.SelectedIndex, len(input.Status.Agents))
+	chips := BuildHeaderChips(input.Status)
 	for i, agentStatus := range input.Status.Agents {
+		chip := HeaderChipModel{}
+		if i < len(chips) {
+			chip = chips[i]
+		}
 		row := EnvironmentRowModel{
 			Agent:        agentStatus.Agent,
 			AgentLabel:   FormatAgentLabel(agentStatus.Agent),
-			AgentMarker:  FormatAgentMarker(agentStatus.Agent),
+			AgentMarker:  chip.AgentMarker,
+			State:        chip.State,
 			BaselineName: agentStatus.BaselineName,
 			BaselineDate: formatDate(agentStatus.BaselineCreatedAt),
+			Detail:       chip.Detail,
 			Selected:     i == selected,
 		}
-		switch {
-		case !agentStatus.HasBaseline:
-			row.State = "missing"
-			row.Detail = "no baseline"
-		case agentStatus.ChangeCount() == 0:
-			row.State = "clean"
-			row.Detail = "clean"
-		default:
-			row.State = "changed"
-			count := agentStatus.ChangeCount()
-			suffix := "s"
-			if count == 1 {
-				suffix = ""
-			}
-			row.Detail = fmt.Sprintf("%d change%s", count, suffix)
+		if row.AgentMarker == "" {
+			row.AgentMarker = FormatAgentMarker(agentStatus.Agent)
 		}
 		model.Rows = append(model.Rows, row)
 	}
@@ -1508,17 +1574,16 @@ func BuildEnvironmentsViewModel(input BuildEnvironmentsViewModelInput) Environme
 		model.ChangesEmpty = "No baseline yet. Press s to save the current environment as a baseline."
 		return model
 	}
-	for _, change := range focus.Diff.SemanticChanges {
-		model.Changes = append(model.Changes, EnvironmentChangeModel{
-			Marker: markerForChange(change.Code),
-			Kind:   entityKindLabel(change.EntityKind),
-			Name:   change.EntityName,
-			Detail: environmentChangeDetail(change),
-		})
-	}
-	if len(model.Changes) == 0 {
+	surfaceIndex := clampIndex(input.SelectedSurfaceIndex, len(focus.Diff.SemanticChanges))
+	model.Surfaces = buildEnvironmentSurfaces(focus.Diff.SemanticChanges, surfaceIndex, input.CurrentHunkIndex)
+	if len(model.Surfaces) == 0 {
 		model.ChangesEmpty = "Current environment matches the baseline."
+		return model
 	}
+	for i := range model.Surfaces {
+		model.Surfaces[i].Selected = i == surfaceIndex
+	}
+	model.Diff = model.Surfaces[surfaceIndex].Diff
 	return model
 }
 
@@ -1535,6 +1600,316 @@ func environmentChangeDetail(change diff.SemanticChange) string {
 	default:
 		return "changed"
 	}
+}
+
+func buildEnvironmentSurfaces(changes []diff.SemanticChange, selectedSurfaceIndex, currentHunkIndex int) []EnvironmentSurfaceModel {
+	surfaces := make([]EnvironmentSurfaceModel, 0, len(changes))
+	for index, change := range changes {
+		sourcePath := ""
+		if change.Details.SourcePath != nil {
+			sourcePath = *change.Details.SourcePath
+		}
+		kind := entityKindLabel(change.EntityKind)
+		title := strings.TrimSpace(kind + " " + change.EntityName)
+		if title == "" {
+			title = environmentChangeDetail(change)
+		}
+		id := fmt.Sprintf("%s:%s:%s:%d", change.EntityKind, change.EntityName, sourcePath, index)
+		changeCount := countEnvironmentChanges(change)
+		detail := environmentChangeDetail(change)
+		if changeCount > 0 {
+			suffix := "changes"
+			if changeCount == 1 {
+				suffix = "change"
+			}
+			detail = fmt.Sprintf("%d %s", changeCount, suffix)
+		}
+		var diffModel EnvironmentDiffModel
+		if index == selectedSurfaceIndex {
+			diffModel = buildEnvironmentDiffModel(id, title, sourcePath, change, currentHunkIndex)
+		}
+		surfaces = append(surfaces, EnvironmentSurfaceModel{
+			ID:          id,
+			Marker:      markerForChange(change.Code),
+			Kind:        kind,
+			Name:        change.EntityName,
+			Detail:      detail,
+			SourcePath:  sourcePath,
+			ChangeCount: changeCount,
+			Diff:        diffModel,
+		})
+	}
+	return surfaces
+}
+
+func buildEnvironmentDiffModel(surfaceID, title, sourcePath string, change diff.SemanticChange, currentHunkIndex int) EnvironmentDiffModel {
+	model := EnvironmentDiffModel{
+		SurfaceID:  surfaceID,
+		Title:      title,
+		SourcePath: sourcePath,
+	}
+	beforeParsed, beforeOK := parseJSONValue(change.Before)
+	afterParsed, afterOK := parseJSONValue(change.After)
+	beforeObject, beforeIsObject := beforeParsed.(map[string]any)
+	afterObject, afterIsObject := afterParsed.(map[string]any)
+	if beforeIsObject || afterIsObject {
+		model.Rows = buildEnvironmentObjectDiffRows(surfaceID, title, sourcePath, beforeObject, beforeIsObject, afterObject, afterIsObject, change.Details.ChangedFields, currentHunkIndex)
+		return model
+	}
+	model.Rows = buildEnvironmentScalarDiffRows(surfaceID, title, sourcePath, change.Before, beforeParsed, beforeOK, change.After, afterParsed, afterOK, currentHunkIndex)
+	return model
+}
+
+func buildEnvironmentObjectDiffRows(surfaceID, title, sourcePath string, before map[string]any, hasBefore bool, after map[string]any, hasAfter bool, changedFields []string, currentHunkIndex int) []EnvironmentDiffRowModel {
+	fields := environmentAllFields(before, hasBefore, after, hasAfter)
+	changed := environmentChangedFieldSet(before, hasBefore, after, hasAfter, changedFields, fields)
+	if len(changed) == 0 {
+		return nil
+	}
+	beforeLines := environmentLineNumbers(fields, before, hasBefore)
+	afterLines := environmentLineNumbers(fields, after, hasAfter)
+	ranges := environmentHunkRanges(fields, changed, 2)
+	rows := make([]EnvironmentDiffRowModel, 0, len(fields)+len(ranges))
+	for hunkIndex, hunkRange := range ranges {
+		rows = append(rows, EnvironmentDiffRowModel{
+			ID:          fmt.Sprintf("%s:hunk:%d", surfaceID, hunkIndex),
+			Kind:        EnvironmentDiffRowHunk,
+			HunkIndex:   hunkIndex,
+			HunkTitle:   environmentHunkTitle(title, sourcePath),
+			CurrentHunk: hunkIndex == currentHunkIndex,
+		})
+		for _, field := range fields[hunkRange.Start : hunkRange.End+1] {
+			beforeValue, beforeOK := before[field]
+			afterValue, afterOK := after[field]
+			row := EnvironmentDiffRowModel{
+				ID:        fmt.Sprintf("%s:%d:%s", surfaceID, hunkIndex, field),
+				Kind:      EnvironmentDiffRowContext,
+				HunkIndex: hunkIndex,
+				Left: EnvironmentDiffSideModel{
+					LineNumber: beforeLines[field],
+					Marker:     " ",
+				},
+				Right: EnvironmentDiffSideModel{
+					LineNumber: afterLines[field],
+					Marker:     " ",
+				},
+			}
+			if beforeOK && hasBefore {
+				row.Left.Text = environmentFieldText(field, beforeValue)
+			}
+			if afterOK && hasAfter {
+				row.Right.Text = environmentFieldText(field, afterValue)
+			}
+			if _, ok := changed[field]; ok {
+				switch {
+				case beforeOK && hasBefore && afterOK && hasAfter:
+					row.Kind = EnvironmentDiffRowChanged
+					row.Left.Marker = "-"
+					row.Right.Marker = "+"
+				case beforeOK && hasBefore:
+					row.Kind = EnvironmentDiffRowRemoved
+					row.Left.Marker = "-"
+					row.Right = EnvironmentDiffSideModel{}
+				case afterOK && hasAfter:
+					row.Kind = EnvironmentDiffRowAdded
+					row.Left = EnvironmentDiffSideModel{}
+					row.Right.Marker = "+"
+				}
+			}
+			rows = append(rows, row)
+		}
+	}
+	return rows
+}
+
+func buildEnvironmentScalarDiffRows(surfaceID, title, sourcePath string, before json.RawMessage, beforeParsed any, beforeOK bool, after json.RawMessage, afterParsed any, afterOK bool, currentHunkIndex int) []EnvironmentDiffRowModel {
+	left := environmentValueText(before, beforeParsed, beforeOK)
+	right := environmentValueText(after, afterParsed, afterOK)
+	if left == right {
+		return nil
+	}
+	row := EnvironmentDiffRowModel{
+		ID:        surfaceID + ":scalar",
+		Kind:      EnvironmentDiffRowChanged,
+		HunkIndex: 0,
+		Left: EnvironmentDiffSideModel{
+			LineNumber: 1,
+			Marker:     "-",
+			Text:       left,
+		},
+		Right: EnvironmentDiffSideModel{
+			LineNumber: 1,
+			Marker:     "+",
+			Text:       right,
+		},
+	}
+	if strings.TrimSpace(left) == "" {
+		row.Kind = EnvironmentDiffRowAdded
+		row.Left = EnvironmentDiffSideModel{}
+	}
+	if strings.TrimSpace(right) == "" {
+		row.Kind = EnvironmentDiffRowRemoved
+		row.Right = EnvironmentDiffSideModel{}
+	}
+	return []EnvironmentDiffRowModel{{
+		ID:          surfaceID + ":hunk:0",
+		Kind:        EnvironmentDiffRowHunk,
+		HunkIndex:   0,
+		HunkTitle:   environmentHunkTitle(title, sourcePath),
+		CurrentHunk: currentHunkIndex == 0,
+	}, row}
+}
+
+func environmentHunkTitle(title, sourcePath string) string {
+	parts := []string{strings.TrimSpace(title)}
+	if strings.TrimSpace(sourcePath) != "" {
+		parts = append(parts, strings.TrimSpace(sourcePath))
+	}
+	return "@@ " + strings.Join(parts, " · ") + " @@"
+}
+
+type environmentHunkRange struct {
+	Start int
+	End   int
+}
+
+func environmentHunkRanges(fields []string, changed map[string]struct{}, context int) []environmentHunkRange {
+	var ranges []environmentHunkRange
+	for index, field := range fields {
+		if _, ok := changed[field]; !ok {
+			continue
+		}
+		start := max(0, index-context)
+		end := min(len(fields)-1, index+context)
+		if len(ranges) > 0 && start <= ranges[len(ranges)-1].End+1 {
+			if end > ranges[len(ranges)-1].End {
+				ranges[len(ranges)-1].End = end
+			}
+			continue
+		}
+		ranges = append(ranges, environmentHunkRange{Start: start, End: end})
+	}
+	return ranges
+}
+
+func environmentAllFields(before map[string]any, hasBefore bool, after map[string]any, hasAfter bool) []string {
+	keys := make(map[string]struct{}, len(before)+len(after))
+	if hasBefore {
+		for key := range before {
+			keys[key] = struct{}{}
+		}
+	}
+	if hasAfter {
+		for key := range after {
+			keys[key] = struct{}{}
+		}
+	}
+	fields := make([]string, 0, len(keys))
+	for key := range keys {
+		fields = append(fields, key)
+	}
+	sort.Strings(fields)
+	return fields
+}
+
+func environmentChangedFieldSet(before map[string]any, hasBefore bool, after map[string]any, hasAfter bool, changedFields []string, allFields []string) map[string]struct{} {
+	changed := make(map[string]struct{})
+	for _, field := range changedFields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		beforeValue, beforeOK := before[field]
+		afterValue, afterOK := after[field]
+		if hasVisibleFieldDiff(beforeValue, beforeOK && hasBefore, afterValue, afterOK && hasAfter) {
+			changed[field] = struct{}{}
+		}
+	}
+	if len(changed) > 0 {
+		return changed
+	}
+	for _, field := range allFields {
+		beforeValue, beforeOK := before[field]
+		afterValue, afterOK := after[field]
+		if hasVisibleFieldDiff(beforeValue, beforeOK && hasBefore, afterValue, afterOK && hasAfter) {
+			changed[field] = struct{}{}
+		}
+	}
+	return changed
+}
+
+func environmentLineNumbers(fields []string, value map[string]any, ok bool) map[string]int {
+	out := make(map[string]int, len(value))
+	if !ok {
+		return out
+	}
+	line := 1
+	for _, field := range fields {
+		if _, ok := value[field]; !ok {
+			continue
+		}
+		out[field] = line
+		line++
+	}
+	return out
+}
+
+func environmentFieldText(field string, value any) string {
+	return fmt.Sprintf("%s: %s", field, compactJSONValue(value))
+}
+
+func environmentValueText(value json.RawMessage, parsed any, parsedOK bool) string {
+	if len(value) == 0 {
+		return ""
+	}
+	if parsedOK {
+		return compactJSONValue(parsed)
+	}
+	return strings.TrimSpace(string(value))
+}
+
+func countEnvironmentChanges(change diff.SemanticChange) int {
+	beforeParsed, beforeOK := parseJSONValue(change.Before)
+	afterParsed, afterOK := parseJSONValue(change.After)
+	beforeObject, beforeIsObject := beforeParsed.(map[string]any)
+	afterObject, afterIsObject := afterParsed.(map[string]any)
+	if beforeIsObject || afterIsObject {
+		fields := environmentAllFields(beforeObject, beforeIsObject, afterObject, afterIsObject)
+		return len(environmentChangedFieldSet(beforeObject, beforeIsObject, afterObject, afterIsObject, change.Details.ChangedFields, fields))
+	}
+	if environmentValueText(change.Before, beforeParsed, beforeOK) == environmentValueText(change.After, afterParsed, afterOK) {
+		return 0
+	}
+	return 1
+}
+
+func hasVisibleFieldDiff(before any, beforeOK bool, after any, afterOK bool) bool {
+	if beforeOK != afterOK {
+		return true
+	}
+	if !beforeOK && !afterOK {
+		return false
+	}
+	return compactJSONValue(before) != compactJSONValue(after)
+}
+
+func parseJSONValue(value json.RawMessage) (any, bool) {
+	if len(value) == 0 {
+		return nil, false
+	}
+	var parsed any
+	if err := json.Unmarshal(value, &parsed); err != nil {
+		return nil, false
+	}
+	return parsed, true
+}
+
+func compactJSONValue(value any) string {
+	data, err := json.Marshal(normalizeValue(value))
+	if err != nil {
+		return fmt.Sprint(value)
+	}
+	return string(data)
 }
 
 // HeaderChipModel is one per-agent drift indicator for the app header.

@@ -98,7 +98,7 @@ type App struct {
 	setupConsole       setupConsoleState
 	timelineCursor     int
 	snapshotCursor     int
-	environmentCursor  int
+	environments       environmentState
 
 	undoPlan       *timelineundo.Plan
 	undoError      string
@@ -422,10 +422,18 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return nil, false
 		}
 	case "tab":
+		if a.screen == ScreenEnvironments {
+			a.environments.cycleFocus()
+			return nil, false
+		}
 		if a.screen == ScreenInventory && a.pendingAction == nil {
 			a.moveSetupTab(1)
 		}
 	case "shift+tab":
+		if a.screen == ScreenEnvironments {
+			a.environments.cycleFocus()
+			return nil, false
+		}
 		if a.screen == ScreenInventory && a.pendingAction == nil {
 			a.moveSetupTab(-1)
 		}
@@ -456,8 +464,25 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	case "E":
 		if a.screen == ScreenInventory || a.screen == ScreenSnapshots || a.screen == ScreenTimeline {
 			a.screen = ScreenEnvironments
-			a.environmentCursor = clampIndex(a.environmentCursor, len(a.baselineStatus.Agents))
+			a.environments.clampAgents(a.baselineStatus)
 			a.actionError = ""
+		}
+	case "v":
+		if a.screen == ScreenEnvironments {
+			a.environments.toggleMode()
+			return nil, false
+		}
+	case "n":
+		if a.screen == ScreenEnvironments {
+			model := a.currentEnvironmentsViewModel()
+			a.environments.moveHunk(model, 1, a.environmentDiffViewportHeight())
+			return nil, false
+		}
+	case "p":
+		if a.screen == ScreenEnvironments {
+			model := a.currentEnvironmentsViewModel()
+			a.environments.moveHunk(model, -1, a.environmentDiffViewportHeight())
+			return nil, false
 		}
 	case "s":
 		if a.screen == ScreenEnvironments {
@@ -505,7 +530,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return nil, false
 		}
 		if a.screen == ScreenEnvironments {
-			a.moveEnvironmentCursor(-1)
+			a.moveEnvironmentSelection(-1)
 			return nil, false
 		}
 		a.moveNavCursor(-1)
@@ -519,10 +544,20 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return nil, false
 		}
 		if a.screen == ScreenEnvironments {
-			a.moveEnvironmentCursor(1)
+			a.moveEnvironmentSelection(1)
 			return nil, false
 		}
 		a.moveNavCursor(1)
+	case "pgup":
+		if a.screen == ScreenEnvironments {
+			a.environments.pageDiff(a.currentEnvironmentsViewModel(), a.environmentDiffViewportHeight(), -1)
+			return nil, false
+		}
+	case "pgdown":
+		if a.screen == ScreenEnvironments {
+			a.environments.pageDiff(a.currentEnvironmentsViewModel(), a.environmentDiffViewportHeight(), 1)
+			return nil, false
+		}
 	case "left", "h":
 		if a.screen == ScreenTimeline {
 			a.moveTimelineCursor(-1)
@@ -1189,29 +1224,58 @@ func (a *App) moveSnapshotCursor(delta int) {
 	a.actionError = ""
 }
 
-func (a *App) moveEnvironmentCursor(delta int) {
-	agents := a.baselineStatus.Agents
-	if len(agents) == 0 {
-		a.environmentCursor = 0
-		return
+func (a *App) moveEnvironmentSelection(delta int) {
+	switch a.environments.focus {
+	case EnvironmentFocusSurfaces:
+		model := a.currentEnvironmentsViewModel()
+		a.environments.moveSurface(len(model.Surfaces), delta)
+	case EnvironmentFocusDiff:
+		a.environments.scrollDiff(a.currentEnvironmentsViewModel(), a.environmentDiffViewportHeight(), delta)
+	default:
+		a.environments.moveAgent(a.baselineStatus, delta)
 	}
-	next := a.environmentCursor + delta
-	if next < 0 {
-		next = len(agents) - 1
-	}
-	if next >= len(agents) {
-		next = 0
-	}
-	a.environmentCursor = next
 	a.actionError = ""
 }
 
 func (a *App) focusedEnvironmentAgent() (types.AgentID, bool) {
-	agents := a.baselineStatus.Agents
-	if len(agents) == 0 {
-		return "", false
+	return a.environments.selectedAgent(a.baselineStatus)
+}
+
+func (a *App) currentEnvironmentsViewModel() EnvironmentsViewModel {
+	a.environments.ensure()
+	a.environments.clampAgents(a.baselineStatus)
+	requestedSurface := a.environments.surfaceCursor
+	requestedHunk := a.environments.hunkCursor
+	model := BuildEnvironmentsViewModel(BuildEnvironmentsViewModelInput{
+		Status:               a.baselineStatus,
+		SelectedIndex:        a.environments.agentCursor,
+		SelectedSurfaceIndex: a.environments.surfaceCursor,
+		Focus:                a.environments.focus,
+		Mode:                 a.environments.mode,
+		CurrentHunkIndex:     a.environments.hunkCursor,
+		DiffOffset:           a.environments.diffOffset,
+	})
+	a.environments.clampSurfaces(len(model.Surfaces))
+	a.environments.clampHunks(environmentHunkCount(model.Diff.Rows))
+	if requestedSurface != a.environments.surfaceCursor || requestedHunk != a.environments.hunkCursor {
+		model = BuildEnvironmentsViewModel(BuildEnvironmentsViewModelInput{
+			Status:               a.baselineStatus,
+			SelectedIndex:        a.environments.agentCursor,
+			SelectedSurfaceIndex: a.environments.surfaceCursor,
+			Focus:                a.environments.focus,
+			Mode:                 a.environments.mode,
+			CurrentHunkIndex:     a.environments.hunkCursor,
+			DiffOffset:           a.environments.diffOffset,
+		})
 	}
-	return agents[clampIndex(a.environmentCursor, len(agents))].Agent, true
+	return model
+}
+
+func (a *App) environmentDiffViewportHeight() int {
+	if a.height <= 0 {
+		return 10
+	}
+	return max(4, a.height/2)
 }
 
 // saveFocusedEnvironment captures the focused agent's current setup as a new
@@ -1370,10 +1434,7 @@ func (a *App) renderContent(width, height int) string {
 	case ScreenSnapshots:
 		return a.renderSnapshots(width, height)
 	case ScreenEnvironments:
-		model := BuildEnvironmentsViewModel(BuildEnvironmentsViewModelInput{
-			Status:        a.baselineStatus,
-			SelectedIndex: a.environmentCursor,
-		})
+		model := a.currentEnvironmentsViewModel()
 		return views.RenderEnvironments(environmentsViewFromModel(model), width, height)
 	case ScreenProfile:
 		agentLabels := make([]string, 0)

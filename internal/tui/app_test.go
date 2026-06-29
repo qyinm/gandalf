@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
+	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -754,9 +755,88 @@ func TestEnvironmentsModeOpensAndListsPerAgentDrift(t *testing.T) {
 
 	// Navigating down moves the focused agent.
 	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	if app.environmentCursor != 1 {
-		t.Fatalf("expected environment cursor to advance, got %d", app.environmentCursor)
+	if app.environments.agentCursor != 1 {
+		t.Fatalf("expected environment cursor to advance, got %d", app.environments.agentCursor)
 	}
+}
+
+func TestEnvironmentsKeysMoveFocusSurfacesDiffAndHunks(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	app := newInventoryTestApp(t, runtime)
+	app.width = 140
+	app.height = 36
+	sourcePath := "~/.codex/config.toml"
+	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{{
+		Agent: types.AgentCodex, HasBaseline: true, BaselineName: "base-cx", SemanticChangeCount: 2,
+		Diff: diff.GraphDiff{SemanticChanges: []diff.SemanticChange{
+			{
+				Code:       diff.SemanticAgentConfigChanged,
+				EntityKind: types.KindAgentConfig,
+				EntityName: "config",
+				Before:     []byte(`{"field00":"old","field01":"same","field02":"same","field03":"same","field04":"same","field05":"same","field06":"same","field07":"old"}`),
+				After:      []byte(`{"field00":"new","field01":"same","field02":"same","field03":"same","field04":"same","field05":"same","field06":"same","field07":"new"}`),
+				Details: diff.SemanticChangeDetails{
+					ChangedFields: []string{"field00", "field07"},
+					SourcePath:    &sourcePath,
+				},
+			},
+			{
+				Code:       diff.SemanticMcpAdded,
+				EntityKind: types.KindMcpServer,
+				EntityName: "postgres",
+				After:      []byte(`{"command":"pg-mcp"}`),
+				Details:    diff.SemanticChangeDetails{SourcePath: &sourcePath},
+			},
+		}},
+	}}}
+
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("E")})
+	if app.screen != ScreenEnvironments {
+		t.Fatalf("screen = %s", app.screen)
+	}
+	if app.environments.focus != EnvironmentFocusAgents {
+		t.Fatalf("focus = %s", app.environments.focus)
+	}
+
+	app.handleKey(tea.KeyMsg{Type: tea.KeyTab})
+	if app.environments.focus != EnvironmentFocusSurfaces {
+		t.Fatalf("focus after tab = %s", app.environments.focus)
+	}
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if app.environments.surfaceCursor != 1 || app.environments.agentCursor != 0 {
+		t.Fatalf("surface cursor = %d agent cursor = %d", app.environments.surfaceCursor, app.environments.agentCursor)
+	}
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	if app.environments.surfaceCursor != 0 {
+		t.Fatalf("surface cursor after k = %d", app.environments.surfaceCursor)
+	}
+
+	app.handleKey(tea.KeyMsg{Type: tea.KeyTab})
+	if app.environments.focus != EnvironmentFocusDiff {
+		t.Fatalf("focus after second tab = %s", app.environments.focus)
+	}
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	if app.environments.hunkCursor != 1 {
+		t.Fatalf("hunk cursor after n = %d", app.environments.hunkCursor)
+	}
+	model := app.currentEnvironmentsViewModel()
+	if !environmentModelHasCurrentHunk(model, 1) {
+		t.Fatalf("expected hunk 1 selected: %#v", model.Diff.Rows)
+	}
+
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
+	if app.environments.mode != EnvironmentRenderModeUnified {
+		t.Fatalf("mode after v = %s", app.environments.mode)
+	}
+}
+
+func environmentModelHasCurrentHunk(model EnvironmentsViewModel, index int) bool {
+	for _, row := range model.Diff.Rows {
+		if row.Kind == EnvironmentDiffRowHunk && row.HunkIndex == index && row.CurrentHunk {
+			return true
+		}
+	}
+	return false
 }
 
 func TestEnvironmentsRestoreWithoutSnapshotIsGated(t *testing.T) {
