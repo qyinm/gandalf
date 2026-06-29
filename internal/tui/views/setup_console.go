@@ -46,6 +46,15 @@ type SetupConsoleTool struct {
 	Description string
 }
 
+// SetupConsoleBaselineRow summarizes baseline state for one supported agent.
+type SetupConsoleBaselineRow struct {
+	AgentMarker string
+	Status      string
+	Baseline    string
+	Changes     string
+	Unsupported string
+}
+
 // SetupConsoleAction is one action exposed in selected-row detail.
 type SetupConsoleAction struct {
 	Label     string
@@ -86,6 +95,7 @@ type SetupConsoleView struct {
 	ActiveTab       string
 	Tabs            []SetupConsoleTab
 	Rows            []SetupConsoleRow
+	BaselineRows    []SetupConsoleBaselineRow
 	RowOffset       int
 	Search          string
 	SearchInput     string
@@ -111,11 +121,17 @@ func RenderSetupConsole(model SetupConsoleView, width, height int) string {
 		renderSetupSearch(model),
 		"",
 	}
+	if len(model.BaselineRows) > 0 {
+		lines = append(lines, renderSetupBaselineRows(model.BaselineRows, width), "")
+	}
 	if model.ActionError != "" {
 		lines = append(lines, warnStyle.Render(model.ActionError), "")
 	}
 
 	listHeight := height - 10
+	if len(model.BaselineRows) > 0 {
+		listHeight -= len(model.BaselineRows) + 1
+	}
 	if listHeight < 4 {
 		listHeight = 4
 	}
@@ -155,6 +171,23 @@ func renderSetupSearch(model SetupConsoleView) string {
 		return labelStyle.Render(model.SearchInput)
 	}
 	return labelStyle.Render("/ to search")
+}
+
+func renderSetupBaselineRows(rows []SetupConsoleBaselineRow, width int) string {
+	lines := make([]string, 0, len(rows))
+	for _, row := range rows {
+		parts := []string{
+			row.AgentMarker,
+			row.Status,
+			"baseline " + row.Baseline,
+			row.Changes,
+		}
+		if row.Unsupported != "" {
+			parts = append(parts, row.Unsupported)
+		}
+		lines = append(lines, labelStyle.Render(truncate(strings.Join(parts, "  "), width)))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func renderSetupConsoleRows(model SetupConsoleView, width, height int) string {
@@ -536,6 +569,7 @@ type setupConsoleKeyMap struct {
 	Tabs      key.Binding
 	Search    key.Binding
 	Rescan    key.Binding
+	Baseline  key.Binding
 	Action    key.Binding
 	Toggle    key.Binding
 	History   key.Binding
@@ -548,7 +582,7 @@ func (m setupConsoleKeyMap) ShortHelp() []key.Binding {
 	if m.Toggle.Help().Key != "" {
 		bindings = append(bindings, m.Toggle)
 	}
-	bindings = append(bindings, m.Action, m.History, m.Snapshots, m.Quit)
+	bindings = append(bindings, m.Baseline, m.Action, m.History, m.Snapshots, m.Quit)
 	return bindings
 }
 
@@ -604,6 +638,7 @@ func renderSetupConsoleHelp(model SetupConsoleView, width int) string {
 		Tabs:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "tabs")),
 		Search:    key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
 		Rescan:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "rescan")),
+		Baseline:  key.NewBinding(key.WithKeys("B"), key.WithHelp("B", "baseline")),
 		Action:    action,
 		Toggle:    toggle,
 		History:   key.NewBinding(key.WithKeys("H"), key.WithHelp("H", "history")),

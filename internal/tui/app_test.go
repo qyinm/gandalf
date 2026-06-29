@@ -494,6 +494,154 @@ func TestInventoryRescanFailureAfterActionClearsPendingAction(t *testing.T) {
 	}
 }
 
+func TestCreateMissingBaselinesWritesAgentScopedSnapshots(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	codexConfig := filepath.Join(runtime.HomeDir, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(codexConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codexConfig, []byte("model = \"gpt-5\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	claudeSettings := filepath.Join(runtime.HomeDir, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(claudeSettings), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(claudeSettings, []byte(`{"permissions":{"allow":["Bash(echo hi)"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := NewApp(runtime)
+	created, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created) != 2 {
+		t.Fatalf("created = %#v", created)
+	}
+	for _, agent := range []types.AgentID{types.AgentClaudeCode, types.AgentCodex} {
+		names, err := store.ListSnapshots(runtime.StoreDir, &agent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(names) != 1 {
+			t.Fatalf("%s snapshots = %#v", agent, names)
+		}
+		snap, err := store.ReadSnapshot(runtime.StoreDir, names[0], &agent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snap.Manifest.Security.RedactionPolicy != "content-backed" {
+			t.Fatalf("%s redaction policy = %q", agent, snap.Manifest.Security.RedactionPolicy)
+		}
+	}
+
+	createdAgain, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(createdAgain) != 0 {
+		t.Fatalf("expected no duplicate baselines, got %#v", createdAgain)
+	}
+}
+
+func TestSnapshotEnterBuildsRollbackReview(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	configPath := writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	app := NewApp(runtime)
+	created, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	codexBaseline := findCreatedSnapshot(t, created, "baseline-codex-")
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5.1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app.applyWorkspaceData(app.fetchWorkspaceData())
+	app.screen = ScreenSnapshots
+	app.snapshotCursor = findSnapshotRefIndex(t, app.snapshotRefs, codexBaseline, types.AgentCodex)
+
+	cmd := app.handleSnapshotEnter()
+	if cmd == nil {
+		t.Fatal("expected preview command")
+	}
+	model, _ := app.Update(cmd())
+	updated := model.(*App)
+	if updated.rollbackReview == nil {
+		t.Fatal("expected rollback review")
+	}
+	if updated.rollbackReview.SnapshotName != codexBaseline || len(updated.rollbackReview.Items) == 0 {
+		t.Fatalf("review = %#v", updated.rollbackReview)
+	}
+}
+
+func TestRollbackApplyBlocksWhenRestorePointFails(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	configPath := writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	app := NewApp(runtime)
+	created, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	codexBaseline := findCreatedSnapshot(t, created, "baseline-codex-")
+	changed := "model = \"gpt-5.1\"\n"
+	if err := os.WriteFile(configPath, []byte(changed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	review, err := app.buildRollbackReview(snapshotRef{Name: codexBaseline, Agent: types.AgentCodex})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.restorePointCreator = func(types.AgentID) (string, error) {
+		return "", os.ErrPermission
+	}
+
+	msg := app.applyRollbackReview(review)
+	if msg.err == nil {
+		t.Fatal("expected restore point failure")
+	}
+	got, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != changed {
+		t.Fatalf("config changed despite restore point failure: %q", got)
+	}
+}
+
+func TestRollbackApplyRestoresConfigAndVerifies(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	configPath := writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	app := NewApp(runtime)
+	created, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	codexBaseline := findCreatedSnapshot(t, created, "baseline-codex-")
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5.1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	review, err := app.buildRollbackReview(snapshotRef{Name: codexBaseline, Agent: types.AgentCodex})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg := app.applyRollbackReview(review)
+	if msg.err != nil {
+		t.Fatal(msg.err)
+	}
+	if !strings.Contains(msg.verify, "Verified") {
+		t.Fatalf("verify = %q", msg.verify)
+	}
+	got, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "model = \"gpt-5\"\n" {
+		t.Fatalf("config = %q", got)
+	}
+}
+
 func TestUndoPreviewMessageUpdatesCorruptEventsInUpdate(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := NewApp(runtime)
@@ -705,4 +853,38 @@ func makeTestRuntime(t *testing.T) types.RuntimeOptions {
 		HomeDir:     homeDir,
 		StoreDir:    storeDir,
 	}
+}
+
+func writeCodexConfig(t *testing.T, homeDir, content string) string {
+	t.Helper()
+	configPath := filepath.Join(homeDir, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return configPath
+}
+
+func findCreatedSnapshot(t *testing.T, names []string, prefix string) string {
+	t.Helper()
+	for _, name := range names {
+		if strings.HasPrefix(name, prefix) {
+			return name
+		}
+	}
+	t.Fatalf("missing created snapshot with prefix %q in %#v", prefix, names)
+	return ""
+}
+
+func findSnapshotRefIndex(t *testing.T, refs []snapshotRef, name string, agent types.AgentID) int {
+	t.Helper()
+	for i, ref := range refs {
+		if ref.Name == name && ref.Agent == agent {
+			return i
+		}
+	}
+	t.Fatalf("missing snapshot ref %s/%s in %#v", agent, name, refs)
+	return 0
 }

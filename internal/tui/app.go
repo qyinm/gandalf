@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,7 +14,10 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/qyinm/gandalf/internal/gandalfcore/agents"
+	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
+	"github.com/qyinm/gandalf/internal/gandalfcore/restore"
 	"github.com/qyinm/gandalf/internal/gandalfcore/scan"
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/snapshot"
@@ -28,6 +32,8 @@ type bootMsg struct {
 	timelineEntries []types.TimelineEntry
 	corruptEvents   []store.TimelineCorruptEvent
 	snapshotNames   []string
+	snapshotRefs    []snapshotRef
+	baselineStatus  baseline.Status
 	err             error
 }
 
@@ -36,6 +42,25 @@ type rescanMsg bootMsg
 type setupActionMsg struct {
 	data bootMsg
 	err  error
+}
+
+type baselineCreateMsg struct {
+	data    bootMsg
+	created []string
+	err     error
+}
+
+type rollbackPreviewMsg struct {
+	review *rollbackReview
+	err    error
+}
+
+type rollbackApplyMsg struct {
+	data         bootMsg
+	summary      types.ApplySummary
+	restorePoint string
+	verify       string
+	err          error
 }
 
 type undoPreviewMsg struct {
@@ -58,6 +83,8 @@ type App struct {
 	timelineEntries []types.TimelineEntry
 	corruptEvents   []store.TimelineCorruptEvent
 	snapshotNames   []string
+	snapshotRefs    []snapshotRef
+	baselineStatus  baseline.Status
 
 	screen          Screen
 	selectedAgent   *types.AgentID
@@ -70,13 +97,15 @@ type App struct {
 	setupSearchFocused bool
 	setupConsole       setupConsoleState
 	timelineCursor     int
+	snapshotCursor     int
 
-	undoPlan      *timelineundo.Plan
-	undoError     string
-	notice        string
-	actionError   string
-	pendingAction *setup.ActionPlan
-	skillViewer   *skillMarkdownViewerState
+	undoPlan       *timelineundo.Plan
+	undoError      string
+	notice         string
+	actionError    string
+	pendingAction  *setup.ActionPlan
+	skillViewer    *skillMarkdownViewerState
+	rollbackReview *rollbackReview
 
 	compareModel   *CompareViewModel
 	saveSetupModel *SaveSetupViewModel
@@ -84,7 +113,23 @@ type App struct {
 	cachedNav    *NavigationModel
 	cachedNavKey string
 
-	actionExecutor func(context.Context, setup.ActionPlan) error
+	actionExecutor      func(context.Context, setup.ActionPlan) error
+	restorePointCreator func(types.AgentID) (string, error)
+	restoreExecutor     restore.RestoreExecutor
+}
+
+type snapshotRef struct {
+	Name      string
+	Agent     types.AgentID
+	CreatedAt string
+}
+
+type rollbackReview struct {
+	SnapshotName     string
+	Agent            types.AgentID
+	Plan             *types.RestorePlan
+	Items            []types.RestoreItem
+	UnsupportedItems []types.UnsupportedPlanItem
 }
 
 type setupConsoleState struct {
@@ -221,6 +266,50 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.notice = "Applied setup action and rescanned global setup."
 		return a, nil
 
+	case baselineCreateMsg:
+		if typed.err != nil {
+			a.actionError = typed.err.Error()
+			return a, nil
+		}
+		if typed.data.err != nil {
+			a.actionError = "Created baseline, but failed to rescan: " + typed.data.err.Error()
+			return a, nil
+		}
+		a.applyWorkspaceData(typed.data)
+		a.actionError = ""
+		if len(typed.created) == 0 {
+			a.notice = "Supported baselines already exist."
+		} else {
+			a.notice = "Created baselines: " + strings.Join(typed.created, ", ")
+		}
+		return a, nil
+
+	case rollbackPreviewMsg:
+		a.rollbackReview = nil
+		a.actionError = ""
+		if typed.err != nil {
+			a.actionError = typed.err.Error()
+			return a, nil
+		}
+		a.rollbackReview = typed.review
+		return a, nil
+
+	case rollbackApplyMsg:
+		if typed.err != nil {
+			a.actionError = typed.err.Error()
+			return a, nil
+		}
+		if typed.data.err != nil {
+			a.rollbackReview = nil
+			a.actionError = "Applied rollback, but failed to rescan: " + typed.data.err.Error()
+			return a, nil
+		}
+		a.applyWorkspaceData(typed.data)
+		a.rollbackReview = nil
+		a.actionError = ""
+		a.notice = fmt.Sprintf("Applied rollback. Restore point: %s. %s", typed.restorePoint, typed.verify)
+		return a, nil
+
 	case undoPreviewMsg:
 		a.undoPlan = nil
 		a.undoError = ""
@@ -296,6 +385,10 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.pendingAction = nil
 			a.actionError = ""
 		}
+		if a.rollbackReview != nil {
+			a.rollbackReview = nil
+			a.actionError = ""
+		}
 	case "/":
 		if a.screen == ScreenInventory && a.pendingAction == nil {
 			a.setupSearchFocused = true
@@ -317,6 +410,16 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			data := a.fetchWorkspaceData()
 			return rescanMsg(data)
 		}, false
+	case "B":
+		if a.screen == ScreenInventory && a.pendingAction == nil {
+			return func() tea.Msg {
+				created, err := a.createMissingBaselines()
+				if err != nil {
+					return baselineCreateMsg{err: err}
+				}
+				return baselineCreateMsg{created: created, data: a.fetchWorkspaceData()}
+			}, false
+		}
 	case "H":
 		if a.screen == ScreenInventory {
 			a.screen = ScreenTimeline
@@ -359,10 +462,18 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.moveInventoryCursor(-1)
 			return nil, false
 		}
+		if a.screen == ScreenSnapshots {
+			a.moveSnapshotCursor(-1)
+			return nil, false
+		}
 		a.moveNavCursor(-1)
 	case "down", "j":
 		if a.screen == ScreenInventory && a.inventoryFocus && a.pendingAction == nil {
 			a.moveInventoryCursor(1)
+			return nil, false
+		}
+		if a.screen == ScreenSnapshots {
+			a.moveSnapshotCursor(1)
 			return nil, false
 		}
 		a.moveNavCursor(1)
@@ -375,6 +486,9 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.moveTimelineCursor(1)
 		}
 	case "enter":
+		if a.screen == ScreenSnapshots {
+			return a.handleSnapshotEnter(), false
+		}
 		if a.screen == ScreenInventory && a.inventoryFocus {
 			return a.handleInventoryEnter(), false
 		}
@@ -793,9 +907,12 @@ func (a *App) applyWorkspaceData(data bootMsg) {
 	a.timelineEntries = data.timelineEntries
 	a.corruptEvents = data.corruptEvents
 	a.snapshotNames = data.snapshotNames
+	a.snapshotRefs = data.snapshotRefs
+	a.baselineStatus = data.baselineStatus
 	a.cachedNav = nil
 	a.cachedNavKey = ""
 	a.clampSetupConsoleState()
+	a.snapshotCursor = clampIndex(a.snapshotCursor, len(a.snapshotRefs))
 }
 
 func (a *App) moveInventoryCursor(delta int) {
@@ -921,7 +1038,15 @@ func (a *App) currentSetupConsoleViewModel() SetupConsoleViewModel {
 		ExpandedToolID:     a.setupConsole.expandedMCPTool,
 		PendingAction:      a.pendingAction,
 		ActionError:        a.actionError,
+		BaselineStatus:     baselineStatusPtr(a.baselineStatus),
 	})
+}
+
+func baselineStatusPtr(status baseline.Status) *baseline.Status {
+	if len(status.Agents) == 0 {
+		return nil
+	}
+	return &status
 }
 
 func firstAvailableInventoryAction(item setup.InventoryItem) (setup.ActionKind, bool) {
@@ -967,6 +1092,45 @@ func (a *App) moveTimelineCursor(delta int) {
 	a.timelineCursor = next
 	a.undoPlan = nil
 	a.undoError = ""
+}
+
+func (a *App) moveSnapshotCursor(delta int) {
+	if len(a.snapshotRefs) == 0 {
+		a.snapshotCursor = 0
+		return
+	}
+	next := a.snapshotCursor + delta
+	if next < 0 {
+		next = len(a.snapshotRefs) - 1
+	}
+	if next >= len(a.snapshotRefs) {
+		next = 0
+	}
+	a.snapshotCursor = next
+	a.rollbackReview = nil
+	a.actionError = ""
+}
+
+func (a *App) handleSnapshotEnter() tea.Cmd {
+	if a.rollbackReview != nil {
+		review := *a.rollbackReview
+		return func() tea.Msg {
+			msg := a.applyRollbackReview(&review)
+			return msg
+		}
+	}
+	if len(a.snapshotRefs) == 0 {
+		a.actionError = "No supported snapshots selected."
+		return nil
+	}
+	ref := a.snapshotRefs[clampIndex(a.snapshotCursor, len(a.snapshotRefs))]
+	return func() tea.Msg {
+		review, err := a.buildRollbackReview(ref)
+		if err != nil {
+			return rollbackPreviewMsg{err: err}
+		}
+		return rollbackPreviewMsg{review: review}
+	}
 }
 
 func (a *App) activateNavItem() {
@@ -1048,20 +1212,13 @@ func (a *App) renderContent(width, height int) string {
 	case ScreenSaveSetup:
 		if a.saveSetupModel == nil {
 			model := BuildSaveSetupViewModel(BuildSaveSetupViewModelInput{
-				HasPreviousSnapshot: len(a.snapshotNames) > 0,
+				HasPreviousSnapshot: a.hasSnapshots(),
 			})
 			a.saveSetupModel = &model
 		}
 		return views.RenderSaveSetup(saveSetupViewFromModel(*a.saveSetupModel), width, height)
 	case ScreenSnapshots:
-		if len(a.snapshotNames) == 0 {
-			return "No saved setups yet.\n\ns save setup"
-		}
-		lines := []string{"Saved setups", ""}
-		for _, name := range a.snapshotNames {
-			lines = append(lines, "  "+name)
-		}
-		return strings.Join(lines, "\n")
+		return a.renderSnapshots(width, height)
 	case ScreenProfile:
 		agentLabels := make([]string, 0)
 		seen := make(map[types.AgentID]struct{})
@@ -1080,7 +1237,7 @@ func (a *App) renderContent(width, height int) string {
 			changedAt = FormatTimelineTimestamp(a.timelineEntries[0].ObservedAt, now)
 		}
 		return fmt.Sprintf("Profiles\n\ndefault\n  snapshots: %d\n  agents: %s\n  changed: %s",
-			len(a.snapshotNames), strings.Join(agentLabels, ", "), changedAt)
+			a.snapshotCount(), strings.Join(agentLabels, ", "), changedAt)
 	default:
 		return "Unsupported screen."
 	}
@@ -1144,6 +1301,78 @@ func renderSkillMarkdown(content string, width int) string {
 		return content
 	}
 	return strings.TrimRight(rendered, "\n")
+}
+
+func (a *App) hasSnapshots() bool {
+	return a.snapshotCount() > 0
+}
+
+func (a *App) snapshotCount() int {
+	if len(a.snapshotRefs) > 0 {
+		return len(a.snapshotRefs)
+	}
+	return len(a.snapshotNames)
+}
+
+func (a *App) renderSnapshots(width, height int) string {
+	if a.rollbackReview != nil {
+		return a.renderRollbackReview(width, height)
+	}
+	if len(a.snapshotRefs) == 0 {
+		return "Saved setups\n\nNo supported Codex or Claude Code snapshots yet.\n\nB create baselines"
+	}
+	lines := []string{"Saved setups", ""}
+	for i, ref := range a.snapshotRefs {
+		prefix := "  "
+		if i == clampIndex(a.snapshotCursor, len(a.snapshotRefs)) {
+			prefix = "> "
+		}
+		lines = append(lines, fmt.Sprintf("%s%s  %s  %s", prefix, FormatAgentMarker(ref.Agent), ref.Name, formatDate(ref.CreatedAt)))
+	}
+	lines = append(lines, "", "enter review changes  B create missing baselines  esc cancel")
+	return fitLines(lines, width, height)
+}
+
+func (a *App) renderRollbackReview(width, height int) string {
+	review := a.rollbackReview
+	lines := []string{
+		"Review Changes",
+		"",
+		fmt.Sprintf("Rollback %s to %s", FormatAgentLabel(review.Agent), review.SnapshotName),
+		"Restore point will be created before apply.",
+		"",
+		"Changes:",
+	}
+	if len(review.Items) == 0 {
+		lines = append(lines, "  No supported changes.")
+	}
+	for _, item := range review.Items {
+		action := ""
+		if item.Action != nil {
+			action = string(*item.Action)
+		}
+		lines = append(lines, fmt.Sprintf("  %s  %s  %s", action, item.ItemType, item.Dest))
+	}
+	if len(review.UnsupportedItems) > 0 {
+		lines = append(lines, "", "Unsupported:")
+		for _, item := range review.UnsupportedItems {
+			lines = append(lines, fmt.Sprintf("  %s  %s  %s", item.Kind, item.SourcePath, item.Reason))
+		}
+	}
+	lines = append(lines, "", "enter apply  esc cancel")
+	return fitLines(lines, width, height)
+}
+
+func fitLines(lines []string, width, height int) string {
+	if width > 0 {
+		for i, line := range lines {
+			lines[i] = TruncateText(line, width)
+		}
+	}
+	if height > 0 && len(lines) > height {
+		lines = lines[:height]
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (a *App) syncSetupConsoleViewports(model *SetupConsoleViewModel, width, height int) {
@@ -1215,13 +1444,172 @@ func (a *App) fetchWorkspaceData() bootMsg {
 	if err != nil {
 		return bootMsg{err: err}
 	}
+	snapshotRefs, err := listSupportedSnapshotRefs(a.runtime.StoreDir)
+	if err != nil {
+		return bootMsg{err: err}
+	}
+	baselineStatus, err := baseline.BuildStatus(a.runtime)
+	if err != nil {
+		return bootMsg{err: err}
+	}
 
 	return bootMsg{
 		evidence:        scanResult.Evidence,
 		timelineEntries: entries,
 		corruptEvents:   corrupt,
 		snapshotNames:   names,
+		snapshotRefs:    snapshotRefs,
+		baselineStatus:  baselineStatus,
 	}
+}
+
+func listSupportedSnapshotRefs(storeDir string) ([]snapshotRef, error) {
+	var refs []snapshotRef
+	for _, agent := range agents.CurrentSupportedIDs() {
+		names, err := store.ListSnapshots(storeDir, &agent)
+		if err != nil {
+			return nil, err
+		}
+		for _, name := range names {
+			snap, err := store.ReadSnapshot(storeDir, name, &agent)
+			if err != nil {
+				return nil, err
+			}
+			refs = append(refs, snapshotRef{Name: name, Agent: agent, CreatedAt: snap.Manifest.CreatedAt})
+		}
+	}
+	sort.Slice(refs, func(i, j int) bool {
+		return refs[i].CreatedAt > refs[j].CreatedAt
+	})
+	return refs, nil
+}
+
+func (a *App) createMissingBaselines() ([]string, error) {
+	status := a.baselineStatus
+	if len(status.Agents) == 0 {
+		built, err := baseline.BuildStatus(a.runtime)
+		if err != nil {
+			return nil, err
+		}
+		status = built
+	}
+
+	scope := types.ScopeUser
+	now := time.Now().UTC()
+	var created []string
+	for _, agentStatus := range status.Agents {
+		if agentStatus.HasBaseline {
+			continue
+		}
+		agent := agentStatus.Agent
+		runtime := a.runtime
+		runtime.Agent = &agent
+		runtime.Scope = &scope
+		runtime.CaptureContent = agents.SupportsContentBackedUserSnapshot(agent, scope)
+		name := fmt.Sprintf("baseline-%s-%s", agent.String(), now.Format("20060102-150405-000000000"))
+		state, err := snapshot.CaptureCurrentState(&runtime, name)
+		if err != nil {
+			return created, err
+		}
+		if err := store.WriteSnapshot(runtime.StoreDir, store.StoreSnapshotFrom(state.Snapshot), &agent); err != nil {
+			return created, err
+		}
+		created = append(created, name)
+	}
+	return created, nil
+}
+
+func (a *App) buildRollbackReview(ref snapshotRef) (*rollbackReview, error) {
+	scope := types.ScopeUser
+	plan, err := restore.BuildRestorePlan(&types.RestoreOptions{
+		SourceSnapshot: ref.Name,
+		ProjectPath:    a.runtime.ProjectPath,
+		HomeDir:        a.runtime.HomeDir,
+		StoreDir:       a.runtime.StoreDir,
+		DryRun:         true,
+		Agent:          &ref.Agent,
+		Scope:          &scope,
+	})
+	if err != nil {
+		return nil, err
+	}
+	parsed := restore.RestoreItemsFromPlan(plan)
+	if len(parsed.Errors) != 0 {
+		return nil, fmt.Errorf("restore preview contains %d parse errors: %s", len(parsed.Errors), parsed.Errors[0].Message)
+	}
+	return &rollbackReview{
+		SnapshotName:     ref.Name,
+		Agent:            ref.Agent,
+		Plan:             plan,
+		Items:            parsed.Items,
+		UnsupportedItems: append([]types.UnsupportedPlanItem(nil), plan.UnsupportedItems...),
+	}, nil
+}
+
+func (a *App) applyRollbackReview(review *rollbackReview) rollbackApplyMsg {
+	createRestorePoint := a.createPreApplyRestorePoint
+	if a.restorePointCreator != nil {
+		createRestorePoint = a.restorePointCreator
+	}
+	restorePoint, err := createRestorePoint(review.Agent)
+	if err != nil {
+		return rollbackApplyMsg{err: fmt.Errorf("failed to create pre-apply restore point: %w", err)}
+	}
+
+	executor := restore.CreateDefaultApplyExecutor()
+	if a.restoreExecutor != nil {
+		executor = a.restoreExecutor
+	}
+	homeDir := a.runtime.HomeDir
+	projectPath := a.runtime.ProjectPath
+	items := append([]types.RestoreItem(nil), review.Items...)
+	summary := restore.ApplyRestoreItems(items, executor, &types.ApplyOptions{
+		FailFast:    true,
+		HomeDir:     &homeDir,
+		ProjectPath: &projectPath,
+	})
+	if summary.Failed != 0 {
+		return rollbackApplyMsg{
+			summary:      summary,
+			restorePoint: restorePoint,
+			err:          fmt.Errorf("rollback apply failed: %d failed", summary.Failed),
+		}
+	}
+	verify := a.verifyRollback(review)
+	return rollbackApplyMsg{
+		data:         a.fetchWorkspaceData(),
+		summary:      summary,
+		restorePoint: restorePoint,
+		verify:       verify,
+	}
+}
+
+func (a *App) createPreApplyRestorePoint(agent types.AgentID) (string, error) {
+	scope := types.ScopeUser
+	runtime := a.runtime
+	runtime.Agent = &agent
+	runtime.Scope = &scope
+	runtime.CaptureContent = agents.SupportsContentBackedUserSnapshot(agent, scope)
+	name := fmt.Sprintf("pre-apply-%s-%s", agent.String(), time.Now().UTC().Format("20060102-150405-000000000"))
+	state, err := snapshot.CaptureCurrentState(&runtime, name)
+	if err != nil {
+		return "", err
+	}
+	if err := store.WriteSnapshot(runtime.StoreDir, store.StoreSnapshotFrom(state.Snapshot), &agent); err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
+func (a *App) verifyRollback(review *rollbackReview) string {
+	next, err := a.buildRollbackReview(snapshotRef{Name: review.SnapshotName, Agent: review.Agent})
+	if err != nil {
+		return "Verification failed: " + err.Error()
+	}
+	if len(next.Plan.Items) == 0 {
+		return "Verified selected baseline."
+	}
+	return fmt.Sprintf("Verification found %d remaining supported changes.", len(next.Plan.Items))
 }
 
 // Run launches the interactive TUI and returns an exit code.

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/qyinm/gandalf/internal/gandalfcore/agents"
+	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
@@ -14,14 +16,8 @@ import (
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
-// VisibleAgents is the stable sidebar agent order.
-var VisibleAgents = []types.AgentID{
-	types.AgentClaudeCode,
-	types.AgentCodex,
-	types.AgentCursor,
-	types.AgentOpencode,
-	types.AgentPiAgent,
-}
+// VisibleAgents is the stable product-visible sidebar agent order.
+var VisibleAgents = agents.CurrentSupportedIDs()
 
 // Screen identifies the active workspace panel.
 type Screen string
@@ -170,6 +166,7 @@ type SetupConsoleViewModel struct {
 	ActiveTab     SetupConsoleTab
 	Tabs          []SetupConsoleTabModel
 	Rows          []SetupConsoleRowModel
+	Baseline      *BaselineStatusViewModel
 	RowOffset     int
 	Search        string
 	SearchInput   string
@@ -193,6 +190,7 @@ type BuildSetupConsoleViewModelInput struct {
 	ExpandedToolID     string
 	PendingAction      *setup.ActionPlan
 	ActionError        string
+	BaselineStatus     *baseline.Status
 }
 
 func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupConsoleViewModel {
@@ -208,6 +206,10 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 		SearchInput:   input.SearchInput,
 		SearchFocused: input.SearchFocused,
 		ActionError:   input.ActionError,
+	}
+	if input.BaselineStatus != nil {
+		baselineModel := BuildBaselineStatusViewModel(*input.BaselineStatus)
+		model.Baseline = &baselineModel
 	}
 
 	if activeTab == SetupConsoleTabMarketplace {
@@ -1370,6 +1372,22 @@ type SaveSetupViewModel struct {
 	NoChanges       bool
 }
 
+type BaselineStatusRowModel struct {
+	Agent       types.AgentID
+	AgentLabel  string
+	AgentMarker string
+	Status      string
+	Baseline    string
+	Changes     string
+	Unsupported string
+}
+
+type BaselineStatusViewModel struct {
+	Rows       []BaselineStatusRowModel
+	HasMissing bool
+	HasChanges bool
+}
+
 type BuildSaveSetupViewModelInput struct {
 	Diff                *diff.GraphDiff
 	HasPreviousSnapshot bool
@@ -1399,6 +1417,36 @@ func BuildSaveSetupViewModel(input BuildSaveSetupViewModelInput) SaveSetupViewMo
 		},
 		NoChanges: noChanges,
 	}
+}
+
+// BuildBaselineStatusViewModel converts core baseline status into compact TUI rows.
+func BuildBaselineStatusViewModel(status baseline.Status) BaselineStatusViewModel {
+	model := BaselineStatusViewModel{Rows: make([]BaselineStatusRowModel, 0, len(status.Agents))}
+	for _, agentStatus := range status.Agents {
+		row := BaselineStatusRowModel{
+			Agent:       agentStatus.Agent,
+			AgentLabel:  FormatAgentLabel(agentStatus.Agent),
+			AgentMarker: FormatAgentMarker(agentStatus.Agent),
+			Baseline:    agentStatus.BaselineName,
+			Changes:     fmt.Sprintf("%d changes", agentStatus.ChangeCount()),
+		}
+		if !agentStatus.HasBaseline {
+			row.Status = "missing baseline"
+			row.Baseline = "-"
+			row.Changes = "-"
+			model.HasMissing = true
+		} else if agentStatus.ChangeCount() == 0 {
+			row.Status = "clean"
+		} else {
+			row.Status = "changed"
+			model.HasChanges = true
+		}
+		if agentStatus.UnsupportedCount > 0 || agentStatus.OmittedContentCount > 0 {
+			row.Unsupported = fmt.Sprintf("%d unsupported, %d omitted", agentStatus.UnsupportedCount, agentStatus.OmittedContentCount)
+		}
+		model.Rows = append(model.Rows, row)
+	}
+	return model
 }
 
 // --- Agent detail view model ---

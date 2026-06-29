@@ -370,3 +370,25 @@ func TestOverlayLinePreservesBackgroundOutsideOverlay(t *testing.T) {
 		t.Fatalf("expected right background to remain: %q", rendered)
 	}
 }
+
+func TestRenderSetupConsoleShowsBaselineStatus(t *testing.T) {
+	view := SetupConsoleView{
+		Tabs: []SetupConsoleTab{{Label: "Hooks", Count: 0, Selected: true}},
+		BaselineRows: []SetupConsoleBaselineRow{
+			{AgentMarker: "CC", Status: "missing baseline", Baseline: "-", Changes: "-"},
+			{AgentMarker: "CX", Status: "changed", Baseline: "baseline-codex", Changes: "2 changes"},
+		},
+		EmptyMessage: "No global hooks found.",
+	}
+
+	rendered := ansi.Strip(RenderSetupConsole(view, 100, 24))
+	if !strings.Contains(rendered, "CC  missing baseline  baseline -") {
+		t.Fatalf("expected missing baseline row:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "CX  changed  baseline baseline-codex  2 changes") {
+		t.Fatalf("expected changed baseline row:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "B baseline") {
+		t.Fatalf("expected baseline key help:\n%s", rendered)
+	}
+}

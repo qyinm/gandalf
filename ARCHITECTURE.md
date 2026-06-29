@@ -1,6 +1,6 @@
 # Gandalf Architecture
 
-Gandalf is a local-first workspace for managing user-global AI coding agent setup. It presents skills, hooks, MCP servers, plugins, and agent marketplace sources in a top-tab terminal setup console, then uses the same normalized evidence model for snapshots, diffs, audits, reports, `.gandalf` bundles, and restore safety workflows.
+Gandalf is a local-first workspace for managing user-global Codex and Claude Code setup. It presents skills, hooks, MCP servers, plugins, agent marketplace sources, and baseline status in a top-tab terminal setup console, then uses the same normalized evidence model for snapshots, diffs, audits, reports, `.gandalf` bundles, and restore safety workflows.
 
 The core architectural rule is simple: scan paths are read-only and policy-aware; write paths are explicit, narrow, and reversible where possible.
 
@@ -39,7 +39,7 @@ New CLI, engine, and TUI behavior lands in Go. The old JavaScript CLI, TUI, and 
 
 - `cmd/gandalf` is the primary CLI (`go build -o bin/gandalf ./cmd/gandalf`). Command wiring lives in `internal/cli`; it exposes scan, snapshot, diff, restore, doctor, report, timeline, bundle, and TUI subcommands.
 - `internal/gandalfcore` holds engine logic: scanners, setup inventory and marketplace source models, store, snapshot, graph, diff, audit, provenance, restore, bundle, timeline, readiness, and report rendering.
-- `internal/tui` is the Bubble Tea presentation layer over typed Go engine APIs. It owns the top-tab setup console interaction state but must not own scan, restore, setup action, or bundle business logic.
+- `internal/tui` is the Bubble Tea presentation layer over typed Go engine APIs. It owns the top-tab setup console interaction state and Review Changes screens but must not own scan, restore, setup action, baseline, or bundle business logic.
 - Release binaries for darwin/linux amd64/arm64 are built with GoReleaser (`.goreleaser.yaml`) on `v*` tags via `.github/workflows/release.yml`.
 - `install.sh` installs the latest stable release binary from GitHub Releases.
 - Homebrew installs use the `qyinm/tap/gandalf` formula generated from GoReleaser into `qyinm/homebrew-tap`.
@@ -60,9 +60,9 @@ The rest of the system derives from that inventory:
 
 ## Scan Pipeline
 
-The scan package builds a scanner context from project path, home directory, and store directory, then executes the registered scanner plugins. The active default scan returns user-global and managed evidence; project-scoped evidence is excluded from the default product path. Target-based scanners declare files or directories to inspect; custom scanners implement direct discovery when an agent needs more than static file targets.
+The scan package builds a scanner context from project path, home directory, and store directory, then executes the registered scanner plugins. The active default scan returns user-global and managed evidence for the current supported agent set; project-scoped evidence is excluded from the default product path. Target-based scanners declare files or directories to inspect; custom scanners implement direct discovery when an agent needs more than static file targets.
 
-Supported built-in scanner modules currently cover Claude Code, Codex, Cursor, OpenCode, and Pi Agent user-global setup surfaces.
+The current product-visible scanner set covers Claude Code and Codex user-global setup surfaces. Legacy scanner implementations for other agents can remain in the repository for compatibility or direct parser tests, but they are not registered in the active default product scan.
 
 Scanner plugins should emit typed evidence without executing referenced MCP commands, hooks, scripts, plugins, or agent tools.
 
@@ -70,7 +70,8 @@ Scanner plugins should emit typed evidence without executing referenced MCP comm
 
 Restore remains conservative:
 
-- planning compares a baseline snapshot to current evidence;
+- Review Changes compares an agent-scoped baseline snapshot to current evidence;
+- apply creates a pre-apply restore point before user-global restore writes;
 - apply requires explicit apply and experimental flags where the command contract requires them;
 - writes are path-confined to declared home and project roots;
 - symlink write targets are refused;

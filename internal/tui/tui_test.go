@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
@@ -234,6 +235,41 @@ func TestFormattersAndSourceRootLabels(t *testing.T) {
 	}
 	if got := tui.FormatInventoryNameWithSource("github", mcpServer); got != "github (project: .mcp.json)" {
 		t.Fatalf("name with source: got %q", got)
+	}
+}
+
+func TestBuildBaselineStatusViewModel(t *testing.T) {
+	model := tui.BuildBaselineStatusViewModel(baseline.Status{
+		Agents: []baseline.AgentStatus{
+			{
+				Agent:               types.AgentClaudeCode,
+				HasBaseline:         false,
+				UnsupportedCount:    2,
+				OmittedContentCount: 1,
+			},
+			{
+				Agent:               types.AgentCodex,
+				HasBaseline:         true,
+				BaselineName:        "baseline-codex",
+				SemanticChangeCount: 1,
+			},
+		},
+	})
+
+	if !model.HasMissing || !model.HasChanges {
+		t.Fatalf("model flags = %#v", model)
+	}
+	if len(model.Rows) != 2 {
+		t.Fatalf("rows = %#v", model.Rows)
+	}
+	if model.Rows[0].Status != "missing baseline" || model.Rows[0].Baseline != "-" {
+		t.Fatalf("missing row = %#v", model.Rows[0])
+	}
+	if model.Rows[0].Unsupported != "2 unsupported, 1 omitted" {
+		t.Fatalf("unsupported label = %q", model.Rows[0].Unsupported)
+	}
+	if model.Rows[1].Status != "changed" || model.Rows[1].Changes != "1 changes" {
+		t.Fatalf("changed row = %#v", model.Rows[1])
 	}
 }
 

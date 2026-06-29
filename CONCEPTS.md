@@ -13,6 +13,9 @@ A portable, rollbackable captured AI agent setup state managed by Gandalf. This 
 ### Global Agent Setup Manager
 The current product direction for Gandalf: a TUI-first manager for user-global agent skills, hooks, MCP servers, and plugins across supported agents. It excludes project-local setup surfaces from the core product scope.
 
+### Current Supported Agent Set
+The product-visible agent boundary for the current Gandalf loop. Gandalf may keep legacy scanners or type constants for compatibility, but the default TUI, CLI help, active scan path, and documentation should only present Codex and Claude Code as currently supported agents until broader support is intentionally reintroduced.
+
 ### Unified Inventory
 The normalized cross-agent setup inventory used by the setup console. It presents skills, hooks, MCP servers, and plugins as global/user setup rows with compact agent identity rather than forcing users through an agent picker first.
 
@@ -41,6 +44,9 @@ The typed category of an evidence record that determines how restore planning an
 
 ### Restore Plan
 The diff-shaped output of comparing a baseline snapshot to current state. Lists planned items with actions (update, delete), risk metadata, and target state—but does not mutate the filesystem until apply.
+
+### Review Changes
+The user-facing preview step before a mutating action applies. Internally it can be backed by a restore plan or action preview, but product language should describe the concrete changes, unsupported items, rollback availability, and required apply confirmation rather than asking users to learn a separate plan concept.
 
 ### Restore Item
 An executable unit derived from a restore plan item. Carries resolved destination path, structured `target_content`, handler `item_type`, and rollback state after apply.

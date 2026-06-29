@@ -46,6 +46,17 @@ func setupConsoleViewFromModel(model SetupConsoleViewModel) views.SetupConsoleVi
 		EmptyMessage:  model.EmptyMessage,
 		ActionError:   model.ActionError,
 	}
+	if model.Baseline != nil {
+		for _, row := range model.Baseline.Rows {
+			view.BaselineRows = append(view.BaselineRows, views.SetupConsoleBaselineRow{
+				AgentMarker: row.AgentMarker,
+				Status:      row.Status,
+				Baseline:    row.Baseline,
+				Changes:     row.Changes,
+				Unsupported: row.Unsupported,
+			})
+		}
+	}
 	for _, tab := range model.Tabs {
 		view.Tabs = append(view.Tabs, views.SetupConsoleTab{
 			Label:    tab.Label,
