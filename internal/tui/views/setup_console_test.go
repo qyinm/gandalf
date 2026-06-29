@@ -204,6 +204,41 @@ func TestRenderSetupConsoleShowsCompactPluginSkillRows(t *testing.T) {
 	}
 }
 
+func TestRenderSetupConsoleShowsPluginRowsWithoutDuplicatePrefix(t *testing.T) {
+	view := SetupConsoleView{
+		ActiveTab: "plugins",
+		Tabs: []SetupConsoleTab{
+			{Label: "Plugins", Count: 2, Selected: true},
+		},
+		Rows: []SetupConsoleRow{
+			{
+				RowKind:     "inventory",
+				AgentLabel:  "Claude Code",
+				AgentMarker: "CC",
+				ObjectKind:  "plugin",
+				Name:        "codex",
+				Selected:    true,
+			},
+			{
+				RowKind:     "inventory",
+				AgentLabel:  "Codex",
+				AgentMarker: "CX",
+				ObjectKind:  "plugin",
+				Name:        "vercel",
+			},
+		},
+	}
+
+	rendered := ansi.Strip(RenderSetupConsole(view, 100, 18))
+	if !strings.Contains(rendered, "codex") || !strings.Contains(rendered, "Claude Code") ||
+		!strings.Contains(rendered, "vercel") || !strings.Contains(rendered, "Codex") {
+		t.Fatalf("expected plugin names with agent origin labels:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "CC plugin") || strings.Contains(rendered, "CX plugin") {
+		t.Fatalf("expected plugin rows without duplicated agent/kind prefix:\n%s", rendered)
+	}
+}
+
 func TestRenderSetupConsoleShowsExpandedSkillRowDetails(t *testing.T) {
 	view := SetupConsoleView{
 		ActiveTab: "skills",

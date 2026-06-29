@@ -428,6 +428,7 @@ func isMCPServerTab(activeTab string) bool {
 
 func isAgentOriginCompactTab(activeTab string) bool {
 	return strings.EqualFold(activeTab, "hooks") ||
+		strings.EqualFold(activeTab, "plugins") ||
 		strings.EqualFold(activeTab, "marketplace") ||
 		isSkillsTab(activeTab) ||
 		isMCPServerTab(activeTab)
