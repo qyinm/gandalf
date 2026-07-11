@@ -57,13 +57,13 @@ type HomeChangeModel struct {
 
 // BuildHomeViewModel turns baseline drift into a compact product-level summary.
 func BuildHomeViewModel(status baseline.Status) HomeViewModel {
-	model := HomeViewModel{HasBaseline: len(status.Agents) > 0}
+	model := HomeViewModel{}
 	for _, agentStatus := range status.Agents {
 		if !agentStatus.HasBaseline {
-			model.HasBaseline = false
 			model.HasMissingBaseline = true
 			continue
 		}
+		model.HasBaseline = true
 		if agentStatus.BaselineCreatedAt > model.LastSnapshotAt {
 			model.LastSnapshotAt = agentStatus.BaselineCreatedAt
 		}
