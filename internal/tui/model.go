@@ -44,6 +44,7 @@ type HomeViewModel struct {
 	HooksChanged       int
 	MCPServersChanged  int
 	PluginsChanged     int
+	OtherChanged       int
 	TopChanges         []HomeChangeModel
 }
 
@@ -66,7 +67,7 @@ func BuildHomeViewModel(status baseline.Status) HomeViewModel {
 		if agentStatus.BaselineCreatedAt > model.LastSnapshotAt {
 			model.LastSnapshotAt = agentStatus.BaselineCreatedAt
 		}
-		model.TotalChanges += agentStatus.ChangeCount()
+		model.TotalChanges += len(agentStatus.Diff.SemanticChanges)
 		for _, change := range agentStatus.Diff.SemanticChanges {
 			switch change.EntityKind {
 			case types.KindSkill:
@@ -77,6 +78,8 @@ func BuildHomeViewModel(status baseline.Status) HomeViewModel {
 				model.MCPServersChanged++
 			case types.KindExtension:
 				model.PluginsChanged++
+			default:
+				model.OtherChanged++
 			}
 			if len(model.TopChanges) < 5 {
 				model.TopChanges = append(model.TopChanges, HomeChangeModel{

@@ -300,10 +300,11 @@ func TestBuildHomeViewModelSummarizesPresentBaselines(t *testing.T) {
 		},
 		{
 			Agent: types.AgentCodex, HasBaseline: true, BaselineCreatedAt: "2026-07-12T01:00:00Z",
-			SemanticChangeCount: 2, RawChangeCount: 1,
+			SemanticChangeCount: 3, RawChangeCount: 7,
 			Diff: diff.GraphDiff{SemanticChanges: []diff.SemanticChange{
 				{Code: diff.SemanticMcpChanged, EntityKind: types.KindMcpServer, EntityName: "posthog"},
 				{Code: diff.SemanticAgentConfigChanged, EntityKind: types.KindExtension, EntityName: "linear"},
+				{Code: diff.SemanticAgentConfigChanged, EntityKind: types.KindAgentConfig, EntityName: "config"},
 			}},
 		},
 	}})
@@ -316,7 +317,13 @@ func TestBuildHomeViewModelSummarizesPresentBaselines(t *testing.T) {
 	if model.SkillsChanged != 1 || model.HooksChanged != 1 || model.MCPServersChanged != 1 || model.PluginsChanged != 1 {
 		t.Fatalf("counts = %#v", model)
 	}
-	if len(model.TopChanges) != 4 || model.TopChanges[0].Action != "added" || model.TopChanges[2].Name != "posthog" {
+	if model.OtherChanged != 1 {
+		t.Fatalf("other count = %d", model.OtherChanged)
+	}
+	if got := model.SkillsChanged + model.HooksChanged + model.MCPServersChanged + model.PluginsChanged + model.OtherChanged; got != model.TotalChanges {
+		t.Fatalf("category total = %d, home total = %d", got, model.TotalChanges)
+	}
+	if len(model.TopChanges) != 5 || model.TopChanges[0].Action != "added" || model.TopChanges[2].Name != "posthog" {
 		t.Fatalf("top changes = %#v", model.TopChanges)
 	}
 }
