@@ -1,6 +1,8 @@
 package views
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -41,14 +43,47 @@ func RenderHeader(model HeaderView, width int) string {
 	left := title
 	gap := width - lipgloss.Width(left) - lipgloss.Width(chipLine)
 	if gap < 2 {
-		// Stack on narrow terminals.
+		// Stack on narrow terminals and collapse agent chips into one truthful
+		// summary instead of truncating the last agent off-screen.
 		lines := []string{truncate(left, width)}
 		if chipLine != "" {
-			lines = append(lines, truncate(chipLine, width))
+			lines = append(lines, truncate(compactHeaderChipSummary(model.Chips), width))
 		}
 		return strings.Join(lines, "\n")
 	}
 	return truncate(left+strings.Repeat(" ", gap)+chipLine, width)
+}
+
+func compactHeaderChipSummary(chips []HeaderChip) string {
+	total := 0
+	hasMissing := false
+	for _, chip := range chips {
+		if chip.State == "missing" {
+			hasMissing = true
+		}
+		if chip.State != "changed" {
+			continue
+		}
+		fields := strings.Fields(chip.Detail)
+		if len(fields) == 0 {
+			continue
+		}
+		count, err := strconv.Atoi(fields[0])
+		if err == nil {
+			total += count
+		}
+	}
+	if total > 0 {
+		label := "changes"
+		if total == 1 {
+			label = "change"
+		}
+		return driftStyle("changed").Render(fmt.Sprintf("▲ %d %s", total, label))
+	}
+	if hasMissing {
+		return driftStyle("missing").Render("○ no baseline")
+	}
+	return driftStyle("clean").Render("● clean")
 }
 
 func driftDot(state string) string {

@@ -2182,12 +2182,12 @@ func BuildHeaderChips(status baseline.Status) []HeaderChipModel {
 		case !agentStatus.HasBaseline:
 			chip.State = "missing"
 			chip.Detail = "no baseline"
-		case agentStatus.ChangeCount() == 0:
+		case agentStatus.SemanticChangeCount == 0:
 			chip.State = "clean"
 			chip.Detail = "clean"
 		default:
 			chip.State = "changed"
-			count := agentStatus.ChangeCount()
+			count := agentStatus.SemanticChangeCount
 			suffix := "s"
 			if count == 1 {
 				suffix = ""

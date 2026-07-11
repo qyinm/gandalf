@@ -1,0 +1,44 @@
+package views
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+func TestRenderHeaderCollapsesChangedAgentsAtNarrowWidths(t *testing.T) {
+	model := HeaderView{
+		Title: "Gandalf",
+		Scope: "/Users/hippoo",
+		Chips: []HeaderChip{
+			{AgentMarker: "CC", State: "changed", Detail: "64 changes"},
+			{AgentMarker: "CX", State: "changed", Detail: "645 changes"},
+		},
+	}
+	for _, width := range []int{40, 24} {
+		rendered := RenderHeader(model, width)
+		for _, line := range strings.Split(rendered, "\n") {
+			if got := lipgloss.Width(line); got > width {
+				t.Fatalf("width %d: line is %d cells: %q", width, got, line)
+			}
+		}
+		if !strings.Contains(rendered, "709 changes") {
+			t.Fatalf("width %d should show aggregate drift:\n%s", width, rendered)
+		}
+		if strings.Contains(rendered, "CC") || strings.Contains(rendered, "CX") {
+			t.Fatalf("width %d should omit individual chips:\n%s", width, rendered)
+		}
+	}
+}
+
+func TestRenderHeaderPreservesMissingBaselineWhenNarrow(t *testing.T) {
+	rendered := RenderHeader(HeaderView{
+		Title: "Gandalf",
+		Scope: "/Users/hippoo",
+		Chips: []HeaderChip{{AgentMarker: "CC", State: "missing", Detail: "no baseline"}},
+	}, 24)
+	if !strings.Contains(rendered, "no baseline") {
+		t.Fatalf("missing baseline summary:\n%s", rendered)
+	}
+}
