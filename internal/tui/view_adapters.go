@@ -2,6 +2,21 @@ package tui
 
 import "github.com/qyinm/gandalf/internal/tui/views"
 
+func homeViewFromModel(model HomeViewModel, now string) views.HomeView {
+	view := views.HomeView{
+		HasBaseline: model.HasBaseline, HasMissingBaseline: model.HasMissingBaseline,
+		LastSnapshot: now, TotalChanges: model.TotalChanges,
+		SkillsChanged: model.SkillsChanged, HooksChanged: model.HooksChanged,
+		MCPServersChanged: model.MCPServersChanged, PluginsChanged: model.PluginsChanged,
+	}
+	for _, change := range model.TopChanges {
+		view.TopChanges = append(view.TopChanges, views.HomeChange{
+			Agent: change.AgentLabel, Kind: change.Kind, Name: change.Name, Action: change.Action,
+		})
+	}
+	return view
+}
+
 func setupConsoleViewFromModel(model SetupConsoleViewModel) views.SetupConsoleView {
 	view := views.SetupConsoleView{
 		ActiveTab:     string(model.ActiveTab),

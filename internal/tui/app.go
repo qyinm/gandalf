@@ -1505,6 +1505,13 @@ func (a *App) filteredTimeline() []types.TimelineEntry {
 func (a *App) renderContent(width, height int) string {
 	now := time.Now()
 	switch a.screen {
+	case ScreenHome:
+		model := BuildHomeViewModel(a.baselineStatus)
+		lastSnapshot := "-"
+		if model.LastSnapshotAt != "" {
+			lastSnapshot = FormatTimelineTimestamp(model.LastSnapshotAt, now)
+		}
+		return views.RenderHome(homeViewFromModel(model, lastSnapshot), width, height)
 	case ScreenInventory:
 		model := a.currentSetupConsoleViewModel()
 		a.syncSetupConsoleViewports(&model, width, height)

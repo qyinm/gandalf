@@ -26,6 +26,26 @@ func TestNewAppOpensChangesFirstHomeAndKeepsSetupReachable(t *testing.T) {
 	}
 }
 
+func TestHomeViewMakesDriftAndSafeActionsVisible(t *testing.T) {
+	app := NewApp(makeTestRuntime(t))
+	app.ready = true
+	app.width = 100
+	app.height = 24
+	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{{
+		Agent: types.AgentCodex, HasBaseline: true, BaselineCreatedAt: "2026-07-12T00:00:00Z",
+		SemanticChangeCount: 1,
+		Diff: diff.GraphDiff{SemanticChanges: []diff.SemanticChange{{
+			Code: diff.SemanticSkillAdded, EntityKind: types.KindSkill, EntityName: "review",
+		}}},
+	}}}
+	view := app.View()
+	for _, want := range []string{"What changed", "1 change since", "Skills 1", "review", "v review changes", "R rollback to baseline", "i setup console"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("missing %q:\n%s", want, view)
+		}
+	}
+}
+
 func TestHomeReviewFocusesChangedEnvironmentWithoutMutation(t *testing.T) {
 	app := NewApp(makeTestRuntime(t))
 	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{
