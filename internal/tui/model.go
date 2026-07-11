@@ -23,6 +23,7 @@ var VisibleAgents = agents.CurrentSupportedIDs()
 type Screen string
 
 const (
+	ScreenHome         Screen = "home"
 	ScreenInventory    Screen = "inventory"
 	ScreenTimeline     Screen = "timeline"
 	ScreenSnapshots    Screen = "snapshots"
@@ -32,6 +33,73 @@ const (
 	ScreenCompare      Screen = "compare"
 	ScreenSaveSetup    Screen = "save-setup"
 )
+
+// HomeViewModel is the changes-first summary shown when Gandalf opens.
+type HomeViewModel struct {
+	HasBaseline        bool
+	HasMissingBaseline bool
+	LastSnapshotAt     string
+	TotalChanges       int
+	SkillsChanged      int
+	HooksChanged       int
+	MCPServersChanged  int
+	PluginsChanged     int
+	TopChanges         []HomeChangeModel
+}
+
+type HomeChangeModel struct {
+	AgentLabel string
+	Kind       string
+	Name       string
+	Action     string
+}
+
+// BuildHomeViewModel turns baseline drift into a compact product-level summary.
+func BuildHomeViewModel(status baseline.Status) HomeViewModel {
+	model := HomeViewModel{HasBaseline: len(status.Agents) > 0}
+	for _, agentStatus := range status.Agents {
+		if !agentStatus.HasBaseline {
+			model.HasBaseline = false
+			model.HasMissingBaseline = true
+			continue
+		}
+		if agentStatus.BaselineCreatedAt > model.LastSnapshotAt {
+			model.LastSnapshotAt = agentStatus.BaselineCreatedAt
+		}
+		model.TotalChanges += agentStatus.ChangeCount()
+		for _, change := range agentStatus.Diff.SemanticChanges {
+			switch change.EntityKind {
+			case types.KindSkill:
+				model.SkillsChanged++
+			case types.KindHook:
+				model.HooksChanged++
+			case types.KindMcpServer:
+				model.MCPServersChanged++
+			case types.KindExtension:
+				model.PluginsChanged++
+			}
+			if len(model.TopChanges) < 5 {
+				model.TopChanges = append(model.TopChanges, HomeChangeModel{
+					AgentLabel: FormatAgentLabel(agentStatus.Agent),
+					Kind:       change.EntityKind.String(),
+					Name:       change.EntityName,
+					Action:     homeChangeAction(change.Code),
+				})
+			}
+		}
+	}
+	return model
+}
+
+func homeChangeAction(code diff.SemanticChangeCode) string {
+	value := strings.ToLower(code.String())
+	for _, action := range []string{"added", "removed", "changed", "appeared"} {
+		if strings.Contains(value, action) {
+			return action
+		}
+	}
+	return "changed"
+}
 
 const (
 	DefaultProfile      = "default"

@@ -275,6 +275,52 @@ func TestBuildBaselineStatusViewModel(t *testing.T) {
 	}
 }
 
+func TestBuildHomeViewModelWithoutBaseline(t *testing.T) {
+	model := tui.BuildHomeViewModel(baseline.Status{Agents: []baseline.AgentStatus{
+		{Agent: types.AgentClaudeCode},
+		{Agent: types.AgentCodex},
+	}})
+	if model.HasBaseline || !model.HasMissingBaseline {
+		t.Fatalf("baseline state = %#v", model)
+	}
+	if model.TotalChanges != 0 || model.LastSnapshotAt != "" || len(model.TopChanges) != 0 {
+		t.Fatalf("empty home state = %#v", model)
+	}
+}
+
+func TestBuildHomeViewModelSummarizesPresentBaselines(t *testing.T) {
+	model := tui.BuildHomeViewModel(baseline.Status{Agents: []baseline.AgentStatus{
+		{
+			Agent: types.AgentClaudeCode, HasBaseline: true, BaselineCreatedAt: "2026-07-12T00:00:00Z",
+			SemanticChangeCount: 2,
+			Diff: diff.GraphDiff{SemanticChanges: []diff.SemanticChange{
+				{Code: diff.SemanticSkillAdded, EntityKind: types.KindSkill, EntityName: "review"},
+				{Code: diff.SemanticHookChanged, EntityKind: types.KindHook, EntityName: "format"},
+			}},
+		},
+		{
+			Agent: types.AgentCodex, HasBaseline: true, BaselineCreatedAt: "2026-07-12T01:00:00Z",
+			SemanticChangeCount: 2, RawChangeCount: 1,
+			Diff: diff.GraphDiff{SemanticChanges: []diff.SemanticChange{
+				{Code: diff.SemanticMcpChanged, EntityKind: types.KindMcpServer, EntityName: "posthog"},
+				{Code: diff.SemanticAgentConfigChanged, EntityKind: types.KindExtension, EntityName: "linear"},
+			}},
+		},
+	}})
+	if !model.HasBaseline || model.HasMissingBaseline {
+		t.Fatalf("baseline state = %#v", model)
+	}
+	if model.LastSnapshotAt != "2026-07-12T01:00:00Z" || model.TotalChanges != 5 {
+		t.Fatalf("summary = %#v", model)
+	}
+	if model.SkillsChanged != 1 || model.HooksChanged != 1 || model.MCPServersChanged != 1 || model.PluginsChanged != 1 {
+		t.Fatalf("counts = %#v", model)
+	}
+	if len(model.TopChanges) != 4 || model.TopChanges[0].Action != "added" || model.TopChanges[2].Name != "posthog" {
+		t.Fatalf("top changes = %#v", model.TopChanges)
+	}
+}
+
 func TestTimelineCurrentSetupSourceRootRows(t *testing.T) {
 	model := tui.BuildCurrentSetupSummaryModel(tui.BuildCurrentSetupSummaryInput{
 		AgentFilter: nil,
