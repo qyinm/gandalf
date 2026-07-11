@@ -15,6 +15,47 @@ import (
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
+func TestNewAppOpensChangesFirstHomeAndKeepsSetupReachable(t *testing.T) {
+	app := NewApp(makeTestRuntime(t))
+	if app.screen != ScreenHome {
+		t.Fatalf("initial screen = %q", app.screen)
+	}
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
+	if app.screen != ScreenInventory {
+		t.Fatalf("setup screen = %q", app.screen)
+	}
+}
+
+func TestHomeReviewFocusesChangedEnvironmentWithoutMutation(t *testing.T) {
+	app := NewApp(makeTestRuntime(t))
+	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{
+		{Agent: types.AgentClaudeCode, HasBaseline: true},
+		{Agent: types.AgentCodex, HasBaseline: true, SemanticChangeCount: 1},
+	}}
+	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
+	if quit || cmd != nil || app.screen != ScreenEnvironments || app.environments.agentCursor != 1 {
+		t.Fatalf("review route: screen=%q cursor=%d cmd=%v quit=%v", app.screen, app.environments.agentCursor, cmd != nil, quit)
+	}
+	if app.rollbackReview != nil {
+		t.Fatal("review navigation must not prepare or apply rollback")
+	}
+}
+
+func TestHomeRollbackStopsAtReviewChanges(t *testing.T) {
+	app := NewApp(makeTestRuntime(t))
+	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{{
+		Agent: types.AgentCodex, HasBaseline: true, SemanticChangeCount: 1,
+	}}}
+	app.snapshotRefs = []snapshotRef{{Name: "baseline-codex", Agent: types.AgentCodex}}
+	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	if quit || cmd == nil || app.screen != ScreenSnapshots {
+		t.Fatalf("rollback route: screen=%q cmd=%v quit=%v", app.screen, cmd != nil, quit)
+	}
+	if app.rollbackReview != nil {
+		t.Fatal("rollback must wait for the Review Changes command result")
+	}
+}
+
 func TestSkillsEnterOpensMarkdownViewerUnavailableWhenNoEntrypointExists(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newInventoryTestApp(t, runtime)
@@ -1050,6 +1091,7 @@ func newInventoryTestApp(t *testing.T, runtime types.RuntimeOptions) *App {
 	t.Helper()
 	name := "review"
 	app := NewApp(runtime)
+	app.screen = ScreenInventory
 	app.activeSetupTab = SetupConsoleTabSkills
 	app.ready = true
 	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
@@ -1067,6 +1109,7 @@ func newHookInventoryTestApp(t *testing.T, runtime types.RuntimeOptions) *App {
 	t.Helper()
 	name := "session_start"
 	app := NewApp(runtime)
+	app.screen = ScreenInventory
 	app.activeSetupTab = SetupConsoleTabHooks
 	app.ready = true
 	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
