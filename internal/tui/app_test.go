@@ -39,7 +39,7 @@ func TestHomeViewMakesDriftAndSafeActionsVisible(t *testing.T) {
 		}}},
 	}}}
 	view := app.View()
-	for _, want := range []string{"What changed", "1 change since", "Skills 1", "review", "v review changes", "R rollback to baseline", "i setup console"} {
+	for _, want := range []string{"1 setup object changed", "since Today", "skills 1", "+ review", "[v] review", "[R] rollback", "[i] setup"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("missing %q:\n%s", want, view)
 		}

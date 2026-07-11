@@ -288,6 +288,18 @@ func TestBuildHomeViewModelWithoutBaseline(t *testing.T) {
 	}
 }
 
+func TestBuildHomeViewModelKeepsAvailableDriftWithPartialBaselineCoverage(t *testing.T) {
+	model := tui.BuildHomeViewModel(baseline.Status{Agents: []baseline.AgentStatus{
+		{Agent: types.AgentClaudeCode},
+		{Agent: types.AgentCodex, HasBaseline: true, Diff: diff.GraphDiff{SemanticChanges: []diff.SemanticChange{{
+			Code: diff.SemanticSkillAdded, EntityKind: types.KindSkill, EntityName: "review",
+		}}}},
+	}})
+	if !model.HasBaseline || !model.HasMissingBaseline || model.TotalChanges != 1 {
+		t.Fatalf("partial baseline home = %#v", model)
+	}
+}
+
 func TestBuildHomeViewModelSummarizesPresentBaselines(t *testing.T) {
 	model := tui.BuildHomeViewModel(baseline.Status{Agents: []baseline.AgentStatus{
 		{

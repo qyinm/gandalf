@@ -7,7 +7,7 @@ func homeViewFromModel(model HomeViewModel, now string) views.HomeView {
 		HasBaseline: model.HasBaseline, HasMissingBaseline: model.HasMissingBaseline,
 		LastSnapshot: now, TotalChanges: model.TotalChanges,
 		SkillsChanged: model.SkillsChanged, HooksChanged: model.HooksChanged,
-		MCPServersChanged: model.MCPServersChanged, PluginsChanged: model.PluginsChanged,
+		MCPServersChanged: model.MCPServersChanged, PluginsChanged: model.PluginsChanged, OtherChanged: model.OtherChanged,
 	}
 	for _, change := range model.TopChanges {
 		view.TopChanges = append(view.TopChanges, views.HomeChange{

@@ -15,6 +15,7 @@ type HomeView struct {
 	HooksChanged       int
 	MCPServersChanged  int
 	PluginsChanged     int
+	OtherChanged       int
 	TopChanges         []HomeChange
 }
 
@@ -26,43 +27,87 @@ type HomeChange struct {
 }
 
 func RenderHome(model HomeView, width, height int) string {
-	lines := []string{titleStyle.Render("What changed")}
+	if width < 1 {
+		width = 1
+	}
 	if !model.HasBaseline {
-		lines = append(lines,
+		return renderHomeLines([]string{
+			labelStyle.Render("○ No baseline yet"),
+			mutedStyle.Render("Capture a baseline to measure setup drift."),
 			"",
-			labelStyle.Render("No baseline yet"),
-			mutedStyle.Render("Capture a baseline before Gandalf can show drift."),
-			"",
-			"B capture baseline   i setup console   r rescan   q quit",
-		)
-		return fitHeight(strings.Join(lines, "\n"), height)
+			"[B] capture baseline  [i] setup",
+			"[r] rescan  [q] quit",
+		}, width, height)
 	}
 
-	changeLabel := "changes"
+	narrow := width < 60
+	short := height <= 12
+	objectLabel := "objects"
 	if model.TotalChanges == 1 {
-		changeLabel = "change"
+		objectLabel = "object"
 	}
-	state := fmt.Sprintf("%d %s since %s", model.TotalChanges, changeLabel, model.LastSnapshot)
+	state := fmt.Sprintf("▲ %d setup %s changed", model.TotalChanges, objectLabel)
 	if model.TotalChanges == 0 {
-		state = "No changes since " + model.LastSnapshot
+		state = "● No setup objects changed"
 	}
-	lines = append(lines, "", labelStyle.Render(state))
+	lines := []string{labelStyle.Render(state), mutedStyle.Render("since " + model.LastSnapshot)}
 	if model.HasMissingBaseline {
-		lines = append(lines, mutedStyle.Render("Some supported agents do not have a baseline yet."))
+		lines = append(lines, mutedStyle.Render("Some agents have no baseline."))
 	}
-	lines = append(lines,
-		"",
-		fmt.Sprintf("Skills %d   Hooks %d   MCP %d   Plugins %d", model.SkillsChanged, model.HooksChanged, model.MCPServersChanged, model.PluginsChanged),
-		"",
-		labelStyle.Render("Top changes"),
-	)
-	if len(model.TopChanges) == 0 {
-		lines = append(lines, mutedStyle.Render("  Current setup matches the baseline."))
+
+	if narrow {
+		lines = append(lines,
+			fmt.Sprintf("skills %d · hooks %d", model.SkillsChanged, model.HooksChanged),
+			fmt.Sprintf("mcp %d · plugins %d · other %d", model.MCPServersChanged, model.PluginsChanged, model.OtherChanged),
+		)
 	} else {
-		for _, change := range model.TopChanges {
-			lines = append(lines, truncate(fmt.Sprintf("  %s  %s %s  %s", change.Agent, change.Action, change.Kind, change.Name), width))
+		lines = append(lines, "", fmt.Sprintf(
+			"skills %d · hooks %d · mcp %d · plugins %d · other %d",
+			model.SkillsChanged, model.HooksChanged, model.MCPServersChanged, model.PluginsChanged, model.OtherChanged,
+		))
+	}
+
+	limit := 5
+	if short {
+		limit = 2
+	}
+	if len(model.TopChanges) > 0 && limit > 0 {
+		lines = append(lines, "")
+		for i, change := range model.TopChanges {
+			if i >= limit {
+				break
+			}
+			row := fmt.Sprintf("%s %s", homeChangeMarker(change.Action), change.Name)
+			if !narrow {
+				row += fmt.Sprintf("  %s · %s", change.Agent, change.Kind)
+			}
+			lines = append(lines, row)
 		}
 	}
-	lines = append(lines, "", "v review changes   R rollback to baseline   i setup console   r rescan   q quit")
+
+	lines = append(lines, "")
+	if narrow {
+		lines = append(lines, "[v] review  [i] setup", "[?] more")
+	} else {
+		lines = append(lines, "[v] review  [R] rollback  [i] setup  [r] rescan  [q] quit")
+	}
+	return renderHomeLines(lines, width, height)
+}
+
+func homeChangeMarker(action string) string {
+	switch action {
+	case "added", "appeared":
+		return "+"
+	case "removed":
+		return "-"
+	default:
+		return "~"
+	}
+}
+
+func renderHomeLines(lines []string, width, height int) string {
+	for i := range lines {
+		lines[i] = truncate(lines[i], width)
+	}
 	return fitHeight(strings.Join(lines, "\n"), height)
 }
