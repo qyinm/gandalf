@@ -174,7 +174,7 @@ func NewApp(runtime types.RuntimeOptions) *App {
 	setupState := newSetupConsoleState()
 	return &App{
 		runtime:         runtime,
-		screen:          ScreenInventory,
+		screen:          ScreenHome,
 		selectedProfile: DefaultProfile,
 		inventoryFocus:  true,
 		activeSetupTab:  SetupConsoleTabHooks,
@@ -512,6 +512,12 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.actionError = ""
 		}
 	case "v":
+		if a.screen == ScreenHome {
+			a.focusFirstChangedEnvironment()
+			a.screen = ScreenEnvironments
+			a.actionError = ""
+			return nil, false
+		}
 		if a.screen == ScreenEnvironments {
 			a.environments.toggleMode()
 			return nil, false
@@ -533,6 +539,10 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return a.saveFocusedEnvironment(), false
 		}
 	case "R":
+		if a.screen == ScreenHome {
+			a.focusFirstChangedEnvironment()
+			return a.restoreFocusedEnvironment(), false
+		}
 		if a.screen == ScreenEnvironments {
 			return a.restoreFocusedEnvironment(), false
 		}
@@ -623,6 +633,23 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 	}
 	return nil, false
+}
+
+func (a *App) focusFirstChangedEnvironment() {
+	a.environments.ensure()
+	for i, status := range a.baselineStatus.Agents {
+		if status.HasBaseline && status.ChangeCount() > 0 {
+			a.environments.agentCursor = i
+			return
+		}
+	}
+	for i, status := range a.baselineStatus.Agents {
+		if status.HasBaseline {
+			a.environments.agentCursor = i
+			return
+		}
+	}
+	a.environments.agentCursor = 0
 }
 
 func (a *App) handleSetupSearchKey(msg tea.KeyMsg) (tea.Cmd, bool) {
