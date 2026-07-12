@@ -1,15 +1,11 @@
 <h1 align="center">Gandalf</h1>
 
 <p align="center">
-  <img alt="Gandalf - AI agent setup control console" src="https://shieldcn.dev/header/surface.svg?title=Gandalf&subtitle=AI%20agent%20setup%20control%20console&align=center">
+  <img alt="Gandalf — inspect, review, and roll back AI agent setup" src="./docs/public/gandalf-readme-hero.png" width="1200">
 </p>
 
 <p align="center">
   <strong>See what your agents changed. Review before apply. Roll back safely.</strong>
-</p>
-
-<p align="center">
-  에이전트가 무엇을 바꿨는지 확인하세요. 적용 전에 검토하세요. 안전하게 되돌리세요.
 </p>
 
 <p align="center">
