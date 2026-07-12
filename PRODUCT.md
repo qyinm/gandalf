@@ -66,6 +66,22 @@ Korean:
 
 > 내 Mac의 AI 에이전트 설정을 확인하고, 에이전트 네이티브 소스를 살펴보고, 검토된 변경만 적용하세요.
 
+## Public Positioning Lock
+
+Pain-first hero:
+
+> See what your agents changed. Review before apply. Roll back safely.
+
+Korean:
+
+> 에이전트가 무엇을 바꿨는지 확인하세요. 적용 전에 검토하세요. 안전하게 되돌리세요.
+
+Competitive FAQ:
+
+- **Not a sync tool.** Gandalf does not sync Claude Code with Codex or synchronize setup across machines; it gives you reviewed local control over each supported agent's user-global setup.
+- **Not a marketplace.** Gandalf browses entries from agent-native sources, but it does not own, certify, or replace those catalogs.
+- **Not multi-tool skill fan-out.** Gandalf does not broadcast a skill or action across agents; every available mutation is scoped, reviewed, and backed by a concrete provider.
+
 ## Product Thesis
 
 AI coding agents are becoming part of a developer's local operating environment. For the current loop, Gandalf focuses on Codex and Claude Code: global config, MCP setup, skills, hooks, permissions, plugins, marketplace/source metadata, and env key inventory together form a real setup layer.
