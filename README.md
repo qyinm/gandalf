@@ -5,12 +5,16 @@
 </p>
 
 <p align="center">
-  <strong>Local control console for AI agent setup.</strong>
+  <strong>See what your agents changed. Review before apply. Roll back safely.</strong>
 </p>
 
 <p align="center">
-  Inspect installed capabilities, browse agent-native marketplace/source entries, and run reviewed
-  provider-backed changes for the user-global setup layer Git does not track.
+  에이전트가 무엇을 바꿨는지 확인하세요. 적용 전에 검토하세요. 안전하게 되돌리세요.
+</p>
+
+<p align="center">
+  Gandalf lets developers inspect local AI agent setup, browse agent-native marketplace/source entries,
+  and apply only reviewed provider-backed changes.
 </p>
 
 <p align="center">
@@ -25,6 +29,7 @@
 ## Contents
 
 - [Why Gandalf](#why-gandalf)
+- [What Gandalf Is Not](#what-gandalf-is-not)
 - [Highlights](#highlights)
 - [Install](#install)
 - [Quick Start](#quick-start)
@@ -35,7 +40,9 @@
 
 ## Why Gandalf
 
-Gandalf is a local control console for AI agent setup: it inspects installed capabilities, browses agent-native marketplace/source entries, and runs reviewed provider-backed changes.
+See what your agents changed. Review before apply. Roll back safely.
+
+Gandalf lets developers inspect local AI agent setup, browse agent-native marketplace/source entries, and apply only reviewed provider-backed changes.
 
 Agent power users constantly change their local environment:
 
@@ -54,6 +61,12 @@ gandalf diff baseline current --agent codex --scope user --project .
 ```
 
 Use it before you let an agent change config, install skills, edit hooks, or rewrite setup instructions. User-global setup is the active product scope; project-local setup files are outside the current management workflow.
+
+## What Gandalf Is Not
+
+- **Not a sync tool.** Gandalf does not sync Claude Code with Codex or synchronize setup across machines; it gives you reviewed local control over each supported agent's user-global setup.
+- **Not a marketplace.** Gandalf browses entries from agent-native sources, but it does not own, certify, or replace those catalogs.
+- **Not multi-tool skill fan-out.** Gandalf does not broadcast a skill or action across agents; every available mutation is scoped, reviewed, and backed by a concrete provider.
 
 ## Highlights
 
