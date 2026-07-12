@@ -25,6 +25,11 @@ The normalized cross-agent setup inventory used by the setup console. It present
 ### Setup Console
 The current target information structure for Gandalf's default TUI. It uses top-level setup tabs for hooks, plugins, agent-native marketplace/source browsing, skills, and MCP servers while preserving cross-agent rows inside each tab.
 
+### Changes-First Home
+The default Gandalf TUI surface that summarizes drift from the latest supported baselines before users enter inventory browsing or recovery flows.
+
+It is read-only: Review opens the detailed environment diff, while rollback must enter Review Changes before apply.
+
 ### Environment Diff Surface
 A TUI-visible unit of environment drift for one semantic setup object or raw source artifact. It exists so semantic object changes and raw source changes both remain navigable and cannot be hidden behind a clean summary.
 
