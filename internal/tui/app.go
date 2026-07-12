@@ -375,8 +375,8 @@ func (a *App) View() string {
 	}
 
 	contentWidth := a.width
-	if contentWidth < 40 {
-		contentWidth = 40
+	if contentWidth < 1 {
+		contentWidth = 1
 	}
 	contentHeight := a.height
 
@@ -425,6 +425,8 @@ func (a *App) headerView() views.HeaderView {
 			AgentMarker: chip.AgentMarker,
 			State:       chip.State,
 			Detail:      chip.Detail,
+			ChangeCount: chip.ChangeCount,
+			SourceDrift: chip.SourceDrift,
 		})
 	}
 	return views.HeaderView{
@@ -487,7 +489,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return rescanMsg(data)
 		}, false
 	case "B":
-		if a.screen == ScreenInventory && !a.hasPendingSetupReview() {
+		if (a.screen == ScreenHome || a.screen == ScreenInventory) && !a.hasPendingSetupReview() {
 			return func() tea.Msg {
 				created, err := a.createMissingBaselines()
 				if err != nil {
@@ -638,7 +640,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 func (a *App) focusFirstChangedEnvironment() {
 	a.environments.ensure()
 	for i, status := range a.baselineStatus.Agents {
-		if status.HasBaseline && status.ChangeCount() > 0 {
+		if status.HasBaseline && status.SemanticChangeCount > 0 {
 			a.environments.agentCursor = i
 			return
 		}

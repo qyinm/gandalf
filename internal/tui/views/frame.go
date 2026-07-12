@@ -2,7 +2,6 @@ package views
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -13,6 +12,8 @@ type HeaderChip struct {
 	AgentMarker string
 	State       string // "clean" | "changed" | "missing"
 	Detail      string // e.g. "clean", "2 changes", "no baseline"
+	ChangeCount int
+	SourceDrift bool
 }
 
 // HeaderView is the persistent top frame: app identity, scope, and per-agent drift.
@@ -57,23 +58,21 @@ func RenderHeader(model HeaderView, width int) string {
 func compactHeaderChipSummary(chips []HeaderChip) string {
 	total := 0
 	hasMissing := false
+	hasSourceDrift := false
 	for _, chip := range chips {
 		if chip.State == "missing" {
 			hasMissing = true
 		}
-		if chip.State != "changed" {
-			continue
-		}
-		fields := strings.Fields(chip.Detail)
-		if len(fields) == 0 {
-			continue
-		}
-		count, err := strconv.Atoi(fields[0])
-		if err == nil {
-			total += count
-		}
+		total += chip.ChangeCount
+		hasSourceDrift = hasSourceDrift || chip.SourceDrift
 	}
 	if total > 0 {
+		if hasMissing {
+			return driftStyle("changed").Render(fmt.Sprintf("▲ %d Δ  ○ baseline", total))
+		}
+		if hasSourceDrift {
+			return driftStyle("changed").Render(fmt.Sprintf("▲ %d Δ + source", total))
+		}
 		label := "changes"
 		if total == 1 {
 			label = "change"
@@ -83,6 +82,9 @@ func compactHeaderChipSummary(chips []HeaderChip) string {
 	if hasMissing {
 		return driftStyle("missing").Render("○ no baseline")
 	}
+	if hasSourceDrift {
+		return driftStyle("drift").Render("▲ source drift")
+	}
 	return driftStyle("clean").Render("● clean")
 }
 
@@ -90,7 +92,7 @@ func driftDot(state string) string {
 	switch state {
 	case "clean":
 		return "●"
-	case "changed":
+	case "changed", "drift":
 		return "▲"
 	default:
 		return "○"
