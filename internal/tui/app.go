@@ -316,6 +316,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		a.applyWorkspaceData(typed.data)
+		a.screen = ScreenHome
 		a.actionError = ""
 		if len(typed.created) == 0 {
 			a.notice = "Supported baselines already exist."
@@ -489,7 +490,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return rescanMsg(data)
 		}, false
 	case "B":
-		if (a.screen == ScreenHome || a.screen == ScreenInventory) && !a.hasPendingSetupReview() {
+		if (a.screen == ScreenHome || a.screen == ScreenInventory || a.screen == ScreenSnapshots) && !a.hasPendingSetupReview() {
 			return func() tea.Msg {
 				created, err := a.createMissingBaselines()
 				if err != nil {
