@@ -275,6 +275,15 @@ func TestBuildBaselineStatusViewModel(t *testing.T) {
 	}
 }
 
+func TestBuildHeaderChipsDistinguishesRawSourceDriftFromClean(t *testing.T) {
+	chips := tui.BuildHeaderChips(baseline.Status{Agents: []baseline.AgentStatus{{
+		Agent: types.AgentCodex, HasBaseline: true, RawChangeCount: 2,
+	}}})
+	if len(chips) != 1 || chips[0].State != "drift" || chips[0].Detail != "source drift" || !chips[0].SourceDrift {
+		t.Fatalf("raw-only chip = %#v", chips)
+	}
+}
+
 func TestBuildHomeViewModelWithoutBaseline(t *testing.T) {
 	model := tui.BuildHomeViewModel(baseline.Status{Agents: []baseline.AgentStatus{
 		{Agent: types.AgentClaudeCode},

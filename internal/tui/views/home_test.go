@@ -44,7 +44,7 @@ func TestRenderHomeFitsResponsiveWidths(t *testing.T) {
 	}
 
 	narrow := RenderHome(model, 36, 16)
-	for _, want := range []string{"skills 2", "hooks 1", "mcp 1", "plugins 0", "other 1", "+ image-to-code", "[?] more"} {
+	for _, want := range []string{"skills 2", "hooks 1", "mcp 1", "plugins 0", "other 1", "+ image-to-code", "[R] rollback", "[q] quit"} {
 		if !strings.Contains(narrow, want) {
 			t.Fatalf("narrow view missing %q:\n%s", want, narrow)
 		}
@@ -55,7 +55,7 @@ func TestRenderHomeFitsResponsiveWidths(t *testing.T) {
 }
 
 func TestRenderHomeReducesChangesBeforeCountsOnShortScreens(t *testing.T) {
-	rendered := RenderHome(responsiveHomeFixture(), 60, 10)
+	rendered := RenderHome(responsiveHomeFixture(), 60, 8)
 	for _, want := range []string{"skills 2", "hooks 1", "mcp 1", "plugins 0", "other 1", "image-to-code", "StopFailure.*"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("short view missing %q:\n%s", want, rendered)
@@ -64,6 +64,11 @@ func TestRenderHomeReducesChangesBeforeCountsOnShortScreens(t *testing.T) {
 	for _, omitted := range []string{"design-taste-frontend", "full-output-enforcement", "config.toml"} {
 		if strings.Contains(rendered, omitted) {
 			t.Fatalf("short view should omit %q:\n%s", omitted, rendered)
+		}
+	}
+	for _, action := range []string{"[v] review", "[R] rollback", "[i] setup"} {
+		if !strings.Contains(rendered, action) {
+			t.Fatalf("short view should preserve %q:\n%s", action, rendered)
 		}
 	}
 }

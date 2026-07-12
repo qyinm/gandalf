@@ -2171,6 +2171,8 @@ type HeaderChipModel struct {
 	AgentMarker string
 	State       string
 	Detail      string
+	ChangeCount int
+	SourceDrift bool
 }
 
 // BuildHeaderChips converts baseline status into per-agent header chips.
@@ -2182,12 +2184,17 @@ func BuildHeaderChips(status baseline.Status) []HeaderChipModel {
 		case !agentStatus.HasBaseline:
 			chip.State = "missing"
 			chip.Detail = "no baseline"
+		case agentStatus.SemanticChangeCount == 0 && agentStatus.RawChangeCount > 0:
+			chip.State = "drift"
+			chip.Detail = "source drift"
+			chip.SourceDrift = true
 		case agentStatus.SemanticChangeCount == 0:
 			chip.State = "clean"
 			chip.Detail = "clean"
 		default:
 			chip.State = "changed"
 			count := agentStatus.SemanticChangeCount
+			chip.ChangeCount = count
 			suffix := "s"
 			if count == 1 {
 				suffix = ""

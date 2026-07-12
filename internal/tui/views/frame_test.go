@@ -12,8 +12,8 @@ func TestRenderHeaderCollapsesChangedAgentsAtNarrowWidths(t *testing.T) {
 		Title: "Gandalf",
 		Scope: "/Users/hippoo",
 		Chips: []HeaderChip{
-			{AgentMarker: "CC", State: "changed", Detail: "64 changes"},
-			{AgentMarker: "CX", State: "changed", Detail: "645 changes"},
+			{AgentMarker: "CC", State: "changed", Detail: "64 changes", ChangeCount: 64},
+			{AgentMarker: "CX", State: "changed", Detail: "645 changes", ChangeCount: 645},
 		},
 	}
 	for _, width := range []int{40, 24} {
@@ -29,6 +29,20 @@ func TestRenderHeaderCollapsesChangedAgentsAtNarrowWidths(t *testing.T) {
 		if strings.Contains(rendered, "CC") || strings.Contains(rendered, "CX") {
 			t.Fatalf("width %d should omit individual chips:\n%s", width, rendered)
 		}
+	}
+}
+
+func TestRenderHeaderCompactSummaryPreservesChangesAndMissingBaseline(t *testing.T) {
+	rendered := RenderHeader(HeaderView{
+		Title: "Gandalf",
+		Scope: "/Users/hippoo",
+		Chips: []HeaderChip{
+			{AgentMarker: "CC", State: "missing", Detail: "no baseline"},
+			{AgentMarker: "CX", State: "changed", Detail: "3 changes", ChangeCount: 3},
+		},
+	}, 40)
+	if !strings.Contains(rendered, "3") || !strings.Contains(rendered, "baseline") {
+		t.Fatalf("mixed compact summary:\n%s", rendered)
 	}
 }
 

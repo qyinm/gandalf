@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
@@ -46,6 +47,33 @@ func TestHomeViewMakesDriftAndSafeActionsVisible(t *testing.T) {
 	}
 }
 
+func TestHomeAppViewNeverExceedsActualTerminalWidth(t *testing.T) {
+	app := NewApp(makeTestRuntime(t))
+	app.ready = true
+	app.width = 24
+	app.height = 16
+	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{{
+		Agent: types.AgentCodex, HasBaseline: true, SemanticChangeCount: 1,
+		Diff: diff.GraphDiff{SemanticChanges: []diff.SemanticChange{{
+			Code: diff.SemanticSkillAdded, EntityKind: types.KindSkill, EntityName: "a-very-long-skill-name",
+		}}},
+	}}}
+	for _, line := range strings.Split(app.View(), "\n") {
+		if got := ansi.StringWidth(line); got > app.width {
+			t.Fatalf("line width = %d, terminal width = %d: %q", got, app.width, line)
+		}
+	}
+}
+
+func TestHomeBaselineShortcutStartsBaselineCreation(t *testing.T) {
+	app := NewApp(makeTestRuntime(t))
+	app.ready = true
+	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("B")})
+	if quit || cmd == nil {
+		t.Fatalf("Home B shortcut: cmd=%v quit=%v", cmd != nil, quit)
+	}
+}
+
 func TestHomeReviewFocusesChangedEnvironmentWithoutMutation(t *testing.T) {
 	app := NewApp(makeTestRuntime(t))
 	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{
@@ -58,6 +86,18 @@ func TestHomeReviewFocusesChangedEnvironmentWithoutMutation(t *testing.T) {
 	}
 	if app.rollbackReview != nil {
 		t.Fatal("review navigation must not prepare or apply rollback")
+	}
+}
+
+func TestHomeReviewPrefersSemanticChangeOverEarlierRawOnlyDrift(t *testing.T) {
+	app := NewApp(makeTestRuntime(t))
+	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{
+		{Agent: types.AgentClaudeCode, HasBaseline: true, RawChangeCount: 3},
+		{Agent: types.AgentCodex, HasBaseline: true, SemanticChangeCount: 1},
+	}}
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
+	if app.screen != ScreenEnvironments || app.environments.agentCursor != 1 {
+		t.Fatalf("review route: screen=%q cursor=%d", app.screen, app.environments.agentCursor)
 	}
 }
 

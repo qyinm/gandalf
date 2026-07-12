@@ -31,13 +31,10 @@ func RenderHome(model HomeView, width, height int) string {
 		width = 1
 	}
 	if !model.HasBaseline {
-		return renderHomeLines([]string{
+		return renderHomeSections([]string{
 			labelStyle.Render("○ No baseline yet"),
 			mutedStyle.Render("Capture a baseline to measure setup drift."),
-			"",
-			"[B] capture baseline  [i] setup",
-			"[r] rescan  [q] quit",
-		}, width, height)
+		}, []string{"", "[B] capture baseline  [i] setup", "[r] rescan  [q] quit"}, width, height)
 	}
 
 	narrow := width < 60
@@ -61,15 +58,20 @@ func RenderHome(model HomeView, width, height int) string {
 			fmt.Sprintf("mcp %d · plugins %d · other %d", model.MCPServersChanged, model.PluginsChanged, model.OtherChanged),
 		)
 	} else {
-		lines = append(lines, "", fmt.Sprintf(
+		lines = append(lines, fmt.Sprintf(
 			"skills %d · hooks %d · mcp %d · plugins %d · other %d",
 			model.SkillsChanged, model.HooksChanged, model.MCPServersChanged, model.PluginsChanged, model.OtherChanged,
 		))
 	}
 
-	limit := 5
+	footer := []string{"", "[v] review  [R] rollback  [i] setup  [r] rescan  [q] quit"}
+	if narrow {
+		footer = []string{"", "[v] review  [R] rollback", "[i] setup  [r] rescan", "[q] quit"}
+	}
+	availableChanges := height - len(footer) - len(lines) - 1
+	limit := min(5, max(0, availableChanges))
 	if short {
-		limit = 2
+		limit = min(limit, 2)
 	}
 	if len(model.TopChanges) > 0 && limit > 0 {
 		lines = append(lines, "")
@@ -85,13 +87,7 @@ func RenderHome(model HomeView, width, height int) string {
 		}
 	}
 
-	lines = append(lines, "")
-	if narrow {
-		lines = append(lines, "[v] review  [i] setup", "[?] more")
-	} else {
-		lines = append(lines, "[v] review  [R] rollback  [i] setup  [r] rescan  [q] quit")
-	}
-	return renderHomeLines(lines, width, height)
+	return renderHomeSections(lines, footer, width, height)
 }
 
 func homeChangeMarker(action string) string {
@@ -110,4 +106,22 @@ func renderHomeLines(lines []string, width, height int) string {
 		lines[i] = truncate(lines[i], width)
 	}
 	return fitHeight(strings.Join(lines, "\n"), height)
+}
+
+func renderHomeSections(body, footer []string, width, height int) string {
+	if height < 1 {
+		height = 1
+	}
+	maxBody := height - len(footer)
+	if maxBody < 0 {
+		maxBody = 0
+	}
+	if len(body) > maxBody {
+		body = body[:maxBody]
+	}
+	lines := append(append([]string(nil), body...), footer...)
+	if len(lines) > height {
+		lines = lines[len(lines)-height:]
+	}
+	return renderHomeLines(lines, width, height)
 }
