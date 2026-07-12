@@ -78,6 +78,11 @@ The trust boundary that restricts restore and bundle writes to declared home and
 
 ## Snapshots and Store
 
+### Baseline Coverage
+The per-agent completeness state of the Changes-First Home, which may be empty, partial, or complete across the Current Supported Agent Set.
+
+Capturing missing baselines preserves existing agent baselines and fills only uncovered agents so established comparison points do not move silently.
+
 ### Snapshot
 A named capture of project and user-global evidence at a point in time. Snapshots may be metadata-only or content-backed depending on capture policy.
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -71,6 +72,24 @@ func TestHomeBaselineShortcutStartsBaselineCreation(t *testing.T) {
 	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("B")})
 	if quit || cmd == nil {
 		t.Fatalf("Home B shortcut: cmd=%v quit=%v", cmd != nil, quit)
+	}
+}
+
+func TestHomePartialBaselineCoverageShowsMissingBaselineCTA(t *testing.T) {
+	for _, width := range []int{100, 36} {
+		app := NewApp(makeTestRuntime(t))
+		app.ready = true
+		app.width = width
+		app.height = 24
+		app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{
+			{Agent: types.AgentClaudeCode},
+			{Agent: types.AgentCodex, HasBaseline: true, BaselineCreatedAt: "2026-07-12T00:00:00Z"},
+		}}
+
+		view := app.View()
+		if !strings.Contains(view, "Some agents have no baseline.") || !strings.Contains(view, "[B] capture missing baselines") {
+			t.Fatalf("width %d partial baseline home must offer the one-action CTA:\n%s", width, view)
+		}
 	}
 }
 
@@ -731,6 +750,119 @@ func TestCreateMissingBaselinesWritesAgentScopedSnapshots(t *testing.T) {
 	}
 	if len(createdAgain) != 0 {
 		t.Fatalf("expected no duplicate baselines, got %#v", createdAgain)
+	}
+}
+
+func TestCreateMissingBaselinesPreservesExistingAgentBaseline(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	claudeSettings := filepath.Join(runtime.HomeDir, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(claudeSettings), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(claudeSettings, []byte(`{"permissions":{"allow":["Bash(echo hi)"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := NewApp(runtime)
+	created, err := app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	codexBaseline := findCreatedSnapshot(t, created, "baseline-codex-")
+	claudeBaseline := findCreatedSnapshot(t, created, "baseline-claude-code-")
+	codex := types.AgentCodex
+	codexBefore, err := store.ReadSnapshot(runtime.StoreDir, codexBaseline, &codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(store.AgentStoreDir(runtime.StoreDir, agentIDPtr(types.AgentClaudeCode)), claudeBaseline)); err != nil {
+		t.Fatal(err)
+	}
+
+	created, err = app.createMissingBaselines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created) != 1 || !strings.HasPrefix(created[0], "baseline-claude-code-") {
+		t.Fatalf("expected only the missing Claude Code baseline, got %#v", created)
+	}
+	codexNames, err := store.ListSnapshots(runtime.StoreDir, &codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(codexNames) != 1 || codexNames[0] != codexBaseline {
+		t.Fatalf("existing Codex baseline list changed: %#v", codexNames)
+	}
+	codexAfter, err := store.ReadSnapshot(runtime.StoreDir, codexBaseline, &codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(codexBefore, codexAfter) {
+		t.Fatal("existing Codex baseline changed while filling missing coverage")
+	}
+}
+
+func agentIDPtr(agent types.AgentID) *types.AgentID {
+	return &agent
+}
+
+func TestHomeBaselineActionCreatesBothSupportedBaselinesAndReturnsClean(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	claudeSettings := filepath.Join(runtime.HomeDir, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(claudeSettings), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(claudeSettings, []byte(`{"permissions":{"allow":["Bash(echo hi)"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := NewApp(runtime)
+	app.ready = true
+	app.applyWorkspaceData(app.fetchWorkspaceData())
+	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("B")})
+	if quit || cmd == nil {
+		t.Fatalf("baseline CTA: cmd=%v quit=%v", cmd != nil, quit)
+	}
+
+	msg := cmd()
+	model, next := app.Update(msg)
+	updated := model.(*App)
+	if next != nil {
+		t.Fatal("baseline completion should not schedule another command")
+	}
+	if updated.screen != ScreenHome || updated.actionError != "" {
+		t.Fatalf("baseline completion: screen=%q error=%q", updated.screen, updated.actionError)
+	}
+	if !strings.Contains(updated.notice, "Created baselines:") {
+		t.Fatalf("notice = %q", updated.notice)
+	}
+	home := BuildHomeViewModel(updated.baselineStatus)
+	if !home.HasBaseline || home.HasMissingBaseline || home.TotalChanges != 0 {
+		t.Fatalf("home after baseline creation = %#v", home)
+	}
+	for _, status := range updated.baselineStatus.Agents {
+		if !status.HasBaseline || !status.ContentBacked || status.ChangeCount() != 0 {
+			t.Fatalf("agent baseline after creation = %#v", status)
+		}
+	}
+}
+
+func TestSnapshotsBaselineShortcutReturnsToChangesHome(t *testing.T) {
+	app := NewApp(makeTestRuntime(t))
+	app.ready = true
+	app.applyWorkspaceData(app.fetchWorkspaceData())
+	app.screen = ScreenSnapshots
+
+	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("B")})
+	if quit || cmd == nil {
+		t.Fatalf("snapshots baseline CTA: cmd=%v quit=%v", cmd != nil, quit)
+	}
+	model, _ := app.Update(cmd())
+	updated := model.(*App)
+	if updated.screen != ScreenHome || updated.actionError != "" {
+		t.Fatalf("baseline completion: screen=%q error=%q", updated.screen, updated.actionError)
 	}
 }
 

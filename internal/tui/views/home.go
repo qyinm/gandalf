@@ -65,8 +65,14 @@ func RenderHome(model HomeView, width, height int) string {
 	}
 
 	footer := []string{"", "[v] review  [R] rollback  [i] setup  [r] rescan  [q] quit"}
+	if model.HasMissingBaseline {
+		footer = []string{"", "[B] capture missing baselines  [v] review  [R] rollback", "[i] setup  [r] rescan  [q] quit"}
+	}
 	if narrow {
 		footer = []string{"", "[v] review  [R] rollback", "[i] setup  [r] rescan", "[q] quit"}
+		if model.HasMissingBaseline {
+			footer = []string{"", "[B] capture missing baselines", "[v] review  [R] rollback", "[i] setup  [r] rescan", "[q] quit"}
+		}
 	}
 	availableChanges := height - len(footer) - len(lines) - 1
 	limit := min(5, max(0, availableChanges))
