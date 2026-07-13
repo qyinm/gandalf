@@ -7,7 +7,7 @@ build:
 	go build -o $(BIN) ./cmd/gandalf
 
 test:
-	go test ./...
+	go test -count=1 ./...
 
 restore-safety: build
 	./scripts/restore-safety-regression.sh
