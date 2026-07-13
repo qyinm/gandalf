@@ -628,6 +628,8 @@ func controlVerb(label string) string {
 		return "e  edit config"
 	case "remove":
 		return "x  remove"
+	case "install":
+		return "I  install"
 	default:
 		return label
 	}

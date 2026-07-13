@@ -465,6 +465,100 @@ func TestMarketplaceEnterTogglesSourceAndChildOpensReviewAction(t *testing.T) {
 	}
 }
 
+func TestClaudeMarketplaceInstallRescansVerifiesAndRollsBack(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	marketplaceRoot := filepath.Join(runtime.HomeDir, ".claude", "plugins", "marketplaces", "openai-codex")
+	writeTUITestFile(t, filepath.Join(runtime.HomeDir, ".claude", "plugins", "known_marketplaces.json"), `{
+		"openai-codex": {
+			"source": {"source": "github", "repo": "openai/codex-plugin-cc"},
+			"installLocation": "`+filepath.ToSlash(marketplaceRoot)+`"
+		}
+	}`)
+	installedPath := filepath.Join(runtime.HomeDir, ".claude", "plugins", "installed_plugins.json")
+	writeTUITestFile(t, installedPath, `{"version":2,"plugins":{}}`)
+	writeTUITestFile(t, filepath.Join(marketplaceRoot, ".claude-plugin", "marketplace.json"), `{
+		"name": "openai-codex",
+		"plugins": [{
+			"name": "codex",
+			"description": "Use Codex from Claude Code.",
+			"version": "1.0.2",
+			"source": "./plugins/codex"
+		}]
+	}`)
+
+	app := NewApp(runtime)
+	app.screen = ScreenInventory
+	app.activeSetupTab = SetupConsoleTabMarketplace
+	app.ready = true
+	data := app.fetchWorkspaceData()
+	if data.err != nil {
+		t.Fatal(data.err)
+	}
+	app.applyWorkspaceData(data)
+	app.marketplaceRunner = &marketplaceFixtureRunner{installedPath: installedPath}
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("source expansion returned command")
+	}
+	app.moveInventoryCursor(1)
+	if cmd, _ := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("I")}); cmd != nil {
+		t.Fatal("install preview returned command")
+	}
+	if app.pendingAction == nil || app.pendingAction.Command == nil || !strings.Contains(strings.Join(app.pendingAction.Command.Args, " "), "codex@openai-codex") {
+		t.Fatalf("install preview = %#v", app.pendingAction)
+	}
+
+	cmd := app.handleInventoryEnter()
+	if cmd == nil {
+		t.Fatal("confirmed install did not return command")
+	}
+	model, _ := app.Update(cmd())
+	app = model.(*App)
+	if app.actionError != "" || app.marketplaceInstallResult == nil || !strings.Contains(app.notice, "rescanned, and verified") {
+		t.Fatalf("install result: error=%q notice=%q plan=%#v", app.actionError, app.notice, app.marketplaceInstallResult)
+	}
+	_, entry, ok := app.marketplaceEntryByID(app.marketplaceInstallResult.MarketplaceInstall.EntryID)
+	if !ok || !entry.Installed {
+		t.Fatalf("installed marketplace entry = %#v, found=%v", entry, ok)
+	}
+
+	cmd, _ = app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
+	if cmd == nil {
+		t.Fatal("rollback did not return command")
+	}
+	model, _ = app.Update(cmd())
+	app = model.(*App)
+	if app.actionError != "" || app.marketplaceInstallResult != nil || !strings.Contains(app.notice, "Rolled back") {
+		t.Fatalf("rollback result: error=%q notice=%q plan=%#v", app.actionError, app.notice, app.marketplaceInstallResult)
+	}
+	sources := setup.BuildMarketplace(app.evidence)
+	if len(sources) != 1 || len(sources[0].Entries) != 1 || sources[0].Entries[0].Installed {
+		t.Fatalf("marketplace after rollback = %#v", sources)
+	}
+}
+
+type marketplaceFixtureRunner struct {
+	installedPath string
+}
+
+func (runner *marketplaceFixtureRunner) Run(_ context.Context, command setup.CommandPlan) error {
+	contents := `{"version":2,"plugins":{"codex@openai-codex":[{"scope":"user","version":"1.0.2"}]}}`
+	if len(command.Args) >= 2 && command.Args[1] == "uninstall" {
+		contents = `{"version":2,"plugins":{}}`
+	}
+	return os.WriteFile(runner.installedPath, []byte(contents), 0o644)
+}
+
+func writeTUITestFile(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMarketplaceSearchClampsCursorAgainstMarketplaceRows(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := NewApp(runtime)
