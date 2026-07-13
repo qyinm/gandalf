@@ -8,6 +8,6 @@ printf 'repo=%s\n' "$REPO"
 
 cd "$REPO"
 
-go test ./internal/gandalfcore/setup ./internal/tui
+go test -count=1 ./internal/gandalfcore/setup ./internal/tui
 
 printf '\nGate 2 setup-console acceptance passed: setup inventory, marketplace/source rows, unavailable reasons, reviewed setup actions, stale-review rejection, and TUI rendering tests passed.\n'
