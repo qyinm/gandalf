@@ -32,17 +32,19 @@ type MCPTogglePlan struct {
 
 // ActionPlan is a concrete setup action proposal for confirmation and execution.
 type ActionPlan struct {
-	ID                string
-	Action            ActionKind
-	Agent             types.AgentID
-	ObjectKind        ObjectKind
-	TargetName        string
-	Operation         string
-	ConfigTarget      string
-	Command           *CommandPlan
-	MCPToggle         *MCPTogglePlan
-	Available         bool
-	UnavailableReason string
+	ID                 string
+	Action             ActionKind
+	Agent              types.AgentID
+	ObjectKind         ObjectKind
+	TargetName         string
+	Operation          string
+	ConfigTarget       string
+	Command            *CommandPlan
+	Rollback           *CommandPlan
+	MarketplaceInstall *MarketplaceInstallContext
+	MCPToggle          *MCPTogglePlan
+	Available          bool
+	UnavailableReason  string
 }
 
 // CommandRunner executes command-backed setup action plans.

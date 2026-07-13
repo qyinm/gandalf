@@ -59,6 +59,7 @@ type MarketplaceEntry struct {
 	SourceID    string
 	SourceKind  MarketplaceSourceKind
 	Agent       types.AgentID
+	Scope       types.EvidenceScope
 	Name        string
 	Kind        types.EvidenceKind
 	SourcePath  string
@@ -174,6 +175,7 @@ func marketplaceEntryFromEvidence(item types.DiscoveredItem, sourceID string, so
 		SourceID:    sourceID,
 		SourceKind:  sourceKind,
 		Agent:       item.Agent,
+		Scope:       item.Scope,
 		Name:        name,
 		Kind:        item.Kind,
 		SourcePath:  item.SourcePath,
@@ -360,21 +362,37 @@ func sourceRootBefore(sourcePath string, separators []string, requiredFragments 
 }
 
 func marketplaceEntryActions(entry MarketplaceEntry) []MarketplaceActionAvailability {
-	reason := "agent-native marketplace action provider is not implemented yet"
+	installReason := marketplaceInstallUnavailableReason(entry)
 	actions := []MarketplaceActionAvailability{
 		{
 			Action:    MarketplaceActionReview,
 			Available: marketplaceEntryReviewAvailable(entry),
 			Reason:    marketplaceEntryReviewUnavailableReason(entry),
 		},
-		{Action: MarketplaceActionInstall, Available: false, Reason: reason},
-		{Action: MarketplaceActionUpdate, Available: false, Reason: reason},
-		{Action: MarketplaceActionUninstall, Available: false, Reason: reason},
+		{Action: MarketplaceActionInstall, Available: installReason == "", Reason: installReason},
+		{Action: MarketplaceActionUpdate, Available: false, Reason: "update provider is not implemented yet"},
+		{Action: MarketplaceActionUninstall, Available: false, Reason: "uninstall is available only as rollback for installs made in this session"},
 	}
 	if actions[0].Available {
 		actions[0].Reason = ""
 	}
 	return actions
+}
+
+func marketplaceInstallUnavailableReason(entry MarketplaceEntry) string {
+	if entry.Agent != types.AgentClaudeCode || entry.SourceKind != MarketplaceSourceMarketplace {
+		return "install provider is available only for Claude Code marketplaces"
+	}
+	if entry.Scope != types.ScopeUser {
+		return "Claude Code marketplace installs require user scope"
+	}
+	if entry.Installed {
+		return "plugin is already installed"
+	}
+	if strings.TrimSpace(entry.ID) == "" || strings.TrimSpace(entry.SourceID) == "" || strings.TrimSpace(entry.Name) == "" {
+		return "install requires a stable marketplace entry and plugin name"
+	}
+	return ""
 }
 
 func defaultMarketplaceSourceActions() []MarketplaceActionAvailability {
