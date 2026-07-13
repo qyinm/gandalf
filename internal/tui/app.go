@@ -126,6 +126,7 @@ type App struct {
 	actionExecutor      func(context.Context, setup.ActionPlan) error
 	restorePointCreator func(types.AgentID) (string, error)
 	restoreExecutor     restore.RestoreExecutor
+	now                 func() time.Time
 }
 
 type snapshotRef struct {
@@ -179,6 +180,7 @@ func NewApp(runtime types.RuntimeOptions) *App {
 		inventoryFocus:  true,
 		activeSetupTab:  SetupConsoleTabHooks,
 		setupConsole:    setupState,
+		now:             time.Now,
 	}
 }
 
@@ -1506,7 +1508,7 @@ func (a *App) filteredTimeline() []types.TimelineEntry {
 }
 
 func (a *App) renderContent(width, height int) string {
-	now := time.Now()
+	now := a.now()
 	switch a.screen {
 	case ScreenHome:
 		model := BuildHomeViewModel(a.baselineStatus)

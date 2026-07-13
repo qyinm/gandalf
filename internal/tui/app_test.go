@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -30,6 +31,9 @@ func TestNewAppOpensChangesFirstHomeAndKeepsSetupReachable(t *testing.T) {
 
 func TestHomeViewMakesDriftAndSafeActionsVisible(t *testing.T) {
 	app := NewApp(makeTestRuntime(t))
+	app.now = func() time.Time {
+		return time.Date(2026, time.July, 12, 12, 0, 0, 0, time.Local)
+	}
 	app.ready = true
 	app.width = 100
 	app.height = 24
