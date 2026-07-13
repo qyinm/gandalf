@@ -139,6 +139,69 @@ func TestHomeRollbackStopsAtReviewChanges(t *testing.T) {
 	}
 }
 
+func TestChangesFirstHomeRollbackRescansToClean(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	configPath := writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	claudeSettings := filepath.Join(runtime.HomeDir, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(claudeSettings), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(claudeSettings, []byte(`{"permissions":{"allow":["Bash(echo hi)"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := NewApp(runtime)
+	app.ready = true
+	if _, err := app.createMissingBaselines(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5.1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app.applyWorkspaceData(app.fetchWorkspaceData())
+
+	home := BuildHomeViewModel(app.baselineStatus)
+	if home.TotalChanges == 0 {
+		t.Fatalf("expected drift before review: %#v", home)
+	}
+	app.width = 36
+	app.height = 20
+	view := app.View()
+	for _, want := range []string{"[v] review", "[R] rollback", "[i] setup"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("narrow home missing %q:\n%s", want, view)
+		}
+	}
+
+	if cmd, _ := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")}); cmd != nil || app.screen != ScreenEnvironments {
+		t.Fatalf("review route: screen=%q cmd=%v", app.screen, cmd != nil)
+	}
+	app.screen = ScreenHome
+	previewCmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	if quit || previewCmd == nil || app.screen != ScreenSnapshots {
+		t.Fatalf("rollback route: screen=%q cmd=%v quit=%v", app.screen, previewCmd != nil, quit)
+	}
+	model, _ := app.Update(previewCmd())
+	app = model.(*App)
+	if app.rollbackReview == nil {
+		t.Fatal("expected Review Changes before rollback apply")
+	}
+
+	applyCmd := app.handleSnapshotEnter()
+	if applyCmd == nil {
+		t.Fatal("expected rollback apply command")
+	}
+	model, _ = app.Update(applyCmd())
+	app = model.(*App)
+	if app.actionError != "" {
+		t.Fatalf("rollback error = %q", app.actionError)
+	}
+	home = BuildHomeViewModel(app.baselineStatus)
+	if !home.HasBaseline || home.HasMissingBaseline || home.TotalChanges != 0 {
+		t.Fatalf("home after rollback rescan = %#v", home)
+	}
+}
+
 func TestSkillsEnterOpensMarkdownViewerUnavailableWhenNoEntrypointExists(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	app := newInventoryTestApp(t, runtime)
