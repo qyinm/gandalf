@@ -41,3 +41,6 @@ jobs:
 
       - name: Gate 2 setup-console acceptance
         run: ./scripts/gate2-console-acceptance.sh
+
+      - name: Changes-first Home acceptance
+        run: ./scripts/changes-home-acceptance.sh
