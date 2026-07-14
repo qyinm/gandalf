@@ -337,6 +337,7 @@ func BuildRestorePlan(options *types.RestoreOptions) (*types.RestorePlan, error)
 		})
 		executionOrder = append(executionOrder, itemID)
 	}
+	unsupportedItems = omitUnsupportedMCPChangesCoveredByAgentConfig(unsupportedItems, items)
 
 	return &types.RestorePlan{
 		PlanID:         "plan-" + longerRandomID(),
@@ -357,6 +358,38 @@ func BuildRestorePlan(options *types.RestoreOptions) (*types.RestorePlan, error)
 			GeneratedBy:    "gandalf restore",
 		},
 	}, nil
+}
+
+func omitUnsupportedMCPChangesCoveredByAgentConfig(
+	unsupported []types.UnsupportedPlanItem,
+	items []types.RestorePlanItem,
+) []types.UnsupportedPlanItem {
+	coveredConfigPaths := make(map[string]struct{})
+	for i := range items {
+		item := &items[i]
+		if item.Kind != types.KindAgentConfig {
+			continue
+		}
+		if item.Action != types.RestoreActionDelete && len(targetContentForPlanItem(item)) == 0 {
+			continue
+		}
+		coveredConfigPaths[restoreCoverageKey(item.Agent, item.SourcePath)] = struct{}{}
+	}
+
+	filtered := make([]types.UnsupportedPlanItem, 0, len(unsupported))
+	for _, item := range unsupported {
+		if item.Kind == types.KindMcpServer {
+			if _, covered := coveredConfigPaths[restoreCoverageKey(item.Agent, item.SourcePath)]; covered {
+				continue
+			}
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
+}
+
+func restoreCoverageKey(agent types.AgentID, sourcePath string) string {
+	return agent.String() + "\x00" + filepath.Clean(strings.TrimSpace(sourcePath))
 }
 
 func snapshotContentByEvidenceID(
