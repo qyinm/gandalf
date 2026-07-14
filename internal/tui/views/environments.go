@@ -193,7 +193,9 @@ func renderEnvironmentAgents(rows []EnvironmentRow, width, height int, focused b
 		lines = append(lines, mutedStyle.Render("no agents"))
 		return fitHeight(strings.Join(lines, "\n"), height)
 	}
+	selectedStart, selectedEnd := -1, -1
 	for _, row := range rows {
+		rowStart := len(lines)
 		prefix := "  "
 		rowStyle := mutedStyle
 		if row.Selected {
@@ -213,8 +215,11 @@ func renderEnvironmentAgents(rows []EnvironmentRow, width, height int, focused b
 		if row.Selected && width >= 54 {
 			lines = append(lines, mutedStyle.Render(truncate("  baseline "+baseline, width)))
 		}
+		if row.Selected {
+			selectedStart, selectedEnd = rowStart, len(lines)
+		}
 	}
-	return fitHeight(strings.Join(lines, "\n"), height)
+	return fitHeightAroundSelection(lines, height, selectedStart, selectedEnd)
 }
 
 func renderEnvironmentSurfaces(rows []EnvironmentSurface, width, height int, focused bool) string {
@@ -223,7 +228,9 @@ func renderEnvironmentSurfaces(rows []EnvironmentSurface, width, height int, foc
 		lines = append(lines, mutedStyle.Render("no changed surfaces"))
 		return fitHeight(strings.Join(lines, "\n"), height)
 	}
+	selectedStart, selectedEnd := -1, -1
 	for _, row := range rows {
+		rowStart := len(lines)
 		prefix := "  "
 		style := mutedStyle
 		if row.Selected {
@@ -239,8 +246,42 @@ func renderEnvironmentSurfaces(rows []EnvironmentSurface, width, height int, foc
 		if row.Selected && strings.TrimSpace(row.SourcePath) != "" {
 			lines = append(lines, mutedStyle.Render(truncate("  "+row.SourcePath, width)))
 		}
+		if row.Selected {
+			selectedStart, selectedEnd = rowStart, len(lines)
+		}
 	}
-	return fitHeight(strings.Join(lines, "\n"), height)
+	return fitHeightAroundSelection(lines, height, selectedStart, selectedEnd)
+}
+
+// fitHeightAroundSelection keeps the selected picker row visible when a
+// vertically constrained list is scrolled. The title remains pinned at the
+// top while the selected row (including its optional detail line) is brought
+// into the visible window.
+func fitHeightAroundSelection(lines []string, height, selectedStart, selectedEnd int) string {
+	if height <= 0 || len(lines) <= height {
+		return strings.Join(lines, "\n")
+	}
+	if selectedStart < 0 || selectedEnd <= selectedStart {
+		return strings.Join(lines[:height], "\n")
+	}
+	visibleHeight := max(1, height-1)
+	offset := 1
+	if selectedEnd > offset+visibleHeight {
+		offset = selectedEnd - visibleHeight
+	}
+	if selectedStart < offset {
+		offset = selectedStart
+	}
+	// Keep the section title fixed while scrolling the rows below it.
+	if offset < 1 {
+		offset = 1
+	}
+	maxOffset := max(1, len(lines)-visibleHeight)
+	if offset > maxOffset {
+		offset = maxOffset
+	}
+	visible := lines[offset : offset+visibleHeight]
+	return strings.Join(append([]string{lines[0]}, visible...), "\n")
 }
 
 func renderEnvironmentDiffPane(model EnvironmentsView, width, height int, focused bool) string {

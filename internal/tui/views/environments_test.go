@@ -148,3 +148,27 @@ func TestRenderEnvironmentsFallsBackToUnifiedDiffWhenNarrow(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderEnvironmentsKeepsSelectedPickerRowsVisible(t *testing.T) {
+	view := EnvironmentsView{
+		Focus:      "surfaces",
+		Mode:       "side_by_side",
+		FocusAgent: "Codex",
+		Rows:       []EnvironmentRow{{AgentLabel: "Codex", AgentMarker: "CX", State: "changed", Detail: "8 changes", Selected: true}},
+		Surfaces: []EnvironmentSurface{
+			{Marker: "~", Kind: "Skill", Name: "first", Detail: "1 change"},
+			{Marker: "~", Kind: "Skill", Name: "second", Detail: "1 change"},
+			{Marker: "~", Kind: "Skill", Name: "third", Detail: "1 change"},
+			{Marker: "~", Kind: "Skill", Name: "last", Detail: "1 change", SourcePath: "~/.claude/skills/last", Selected: true},
+		},
+		Diff: EnvironmentDiff{Title: "Skill last", Rows: []EnvironmentDiffRow{{Kind: "hunk", HunkTitle: "@@ Skill last @@", CurrentHunk: true}}},
+	}
+
+	rendered := ansi.Strip(RenderEnvironments(view, 100, 18))
+	if !strings.Contains(rendered, "last") || !strings.Contains(rendered, "~/.claude/skills/last") {
+		t.Fatalf("selected surface should remain visible after scrolling:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "› ~ Skill first") {
+		t.Fatalf("top surface should have scrolled away:\n%s", rendered)
+	}
+}
