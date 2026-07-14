@@ -226,7 +226,7 @@ func TestDeletesCodexUserSkillAddedAfterBaseline(t *testing.T) {
 	}
 }
 
-func TestMarksCodexTOMLMCPChangesUnsupportedWhileConfigCarriesRestore(t *testing.T) {
+func TestOmitsCodexTOMLMCPUnsupportedWhenConfigCarriesRestore(t *testing.T) {
 	t.Parallel()
 	projectPath, homeDir, storeDir := makeRestoreSandbox(t)
 	configPath := filepath.Join(homeDir, ".codex", "config.toml")
@@ -281,17 +281,65 @@ func TestMarksCodexTOMLMCPChangesUnsupportedWhileConfigCarriesRestore(t *testing
 		t.Fatal("expected agent_config update item")
 	}
 
+	for _, item := range plan.UnsupportedItems {
+		if item.Kind == types.KindMcpServer && item.Agent == types.AgentCodex {
+			t.Fatalf("content-backed config restore must cover TOML MCP change: %#v", item)
+		}
+	}
+}
+
+func TestKeepsCodexTOMLMCPUnsupportedWithoutContentBackedConfigRestore(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, storeDir := makeRestoreSandbox(t)
+	configPath := filepath.Join(homeDir, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5\"\n[mcp_servers.docs]\ncommand = \"docs-old\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := types.AgentCodex
+	scope := types.ScopeUser
+	state, err := snapshot.CaptureCurrentState(&types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+		Agent:       &agent,
+		Scope:       &scope,
+	}, "baseline")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WriteSnapshot(storeDir, store.StoreSnapshotFrom(state.Snapshot), &agent); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5\"\n[mcp_servers.docs]\ncommand = \"docs-new\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := restore.BuildRestorePlan(&types.RestoreOptions{
+		SourceSnapshot: "baseline",
+		ProjectPath:    projectPath,
+		HomeDir:        homeDir,
+		StoreDir:       storeDir,
+		DryRun:         true,
+		Agent:          &agent,
+		Scope:          &scope,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	foundUnsupportedMCP := false
 	for _, item := range plan.UnsupportedItems {
-		if item.Kind == types.KindMcpServer &&
-			item.Agent == types.AgentCodex &&
-			strings.Contains(item.Reason, "No supported restore action") {
+		if item.Kind == types.KindMcpServer && item.Agent == types.AgentCodex {
 			foundUnsupportedMCP = true
 			break
 		}
 	}
 	if !foundUnsupportedMCP {
-		t.Fatalf("unsupported mcp items = %#v", plan.UnsupportedItems)
+		t.Fatalf("metadata-only config must not hide unsupported MCP restore: %#v", plan.UnsupportedItems)
 	}
 }
 

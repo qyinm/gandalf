@@ -41,8 +41,11 @@ type bootMsg struct {
 type rescanMsg bootMsg
 
 type setupActionMsg struct {
-	data bootMsg
-	err  error
+	data       bootMsg
+	err        error
+	plan       *setup.ActionPlan
+	installed  bool
+	rolledBack bool
 }
 
 type marketplaceReviewMsg struct {
@@ -114,6 +117,7 @@ type App struct {
 	pendingAction            *setup.ActionPlan
 	pendingMarketplaceReview *setup.MarketplaceReviewPlan
 	marketplaceReviewResult  *setup.MarketplaceReviewResult
+	marketplaceInstallResult *setup.ActionPlan
 	skillViewer              *skillMarkdownViewerState
 	rollbackReview           *rollbackReview
 
@@ -124,8 +128,10 @@ type App struct {
 	cachedNavKey string
 
 	actionExecutor      func(context.Context, setup.ActionPlan) error
+	marketplaceRunner   setup.CommandRunner
 	restorePointCreator func(types.AgentID) (string, error)
 	restoreExecutor     restore.RestoreExecutor
+	now                 func() time.Time
 }
 
 type snapshotRef struct {
@@ -173,12 +179,14 @@ type skillMarkdownViewerState struct {
 func NewApp(runtime types.RuntimeOptions) *App {
 	setupState := newSetupConsoleState()
 	return &App{
-		runtime:         runtime,
-		screen:          ScreenHome,
-		selectedProfile: DefaultProfile,
-		inventoryFocus:  true,
-		activeSetupTab:  SetupConsoleTabHooks,
-		setupConsole:    setupState,
+		runtime:           runtime,
+		screen:            ScreenHome,
+		selectedProfile:   DefaultProfile,
+		inventoryFocus:    true,
+		activeSetupTab:    SetupConsoleTabHooks,
+		setupConsole:      setupState,
+		marketplaceRunner: nativeSetupCommandRunner{homeDir: runtime.HomeDir},
+		now:               time.Now,
 	}
 }
 
@@ -262,6 +270,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case setupActionMsg:
 		if typed.err != nil {
+			if typed.data.err == nil && typed.data.evidence != nil {
+				a.applyWorkspaceData(typed.data)
+				a.clampSetupConsoleState()
+			}
+			if typed.plan != nil {
+				a.pendingAction = nil
+			}
+			if typed.rolledBack {
+				a.marketplaceInstallResult = nil
+			}
 			a.actionError = typed.err.Error()
 			return a, nil
 		}
@@ -275,7 +293,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.pendingAction = nil
 		a.marketplaceReviewResult = nil
 		a.actionError = ""
-		a.notice = "Applied setup action and rescanned global setup."
+		if typed.installed && typed.plan != nil && typed.plan.MarketplaceInstall != nil {
+			plan := *typed.plan
+			a.marketplaceInstallResult = &plan
+			a.notice = fmt.Sprintf("Installed %s, rescanned, and verified. Press u to roll back.", plan.MarketplaceInstall.Selector)
+		} else if typed.rolledBack {
+			a.marketplaceInstallResult = nil
+			a.notice = "Rolled back marketplace install, rescanned, and verified."
+		} else {
+			a.notice = "Applied setup action and rescanned global setup."
+		}
 		return a, nil
 
 	case marketplaceReviewMsg:
@@ -555,7 +582,14 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.undoPlan = nil
 			a.undoError = ""
 		}
+	case "I":
+		if a.screen == ScreenInventory && normalizeSetupConsoleTab(a.activeSetupTab) == SetupConsoleTabMarketplace && !a.hasPendingSetupReview() {
+			a.handleMarketplaceInstall()
+		}
 	case "u":
+		if a.screen == ScreenInventory && a.marketplaceInstallResult != nil && !a.hasPendingSetupReview() {
+			return a.rollbackMarketplaceInstall(), false
+		}
 		if a.screen != ScreenTimeline {
 			return nil, false
 		}
@@ -699,6 +733,9 @@ func (a *App) handleSkillViewerKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 func (a *App) handleInventoryEnter() tea.Cmd {
 	if a.pendingAction != nil {
 		plan := *a.pendingAction
+		if plan.MarketplaceInstall != nil {
+			return a.executeMarketplaceInstall(plan)
+		}
 		executor := a.actionExecutor
 		if executor == nil {
 			executor = a.defaultSetupActionExecutor
@@ -760,6 +797,108 @@ func (a *App) handleInventoryEnter() tea.Cmd {
 	a.pendingAction = &plan
 	a.actionError = ""
 	return nil
+}
+
+func (a *App) handleMarketplaceInstall() {
+	model := a.currentSetupConsoleViewModel()
+	if len(model.Rows) == 0 {
+		a.actionError = "No marketplace entry selected."
+		return
+	}
+	row := model.Rows[clampIndex(a.activeSetupTabState().cursor, len(model.Rows))]
+	if row.RowKind != SetupConsoleRowMarketplaceEntry {
+		a.actionError = "Select a marketplace plugin entry to install."
+		return
+	}
+	source, entry, ok := a.marketplaceEntryByID(row.ID)
+	if !ok {
+		a.actionError = "Marketplace entry was not found in current scan data."
+		return
+	}
+	plan := setup.PlanMarketplaceInstall(source, entry)
+	if !plan.Available {
+		a.actionError = plan.UnavailableReason
+		return
+	}
+	a.pendingAction = &plan
+	a.marketplaceReviewResult = nil
+	a.actionError = ""
+}
+
+func (a *App) executeMarketplaceInstall(plan setup.ActionPlan) tea.Cmd {
+	return func() tea.Msg {
+		before := a.fetchWorkspaceData()
+		if before.err != nil {
+			return setupActionMsg{err: before.err, plan: &plan}
+		}
+		if _, err := setup.ExecuteMarketplaceInstallPlan(context.Background(), plan, setup.BuildMarketplace(before.evidence), a.marketplaceRunner); err != nil {
+			failed := err
+			afterFailure := a.fetchWorkspaceData()
+			if afterFailure.err != nil {
+				return setupActionMsg{data: afterFailure, err: fmt.Errorf("install command failed (%v); rollback unavailable because rescan failed: %w", failed, afterFailure.err), plan: &plan}
+			}
+			if verifyErr := setup.VerifyMarketplaceInstallPlan(plan, setup.BuildMarketplace(afterFailure.evidence)); verifyErr != nil {
+				return setupActionMsg{data: afterFailure, err: failed, plan: &plan}
+			}
+			if _, rollbackErr := setup.RollbackMarketplaceInstallPlan(context.Background(), plan, setup.BuildMarketplace(afterFailure.evidence), a.marketplaceRunner); rollbackErr != nil {
+				return setupActionMsg{data: afterFailure, err: fmt.Errorf("install command failed (%v) after changing state; rollback unavailable: %w", failed, rollbackErr), plan: &plan}
+			}
+			rolledBack := a.fetchWorkspaceData()
+			if rolledBack.err != nil {
+				return setupActionMsg{data: rolledBack, err: fmt.Errorf("install command failed (%v); rollback ran but rescan failed: %w", failed, rolledBack.err), plan: &plan}
+			}
+			if rollbackErr := setup.VerifyMarketplaceInstallRollback(plan, setup.BuildMarketplace(rolledBack.evidence)); rollbackErr != nil {
+				return setupActionMsg{data: rolledBack, err: fmt.Errorf("install command failed (%v); rollback verification failed: %w", failed, rollbackErr), plan: &plan}
+			}
+			return setupActionMsg{data: rolledBack, err: fmt.Errorf("install command failed: %v; partial change was rolled back and verified", failed), plan: &plan, rolledBack: true}
+		}
+		after := a.fetchWorkspaceData()
+		if after.err == nil {
+			if err := setup.VerifyMarketplaceInstallPlan(plan, setup.BuildMarketplace(after.evidence)); err == nil {
+				return setupActionMsg{data: after, plan: &plan, installed: true}
+			}
+		}
+		fresh := before
+		if after.err == nil {
+			fresh = after
+		}
+		verifyErr := after.err
+		if verifyErr == nil {
+			verifyErr = setup.VerifyMarketplaceInstallPlan(plan, setup.BuildMarketplace(after.evidence))
+		}
+		if _, err := setup.RollbackMarketplaceInstallPlan(context.Background(), plan, setup.BuildMarketplace(fresh.evidence), a.marketplaceRunner); err != nil {
+			return setupActionMsg{data: after, err: fmt.Errorf("install verification failed (%v); rollback unavailable: %w", verifyErr, err), plan: &plan}
+		}
+		rolledBack := a.fetchWorkspaceData()
+		if rolledBack.err != nil {
+			return setupActionMsg{data: rolledBack, err: fmt.Errorf("install verification failed (%v); rollback ran but rescan failed: %w", verifyErr, rolledBack.err), plan: &plan}
+		}
+		if err := setup.VerifyMarketplaceInstallRollback(plan, setup.BuildMarketplace(rolledBack.evidence)); err != nil {
+			return setupActionMsg{data: rolledBack, err: fmt.Errorf("install verification failed (%v); rollback verification failed: %w", verifyErr, err), plan: &plan}
+		}
+		return setupActionMsg{data: rolledBack, err: fmt.Errorf("install verification failed: %v; rollback was verified", verifyErr), plan: &plan, rolledBack: true}
+	}
+}
+
+func (a *App) rollbackMarketplaceInstall() tea.Cmd {
+	plan := *a.marketplaceInstallResult
+	return func() tea.Msg {
+		before := a.fetchWorkspaceData()
+		if before.err != nil {
+			return setupActionMsg{err: before.err, plan: &plan}
+		}
+		if _, err := setup.RollbackMarketplaceInstallPlan(context.Background(), plan, setup.BuildMarketplace(before.evidence), a.marketplaceRunner); err != nil {
+			return setupActionMsg{data: before, err: err, plan: &plan}
+		}
+		after := a.fetchWorkspaceData()
+		if after.err != nil {
+			return setupActionMsg{data: after, err: fmt.Errorf("rollback ran but rescan failed: %w", after.err), plan: &plan}
+		}
+		if err := setup.VerifyMarketplaceInstallRollback(plan, setup.BuildMarketplace(after.evidence)); err != nil {
+			return setupActionMsg{data: after, err: err, plan: &plan}
+		}
+		return setupActionMsg{data: after, plan: &plan, rolledBack: true}
+	}
 }
 
 func (a *App) openSelectedSkillViewer() {
@@ -1506,7 +1645,7 @@ func (a *App) filteredTimeline() []types.TimelineEntry {
 }
 
 func (a *App) renderContent(width, height int) string {
-	now := time.Now()
+	now := a.now()
 	switch a.screen {
 	case ScreenHome:
 		model := BuildHomeViewModel(a.baselineStatus)

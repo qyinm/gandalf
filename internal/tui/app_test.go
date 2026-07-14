@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -30,6 +31,9 @@ func TestNewAppOpensChangesFirstHomeAndKeepsSetupReachable(t *testing.T) {
 
 func TestHomeViewMakesDriftAndSafeActionsVisible(t *testing.T) {
 	app := NewApp(makeTestRuntime(t))
+	app.now = func() time.Time {
+		return time.Date(2026, time.July, 12, 12, 0, 0, 0, time.Local)
+	}
 	app.ready = true
 	app.width = 100
 	app.height = 24
@@ -132,6 +136,69 @@ func TestHomeRollbackStopsAtReviewChanges(t *testing.T) {
 	}
 	if app.rollbackReview != nil {
 		t.Fatal("rollback must wait for the Review Changes command result")
+	}
+}
+
+func TestChangesFirstHomeRollbackRescansToClean(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	configPath := writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	claudeSettings := filepath.Join(runtime.HomeDir, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(claudeSettings), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(claudeSettings, []byte(`{"permissions":{"allow":["Bash(echo hi)"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := NewApp(runtime)
+	app.ready = true
+	if _, err := app.createMissingBaselines(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5.1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app.applyWorkspaceData(app.fetchWorkspaceData())
+
+	home := BuildHomeViewModel(app.baselineStatus)
+	if home.TotalChanges == 0 {
+		t.Fatalf("expected drift before review: %#v", home)
+	}
+	app.width = 36
+	app.height = 20
+	view := app.View()
+	for _, want := range []string{"[v] review", "[R] rollback", "[i] setup"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("narrow home missing %q:\n%s", want, view)
+		}
+	}
+
+	if cmd, _ := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")}); cmd != nil || app.screen != ScreenEnvironments {
+		t.Fatalf("review route: screen=%q cmd=%v", app.screen, cmd != nil)
+	}
+	app.screen = ScreenHome
+	previewCmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	if quit || previewCmd == nil || app.screen != ScreenSnapshots {
+		t.Fatalf("rollback route: screen=%q cmd=%v quit=%v", app.screen, previewCmd != nil, quit)
+	}
+	model, _ := app.Update(previewCmd())
+	app = model.(*App)
+	if app.rollbackReview == nil {
+		t.Fatal("expected Review Changes before rollback apply")
+	}
+
+	applyCmd := app.handleSnapshotEnter()
+	if applyCmd == nil {
+		t.Fatal("expected rollback apply command")
+	}
+	model, _ = app.Update(applyCmd())
+	app = model.(*App)
+	if app.actionError != "" {
+		t.Fatalf("rollback error = %q", app.actionError)
+	}
+	home = BuildHomeViewModel(app.baselineStatus)
+	if !home.HasBaseline || home.HasMissingBaseline || home.TotalChanges != 0 {
+		t.Fatalf("home after rollback rescan = %#v", home)
 	}
 }
 
@@ -395,6 +462,100 @@ func TestMarketplaceEnterTogglesSourceAndChildOpensReviewAction(t *testing.T) {
 	model = app.currentSetupConsoleViewModel()
 	if len(model.Rows) != 1 || model.Rows[0].Expanded {
 		t.Fatalf("collapsed marketplace rows after toggle = %#v", model.Rows)
+	}
+}
+
+func TestClaudeMarketplaceInstallRescansVerifiesAndRollsBack(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	marketplaceRoot := filepath.Join(runtime.HomeDir, ".claude", "plugins", "marketplaces", "openai-codex")
+	writeTUITestFile(t, filepath.Join(runtime.HomeDir, ".claude", "plugins", "known_marketplaces.json"), `{
+		"openai-codex": {
+			"source": {"source": "github", "repo": "openai/codex-plugin-cc"},
+			"installLocation": "`+filepath.ToSlash(marketplaceRoot)+`"
+		}
+	}`)
+	installedPath := filepath.Join(runtime.HomeDir, ".claude", "plugins", "installed_plugins.json")
+	writeTUITestFile(t, installedPath, `{"version":2,"plugins":{}}`)
+	writeTUITestFile(t, filepath.Join(marketplaceRoot, ".claude-plugin", "marketplace.json"), `{
+		"name": "openai-codex",
+		"plugins": [{
+			"name": "codex",
+			"description": "Use Codex from Claude Code.",
+			"version": "1.0.2",
+			"source": "./plugins/codex"
+		}]
+	}`)
+
+	app := NewApp(runtime)
+	app.screen = ScreenInventory
+	app.activeSetupTab = SetupConsoleTabMarketplace
+	app.ready = true
+	data := app.fetchWorkspaceData()
+	if data.err != nil {
+		t.Fatal(data.err)
+	}
+	app.applyWorkspaceData(data)
+	app.marketplaceRunner = &marketplaceFixtureRunner{installedPath: installedPath}
+
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("source expansion returned command")
+	}
+	app.moveInventoryCursor(1)
+	if cmd, _ := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("I")}); cmd != nil {
+		t.Fatal("install preview returned command")
+	}
+	if app.pendingAction == nil || app.pendingAction.Command == nil || !strings.Contains(strings.Join(app.pendingAction.Command.Args, " "), "codex@openai-codex") {
+		t.Fatalf("install preview = %#v", app.pendingAction)
+	}
+
+	cmd := app.handleInventoryEnter()
+	if cmd == nil {
+		t.Fatal("confirmed install did not return command")
+	}
+	model, _ := app.Update(cmd())
+	app = model.(*App)
+	if app.actionError != "" || app.marketplaceInstallResult == nil || !strings.Contains(app.notice, "rescanned, and verified") {
+		t.Fatalf("install result: error=%q notice=%q plan=%#v", app.actionError, app.notice, app.marketplaceInstallResult)
+	}
+	_, entry, ok := app.marketplaceEntryByID(app.marketplaceInstallResult.MarketplaceInstall.EntryID)
+	if !ok || !entry.Installed {
+		t.Fatalf("installed marketplace entry = %#v, found=%v", entry, ok)
+	}
+
+	cmd, _ = app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
+	if cmd == nil {
+		t.Fatal("rollback did not return command")
+	}
+	model, _ = app.Update(cmd())
+	app = model.(*App)
+	if app.actionError != "" || app.marketplaceInstallResult != nil || !strings.Contains(app.notice, "Rolled back") {
+		t.Fatalf("rollback result: error=%q notice=%q plan=%#v", app.actionError, app.notice, app.marketplaceInstallResult)
+	}
+	sources := setup.BuildMarketplace(app.evidence)
+	if len(sources) != 1 || len(sources[0].Entries) != 1 || sources[0].Entries[0].Installed {
+		t.Fatalf("marketplace after rollback = %#v", sources)
+	}
+}
+
+type marketplaceFixtureRunner struct {
+	installedPath string
+}
+
+func (runner *marketplaceFixtureRunner) Run(_ context.Context, command setup.CommandPlan) error {
+	contents := `{"version":2,"plugins":{"codex@openai-codex":[{"scope":"user","version":"1.0.2"}]}}`
+	if len(command.Args) >= 2 && command.Args[1] == "uninstall" {
+		contents = `{"version":2,"plugins":{}}`
+	}
+	return os.WriteFile(runner.installedPath, []byte(contents), 0o644)
+}
+
+func writeTUITestFile(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
