@@ -14,7 +14,7 @@ func TestRenderEnvironmentsShowsSideBySideDiff(t *testing.T) {
 	for _, expected := range []string{
 		"Agents",
 		"Surfaces",
-		"Baseline",
+		"Save",
 		"Current",
 		"@@ MCP aside",
 		`1 - command: "old-aside"`,
@@ -37,7 +37,7 @@ func TestRenderEnvironmentsShowsSideBySideDiff(t *testing.T) {
 
 func TestRenderEnvironmentsKeepsFullWidthSideBySideWhenThreeColumnDiffWouldBeTooNarrow(t *testing.T) {
 	rendered := ansi.Strip(RenderEnvironments(sideBySideEnvironmentFixture(), 150, 28))
-	if !strings.Contains(rendered, "Baseline") || !strings.Contains(rendered, "Current") {
+	if !strings.Contains(rendered, "Save") || !strings.Contains(rendered, "Current") {
 		t.Fatalf("expected side-by-side diff headers at 150 columns:\n%s", rendered)
 	}
 	if !hasLineWithAll(rendered, `command: "old-aside"`, `command: "new-aside"`, "│") {
@@ -46,6 +46,35 @@ func TestRenderEnvironmentsKeepsFullWidthSideBySideWhenThreeColumnDiffWouldBeToo
 	for _, line := range strings.Split(rendered, "\n") {
 		if ansi.StringWidth(line) > 150 {
 			t.Fatalf("line overflows 150 columns (%d): %q\n%s", ansi.StringWidth(line), line, rendered)
+		}
+	}
+}
+
+func TestRenderChangesShowsCapabilityBadgesOnSurfaces(t *testing.T) {
+	view := EnvironmentsView{
+		Focus:      "surfaces",
+		FocusAgent: "Codex",
+		Rows: []EnvironmentRow{{
+			AgentLabel: "Codex", AgentMarker: "CX", State: "changed", Detail: "3 changes", Selected: true,
+		}},
+		Surfaces: []EnvironmentSurface{
+			{Marker: "~", Kind: "MCP", Name: "aside", Detail: "changed", Capability: "reviewable", Selected: true},
+			{Marker: "-", Kind: "Hook", Name: "Stop", Detail: "removed", Capability: "restore-only"},
+			{Marker: "~", Kind: "Source", Name: "~/.codex/config.toml", Detail: "changed", Capability: "read-only", CapabilityReason: "save has no captured content"},
+		},
+	}
+
+	rendered := ansi.Strip(RenderEnvironments(view, 120, 24))
+	for _, want := range []string{"[reviewable]", "[restore-only]", "[read-only · save has no captured content]"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("missing %q from Changes surfaces:\n%s", want, rendered)
+		}
+	}
+
+	narrow := ansi.Strip(RenderEnvironments(view, 40, 24))
+	for _, want := range []string{"[reviewable]", "[restore-only]", "[read-only]"} {
+		if !strings.Contains(narrow, want) {
+			t.Fatalf("narrow Changes dropped capability %q:\n%s", want, narrow)
 		}
 	}
 }

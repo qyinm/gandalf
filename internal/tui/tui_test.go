@@ -240,41 +240,6 @@ func TestFormattersAndSourceRootLabels(t *testing.T) {
 	}
 }
 
-func TestBuildBaselineStatusViewModel(t *testing.T) {
-	model := tui.BuildBaselineStatusViewModel(baseline.Status{
-		Agents: []baseline.AgentStatus{
-			{
-				Agent:               types.AgentClaudeCode,
-				HasBaseline:         false,
-				UnsupportedCount:    2,
-				OmittedContentCount: 1,
-			},
-			{
-				Agent:               types.AgentCodex,
-				HasBaseline:         true,
-				BaselineName:        "baseline-codex",
-				SemanticChangeCount: 1,
-			},
-		},
-	})
-
-	if !model.HasMissing || !model.HasChanges {
-		t.Fatalf("model flags = %#v", model)
-	}
-	if len(model.Rows) != 2 {
-		t.Fatalf("rows = %#v", model.Rows)
-	}
-	if model.Rows[0].Status != "missing baseline" || model.Rows[0].Baseline != "-" {
-		t.Fatalf("missing row = %#v", model.Rows[0])
-	}
-	if model.Rows[0].Unsupported != "2 unsupported, 1 omitted" {
-		t.Fatalf("unsupported label = %q", model.Rows[0].Unsupported)
-	}
-	if model.Rows[1].Status != "changed" || model.Rows[1].Changes != "1 changes" {
-		t.Fatalf("changed row = %#v", model.Rows[1])
-	}
-}
-
 func TestBuildHeaderChipsDistinguishesRawSourceDriftFromClean(t *testing.T) {
 	chips := tui.BuildHeaderChips(baseline.Status{Agents: []baseline.AgentStatus{{
 		Agent: types.AgentCodex, HasBaseline: true, RawChangeCount: 2,
@@ -382,41 +347,6 @@ func TestTimelineCurrentSetupSourceRootRows(t *testing.T) {
 	}
 	if strings.Join(model.EnvKeyRows, "|") != "Project: OPENAI_API_KEY" {
 		t.Fatalf("env rows: got %#v", model.EnvKeyRows)
-	}
-}
-
-func TestSetupInventoryViewModelShowsGlobalItemsWithAgentMarkers(t *testing.T) {
-	evidence := []types.DiscoveredItem{
-		discoveredItem(map[string]any{
-			"id": "skill:review", "agent": types.AgentClaudeCode, "kind": types.KindSkill,
-			"name": "review", "sourcePath": "~/.claude/skills/review", "scope": types.ScopeUser,
-		}),
-		discoveredItem(map[string]any{
-			"id": "mcp:docs", "agent": types.AgentCodex, "kind": types.KindMcpServer,
-			"name": "docs", "sourcePath": "~/.codex/config.toml", "scope": types.ScopeUser,
-		}),
-		discoveredItem(map[string]any{
-			"id": "project:env", "agent": types.AgentProject, "kind": types.KindEnvKey,
-			"name": "OPENAI_API_KEY", "sourcePath": ".env", "scope": types.ScopeProject,
-		}),
-	}
-	model := tui.BuildSetupInventoryViewModel(tui.BuildSetupInventoryViewModelInput{
-		Inventory: setup.BuildInventory(evidence),
-	})
-
-	if len(model.Rows) != 2 {
-		t.Fatalf("rows = %#v", model.Rows)
-	}
-	if model.Rows[0].AgentMarker == "" || model.Rows[0].AgentLabel == "" {
-		t.Fatalf("missing agent identity: %#v", model.Rows[0])
-	}
-	for _, row := range model.Rows {
-		if row.SourcePath == ".env" {
-			t.Fatalf("project row included: %#v", row)
-		}
-	}
-	if model.Skills != 1 || model.McpServers != 1 {
-		t.Fatalf("counts = %#v", model)
 	}
 }
 
@@ -612,6 +542,50 @@ func TestSetupConsoleRendersMarketplaceReviewResultAsNonMutating(t *testing.T) {
 	}
 }
 
+func TestSetupConsoleViewModelClassifiesCapabilitiesFromProvidersAndSaves(t *testing.T) {
+	model := tui.BuildSetupConsoleViewModel(tui.BuildSetupConsoleViewModelInput{
+		Inventory: []setup.InventoryItem{
+			{
+				ID: "reviewable", Agent: types.AgentCodex, ObjectKind: setup.ObjectHook,
+				EvidenceKind: types.KindHook, Name: "PostToolUse", Scope: types.ScopeUser,
+				Actions: []setup.ActionAvailability{{Action: setup.ActionEdit, Available: true}},
+			},
+			{
+				ID: "restore-only", Agent: types.AgentCodex, ObjectKind: setup.ObjectHook,
+				EvidenceKind: types.KindHook, Name: "SessionStart", Scope: types.ScopeUser,
+				Actions: []setup.ActionAvailability{{Action: setup.ActionEdit, Reason: "edit provider unavailable"}},
+			},
+			{
+				ID: "read-only", Agent: types.AgentClaudeCode, ObjectKind: setup.ObjectHook,
+				EvidenceKind: types.KindHook, Name: "Stop", Scope: types.ScopeUser,
+				Actions: []setup.ActionAvailability{{Action: setup.ActionEdit, Reason: "edit provider unavailable"}},
+			},
+		},
+		ActiveTab: tui.SetupConsoleTabHooks,
+		BaselineStatus: &baseline.Status{Agents: []baseline.AgentStatus{
+			{Agent: types.AgentCodex, HasBaseline: true, ContentBacked: true},
+			{Agent: types.AgentClaudeCode, HasBaseline: false},
+		}},
+	})
+
+	if len(model.Rows) != 3 {
+		t.Fatalf("rows = %#v", model.Rows)
+	}
+	got := map[string]tui.SetupConsoleRowModel{}
+	for _, row := range model.Rows {
+		got[row.ID] = row
+	}
+	if got["reviewable"].Capability != tui.CapabilityReviewable {
+		t.Fatalf("reviewable row = %#v", got["reviewable"])
+	}
+	if got["restore-only"].Capability != tui.CapabilityRestoreOnly {
+		t.Fatalf("restore-only row = %#v", got["restore-only"])
+	}
+	if got["read-only"].Capability != tui.CapabilityReadOnly || got["read-only"].CapabilityReason != "edit provider unavailable" {
+		t.Fatalf("read-only row = %#v", got["read-only"])
+	}
+}
+
 func TestSetupConsoleViewModelClassifiesPiExtensionInPluginsAndExcludesMarketplace(t *testing.T) {
 	name := "cmux-session"
 	evidence := []types.DiscoveredItem{
@@ -661,48 +635,6 @@ func TestTimelineCorruptWarning(t *testing.T) {
 	}
 	if len(model.Rows) != 1 {
 		t.Fatalf("rows length: got %d", len(model.Rows))
-	}
-}
-
-func TestCompareScopeAndLabels(t *testing.T) {
-	before := snapshotForTui("baseline", "2026-06-07T00:00:00.000Z", []types.GraphNode{
-		graphNode(map[string]any{"id": "mcp-linear-before", "entityKind": types.KindMcpServer, "entityName": "linear", "effectiveValue": json.RawMessage(`{"command":"linear-old"}`)}),
-		graphNode(map[string]any{"id": "hook-pre-before", "entityKind": types.KindHook, "entityName": "pre-tool-use", "effectiveValue": json.RawMessage(`{"command":"notify"}`)}),
-	})
-	after := snapshotForTui("current", "2026-06-08T00:00:00.000Z", []types.GraphNode{
-		graphNode(map[string]any{"id": "mcp-linear-after", "entityKind": types.KindMcpServer, "entityName": "linear", "effectiveValue": json.RawMessage(`{"command":"linear-new"}`)}),
-		graphNode(map[string]any{"id": "skill-review-after", "entityKind": types.KindSkill, "entityName": "react-review", "effectiveValue": json.RawMessage(`{"installed":true}`)}),
-	})
-
-	model := tui.BuildCompareViewModel(tui.BuildCompareViewModelInput{
-		FromSnapshot: before,
-		ToSnapshot:   after,
-		ToLabel:      "Current  unsaved changes",
-		Scope:        "Full setup",
-		Diff: diff.GraphDiff{
-			SemanticChanges: []diff.SemanticChange{{
-				Code:       diff.SemanticSkillAdded,
-				EntityKind: types.KindSkill,
-				EntityName: "react-review",
-				Severity:   types.SeverityLow,
-			}},
-		},
-	})
-
-	if !strings.HasPrefix(model.FromLabel, "baseline") {
-		t.Fatalf("from label: got %q", model.FromLabel)
-	}
-	if model.ToLabel != "Current  unsaved changes" {
-		t.Fatalf("to label: got %q", model.ToLabel)
-	}
-	if model.ScopeLabel != "Full setup" {
-		t.Fatalf("scope label: got %q", model.ScopeLabel)
-	}
-	if len(model.Summary) != 1 || model.Summary[0] != "+ Skill: react-review" {
-		t.Fatalf("summary: got %#v", model.Summary)
-	}
-	if len(model.Sections) == 0 || model.Sections[0].Title != "Claude Code" {
-		t.Fatalf("sections: got %#v", model.Sections)
 	}
 }
 
@@ -833,7 +765,7 @@ func TestEnvironmentsViewModelShowsRawOnlyChanges(t *testing.T) {
 	if !hasEnvironmentPair(model.Diff.Rows, "checksum: sha256:old", "checksum: sha256:new") {
 		t.Fatalf("expected raw checksum diff: %#v", model.Diff.Rows)
 	}
-	if !hasEnvironmentPair(model.Diff.Rows, "status: baseline", "status: current") {
+	if !hasEnvironmentPair(model.Diff.Rows, "status: saved", "status: current") {
 		t.Fatalf("expected raw status diff: %#v", model.Diff.Rows)
 	}
 }
@@ -883,39 +815,6 @@ func hasEnvironmentContext(rows []tui.EnvironmentDiffRowModel, text string) bool
 	return false
 }
 
-func TestSaveSetupTitlePreview(t *testing.T) {
-	baseline := tui.BuildSaveSetupViewModel(tui.BuildSaveSetupViewModelInput{HasPreviousSnapshot: false})
-	if baseline.Title != "capture baseline" {
-		t.Fatalf("baseline title: got %q", baseline.Title)
-	}
-
-	changed := tui.BuildSaveSetupViewModel(tui.BuildSaveSetupViewModelInput{
-		HasPreviousSnapshot: true,
-		Diff: &diff.GraphDiff{
-			SemanticChanges: []diff.SemanticChange{{
-				Code:       diff.SemanticSkillAdded,
-				EntityKind: types.KindSkill,
-				EntityName: "react-review",
-				Severity:   types.SeverityLow,
-			}},
-		},
-	})
-	if changed.Title != "install react-review skill" {
-		t.Fatalf("changed title: got %q", changed.Title)
-	}
-	if changed.DetectedChanges[0] != "install react-review skill" {
-		t.Fatalf("detected changes: got %#v", changed.DetectedChanges)
-	}
-
-	unchanged := tui.BuildSaveSetupViewModel(tui.BuildSaveSetupViewModelInput{
-		HasPreviousSnapshot: true,
-		Diff:                &diff.GraphDiff{},
-	})
-	if !unchanged.NoChanges || unchanged.Title != "current setup unchanged" {
-		t.Fatalf("unchanged model: %#v", unchanged)
-	}
-}
-
 func TestUndoPreviewDryRunOnly(t *testing.T) {
 	plan := timelineundo.Plan{
 		EntryID:     "changed-entry",
@@ -948,63 +847,26 @@ func TestUndoPreviewDryRunOnly(t *testing.T) {
 	}
 }
 
-func TestNavigationAgentsExcludeProject(t *testing.T) {
-	model := tui.BuildNavigationModel(tui.BuildNavigationModelInput{
-		Evidence: []types.DiscoveredItem{
-			discoveredItem(map[string]any{"id": "skill", "agent": types.AgentClaudeCode, "kind": types.KindSkill}),
-			discoveredItem(map[string]any{"id": "env", "agent": types.AgentProject, "kind": types.KindEnvKey}),
-		},
-	})
-	var agentsSection tui.NavSection
-	for _, section := range model.Sections {
-		if section.Label == "Agents" {
-			agentsSection = section
-			break
+func TestDestinationsCoverAllScreensWithNumberKeys(t *testing.T) {
+	if len(tui.Destinations) != 5 {
+		t.Fatalf("destinations = %#v", tui.Destinations)
+	}
+	wantScreens := []tui.Screen{
+		tui.ScreenHome, tui.ScreenInventory, tui.ScreenEnvironments, tui.ScreenTimeline, tui.ScreenSnapshots,
+	}
+	for i, dest := range tui.Destinations {
+		if dest.Screen != wantScreens[i] {
+			t.Fatalf("destination %d = %#v, want screen %q", i, dest, wantScreens[i])
+		}
+		if dest.Key != fmt.Sprintf("%d", i+1) {
+			t.Fatalf("destination %d key = %q", i, dest.Key)
+		}
+		resolved, ok := tui.DestinationForKey(dest.Key)
+		if !ok || resolved.Screen != dest.Screen {
+			t.Fatalf("DestinationForKey(%q) = %#v, %v", dest.Key, resolved, ok)
 		}
 	}
-	if len(agentsSection.Items) != 1 || agentsSection.Items[0].Label != "Claude Code" {
-		t.Fatalf("agents section: got %#v", agentsSection.Items)
-	}
-}
-
-func TestNavigationDefaultsToInventory(t *testing.T) {
-	model := tui.BuildNavigationModel(tui.BuildNavigationModelInput{})
-	if model.SelectedItemID != "inventory:global" {
-		t.Fatalf("selected item = %q", model.SelectedItemID)
-	}
-	if len(model.Sections) == 0 || model.Sections[0].Label != "Inventory" {
-		t.Fatalf("sections = %#v", model.Sections)
-	}
-}
-
-func TestNavigationSelectionIDsSplitInventoryAndHistory(t *testing.T) {
-	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenInventory}); got != tui.InventoryNavItemID {
-		t.Fatalf("inventory id = %q", got)
-	}
-	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenTimeline}); got != tui.HistoryAllNavItemID {
-		t.Fatalf("history id = %q", got)
-	}
-	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenSnapshots}); got != "history:snapshots" {
-		t.Fatalf("snapshots id = %q", got)
-	}
-
-	agent := types.AgentCodex
-	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenTimeline, SelectedAgent: &agent}); got != "agent:codex" {
-		t.Fatalf("agent timeline id = %q", got)
-	}
-	if got := tui.NavItemIDForSelection(tui.NavigationSelection{Screen: tui.ScreenProfile}); got != "profile:default" {
-		t.Fatalf("profile id = %q", got)
-	}
-}
-
-func TestSelectNavItemRoutesInventoryAndHistoryScreens(t *testing.T) {
-	inventory := tui.NavItem{ID: tui.InventoryNavItemID, Kind: tui.NavHistoryItem, Screen: tui.ScreenInventory}
-	if selection := tui.SelectNavItem(inventory, tui.ScreenTimeline, nil, ""); selection.Screen != tui.ScreenInventory {
-		t.Fatalf("inventory selection = %#v", selection)
-	}
-
-	history := tui.NavItem{ID: tui.HistoryAllNavItemID, Kind: tui.NavHistoryItem, Screen: tui.ScreenTimeline}
-	if selection := tui.SelectNavItem(history, tui.ScreenInventory, nil, ""); selection.Screen != tui.ScreenTimeline {
-		t.Fatalf("history selection = %#v", selection)
+	if _, ok := tui.DestinationForKey("6"); ok {
+		t.Fatalf("key 6 should not resolve")
 	}
 }

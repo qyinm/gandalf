@@ -19,42 +19,35 @@ type SetupConsoleTab struct {
 
 // SetupConsoleRow is one setup object row in the active tab.
 type SetupConsoleRow struct {
-	RowKind       string
-	ParentID      string
-	Depth         int
-	Expanded      bool
-	Toggleable    bool
-	AgentLabel    string
-	AgentMarker   string
-	ObjectKind    string
-	Name          string
-	SourcePath    string
-	Scope         string
-	Status        string
-	Entrypoint    string
-	EntryStatus   string
-	RuntimeStatus string
-	Tools         []SetupConsoleTool
-	ToolCount     int
-	Description   string
-	ActionLabel   string
-	ToggleControl bool
-	Disabled      bool
-	Selected      bool
+	RowKind          string
+	ParentID         string
+	Depth            int
+	Expanded         bool
+	Toggleable       bool
+	AgentLabel       string
+	AgentMarker      string
+	ObjectKind       string
+	Name             string
+	SourcePath       string
+	Scope            string
+	Status           string
+	Entrypoint       string
+	EntryStatus      string
+	RuntimeStatus    string
+	Tools            []SetupConsoleTool
+	ToolCount        int
+	Description      string
+	ActionLabel      string
+	Capability       string
+	CapabilityReason string
+	ToggleControl    bool
+	Disabled         bool
+	Selected         bool
 }
 
 type SetupConsoleTool struct {
 	Name        string
 	Description string
-}
-
-// SetupConsoleBaselineRow summarizes baseline state for one supported agent.
-type SetupConsoleBaselineRow struct {
-	AgentMarker string
-	Status      string
-	Baseline    string
-	Changes     string
-	Unsupported string
 }
 
 // SetupConsoleAction is one action exposed in selected-row detail.
@@ -66,19 +59,21 @@ type SetupConsoleAction struct {
 
 // SetupConsoleDetail is selected setup object detail.
 type SetupConsoleDetail struct {
-	Title        string
-	AgentLabel   string
-	ObjectKind   string
-	SourcePath   string
-	Scope        string
-	Status       string
-	Description  string
-	Author       string
-	Category     string
-	Version      string
-	Provides     []string
-	Actions      []SetupConsoleAction
-	ConfigTarget string
+	Title            string
+	AgentLabel       string
+	ObjectKind       string
+	SourcePath       string
+	Scope            string
+	Status           string
+	Description      string
+	Author           string
+	Category         string
+	Version          string
+	Provides         []string
+	Actions          []SetupConsoleAction
+	ConfigTarget     string
+	Capability       string
+	CapabilityReason string
 }
 
 // SetupMarkdownOverlay is a read-only markdown viewer rendered over the setup console.
@@ -97,16 +92,13 @@ type SetupConsoleView struct {
 	ActiveTab         string
 	Tabs              []SetupConsoleTab
 	Rows              []SetupConsoleRow
-	BaselineRows      []SetupConsoleBaselineRow
 	RowOffset         int
 	Search            string
 	SearchInput       string
 	SearchFocused     bool
 	EmptyMessage      string
 	Selected          *SetupConsoleDetail
-	Confirmation      *SetupActionConfirmation
 	MarketplaceReview *SetupMarketplaceReview
-	ActionError       string
 	MarkdownOverlay   *SetupMarkdownOverlay
 }
 
@@ -137,17 +129,8 @@ func RenderSetupConsole(model SetupConsoleView, width, height int) string {
 		renderSetupSearch(model),
 		"",
 	}
-	if len(model.BaselineRows) > 0 {
-		lines = append(lines, renderSetupBaselineRows(model.BaselineRows, listWidth), "")
-	}
-	if model.ActionError != "" {
-		lines = append(lines, warnStyle.Render(model.ActionError), "")
-	}
 
 	listHeight := height - 10
-	if len(model.BaselineRows) > 0 {
-		listHeight -= len(model.BaselineRows) + 1
-	}
 	if listHeight < 4 {
 		listHeight = 4
 	}
@@ -159,10 +142,6 @@ func RenderSetupConsole(model SetupConsoleView, width, height int) string {
 		lines = append(lines, renderSetupConsoleDetail(*model.Selected, listWidth)...)
 	}
 
-	if model.Confirmation != nil {
-		lines = append(lines, "")
-		lines = append(lines, renderSetupActionConfirmation(*model.Confirmation)...)
-	}
 	if model.MarketplaceReview != nil {
 		lines = append(lines, "")
 		lines = append(lines, renderSetupMarketplaceReview(*model.MarketplaceReview, listWidth)...)
@@ -212,23 +191,6 @@ func renderSetupSearch(model SetupConsoleView) string {
 	return labelStyle.Render("/ to search")
 }
 
-func renderSetupBaselineRows(rows []SetupConsoleBaselineRow, width int) string {
-	lines := make([]string, 0, len(rows))
-	for _, row := range rows {
-		parts := []string{
-			row.AgentMarker,
-			row.Status,
-			"baseline " + row.Baseline,
-			row.Changes,
-		}
-		if row.Unsupported != "" {
-			parts = append(parts, row.Unsupported)
-		}
-		lines = append(lines, labelStyle.Render(truncate(strings.Join(parts, "  "), width)))
-	}
-	return strings.Join(lines, "\n")
-}
-
 func renderSetupConsoleRows(model SetupConsoleView, width, height int) string {
 	if model.EmptyMessage != "" {
 		return mutedStyle.Render(model.EmptyMessage)
@@ -241,10 +203,7 @@ func renderSetupCompactRows(model SetupConsoleView, width, height int) string {
 	for _, row := range model.Rows {
 		line := renderSetupCompactRow(row, model.ActiveTab, width)
 		if row.Selected {
-			line = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("252")).
-				Background(lipgloss.Color("236")).
-				Render(line)
+			line = selectedRow.Render(line)
 		} else {
 			line = mutedStyle.Render(line)
 		}
@@ -271,7 +230,9 @@ func renderSetupCompactRow(row SetupConsoleRow, activeTab string, width int) str
 	if width < 20 {
 		width = 20
 	}
-	origin := setupCompactOriginLabel(row, activeTab)
+	originBase := setupCompactOriginBase(row, activeTab)
+	badge := capabilityBadge(row)
+	origin := joinSetupOrigin(originBase, badge)
 	prefix := "›"
 	if row.Expanded {
 		prefix = "⌄"
@@ -292,8 +253,15 @@ func renderSetupCompactRow(row SetupConsoleRow, activeTab string, width int) str
 	}
 	nameWidth := width - ansi.StringWidth(origin) - ansi.StringWidth(leftPrefix) - 2
 	if nameWidth < 8 {
-		nameWidth = width - ansi.StringWidth(leftPrefix)
-		origin = ""
+		origin = badge
+		nameWidth = width - ansi.StringWidth(origin) - ansi.StringWidth(leftPrefix) - 2
+	}
+	if nameWidth < 8 {
+		origin = compactCapabilityBadge(row.Capability)
+		nameWidth = width - ansi.StringWidth(origin) - ansi.StringWidth(leftPrefix) - 2
+	}
+	if nameWidth < 4 {
+		nameWidth = 4
 	}
 	nameValue := strings.Repeat("  ", max(0, row.Depth)) + row.Name
 	if isMCPServerRow(row, activeTab) {
@@ -306,6 +274,26 @@ func renderSetupCompactRow(row SetupConsoleRow, activeTab string, width int) str
 		gap = 1
 	}
 	return truncate(left+strings.Repeat(" ", gap)+origin, width)
+}
+
+func joinSetupOrigin(origin, badge string) string {
+	switch {
+	case origin == "":
+		return badge
+	case badge == "":
+		return origin
+	default:
+		return origin + " " + badge
+	}
+}
+
+func compactCapabilityBadge(capability string) string {
+	switch capability {
+	case "reviewable", "restore-only", "read-only":
+		return "[" + capability + "]"
+	default:
+		return "[read-only]"
+	}
 }
 
 // rowStateDot returns an on/off indicator for rows that carry a real toggle
@@ -403,6 +391,10 @@ func renderSetupMCPToolExpandedRows(row SetupConsoleRow, width int) []string {
 }
 
 func setupCompactOriginLabel(row SetupConsoleRow, activeTab string) string {
+	return joinSetupOrigin(setupCompactOriginBase(row, activeTab), capabilityBadge(row))
+}
+
+func setupCompactOriginBase(row SetupConsoleRow, activeTab string) string {
 	if isSkillsTab(activeTab) {
 		return setupSkillOriginLabel(row)
 	}
@@ -421,6 +413,25 @@ func setupCompactOriginLabel(row SetupConsoleRow, activeTab string) string {
 		return agent
 	}
 	return ""
+}
+
+// capabilityBadge makes mutation capability visible on the row itself:
+// visibility ≠ executability stops being a silent rule.
+func capabilityBadge(row SetupConsoleRow) string {
+	return capabilityLabel(row.Capability, row.CapabilityReason)
+}
+
+func capabilityLabel(capability, reason string) string {
+	switch capability {
+	case "reviewable", "restore-only":
+		return "[" + capability + "]"
+	case "read-only":
+		if strings.TrimSpace(reason) != "" {
+			return "[read-only · " + reason + "]"
+		}
+		return "[read-only · no action provider]"
+	}
+	return "[read-only · no action provider]"
 }
 
 func isMCPServerRow(row SetupConsoleRow, activeTab string) bool {
@@ -580,6 +591,7 @@ func renderSetupConsoleDetail(detail SetupConsoleDetail, width int) []string {
 	lines := []string{
 		titleStyle.Render(detail.Title),
 		labelStyle.Render(fmt.Sprintf("%s · %s · %s", detail.AgentLabel, detail.ObjectKind, detail.Status)),
+		mutedStyle.Render(capabilityLabel(detail.Capability, detail.CapabilityReason)),
 		mutedStyle.Render(truncate("source: "+detail.SourcePath, width)),
 	}
 	if detail.Scope != "" {
@@ -629,7 +641,7 @@ func controlVerb(label string) string {
 	case "remove":
 		return "x  remove"
 	case "install":
-		return "I  install"
+		return "enter  review and install"
 	default:
 		return label
 	}
@@ -650,16 +662,13 @@ func renderMetadataLine(detail SetupConsoleDetail) string {
 }
 
 type setupConsoleKeyMap struct {
-	Tabs         key.Binding
-	Search       key.Binding
-	Rescan       key.Binding
-	Baseline     key.Binding
-	Action       key.Binding
-	Toggle       key.Binding
-	Environments key.Binding
-	History      key.Binding
-	Snapshots    key.Binding
-	Quit         key.Binding
+	Tabs   key.Binding
+	Search key.Binding
+	Rescan key.Binding
+	Action key.Binding
+	Toggle key.Binding
+	Keymap key.Binding
+	Quit   key.Binding
 }
 
 func (m setupConsoleKeyMap) ShortHelp() []key.Binding {
@@ -667,7 +676,7 @@ func (m setupConsoleKeyMap) ShortHelp() []key.Binding {
 	if m.Toggle.Help().Key != "" {
 		bindings = append(bindings, m.Toggle)
 	}
-	bindings = append(bindings, m.Action, m.Environments, m.Baseline, m.History, m.Snapshots, m.Quit)
+	bindings = append(bindings, m.Action, m.Keymap, m.Quit)
 	return bindings
 }
 
@@ -731,19 +740,16 @@ func renderSetupConsoleHelp(model SetupConsoleView, width int) string {
 		}
 	}
 	keyMap := setupConsoleKeyMap{
-		Tabs:         key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "tabs")),
-		Search:       key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
-		Rescan:       key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "rescan")),
-		Baseline:     key.NewBinding(key.WithKeys("B"), key.WithHelp("B", "baseline")),
-		Action:       action,
-		Toggle:       toggle,
-		Environments: key.NewBinding(key.WithKeys("E"), key.WithHelp("E", "environments")),
-		History:      key.NewBinding(key.WithKeys("H"), key.WithHelp("H", "history")),
-		Snapshots:    key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "snapshots")),
-		Quit:         key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+		Tabs:   key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "tabs")),
+		Search: key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
+		Rescan: key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "rescan")),
+		Action: action,
+		Toggle: toggle,
+		Keymap: key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "keys")),
+		Quit:   key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
 	}
 	helpView := help.New()
-	helpView.Styles.ShortKey = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
+	helpView.Styles.ShortKey = lipgloss.NewStyle().Foreground(colorForeground).Bold(true)
 	helpView.Styles.ShortDesc = mutedStyle
 	return truncate(helpView.ShortHelpView(keyMap.ShortHelp()), width)
 }
@@ -801,9 +807,9 @@ func renderMarkdownOverlayBox(overlay SetupMarkdownOverlay) string {
 	return lipgloss.NewStyle().
 		Width(overlay.Width).
 		Height(overlay.Height).
-		Background(lipgloss.Color("235")).
+		Background(colorOverlayBg).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
+		BorderForeground(colorBorder).
 		Padding(0, 1).
 		Render(strings.Join(lines, "\n"))
 }

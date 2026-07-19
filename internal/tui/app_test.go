@@ -16,6 +16,7 @@ import (
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
+	"github.com/qyinm/gandalf/internal/tui/views"
 )
 
 func TestNewAppOpensChangesFirstHomeAndKeepsSetupReachable(t *testing.T) {
@@ -23,9 +24,122 @@ func TestNewAppOpensChangesFirstHomeAndKeepsSetupReachable(t *testing.T) {
 	if app.screen != ScreenHome {
 		t.Fatalf("initial screen = %q", app.screen)
 	}
-	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
 	if app.screen != ScreenInventory {
 		t.Fatalf("setup screen = %q", app.screen)
+	}
+}
+
+func TestNumberKeysReachEveryDestinationFromEveryScreen(t *testing.T) {
+	for _, from := range Destinations {
+		for _, to := range Destinations {
+			app := NewApp(makeTestRuntime(t))
+			app.ready = true
+			app.screen = from.Screen
+			if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(to.Key)}); quit {
+				t.Fatalf("%s→%s: number key quit", from.Label, to.Label)
+			}
+			if app.screen != to.Screen {
+				t.Fatalf("%s→%s: screen = %q", from.Label, to.Label, app.screen)
+			}
+		}
+	}
+}
+
+func TestEscReturnsHomeFromEveryDestination(t *testing.T) {
+	for _, from := range Destinations {
+		app := NewApp(makeTestRuntime(t))
+		app.ready = true
+		app.screen = from.Screen
+		if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyEsc}); quit {
+			t.Fatalf("%s: esc quit", from.Label)
+		}
+		if app.screen != ScreenHome {
+			t.Fatalf("%s: esc should return home, screen = %q", from.Label, app.screen)
+		}
+	}
+}
+
+func TestEscClosesOverlayBeforeNavigatingHome(t *testing.T) {
+	app := NewApp(makeTestRuntime(t))
+	app.ready = true
+	app.screen = ScreenSnapshots
+	app.rollbackReview = &rollbackReview{SnapshotName: "save-x", Agent: types.AgentCodex}
+
+	app.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if app.rollbackReview != nil {
+		t.Fatal("first esc should close the review overlay")
+	}
+	if app.screen != ScreenSnapshots {
+		t.Fatalf("first esc should stay on saves, screen = %q", app.screen)
+	}
+
+	app.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if app.screen != ScreenHome {
+		t.Fatalf("second esc should return home, screen = %q", app.screen)
+	}
+}
+
+func TestKeymapOverlayTogglesAndSwallowsNextKey(t *testing.T) {
+	app := NewApp(makeTestRuntime(t))
+	app.ready = true
+	app.width = 100
+	app.height = 30
+
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	if !app.keymapVisible {
+		t.Fatal("? should open the keymap overlay")
+	}
+	view := app.View()
+	for _, want := range []string{"Keys", "jump to Home / Console / Changes / Timeline / Saves", "close overlay, else back to Home"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("keymap overlay missing %q:\n%s", want, view)
+		}
+	}
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
+	if app.keymapVisible {
+		t.Fatal("any key should close the keymap overlay")
+	}
+	if app.screen != ScreenHome {
+		t.Fatalf("overlay-closing key must not navigate, screen = %q", app.screen)
+	}
+}
+
+func TestUnifiedStatusLineIsVisibleAcrossDestinations(t *testing.T) {
+	for _, destination := range Destinations {
+		app := NewApp(makeTestRuntime(t))
+		app.ready = true
+		app.width = 100
+		app.height = 24
+		app.screen = destination.Screen
+		app.setStatus(views.StatusSuccess, "saved setup receipt 61b8")
+
+		if app.status.Level != views.StatusSuccess || app.status.Text != "saved setup receipt 61b8" {
+			t.Fatalf("%s status = %#v", destination.Label, app.status)
+		}
+		if view := app.View(); !strings.Contains(view, "✓ saved setup receipt 61b8") {
+			t.Fatalf("%s did not render the shared status line:\n%s", destination.Label, view)
+		}
+	}
+}
+
+func TestTUIRenderedCopyUsesSaveTerminology(t *testing.T) {
+	app := NewApp(makeTestRuntime(t))
+	app.ready = true
+	app.width = 100
+	app.height = 28
+	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{{
+		Agent: types.AgentCodex, HasBaseline: false,
+	}}}
+
+	for _, screen := range []Screen{ScreenHome, ScreenInventory, ScreenEnvironments, ScreenSnapshots} {
+		app.screen = screen
+		rendered := strings.ToLower(ansi.Strip(app.View()))
+		for _, retired := range []string{"baseline", "snapshot", "saved setup", "restore point"} {
+			if strings.Contains(rendered, retired) {
+				t.Fatalf("%s rendered retired term %q:\n%s", screen, retired, rendered)
+			}
+		}
 	}
 }
 
@@ -45,7 +159,7 @@ func TestHomeViewMakesDriftAndSafeActionsVisible(t *testing.T) {
 		}}},
 	}}}
 	view := app.View()
-	for _, want := range []string{"1 setup object changed", "since Today", "skills 1", "+ review", "[v] review", "[R] rollback", "[i] setup"} {
+	for _, want := range []string{"1 setup object changed", "since last save", "skills 1", "+ review", "enter review", "s save"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("missing %q:\n%s", want, view)
 		}
@@ -70,12 +184,15 @@ func TestHomeAppViewNeverExceedsActualTerminalWidth(t *testing.T) {
 	}
 }
 
-func TestHomeBaselineShortcutStartsBaselineCreation(t *testing.T) {
+func TestHomeSaveShortcutStartsBaselineCreation(t *testing.T) {
 	app := NewApp(makeTestRuntime(t))
 	app.ready = true
-	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("B")})
-	if quit || cmd == nil {
-		t.Fatalf("Home B shortcut: cmd=%v quit=%v", cmd != nil, quit)
+	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if quit || cmd != nil || app.pendingSave == nil {
+		t.Fatalf("Home s shortcut: cmd=%v quit=%v", cmd != nil, quit)
+	}
+	if view := ansi.Strip(app.View()); !strings.Contains(view, "Review Changes") || !strings.Contains(view, "Save current setup") {
+		t.Fatalf("save did not open unified review:\n%s", view)
 	}
 }
 
@@ -91,8 +208,8 @@ func TestHomePartialBaselineCoverageShowsMissingBaselineCTA(t *testing.T) {
 		}}
 
 		view := app.View()
-		if !strings.Contains(view, "Some agents have no baseline.") || !strings.Contains(view, "[B] capture missing baselines") {
-			t.Fatalf("width %d partial baseline home must offer the one-action CTA:\n%s", width, view)
+		if !strings.Contains(view, "Some agents have no save yet.") || !strings.Contains(view, "s save") {
+			t.Fatalf("width %d partial-save home must offer the one-action CTA:\n%s", width, view)
 		}
 	}
 }
@@ -103,7 +220,7 @@ func TestHomeReviewFocusesChangedEnvironmentWithoutMutation(t *testing.T) {
 		{Agent: types.AgentClaudeCode, HasBaseline: true},
 		{Agent: types.AgentCodex, HasBaseline: true, SemanticChangeCount: 1},
 	}}
-	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
+	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if quit || cmd != nil || app.screen != ScreenEnvironments || app.environments.agentCursor != 1 {
 		t.Fatalf("review route: screen=%q cursor=%d cmd=%v quit=%v", app.screen, app.environments.agentCursor, cmd != nil, quit)
 	}
@@ -118,24 +235,28 @@ func TestHomeReviewPrefersSemanticChangeOverEarlierRawOnlyDrift(t *testing.T) {
 		{Agent: types.AgentClaudeCode, HasBaseline: true, RawChangeCount: 3},
 		{Agent: types.AgentCodex, HasBaseline: true, SemanticChangeCount: 1},
 	}}
-	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
+	app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if app.screen != ScreenEnvironments || app.environments.agentCursor != 1 {
 		t.Fatalf("review route: screen=%q cursor=%d", app.screen, app.environments.agentCursor)
 	}
 }
 
-func TestHomeRollbackStopsAtReviewChanges(t *testing.T) {
+func TestHomeRestoreRouteStopsAtReviewChanges(t *testing.T) {
 	app := NewApp(makeTestRuntime(t))
 	app.baselineStatus = baseline.Status{Agents: []baseline.AgentStatus{{
 		Agent: types.AgentCodex, HasBaseline: true, SemanticChangeCount: 1,
 	}}}
 	app.snapshotRefs = []snapshotRef{{Name: "baseline-codex", Agent: types.AgentCodex}}
-	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if app.screen != ScreenEnvironments {
+		t.Fatalf("review route: screen=%q", app.screen)
+	}
+	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if quit || cmd == nil || app.screen != ScreenSnapshots {
-		t.Fatalf("rollback route: screen=%q cmd=%v quit=%v", app.screen, cmd != nil, quit)
+		t.Fatalf("restore route: screen=%q cmd=%v quit=%v", app.screen, cmd != nil, quit)
 	}
 	if app.rollbackReview != nil {
-		t.Fatal("rollback must wait for the Review Changes command result")
+		t.Fatal("restore must wait for the Review Changes command result")
 	}
 }
 
@@ -167,19 +288,18 @@ func TestChangesFirstHomeRollbackRescansToClean(t *testing.T) {
 	app.width = 36
 	app.height = 20
 	view := app.View()
-	for _, want := range []string{"[v] review", "[R] rollback", "[i] setup"} {
+	for _, want := range []string{"enter review", "s save", "? keys"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("narrow home missing %q:\n%s", want, view)
 		}
 	}
 
-	if cmd, _ := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")}); cmd != nil || app.screen != ScreenEnvironments {
+	if cmd, _ := app.handleKey(tea.KeyMsg{Type: tea.KeyEnter}); cmd != nil || app.screen != ScreenEnvironments {
 		t.Fatalf("review route: screen=%q cmd=%v", app.screen, cmd != nil)
 	}
-	app.screen = ScreenHome
-	previewCmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	previewCmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if quit || previewCmd == nil || app.screen != ScreenSnapshots {
-		t.Fatalf("rollback route: screen=%q cmd=%v quit=%v", app.screen, previewCmd != nil, quit)
+		t.Fatalf("restore route: screen=%q cmd=%v quit=%v", app.screen, previewCmd != nil, quit)
 	}
 	model, _ := app.Update(previewCmd())
 	app = model.(*App)
@@ -193,8 +313,8 @@ func TestChangesFirstHomeRollbackRescansToClean(t *testing.T) {
 	}
 	model, _ = app.Update(applyCmd())
 	app = model.(*App)
-	if app.actionError != "" {
-		t.Fatalf("rollback error = %q", app.actionError)
+	if app.status.Level == views.StatusError {
+		t.Fatalf("restore error = %q", app.status.Text)
 	}
 	home = BuildHomeViewModel(app.baselineStatus)
 	if !home.HasBaseline || home.HasMissingBaseline || home.TotalChanges != 0 {
@@ -221,8 +341,8 @@ func TestSkillsEnterOpensMarkdownViewerUnavailableWhenNoEntrypointExists(t *test
 	if cmd := app.handleInventoryEnter(); cmd != nil {
 		t.Fatal("opening viewer should not return a command")
 	}
-	if app.actionError != "" {
-		t.Fatalf("action error = %q", app.actionError)
+	if app.status.Level == views.StatusError {
+		t.Fatalf("action error = %q", app.status.Text)
 	}
 	if app.skillViewer == nil {
 		t.Fatal("expected skill viewer")
@@ -390,8 +510,8 @@ func TestMarketplaceEnterReportsUnavailableProvider(t *testing.T) {
 	if cmd := app.handleInventoryEnter(); cmd != nil {
 		t.Fatal("marketplace action should not return a command")
 	}
-	if !strings.Contains(app.actionError, "marketplace source") {
-		t.Fatalf("action error = %q", app.actionError)
+	if !strings.Contains(app.status.Text, "marketplace source") {
+		t.Fatalf("action error = %q", app.status.Text)
 	}
 }
 
@@ -428,8 +548,8 @@ func TestMarketplaceEnterTogglesSourceAndChildOpensReviewAction(t *testing.T) {
 	if cmd := app.handleInventoryEnter(); cmd != nil {
 		t.Fatal("opening marketplace review should not return a command")
 	}
-	if app.actionError != "" {
-		t.Fatalf("action error = %q", app.actionError)
+	if app.status.Level == views.StatusError {
+		t.Fatalf("action error = %q", app.status.Text)
 	}
 	if app.pendingMarketplaceReview == nil {
 		t.Fatal("expected pending marketplace review")
@@ -450,8 +570,8 @@ func TestMarketplaceEnterTogglesSourceAndChildOpensReviewAction(t *testing.T) {
 	if updated.marketplaceReviewResult == nil {
 		t.Fatal("expected marketplace review result")
 	}
-	if strings.Contains(updated.notice, "Applied setup action") {
-		t.Fatalf("notice should not claim an apply: %q", updated.notice)
+	if strings.Contains(updated.status.Text, "Applied setup action") {
+		t.Fatalf("status should not claim an apply: %q", updated.status.Text)
 	}
 
 	app = updated
@@ -501,7 +621,22 @@ func TestClaudeMarketplaceInstallRescansVerifiesAndRollsBack(t *testing.T) {
 		t.Fatal("source expansion returned command")
 	}
 	app.moveInventoryCursor(1)
-	if cmd, _ := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("I")}); cmd != nil {
+	if cmd := app.handleInventoryEnter(); cmd != nil {
+		t.Fatal("marketplace review preview returned command")
+	}
+	if app.pendingMarketplaceReview == nil {
+		t.Fatal("expected marketplace review before install is offered")
+	}
+	reviewCmd := app.handleInventoryEnter()
+	if reviewCmd == nil {
+		t.Fatal("marketplace review confirmation did not return a command")
+	}
+	model, _ := app.Update(reviewCmd())
+	app = model.(*App)
+	if app.marketplaceReviewResult == nil {
+		t.Fatal("expected completed marketplace review")
+	}
+	if cmd := app.handleInventoryEnter(); cmd != nil {
 		t.Fatal("install preview returned command")
 	}
 	if app.pendingAction == nil || app.pendingAction.Command == nil || !strings.Contains(strings.Join(app.pendingAction.Command.Args, " "), "codex@openai-codex") {
@@ -512,10 +647,10 @@ func TestClaudeMarketplaceInstallRescansVerifiesAndRollsBack(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("confirmed install did not return command")
 	}
-	model, _ := app.Update(cmd())
+	model, _ = app.Update(cmd())
 	app = model.(*App)
-	if app.actionError != "" || app.marketplaceInstallResult == nil || !strings.Contains(app.notice, "rescanned, and verified") {
-		t.Fatalf("install result: error=%q notice=%q plan=%#v", app.actionError, app.notice, app.marketplaceInstallResult)
+	if app.status.Level == views.StatusError || app.marketplaceInstallResult == nil || !strings.Contains(app.status.Text, "rescanned, and verified") {
+		t.Fatalf("install result: status=%#v plan=%#v", app.status, app.marketplaceInstallResult)
 	}
 	_, entry, ok := app.marketplaceEntryByID(app.marketplaceInstallResult.MarketplaceInstall.EntryID)
 	if !ok || !entry.Installed {
@@ -523,13 +658,20 @@ func TestClaudeMarketplaceInstallRescansVerifiesAndRollsBack(t *testing.T) {
 	}
 
 	cmd, _ = app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
+	if cmd != nil || app.pendingMarketplaceRollback == nil {
+		t.Fatalf("rollback review: cmd=%v pending=%v", cmd != nil, app.pendingMarketplaceRollback != nil)
+	}
+	if view := ansi.Strip(app.View()); !strings.Contains(view, "Review Changes") || !strings.Contains(view, "Undo marketplace install") {
+		t.Fatalf("marketplace rollback did not open unified review:\n%s", view)
+	}
+	cmd, _ = app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
-		t.Fatal("rollback did not return command")
+		t.Fatal("confirmed marketplace rollback did not return command")
 	}
 	model, _ = app.Update(cmd())
 	app = model.(*App)
-	if app.actionError != "" || app.marketplaceInstallResult != nil || !strings.Contains(app.notice, "Rolled back") {
-		t.Fatalf("rollback result: error=%q notice=%q plan=%#v", app.actionError, app.notice, app.marketplaceInstallResult)
+	if app.status.Level == views.StatusError || app.marketplaceInstallResult != nil || !strings.Contains(app.status.Text, "Rolled back") {
+		t.Fatalf("rollback result: status=%#v plan=%#v", app.status, app.marketplaceInstallResult)
 	}
 	sources := setup.BuildMarketplace(app.evidence)
 	if len(sources) != 1 || len(sources[0].Entries) != 1 || sources[0].Entries[0].Installed {
@@ -596,6 +738,7 @@ func TestMCPEnterExpandsServerToolsAndToolDescription(t *testing.T) {
 	name := "posthog"
 	app := NewApp(runtime)
 	app.ready = true
+	app.screen = ScreenInventory
 	app.activeSetupTab = SetupConsoleTabMCPServers
 	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
 		ID:         "mcp-posthog",
@@ -628,7 +771,7 @@ func TestMCPEnterExpandsServerToolsAndToolDescription(t *testing.T) {
 	}
 }
 
-func TestMCPSpaceTogglesDisabledFlagOnDisk(t *testing.T) {
+func TestMCPSpaceReviewsBeforeTogglingDisabledFlagOnDisk(t *testing.T) {
 	runtime := makeTestRuntime(t)
 	cfgPath := filepath.Join(runtime.HomeDir, ".mcp.json")
 	if err := os.WriteFile(cfgPath, []byte(`{"mcpServers":{"postgres":{"command":"pg-mcp"}}}`+"\n"), 0o644); err != nil {
@@ -638,6 +781,7 @@ func TestMCPSpaceTogglesDisabledFlagOnDisk(t *testing.T) {
 	name := "postgres"
 	app := NewApp(runtime)
 	app.ready = true
+	app.screen = ScreenInventory
 	app.activeSetupTab = SetupConsoleTabMCPServers
 	app.applyWorkspaceData(bootMsg{evidence: []types.DiscoveredItem{{
 		ID:         "mcp-postgres",
@@ -650,15 +794,49 @@ func TestMCPSpaceTogglesDisabledFlagOnDisk(t *testing.T) {
 	}}})
 
 	cmd := app.handleSetupToggle()
+	if cmd != nil {
+		t.Fatal("opening MCP Review Changes should not return an execution command")
+	}
+	if app.pendingAction == nil {
+		t.Fatal("expected MCP toggle to wait in Review Changes")
+	}
+	reviewView := ansi.Strip(app.View())
+	if !strings.Contains(reviewView, "Review Changes") || strings.Contains(reviewView, "Confirm setup action") {
+		t.Fatalf("MCP toggle did not use the unified review surface:\n%s", reviewView)
+	}
+	raw, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"disabled": true`) {
+		t.Fatalf("MCP config changed before review confirmation:\n%s", raw)
+	}
+
+	app.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if app.pendingAction != nil {
+		t.Fatal("esc should cancel MCP Review Changes")
+	}
+	raw, err = os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"disabled": true`) {
+		t.Fatalf("cancelled MCP review changed config:\n%s", raw)
+	}
+	if cmd = app.handleSetupToggle(); cmd != nil || app.pendingAction == nil {
+		t.Fatalf("reopening MCP review: cmd=%v pending=%v", cmd != nil, app.pendingAction != nil)
+	}
+
+	cmd = app.handleInventoryEnter()
 	if cmd == nil {
-		t.Fatal("toggling a JSON MCP server should return a command")
+		t.Fatal("confirming MCP Review Changes should return a command")
 	}
 	msg := cmd()
 	if actionMsg, ok := msg.(setupActionMsg); ok && actionMsg.err != nil {
 		t.Fatalf("toggle command failed: %v", actionMsg.err)
 	}
 
-	raw, err := os.ReadFile(cfgPath)
+	raw, err = os.ReadFile(cfgPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -686,7 +864,7 @@ func TestMCPSpaceToggleGatedForTOMLServer(t *testing.T) {
 	if cmd := app.handleSetupToggle(); cmd != nil {
 		t.Fatal("TOML-backed MCP server should not run a real toggle command")
 	}
-	if app.actionError == "" {
+	if app.status.Level != views.StatusError {
 		t.Fatal("expected a gated reason for TOML MCP toggle")
 	}
 }
@@ -817,8 +995,8 @@ func TestInventoryEnterConfirmsActionAndRescans(t *testing.T) {
 	if updated.pendingAction != nil {
 		t.Fatalf("pending action was not cleared: %#v", updated.pendingAction)
 	}
-	if updated.notice == "" {
-		t.Fatal("expected success notice")
+	if updated.status.Level != views.StatusSuccess || updated.status.Text == "" {
+		t.Fatalf("expected success status, got %#v", updated.status)
 	}
 }
 
@@ -840,7 +1018,7 @@ func TestInventoryActionFailureKeepsUserInContext(t *testing.T) {
 	if updated.pendingAction == nil {
 		t.Fatal("pending action should remain for a failed confirmation")
 	}
-	if updated.actionError == "" {
+	if updated.status.Level != views.StatusError {
 		t.Fatal("expected action error")
 	}
 }
@@ -858,7 +1036,7 @@ func TestInventoryRescanFailureAfterActionClearsPendingAction(t *testing.T) {
 	if updated.pendingAction != nil {
 		t.Fatalf("pending action should be cleared after executed action: %#v", updated.pendingAction)
 	}
-	if updated.actionError == "" {
+	if updated.status.Level != views.StatusError {
 		t.Fatal("expected rescan error")
 	}
 }
@@ -982,9 +1160,13 @@ func TestHomeBaselineActionCreatesBothSupportedBaselinesAndReturnsClean(t *testi
 	app := NewApp(runtime)
 	app.ready = true
 	app.applyWorkspaceData(app.fetchWorkspaceData())
-	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("B")})
+	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if quit || cmd != nil || app.pendingSave == nil {
+		t.Fatalf("save review: cmd=%v quit=%v pending=%v", cmd != nil, quit, app.pendingSave != nil)
+	}
+	cmd, quit = app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if quit || cmd == nil {
-		t.Fatalf("baseline CTA: cmd=%v quit=%v", cmd != nil, quit)
+		t.Fatalf("confirmed save: cmd=%v quit=%v", cmd != nil, quit)
 	}
 
 	msg := cmd()
@@ -993,11 +1175,11 @@ func TestHomeBaselineActionCreatesBothSupportedBaselinesAndReturnsClean(t *testi
 	if next != nil {
 		t.Fatal("baseline completion should not schedule another command")
 	}
-	if updated.screen != ScreenHome || updated.actionError != "" {
-		t.Fatalf("baseline completion: screen=%q error=%q", updated.screen, updated.actionError)
+	if updated.screen != ScreenHome || updated.status.Level == views.StatusError {
+		t.Fatalf("save completion: screen=%q status=%#v", updated.screen, updated.status)
 	}
-	if !strings.Contains(updated.notice, "Created baselines:") {
-		t.Fatalf("notice = %q", updated.notice)
+	if !strings.Contains(updated.status.Text, "Created 2 saves") {
+		t.Fatalf("status = %q", updated.status.Text)
 	}
 	home := BuildHomeViewModel(updated.baselineStatus)
 	if !home.HasBaseline || home.HasMissingBaseline || home.TotalChanges != 0 {
@@ -1016,14 +1198,18 @@ func TestSnapshotsBaselineShortcutReturnsToChangesHome(t *testing.T) {
 	app.applyWorkspaceData(app.fetchWorkspaceData())
 	app.screen = ScreenSnapshots
 
-	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("B")})
+	cmd, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if quit || cmd != nil || app.pendingSave == nil {
+		t.Fatalf("Saves review: cmd=%v quit=%v pending=%v", cmd != nil, quit, app.pendingSave != nil)
+	}
+	cmd, quit = app.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if quit || cmd == nil {
-		t.Fatalf("snapshots baseline CTA: cmd=%v quit=%v", cmd != nil, quit)
+		t.Fatalf("confirmed Saves action: cmd=%v quit=%v", cmd != nil, quit)
 	}
 	model, _ := app.Update(cmd())
 	updated := model.(*App)
-	if updated.screen != ScreenHome || updated.actionError != "" {
-		t.Fatalf("baseline completion: screen=%q error=%q", updated.screen, updated.actionError)
+	if updated.screen != ScreenHome || updated.status.Level == views.StatusError {
+		t.Fatalf("save completion: screen=%q status=%#v", updated.screen, updated.status)
 	}
 }
 
@@ -1186,8 +1372,8 @@ func TestEnvironmentsModeOpensAndListsPerAgentDrift(t *testing.T) {
 		{Agent: types.AgentCodex, HasBaseline: true, BaselineName: "base-cx", SemanticChangeCount: 2},
 	}}
 
-	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("E")}); quit {
-		t.Fatal("E should not quit")
+	if _, quit := app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")}); quit {
+		t.Fatal("3 should not quit")
 	}
 	if app.screen != ScreenEnvironments {
 		t.Fatalf("expected environments screen, got %s", app.screen)
@@ -1240,7 +1426,7 @@ func TestEnvironmentsKeysMoveFocusSurfacesDiffAndHunks(t *testing.T) {
 		}},
 	}}}
 
-	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("E")})
+	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
 	if app.screen != ScreenEnvironments {
 		t.Fatalf("screen = %s", app.screen)
 	}
@@ -1300,7 +1486,7 @@ func TestEnvironmentsRestoreWithoutSnapshotIsGated(t *testing.T) {
 	if cmd := app.restoreFocusedEnvironment(); cmd != nil {
 		t.Fatal("restore should be gated when no snapshot exists for the agent")
 	}
-	if app.actionError == "" {
+	if app.status.Level != views.StatusError {
 		t.Fatal("expected a gated reason when restoring without a snapshot")
 	}
 }

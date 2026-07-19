@@ -282,22 +282,6 @@ func formatMarketplaceActions(actions []setup.MarketplaceActionAvailability) str
 	return strings.Join(labels, " ")
 }
 
-func buildSetupActionConfirmation(plan setup.ActionPlan) *SetupActionConfirmationModel {
-	command := plan.Operation
-	if plan.Command != nil {
-		command = strings.Join(append([]string{plan.Command.Program}, plan.Command.Args...), " ")
-	}
-	return &SetupActionConfirmationModel{
-		Action:       string(plan.Action),
-		AgentLabel:   FormatAgentLabel(plan.Agent),
-		ObjectKind:   formatSetupObjectKind(plan.ObjectKind),
-		TargetName:   plan.TargetName,
-		Operation:    plan.Operation,
-		ConfigTarget: plan.ConfigTarget,
-		Command:      command,
-	}
-}
-
 func buildMarketplaceReviewModel(plan setup.MarketplaceReviewPlan, pending bool) MarketplaceReviewModel {
 	status := "reviewed guidance"
 	if pending {

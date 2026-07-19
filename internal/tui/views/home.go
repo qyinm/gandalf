@@ -32,9 +32,9 @@ func RenderHome(model HomeView, width, height int) string {
 	}
 	if !model.HasBaseline {
 		return renderHomeSections([]string{
-			labelStyle.Render("○ No baseline yet"),
-			mutedStyle.Render("Capture a baseline to measure setup drift."),
-		}, []string{"", "[B] capture baseline  [i] setup", "[r] rescan  [q] quit"}, width, height)
+			labelStyle.Render("○ No saves yet"),
+			mutedStyle.Render("Save your current setup to measure drift."),
+		}, []string{"", "s save setup · 2 console · ? keys · q quit"}, width, height)
 	}
 
 	narrow := width < 60
@@ -47,9 +47,9 @@ func RenderHome(model HomeView, width, height int) string {
 	if model.TotalChanges == 0 {
 		state = "● No setup objects changed"
 	}
-	lines := []string{labelStyle.Render(state), mutedStyle.Render("since " + model.LastSnapshot)}
+	lines := []string{labelStyle.Render(state), mutedStyle.Render("since last save · " + model.LastSnapshot)}
 	if model.HasMissingBaseline {
-		lines = append(lines, mutedStyle.Render("Some agents have no baseline."))
+		lines = append(lines, mutedStyle.Render("Some agents have no save yet."))
 	}
 
 	if narrow {
@@ -64,15 +64,12 @@ func RenderHome(model HomeView, width, height int) string {
 		))
 	}
 
-	footer := []string{"", "[v] review  [R] rollback  [i] setup  [r] rescan  [q] quit"}
+	footer := []string{"", "enter review · s save · r rescan · ? keys · q quit"}
 	if model.HasMissingBaseline {
-		footer = []string{"", "[B] capture missing baselines  [v] review  [R] rollback", "[i] setup  [r] rescan  [q] quit"}
+		footer = []string{"", "s save missing setups · enter review", "r rescan · ? keys · q quit"}
 	}
 	if narrow {
-		footer = []string{"", "[v] review  [R] rollback", "[i] setup  [r] rescan", "[q] quit"}
-		if model.HasMissingBaseline {
-			footer = []string{"", "[B] capture missing baselines", "[v] review  [R] rollback", "[i] setup  [r] rescan", "[q] quit"}
-		}
+		footer = []string{"", "enter review · s save", "r rescan · ? keys · q quit"}
 	}
 	availableChanges := height - len(footer) - len(lines) - 1
 	limit := min(5, max(0, availableChanges))

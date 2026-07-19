@@ -28,11 +28,34 @@ const (
 	ScreenTimeline     Screen = "timeline"
 	ScreenSnapshots    Screen = "snapshots"
 	ScreenEnvironments Screen = "environments"
-	ScreenAgentDetail  Screen = "agent-detail"
-	ScreenProfile      Screen = "profile"
-	ScreenCompare      Screen = "compare"
-	ScreenSaveSetup    Screen = "save-setup"
 )
+
+// Destination is one fixed sidebar navigation target.
+type Destination struct {
+	Screen Screen
+	Label  string
+	Key    string
+}
+
+// Destinations is the stable v1 sidebar order: five fixed destinations
+// reachable from anywhere with number keys.
+var Destinations = []Destination{
+	{Screen: ScreenHome, Label: "Home", Key: "1"},
+	{Screen: ScreenInventory, Label: "Console", Key: "2"},
+	{Screen: ScreenEnvironments, Label: "Changes", Key: "3"},
+	{Screen: ScreenTimeline, Label: "Timeline", Key: "4"},
+	{Screen: ScreenSnapshots, Label: "Saves", Key: "5"},
+}
+
+// DestinationForKey resolves a number key to its destination screen.
+func DestinationForKey(key string) (Destination, bool) {
+	for _, dest := range Destinations {
+		if dest.Key == key {
+			return dest, true
+		}
+	}
+	return Destination{}, false
+}
 
 // HomeViewModel is the changes-first summary shown when Gandalf opens.
 type HomeViewModel struct {
@@ -104,47 +127,6 @@ func homeChangeAction(code diff.SemanticChangeCode) string {
 	return "changed"
 }
 
-const (
-	DefaultProfile      = "default"
-	InventoryNavItemID  = "inventory:global"
-	HistoryAllNavItemID = "history:all"
-	InitialNavItemID    = InventoryNavItemID
-)
-
-// --- Setup inventory view model ---
-
-type SetupInventoryRowModel struct {
-	ID          string
-	AgentLabel  string
-	AgentMarker string
-	ObjectKind  string
-	Name        string
-	SourcePath  string
-	ActionLabel string
-	Selected    bool
-}
-
-type SetupInventoryViewModel struct {
-	Rows         []SetupInventoryRowModel
-	Skills       int
-	McpServers   int
-	Hooks        int
-	Plugins      int
-	EmptyMessage string
-	Confirmation *SetupActionConfirmationModel
-	ActionError  string
-}
-
-type SetupActionConfirmationModel struct {
-	Action       string
-	AgentLabel   string
-	ObjectKind   string
-	TargetName   string
-	Operation    string
-	ConfigTarget string
-	Command      string
-}
-
 type MarketplaceReviewModel struct {
 	Title          string
 	Status         string
@@ -186,29 +168,89 @@ type SetupConsoleTabModel struct {
 }
 
 type SetupConsoleRowModel struct {
-	ID            string
-	RowKind       SetupConsoleRowKind
-	ParentID      string
-	Depth         int
-	Expanded      bool
-	Toggleable    bool
-	AgentLabel    string
-	AgentMarker   string
-	ObjectKind    string
-	Name          string
-	SourcePath    string
-	Scope         string
-	Status        string
-	Entrypoint    string
-	EntryStatus   string
-	RuntimeStatus string
-	Tools         []SetupConsoleToolModel
-	ToolCount     int
-	Description   string
-	ActionLabel   string
-	ToggleControl bool
-	Disabled      bool
-	Selected      bool
+	ID               string
+	RowKind          SetupConsoleRowKind
+	ParentID         string
+	Depth            int
+	Expanded         bool
+	Toggleable       bool
+	AgentLabel       string
+	AgentMarker      string
+	ObjectKind       string
+	Name             string
+	SourcePath       string
+	Scope            string
+	Status           string
+	Entrypoint       string
+	EntryStatus      string
+	RuntimeStatus    string
+	Tools            []SetupConsoleToolModel
+	ToolCount        int
+	Description      string
+	ActionLabel      string
+	Capability       string
+	CapabilityReason string
+	ToggleControl    bool
+	Disabled         bool
+	Selected         bool
+}
+
+// Capability badge values: mutation capability is inventory, not a hidden rule.
+const (
+	CapabilityReviewable  = "reviewable"
+	CapabilityRestoreOnly = "restore-only"
+	CapabilityReadOnly    = "read-only"
+)
+
+// inventoryCapability classifies a row from concrete provider plans and save
+// coverage. Visibility never implies executability.
+func inventoryCapability(item setup.InventoryItem, status *baseline.Status) (string, string) {
+	for _, availability := range item.Actions {
+		if plan := setup.PlanItemAction(item, availability.Action); plan.Available {
+			return CapabilityReviewable, ""
+		}
+	}
+	if agentHasRestorableSave(status, item.Agent) {
+		return CapabilityRestoreOnly, ""
+	}
+	return CapabilityReadOnly, setupActionUnavailableReason(item.Actions)
+}
+
+func marketplaceCapability(actions []setup.MarketplaceActionAvailability) (string, string) {
+	for _, action := range actions {
+		if action.Available {
+			return CapabilityReviewable, ""
+		}
+	}
+	for _, action := range actions {
+		if strings.TrimSpace(action.Reason) != "" {
+			return CapabilityReadOnly, action.Reason
+		}
+	}
+	return CapabilityReadOnly, "no action provider"
+}
+
+func agentHasRestorableSave(status *baseline.Status, agent types.AgentID) bool {
+	if status == nil {
+		return false
+	}
+	for _, agentStatus := range status.Agents {
+		if agentStatus.Agent == agent {
+			return agentStatus.HasBaseline && agentStatus.ContentBacked
+		}
+	}
+	return false
+}
+
+func setupActionUnavailableReason(actions []setup.ActionAvailability) string {
+	for _, preferred := range []setup.ActionKind{setup.ActionEdit, setup.ActionRemove, setup.ActionToggle} {
+		for _, action := range actions {
+			if action.Action == preferred && strings.TrimSpace(action.Reason) != "" {
+				return action.Reason
+			}
+		}
+	}
+	return "no action provider"
 }
 
 type SetupConsoleRowKind string
@@ -226,21 +268,23 @@ type SetupConsoleToolModel struct {
 }
 
 type SetupConsoleDetailModel struct {
-	Title        string
-	AgentLabel   string
-	ObjectKind   string
-	SourcePath   string
-	Scope        string
-	Status       string
-	Entrypoint   string
-	EntryStatus  string
-	Description  string
-	Author       string
-	Category     string
-	Version      string
-	Provides     []string
-	Actions      []SetupConsoleActionModel
-	ConfigTarget string
+	Title            string
+	AgentLabel       string
+	ObjectKind       string
+	SourcePath       string
+	Scope            string
+	Status           string
+	Entrypoint       string
+	EntryStatus      string
+	Description      string
+	Author           string
+	Category         string
+	Version          string
+	Provides         []string
+	Actions          []SetupConsoleActionModel
+	ConfigTarget     string
+	Capability       string
+	CapabilityReason string
 }
 
 type SetupConsoleActionModel struct {
@@ -253,16 +297,13 @@ type SetupConsoleViewModel struct {
 	ActiveTab         SetupConsoleTab
 	Tabs              []SetupConsoleTabModel
 	Rows              []SetupConsoleRowModel
-	Baseline          *BaselineStatusViewModel
 	RowOffset         int
 	Search            string
 	SearchInput       string
 	SearchFocused     bool
 	EmptyMessage      string
 	Selected          *SetupConsoleDetailModel
-	Confirmation      *SetupActionConfirmationModel
 	MarketplaceReview *MarketplaceReviewModel
-	ActionError       string
 }
 
 type BuildSetupConsoleViewModelInput struct {
@@ -276,10 +317,8 @@ type BuildSetupConsoleViewModelInput struct {
 	ExpandedSources          map[string]bool
 	ExpandedRowID            string
 	ExpandedToolID           string
-	PendingAction            *setup.ActionPlan
 	PendingMarketplaceReview *setup.MarketplaceReviewPlan
 	MarketplaceReviewResult  *setup.MarketplaceReviewResult
-	ActionError              string
 	BaselineStatus           *baseline.Status
 }
 
@@ -295,13 +334,7 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 		Search:        strings.TrimSpace(input.Search),
 		SearchInput:   input.SearchInput,
 		SearchFocused: input.SearchFocused,
-		ActionError:   input.ActionError,
 	}
-	if input.BaselineStatus != nil {
-		baselineModel := BuildBaselineStatusViewModel(*input.BaselineStatus)
-		model.Baseline = &baselineModel
-	}
-
 	if activeTab == SetupConsoleTabMarketplace {
 		rows, details := setupConsoleMarketplaceRows(marketplaceSources, input.Search, input.ExpandedSources)
 		selectedIndex := clampIndex(input.SelectedIndex, len(rows))
@@ -314,6 +347,8 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 			model.EmptyMessage = setupConsoleEmptyMessage(activeTab, input.Search)
 		} else {
 			selected := details[selectedIndex]
+			selected.Capability = model.Rows[selectedIndex].Capability
+			selected.CapabilityReason = model.Rows[selectedIndex].CapabilityReason
 			model.Selected = &selected
 		}
 	} else {
@@ -321,7 +356,7 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 		model.Rows = make([]SetupConsoleRowModel, 0, len(filtered))
 		query := strings.ToLower(strings.TrimSpace(input.Search))
 		for _, item := range filtered {
-			row := setupConsoleRowFromInventory(item, false)
+			row := setupConsoleRowFromInventory(item, false, input.BaselineStatus)
 			if activeTab != SetupConsoleTabMarketplace {
 				row.Toggleable = true
 				row.Expanded = item.ID == input.ExpandedRowID || (activeTab == SetupConsoleTabMCPServers && query != "")
@@ -342,12 +377,11 @@ func BuildSetupConsoleViewModel(input BuildSetupConsoleViewModelInput) SetupCons
 			model.EmptyMessage = setupConsoleEmptyMessage(activeTab, input.Search)
 		} else {
 			if selected, ok := setupConsoleSelectedDetail(model.Rows[selectedIndex], filtered); ok {
+				selected.Capability = model.Rows[selectedIndex].Capability
+				selected.CapabilityReason = model.Rows[selectedIndex].CapabilityReason
 				model.Selected = &selected
 			}
 		}
-	}
-	if input.PendingAction != nil {
-		model.Confirmation = buildSetupActionConfirmation(*input.PendingAction)
 	}
 	if input.PendingMarketplaceReview != nil {
 		review := buildMarketplaceReviewModel(*input.PendingMarketplaceReview, true)
@@ -544,26 +578,29 @@ func setupObjectKindForConsoleTab(tab SetupConsoleTab) (setup.ObjectKind, bool) 
 	}
 }
 
-func setupConsoleRowFromInventory(item setup.InventoryItem, selected bool) SetupConsoleRowModel {
+func setupConsoleRowFromInventory(item setup.InventoryItem, selected bool, status *baseline.Status) SetupConsoleRowModel {
+	capability, capabilityReason := inventoryCapability(item, status)
 	return SetupConsoleRowModel{
-		RowKind:       SetupConsoleRowInventory,
-		ID:            item.ID,
-		AgentLabel:    FormatAgentLabel(item.Agent),
-		AgentMarker:   FormatAgentMarker(item.Agent),
-		ObjectKind:    formatInventoryObjectKind(item),
-		Name:          item.Name,
-		SourcePath:    item.SourcePath,
-		Scope:         string(item.Scope),
-		Status:        setupInventoryStatus(item),
-		Entrypoint:    item.Entrypoint,
-		EntryStatus:   item.EntryStatus,
-		RuntimeStatus: item.RuntimeStatus,
-		Tools:         setupConsoleToolsFromInventory(item.Tools),
-		ToolCount:     item.ToolCount,
-		ActionLabel:   formatSetupActions(item.Actions),
-		ToggleControl: inventoryActionAvailable(item, setup.ActionToggle),
-		Disabled:      item.Disabled,
-		Selected:      selected,
+		RowKind:          SetupConsoleRowInventory,
+		ID:               item.ID,
+		AgentLabel:       FormatAgentLabel(item.Agent),
+		AgentMarker:      FormatAgentMarker(item.Agent),
+		ObjectKind:       formatInventoryObjectKind(item),
+		Name:             item.Name,
+		SourcePath:       item.SourcePath,
+		Scope:            string(item.Scope),
+		Status:           setupInventoryStatus(item),
+		Entrypoint:       item.Entrypoint,
+		EntryStatus:      item.EntryStatus,
+		RuntimeStatus:    item.RuntimeStatus,
+		Tools:            setupConsoleToolsFromInventory(item.Tools),
+		ToolCount:        item.ToolCount,
+		ActionLabel:      formatSetupActions(item.Actions),
+		Capability:       capability,
+		CapabilityReason: capabilityReason,
+		ToggleControl:    inventoryActionAvailable(item, setup.ActionToggle),
+		Disabled:         item.Disabled,
+		Selected:         selected,
 	}
 }
 
@@ -585,15 +622,17 @@ func setupConsoleMCPToolRows(item setup.InventoryItem, expandedToolID string, se
 		}
 		id := item.ID + ":tool:" + tool.Name
 		rows = append(rows, SetupConsoleRowModel{
-			ID:          id,
-			RowKind:     SetupConsoleRowMCPTool,
-			ParentID:    item.ID,
-			Depth:       1,
-			Toggleable:  true,
-			Expanded:    id == expandedToolID,
-			ObjectKind:  "tool",
-			Name:        tool.Name,
-			Description: tool.Description,
+			ID:               id,
+			RowKind:          SetupConsoleRowMCPTool,
+			ParentID:         item.ID,
+			Depth:            1,
+			Toggleable:       true,
+			Expanded:         id == expandedToolID,
+			ObjectKind:       "tool",
+			Name:             tool.Name,
+			Description:      tool.Description,
+			Capability:       CapabilityReadOnly,
+			CapabilityReason: "tool metadata only",
 		})
 	}
 	return rows
@@ -650,37 +689,43 @@ func setupConsoleDetailFromInventory(item setup.InventoryItem) SetupConsoleDetai
 }
 
 func setupConsoleRowFromMarketplaceSource(source setup.MarketplaceSource, expanded bool) SetupConsoleRowModel {
+	capability, capabilityReason := marketplaceCapability(source.Actions)
 	return SetupConsoleRowModel{
-		ID:          source.ID,
-		RowKind:     SetupConsoleRowMarketplaceSource,
-		Expanded:    expanded,
-		Toggleable:  true,
-		AgentLabel:  FormatAgentLabel(source.Agent),
-		AgentMarker: FormatAgentMarker(source.Agent),
-		ObjectKind:  marketplaceSourceKindLabel(source.Kind),
-		Name:        source.Label,
-		SourcePath:  source.Path,
-		Scope:       string(source.Scope),
-		Status:      marketplaceSourceStatus(source),
-		ActionLabel: formatMarketplaceActions(source.Actions),
+		ID:               source.ID,
+		RowKind:          SetupConsoleRowMarketplaceSource,
+		Expanded:         expanded,
+		Toggleable:       true,
+		AgentLabel:       FormatAgentLabel(source.Agent),
+		AgentMarker:      FormatAgentMarker(source.Agent),
+		ObjectKind:       marketplaceSourceKindLabel(source.Kind),
+		Name:             source.Label,
+		SourcePath:       source.Path,
+		Scope:            string(source.Scope),
+		Status:           marketplaceSourceStatus(source),
+		ActionLabel:      formatMarketplaceActions(source.Actions),
+		Capability:       capability,
+		CapabilityReason: capabilityReason,
 	}
 }
 
 func setupConsoleRowFromMarketplaceEntry(entry setup.MarketplaceEntry) SetupConsoleRowModel {
+	capability, capabilityReason := marketplaceCapability(entry.Actions)
 	return SetupConsoleRowModel{
-		ID:            entry.ID,
-		RowKind:       SetupConsoleRowMarketplaceEntry,
-		ParentID:      entry.SourceID,
-		Depth:         1,
-		AgentLabel:    FormatAgentLabel(entry.Agent),
-		AgentMarker:   FormatAgentMarker(entry.Agent),
-		ObjectKind:    marketplaceEntryKindLabel(entry),
-		Name:          entry.Name,
-		SourcePath:    entry.SourcePath,
-		Scope:         "",
-		Status:        entry.Status,
-		ActionLabel:   formatMarketplaceActions(entry.Actions),
-		ToggleControl: marketplaceActionAvailable(entry.Actions, setup.MarketplaceActionReview),
+		ID:               entry.ID,
+		RowKind:          SetupConsoleRowMarketplaceEntry,
+		ParentID:         entry.SourceID,
+		Depth:            1,
+		AgentLabel:       FormatAgentLabel(entry.Agent),
+		AgentMarker:      FormatAgentMarker(entry.Agent),
+		ObjectKind:       marketplaceEntryKindLabel(entry),
+		Name:             entry.Name,
+		SourcePath:       entry.SourcePath,
+		Scope:            "",
+		Status:           entry.Status,
+		ActionLabel:      formatMarketplaceActions(entry.Actions),
+		Capability:       capability,
+		CapabilityReason: capabilityReason,
+		ToggleControl:    marketplaceActionAvailable(entry.Actions, setup.MarketplaceActionReview),
 	}
 }
 
@@ -831,51 +876,6 @@ func setupConsoleEmptyMessage(tab SetupConsoleTab, search string) string {
 		return "No marketplace sources found."
 	}
 	return "No global " + strings.ToLower(setupConsoleTabLabel(tab)) + " found."
-}
-
-type BuildSetupInventoryViewModelInput struct {
-	Inventory      []setup.InventoryItem
-	SelectedIndex  int
-	InventoryFocus bool
-	PendingAction  *setup.ActionPlan
-	ActionError    string
-}
-
-func BuildSetupInventoryViewModel(input BuildSetupInventoryViewModelInput) SetupInventoryViewModel {
-	model := SetupInventoryViewModel{
-		Rows: make([]SetupInventoryRowModel, 0, len(input.Inventory)),
-	}
-	selectedIndex := clampIndex(input.SelectedIndex, len(input.Inventory))
-	for i, item := range input.Inventory {
-		switch item.ObjectKind {
-		case setup.ObjectSkill:
-			model.Skills++
-		case setup.ObjectMCPServer:
-			model.McpServers++
-		case setup.ObjectHook:
-			model.Hooks++
-		case setup.ObjectPlugin:
-			model.Plugins++
-		}
-		model.Rows = append(model.Rows, SetupInventoryRowModel{
-			ID:          item.ID,
-			AgentLabel:  FormatAgentLabel(item.Agent),
-			AgentMarker: FormatAgentMarker(item.Agent),
-			ObjectKind:  formatSetupObjectKind(item.ObjectKind),
-			Name:        item.Name,
-			SourcePath:  item.SourcePath,
-			ActionLabel: formatSetupActions(item.Actions),
-			Selected:    input.InventoryFocus && i == selectedIndex,
-		})
-	}
-	if len(model.Rows) == 0 {
-		model.EmptyMessage = "No global skills, hooks, MCP servers, or plugins found."
-	}
-	if input.PendingAction != nil {
-		model.Confirmation = buildSetupActionConfirmation(*input.PendingAction)
-	}
-	model.ActionError = input.ActionError
-	return model
 }
 
 // --- Timeline view model ---
@@ -1096,8 +1096,8 @@ func BuildTimelineDetail(entry types.TimelineEntry) TimelineDetailModel {
 		EventKind:           string(entry.EventKind),
 		Readiness:           entry.RestoreReadiness,
 		Confidence:          fmt.Sprintf("%s: %s", entry.Confidence, entry.ConfidenceReason),
-		BeforeSnapshotName:  beforeName,
-		AfterSnapshotName:   entry.AfterSnapshotName,
+		BeforeSnapshotName:  formatSaveDisplayName(beforeName),
+		AfterSnapshotName:   formatSaveDisplayName(entry.AfterSnapshotName),
 		CaptureID:           entry.CaptureID,
 		Counts:              fmt.Sprintf("%d evidence, %d graph nodes, %d findings", entry.EvidenceCount, entry.GraphNodeCount, entry.AuditFindingCount),
 		Highlights:          append([]string(nil), entry.Changes.Highlights...),
@@ -1146,398 +1146,6 @@ func corruptWarning(count int) string {
 	return fmt.Sprintf("%d corrupt timeline event%s skipped", count, suffix)
 }
 
-// --- Navigation model ---
-
-type NavSectionID string
-
-const (
-	NavProfiles NavSectionID = "profiles"
-	NavAgents   NavSectionID = "agents"
-	NavHistory  NavSectionID = "history"
-)
-
-type NavItemKind string
-
-const (
-	NavProfile     NavItemKind = "profile"
-	NavAgent       NavItemKind = "agent"
-	NavHistoryItem NavItemKind = "history"
-)
-
-type NavItem struct {
-	ID            string
-	Kind          NavItemKind
-	Label         string
-	Screen        Screen
-	Agent         *types.AgentID
-	Profile       string
-	EvidenceCount int
-}
-
-type NavSection struct {
-	ID    NavSectionID
-	Label string
-	Items []NavItem
-}
-
-type NavigationModel struct {
-	Sections       []NavSection
-	FlatItems      []NavItem
-	SelectedItemID string
-	Cursor         int
-}
-
-type NavigationSelection struct {
-	Screen          Screen
-	SelectedAgent   *types.AgentID
-	SelectedProfile string
-}
-
-type BuildNavigationModelInput struct {
-	Evidence       []types.DiscoveredItem
-	SelectedItemID string
-	Cursor         int
-}
-
-// BuildNavigationModel builds sidebar navigation sections.
-func BuildNavigationModel(input BuildNavigationModelInput) NavigationModel {
-	sections := buildNavSections(input.Evidence)
-	flat := flattenNavItems(sections)
-
-	selectedItemID := InitialNavItemID
-	if input.SelectedItemID != "" && navItemExists(flat, input.SelectedItemID) {
-		selectedItemID = input.SelectedItemID
-	}
-
-	selectedIndex := 0
-	for i, item := range flat {
-		if item.ID == selectedItemID {
-			selectedIndex = i
-			break
-		}
-	}
-	cursor := input.Cursor
-	if input.Cursor == 0 && selectedIndex > 0 {
-		cursor = selectedIndex
-	}
-	cursor = clampIndex(cursor, len(flat))
-
-	return NavigationModel{
-		Sections:       sections,
-		FlatItems:      flat,
-		SelectedItemID: selectedItemID,
-		Cursor:         cursor,
-	}
-}
-
-func buildNavSections(evidence []types.DiscoveredItem) []NavSection {
-	agentItems := make([]NavItem, 0)
-	for _, agent := range buildAgentEntries(evidence) {
-		if agent.ID == nil {
-			continue
-		}
-		id := *agent.ID
-		agentItems = append(agentItems, NavItem{
-			ID:            "agent:" + id.String(),
-			Kind:          NavAgent,
-			Label:         agent.Label,
-			Screen:        ScreenAgentDetail,
-			Agent:         &id,
-			EvidenceCount: agent.EvidenceCount,
-		})
-	}
-
-	return []NavSection{
-		{
-			ID:    "inventory",
-			Label: "Inventory",
-			Items: []NavItem{{
-				ID:            InitialNavItemID,
-				Kind:          NavHistoryItem,
-				Label:         "Global setup",
-				Screen:        ScreenInventory,
-				EvidenceCount: countSidebarInventory(evidence, nil),
-			}},
-		},
-		{
-			ID:    NavProfiles,
-			Label: "Profiles",
-			Items: []NavItem{{
-				ID:      "profile:" + DefaultProfile,
-				Kind:    NavProfile,
-				Label:   DefaultProfile,
-				Screen:  ScreenProfile,
-				Profile: DefaultProfile,
-			}},
-		},
-		{
-			ID:    NavAgents,
-			Label: "Agents",
-			Items: agentItems,
-		},
-		{
-			ID:    NavHistory,
-			Label: "History",
-			Items: []NavItem{
-				{
-					ID:     HistoryAllNavItemID,
-					Kind:   NavHistoryItem,
-					Label:  "All changes",
-					Screen: ScreenTimeline,
-				},
-				{
-					ID:     "history:snapshots",
-					Kind:   NavHistoryItem,
-					Label:  "Snapshots",
-					Screen: ScreenSnapshots,
-				},
-			},
-		},
-	}
-}
-
-func NavItemIDForSelection(selection NavigationSelection) string {
-	if selection.Screen == ScreenInventory {
-		return InventoryNavItemID
-	}
-	if selection.Screen == ScreenTimeline {
-		if selection.SelectedAgent != nil {
-			return "agent:" + selection.SelectedAgent.String()
-		}
-		return HistoryAllNavItemID
-	}
-	if selection.Screen == ScreenSnapshots {
-		return "history:snapshots"
-	}
-	if selection.Screen == ScreenProfile {
-		profile := selection.SelectedProfile
-		if profile == "" {
-			profile = DefaultProfile
-		}
-		return "profile:" + profile
-	}
-	if selection.Screen == ScreenAgentDetail && selection.SelectedAgent != nil {
-		return "agent:" + selection.SelectedAgent.String()
-	}
-	return InitialNavItemID
-}
-
-func SelectNavItem(item NavItem, currentScreen Screen, currentAgent *types.AgentID, currentProfile string) NavigationSelection {
-	if item.Kind == NavAgent {
-		screen := ScreenAgentDetail
-		if currentScreen == ScreenTimeline {
-			screen = ScreenTimeline
-		}
-		agent := currentAgent
-		if item.Agent != nil {
-			agent = item.Agent
-		}
-		profile := currentProfile
-		if profile == "" {
-			profile = DefaultProfile
-		}
-		return NavigationSelection{
-			Screen:          screen,
-			SelectedAgent:   agent,
-			SelectedProfile: profile,
-		}
-	}
-
-	profile := currentProfile
-	if profile == "" {
-		profile = DefaultProfile
-	}
-	if item.Profile != "" {
-		profile = item.Profile
-	}
-	return NavigationSelection{
-		Screen:          item.Screen,
-		SelectedAgent:   nil,
-		SelectedProfile: profile,
-	}
-}
-
-type AgentEntry struct {
-	ID            *types.AgentID
-	Label         string
-	EvidenceCount int
-}
-
-func buildAgentEntries(evidence []types.DiscoveredItem) []AgentEntry {
-	found := make(map[types.AgentID]struct{})
-	for _, item := range evidence {
-		found[item.Agent] = struct{}{}
-	}
-	entries := make([]AgentEntry, 0)
-	for _, agent := range VisibleAgents {
-		if _, ok := found[agent]; !ok {
-			continue
-		}
-		entries = append(entries, AgentEntry{
-			ID:            &agent,
-			Label:         FormatAgentLabel(agent),
-			EvidenceCount: countSidebarInventory(evidence, &agent),
-		})
-	}
-	return entries
-}
-
-func countSidebarInventory(evidence []types.DiscoveredItem, agent *types.AgentID) int {
-	count := 0
-	for _, item := range evidence {
-		if !setup.IsInventoryEvidence(item) {
-			continue
-		}
-		if agent != nil {
-			if item.Agent == *agent {
-				count++
-			}
-			continue
-		}
-		if item.Agent != types.AgentProject {
-			count++
-		}
-	}
-	return count
-}
-
-// --- Compare view model ---
-
-type CompareSideBySideRow struct {
-	Marker string
-	Before string
-	After  string
-}
-
-type CompareSection struct {
-	Title string
-	Rows  []CompareSideBySideRow
-}
-
-type CompareViewModel struct {
-	FromLabel    string
-	ToLabel      string
-	ScopeLabel   string
-	Summary      []string
-	Sections     []CompareSection
-	EmptyMessage string
-}
-
-type BuildCompareViewModelInput struct {
-	FromSnapshot types.Snapshot
-	ToSnapshot   types.Snapshot
-	Diff         diff.GraphDiff
-	ToLabel      string
-	Scope        string
-}
-
-// BuildCompareViewModel builds explicit From/To/Scope compare presentation.
-func BuildCompareViewModel(input BuildCompareViewModelInput) CompareViewModel {
-	summary := make([]string, 0, len(input.Diff.SemanticChanges))
-	for _, change := range input.Diff.SemanticChanges {
-		summary = append(summary, compareSummaryLabel(change))
-	}
-	if len(summary) == 0 {
-		summary = []string{"No structured setup changes."}
-	}
-
-	toLabel := input.ToLabel
-	if toLabel == "" {
-		toLabel = fmt.Sprintf("%s  %s", input.ToSnapshot.Manifest.Name, formatDate(input.ToSnapshot.Manifest.CreatedAt))
-	}
-	scope := input.Scope
-	if scope == "" {
-		scope = "Full setup"
-	}
-
-	model := CompareViewModel{
-		FromLabel:  fmt.Sprintf("%s  %s", input.FromSnapshot.Manifest.Name, formatDate(input.FromSnapshot.Manifest.CreatedAt)),
-		ToLabel:    toLabel,
-		ScopeLabel: scope,
-		Summary:    summary,
-		Sections:   buildSideBySideSections(input.FromSnapshot.Graph, input.ToSnapshot.Graph),
-	}
-	if len(input.Diff.SemanticChanges) == 0 && len(input.Diff.RawSourceChanges) == 0 {
-		model.EmptyMessage = "Current setup matches the selected saved setup."
-	}
-	return model
-}
-
-// LatestSnapshotByCreatedAt returns the newest snapshot by manifest timestamp.
-func LatestSnapshotByCreatedAt(snapshots []types.Snapshot) *types.Snapshot {
-	if len(snapshots) == 0 {
-		return nil
-	}
-	sorted := append([]types.Snapshot(nil), snapshots...)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Manifest.CreatedAt > sorted[j].Manifest.CreatedAt
-	})
-	return &sorted[0]
-}
-
-// --- Save setup view model ---
-
-type SaveSetupDestination struct {
-	Label    string
-	Selected bool
-	Disabled bool
-	Note     string
-}
-
-type SaveSetupViewModel struct {
-	Title           string
-	DetectedChanges []string
-	Destinations    []SaveSetupDestination
-	NoChanges       bool
-}
-
-type BaselineStatusRowModel struct {
-	Agent       types.AgentID
-	AgentLabel  string
-	AgentMarker string
-	Status      string
-	Baseline    string
-	Changes     string
-	Unsupported string
-}
-
-type BaselineStatusViewModel struct {
-	Rows       []BaselineStatusRowModel
-	HasMissing bool
-	HasChanges bool
-}
-
-type BuildSaveSetupViewModelInput struct {
-	Diff                *diff.GraphDiff
-	HasPreviousSnapshot bool
-}
-
-// BuildSaveSetupViewModel previews save-setup title and detected changes.
-func BuildSaveSetupViewModel(input BuildSaveSetupViewModelInput) SaveSetupViewModel {
-	semantic := []diff.SemanticChange{}
-	rawCount := 0
-	if input.Diff != nil {
-		semantic = input.Diff.SemanticChanges
-		rawCount = len(input.Diff.RawSourceChanges)
-	}
-	noChanges := input.HasPreviousSnapshot && len(semantic) == 0 && rawCount == 0
-
-	changes := detectedChangeLabels(semantic, rawCount)
-	if noChanges {
-		changes = []string{"Current setup matches latest saved setup."}
-	}
-
-	return SaveSetupViewModel{
-		Title:           snapshotTitleForChanges(input.Diff, input.HasPreviousSnapshot),
-		DetectedChanges: changes,
-		Destinations: []SaveSetupDestination{
-			{Label: "Local history", Selected: true},
-			{Label: "Export as .gandalf", Selected: false},
-		},
-		NoChanges: noChanges,
-	}
-}
-
 // --- Environments (snapshot workspace) view model ---
 
 type EnvironmentRowModel struct {
@@ -1567,15 +1175,17 @@ const (
 )
 
 type EnvironmentSurfaceModel struct {
-	ID          string
-	Marker      string // + - ~
-	Kind        string
-	Name        string
-	Detail      string
-	SourcePath  string
-	ChangeCount int
-	Selected    bool
-	Diff        EnvironmentDiffModel
+	ID               string
+	Marker           string // + - ~
+	Kind             string
+	Name             string
+	Detail           string
+	SourcePath       string
+	ChangeCount      int
+	Capability       string
+	CapabilityReason string
+	Selected         bool
+	Diff             EnvironmentDiffModel
 }
 
 type EnvironmentDiffRowKind string
@@ -1625,6 +1235,7 @@ type EnvironmentsViewModel struct {
 
 type BuildEnvironmentsViewModelInput struct {
 	Status               baseline.Status
+	Inventory            []setup.InventoryItem
 	SelectedIndex        int
 	SelectedSurfaceIndex int
 	Focus                EnvironmentFocus
@@ -1662,7 +1273,7 @@ func BuildEnvironmentsViewModel(input BuildEnvironmentsViewModelInput) Environme
 			AgentLabel:   FormatAgentLabel(agentStatus.Agent),
 			AgentMarker:  chip.AgentMarker,
 			State:        chip.State,
-			BaselineName: agentStatus.BaselineName,
+			BaselineName: formatSaveDisplayName(agentStatus.BaselineName),
 			BaselineDate: formatDate(agentStatus.BaselineCreatedAt),
 			Detail:       chip.Detail,
 			Selected:     i == selected,
@@ -1676,14 +1287,14 @@ func BuildEnvironmentsViewModel(input BuildEnvironmentsViewModelInput) Environme
 	focus := input.Status.Agents[selected]
 	model.FocusAgent = FormatAgentLabel(focus.Agent)
 	if !focus.HasBaseline {
-		model.ChangesEmpty = "No baseline yet. Press s to save the current environment as a baseline."
+		model.ChangesEmpty = "No save yet. Press s to save the current environment."
 		return model
 	}
 	totalSurfaces := len(focus.Diff.SemanticChanges) + len(focus.Diff.RawSourceChanges)
 	surfaceIndex := clampIndex(input.SelectedSurfaceIndex, totalSurfaces)
-	model.Surfaces = buildEnvironmentSurfaces(focus.Diff, surfaceIndex, input.CurrentHunkIndex)
+	model.Surfaces = buildEnvironmentSurfaces(focus, input.Inventory, surfaceIndex, input.CurrentHunkIndex)
 	if len(model.Surfaces) == 0 {
-		model.ChangesEmpty = "Current environment matches the baseline."
+		model.ChangesEmpty = "Current environment matches the latest save."
 		return model
 	}
 	for i := range model.Surfaces {
@@ -1708,7 +1319,8 @@ func environmentChangeDetail(change diff.SemanticChange) string {
 	}
 }
 
-func buildEnvironmentSurfaces(graphDiff diff.GraphDiff, selectedSurfaceIndex, currentHunkIndex int) []EnvironmentSurfaceModel {
+func buildEnvironmentSurfaces(agentStatus baseline.AgentStatus, inventory []setup.InventoryItem, selectedSurfaceIndex, currentHunkIndex int) []EnvironmentSurfaceModel {
+	graphDiff := agentStatus.Diff
 	surfaces := make([]EnvironmentSurfaceModel, 0, len(graphDiff.SemanticChanges)+len(graphDiff.RawSourceChanges))
 	for index, change := range graphDiff.SemanticChanges {
 		sourcePath := ""
@@ -1734,15 +1346,18 @@ func buildEnvironmentSurfaces(graphDiff diff.GraphDiff, selectedSurfaceIndex, cu
 		if index == selectedSurfaceIndex {
 			diffModel = buildEnvironmentDiffModel(id, title, sourcePath, change, currentHunkIndex)
 		}
+		capability, capabilityReason := environmentSemanticCapability(agentStatus, inventory, change)
 		surfaces = append(surfaces, EnvironmentSurfaceModel{
-			ID:          id,
-			Marker:      markerForChange(change.Code),
-			Kind:        kind,
-			Name:        change.EntityName,
-			Detail:      detail,
-			SourcePath:  sourcePath,
-			ChangeCount: changeCount,
-			Diff:        diffModel,
+			ID:               id,
+			Marker:           markerForChange(change.Code),
+			Kind:             kind,
+			Name:             change.EntityName,
+			Detail:           detail,
+			SourcePath:       sourcePath,
+			ChangeCount:      changeCount,
+			Capability:       capability,
+			CapabilityReason: capabilityReason,
+			Diff:             diffModel,
 		})
 	}
 	for index, change := range graphDiff.RawSourceChanges {
@@ -1753,18 +1368,47 @@ func buildEnvironmentSurfaces(graphDiff diff.GraphDiff, selectedSurfaceIndex, cu
 		if globalIndex == selectedSurfaceIndex {
 			diffModel = buildEnvironmentRawDiffModel(id, change, currentHunkIndex)
 		}
+		capability, capabilityReason := environmentRawCapability(agentStatus)
 		surfaces = append(surfaces, EnvironmentSurfaceModel{
-			ID:          id,
-			Marker:      markerForRawSourceChange(change),
-			Kind:        "Source",
-			Name:        change.SourcePath,
-			Detail:      rawSourceChangeDetail(change),
-			SourcePath:  change.SourcePath,
-			ChangeCount: changeCount,
-			Diff:        diffModel,
+			ID:               id,
+			Marker:           markerForRawSourceChange(change),
+			Kind:             "Source",
+			Name:             change.SourcePath,
+			Detail:           rawSourceChangeDetail(change),
+			SourcePath:       change.SourcePath,
+			ChangeCount:      changeCount,
+			Capability:       capability,
+			CapabilityReason: capabilityReason,
+			Diff:             diffModel,
 		})
 	}
 	return surfaces
+}
+
+func environmentSemanticCapability(agentStatus baseline.AgentStatus, inventory []setup.InventoryItem, change diff.SemanticChange) (string, string) {
+	for _, item := range inventory {
+		if item.Agent != agentStatus.Agent || item.EvidenceKind != change.EntityKind {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(item.Name), strings.TrimSpace(change.EntityName)) {
+			continue
+		}
+		capability, _ := inventoryCapability(item, nil)
+		if capability == CapabilityReviewable {
+			return CapabilityReviewable, ""
+		}
+	}
+	if agentStatus.HasBaseline {
+		return CapabilityRestoreOnly, ""
+	}
+	return CapabilityReadOnly, "no save available"
+}
+
+func environmentRawCapability(agentStatus baseline.AgentStatus) (string, string) {
+	if agentStatus.HasBaseline && agentStatus.ContentBacked {
+		return CapabilityRestoreOnly, ""
+	}
+	return CapabilityReadOnly, "save has no captured content"
 }
 
 func buildEnvironmentRawDiffModel(surfaceID string, change diff.RawSourceChange, currentHunkIndex int) EnvironmentDiffModel {
@@ -2124,7 +1768,7 @@ func rawStatusPair(status string) (*string, *string) {
 		before := "present"
 		return &before, nil
 	default:
-		before := "baseline"
+		before := "saved"
 		after := "current"
 		return &before, &after
 	}
@@ -2183,7 +1827,7 @@ func BuildHeaderChips(status baseline.Status) []HeaderChipModel {
 		switch {
 		case !agentStatus.HasBaseline:
 			chip.State = "missing"
-			chip.Detail = "no baseline"
+			chip.Detail = "no save"
 		case agentStatus.SemanticChangeCount == 0 && agentStatus.RawChangeCount > 0:
 			chip.State = "drift"
 			chip.Detail = "source drift"
@@ -2204,134 +1848,6 @@ func BuildHeaderChips(status baseline.Status) []HeaderChipModel {
 		chips = append(chips, chip)
 	}
 	return chips
-}
-
-// BuildBaselineStatusViewModel converts core baseline status into compact TUI rows.
-func BuildBaselineStatusViewModel(status baseline.Status) BaselineStatusViewModel {
-	model := BaselineStatusViewModel{Rows: make([]BaselineStatusRowModel, 0, len(status.Agents))}
-	for _, agentStatus := range status.Agents {
-		row := BaselineStatusRowModel{
-			Agent:       agentStatus.Agent,
-			AgentLabel:  FormatAgentLabel(agentStatus.Agent),
-			AgentMarker: FormatAgentMarker(agentStatus.Agent),
-			Baseline:    agentStatus.BaselineName,
-			Changes:     fmt.Sprintf("%d changes", agentStatus.ChangeCount()),
-		}
-		if !agentStatus.HasBaseline {
-			row.Status = "missing baseline"
-			row.Baseline = "-"
-			row.Changes = "-"
-			model.HasMissing = true
-		} else if agentStatus.ChangeCount() == 0 {
-			row.Status = "clean"
-		} else {
-			row.Status = "changed"
-			model.HasChanges = true
-		}
-		if agentStatus.UnsupportedCount > 0 || agentStatus.OmittedContentCount > 0 {
-			row.Unsupported = fmt.Sprintf("%d unsupported, %d omitted", agentStatus.UnsupportedCount, agentStatus.OmittedContentCount)
-		}
-		model.Rows = append(model.Rows, row)
-	}
-	return model
-}
-
-// --- Agent detail view model ---
-
-type AgentInventoryRow struct {
-	Name   string
-	Status string
-	Path   string
-}
-
-type AgentHistoryRow struct {
-	ID         string
-	ObservedAt string
-	Title      string
-}
-
-type AgentDetailViewModel struct {
-	Title        string
-	ProfileLabel string
-	Counts       struct {
-		Skills       int
-		McpServers   int
-		Hooks        int
-		Permissions  int
-		EnvKeys      int
-		Instructions int
-	}
-	Skills       []AgentInventoryRow
-	McpServers   []AgentInventoryRow
-	Hooks        []AgentInventoryRow
-	EnvKeys      []AgentInventoryRow
-	Instructions []AgentInventoryRow
-	History      []AgentHistoryRow
-	EmptyMessage string
-}
-
-type BuildAgentDetailViewModelInput struct {
-	Agent           types.AgentID
-	Evidence        []types.DiscoveredItem
-	TimelineEntries []types.TimelineEntry
-	Profile         string
-	Now             time.Time
-}
-
-// BuildAgentDetailViewModel builds per-agent inventory and filtered history.
-func BuildAgentDetailViewModel(input BuildAgentDetailViewModelInput) AgentDetailViewModel {
-	agentEvidence := filterEvidenceByAgent(input.Evidence, input.Agent, false)
-	setupEvidence := filterEvidenceByAgent(input.Evidence, input.Agent, true)
-
-	profile := input.Profile
-	if profile == "" {
-		profile = DefaultProfile
-	}
-
-	model := AgentDetailViewModel{
-		Title:        FormatAgentLabel(input.Agent),
-		ProfileLabel: profile,
-	}
-	model.Counts.Skills = countKind(setupEvidence, types.KindSkill)
-	model.Counts.McpServers = countKind(setupEvidence, types.KindMcpServer)
-	model.Counts.Hooks = countKind(setupEvidence, types.KindHook)
-	model.Counts.Permissions = countKind(setupEvidence, types.KindPermission)
-	model.Counts.EnvKeys = countKind(setupEvidence, types.KindEnvKey)
-	model.Counts.Instructions = countKind(setupEvidence, types.KindAgentInstruction)
-
-	model.Skills = agentRowsForKind(setupEvidence, types.KindSkill)
-	model.McpServers = agentRowsForKind(setupEvidence, types.KindMcpServer)
-	for i := range model.McpServers {
-		if model.McpServers[i].Status == "" {
-			model.McpServers[i].Status = "enabled"
-		}
-	}
-	model.Hooks = agentRowsForKind(setupEvidence, types.KindHook)
-	model.EnvKeys = agentRowsForKind(setupEvidence, types.KindEnvKey)
-	model.Instructions = agentRowsForKind(setupEvidence, types.KindAgentInstruction)
-
-	for _, entry := range input.TimelineEntries {
-		if !timelineEntryMatchesAgent(entry, input.Agent) {
-			continue
-		}
-		shortID := entry.ID
-		if len(shortID) > 8 {
-			shortID = shortID[:8]
-		}
-		model.History = append(model.History, AgentHistoryRow{
-			ID:         shortID,
-			ObservedAt: FormatTimelineTimestamp(entry.ObservedAt, input.Now),
-			Title:      entry.Title,
-		})
-		if len(model.History) >= 6 {
-			break
-		}
-	}
-
-	if len(agentEvidence) == 0 {
-		model.EmptyMessage = "No supported agent setup found."
-	}
-	return model
 }
 
 // FilterTimelineEntries filters timeline entries by optional agent scope.
@@ -2411,75 +1927,6 @@ func displayNameForItem(item types.DiscoveredItem) string {
 	return FormatInventoryNameWithSource(item.ID+suffix, item)
 }
 
-func agentRowsForKind(evidence []types.DiscoveredItem, kind types.EvidenceKind) []AgentInventoryRow {
-	rows := make([]AgentInventoryRow, 0)
-	for _, item := range evidence {
-		if item.Kind != kind {
-			continue
-		}
-		rows = append(rows, AgentInventoryRow{
-			Name:   agentDisplayNameForItem(item),
-			Path:   item.SourcePath,
-			Status: statusForItem(item),
-		})
-	}
-	sort.Slice(rows, func(i, j int) bool {
-		return rows[i].Name < rows[j].Name
-	})
-	return rows
-}
-
-func agentDisplayNameForItem(item types.DiscoveredItem) string {
-	name := item.ID
-	if item.Name != nil {
-		name = *item.Name
-	}
-	sourceLabeled := FormatInventoryNameWithSource(name, item)
-	if sourceLabeled != name {
-		return sourceLabeled
-	}
-	if item.Agent == types.AgentProject {
-		return name + " (project)"
-	}
-	return name
-}
-
-func statusForItem(item types.DiscoveredItem) string {
-	if item.Kind == types.KindMcpServer {
-		var value map[string]any
-		if len(item.Value) > 0 {
-			_ = json.Unmarshal(item.Value, &value)
-		}
-		if value != nil {
-			if disabled, ok := value["disabled"].(bool); ok && disabled {
-				return "disabled"
-			}
-			if enabled, ok := value["enabled"].(bool); ok && !enabled {
-				return "disabled"
-			}
-		}
-		return "enabled"
-	}
-	if item.CaptureStatus != types.CaptureCaptured {
-		return item.CaptureStatus.String()
-	}
-	return ""
-}
-
-func filterEvidenceByAgent(evidence []types.DiscoveredItem, agent types.AgentID, includeProject bool) []types.DiscoveredItem {
-	filtered := make([]types.DiscoveredItem, 0)
-	for _, item := range evidence {
-		if item.Agent == agent {
-			filtered = append(filtered, item)
-			continue
-		}
-		if includeProject && item.Agent == types.AgentProject {
-			filtered = append(filtered, item)
-		}
-	}
-	return filtered
-}
-
 func timelineEntryMatchesAgent(entry types.TimelineEntry, agent types.AgentID) bool {
 	if entry.Agent != nil && *entry.Agent == agent {
 		return true
@@ -2522,23 +1969,6 @@ func clampIndex(index, length int) int {
 	return index
 }
 
-func flattenNavItems(sections []NavSection) []NavItem {
-	items := make([]NavItem, 0)
-	for _, section := range sections {
-		items = append(items, section.Items...)
-	}
-	return items
-}
-
-func navItemExists(items []NavItem, id string) bool {
-	for _, item := range items {
-		if item.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
 func formatDate(value string) string {
 	if len(value) >= 10 {
 		return value[:10]
@@ -2546,13 +1976,20 @@ func formatDate(value string) string {
 	return value
 }
 
-func compareSummaryLabel(change diff.SemanticChange) string {
-	prefix := markerForChange(change.Code)
-	owner := ""
-	if change.EntityKind == types.KindAgentInstruction {
-		owner = "Project "
-	}
-	return fmt.Sprintf("%s %s%s: %s", prefix, owner, entityKindLabel(change.EntityKind), change.EntityName)
+// formatSaveDisplayName keeps the persisted snapshot identifier intact while
+// translating legacy storage vocabulary at the TUI boundary.
+func formatSaveDisplayName(value string) string {
+	replacer := strings.NewReplacer(
+		"restore-point", "safety-save",
+		"restore_point", "safety_save",
+		"Restore Point", "Safety Save",
+		"restore point", "safety save",
+		"Baseline", "Save",
+		"baseline", "save",
+		"Snapshot", "Save",
+		"snapshot", "save",
+	)
+	return replacer.Replace(value)
 }
 
 func markerForChange(code diff.SemanticChangeCode) string {
@@ -2585,116 +2022,6 @@ func entityKindLabel(kind types.EvidenceKind) string {
 	}
 }
 
-func buildSideBySideSections(beforeGraph, afterGraph []types.GraphNode) []CompareSection {
-	beforeByIdentity := make(map[string]types.GraphNode)
-	for _, node := range beforeGraph {
-		beforeByIdentity[graphIdentity(node)] = node
-	}
-	afterByIdentity := make(map[string]types.GraphNode)
-	for _, node := range afterGraph {
-		afterByIdentity[graphIdentity(node)] = node
-	}
-
-	identities := make([]string, 0)
-	seen := make(map[string]struct{})
-	for id := range beforeByIdentity {
-		if _, ok := seen[id]; !ok {
-			seen[id] = struct{}{}
-			identities = append(identities, id)
-		}
-	}
-	for id := range afterByIdentity {
-		if _, ok := seen[id]; !ok {
-			seen[id] = struct{}{}
-			identities = append(identities, id)
-		}
-	}
-	sort.Strings(identities)
-
-	sections := make(map[string][]CompareSideBySideRow)
-	order := make([]string, 0)
-	for _, identity := range identities {
-		before, hasBefore := beforeByIdentity[identity]
-		after, hasAfter := afterByIdentity[identity]
-		var node types.GraphNode
-		switch {
-		case hasAfter:
-			node = after
-		case hasBefore:
-			node = before
-		default:
-			continue
-		}
-		title := FormatAgentLabel(node.Agent)
-		if _, ok := sections[title]; !ok {
-			order = append(order, title)
-		}
-		var beforeNode, afterNode *types.GraphNode
-		if hasBefore {
-			b := before
-			beforeNode = &b
-		}
-		if hasAfter {
-			a := after
-			afterNode = &a
-		}
-		sections[title] = append(sections[title], CompareSideBySideRow{
-			Marker: markerForNodes(beforeNode, afterNode),
-			Before: nodeLabel(beforeNode),
-			After:  nodeLabel(afterNode),
-		})
-	}
-
-	result := make([]CompareSection, 0, len(order))
-	for _, title := range order {
-		result = append(result, CompareSection{
-			Title: title,
-			Rows:  sections[title],
-		})
-	}
-	return result
-}
-
-func graphIdentity(node types.GraphNode) string {
-	return strings.Join([]string{node.Agent.String(), node.EntityKind.String(), node.EntityName}, "\x00")
-}
-
-func nodeLabel(node *types.GraphNode) string {
-	if node == nil {
-		return ""
-	}
-	return fmt.Sprintf("%s: %s", node.EntityKind, node.EntityName)
-}
-
-func markerForNodes(before, after *types.GraphNode) string {
-	if before == nil && after != nil {
-		return "+"
-	}
-	if before != nil && after == nil {
-		return "-"
-	}
-	if before != nil && after != nil && stableJSON(before.EffectiveValue) != stableJSON(after.EffectiveValue) {
-		return "~"
-	}
-	return " "
-}
-
-func stableJSON(value json.RawMessage) string {
-	if len(value) == 0 {
-		return "null"
-	}
-	var parsed any
-	if err := json.Unmarshal(value, &parsed); err != nil {
-		return string(value)
-	}
-	normalized := normalizeValue(parsed)
-	data, err := json.Marshal(normalized)
-	if err != nil {
-		return string(value)
-	}
-	return string(data)
-}
-
 func normalizeValue(value any) any {
 	switch typed := value.(type) {
 	case map[string]any:
@@ -2716,98 +2043,5 @@ func normalizeValue(value any) any {
 		return result
 	default:
 		return value
-	}
-}
-
-func snapshotTitleForChanges(graphDiff *diff.GraphDiff, hasPreviousSnapshot bool) string {
-	if !hasPreviousSnapshot {
-		return "capture baseline"
-	}
-	if graphDiff == nil || (len(graphDiff.SemanticChanges) == 0 && len(graphDiff.RawSourceChanges) == 0) {
-		return "current setup unchanged"
-	}
-
-	semantic := graphDiff.SemanticChanges
-	if change := firstChange(semantic, diff.SemanticMcpAdded, diff.SemanticMcpRemoved, diff.SemanticMcpChanged); change != nil {
-		return titleForSemanticChange(*change)
-	}
-	if change := firstChange(semantic, diff.SemanticSkillAdded, diff.SemanticSkillRemoved, diff.SemanticSkillExecutableAppeared); change != nil {
-		return titleForSemanticChange(*change)
-	}
-	if change := firstChange(semantic,
-		diff.SemanticHookAdded, diff.SemanticHookRemoved, diff.SemanticHookChanged,
-		diff.SemanticPermissionChanged, diff.SemanticPermissionWildcardAdded,
-	); change != nil {
-		return titleForSemanticChange(*change)
-	}
-	if change := firstChange(semantic, diff.SemanticInstructionChanged); change != nil {
-		return titleForSemanticChange(*change)
-	}
-	if change := firstChange(semantic, diff.SemanticEnvKeyAdded, diff.SemanticEnvKeyRemoved); change != nil {
-		return titleForSemanticChange(*change)
-	}
-	if len(semantic) > 1 || len(graphDiff.RawSourceChanges) > 1 {
-		return fmt.Sprintf("change %d setup items and %d files", len(semantic), len(graphDiff.RawSourceChanges))
-	}
-	return "update setup"
-}
-
-func detectedChangeLabels(semantic []diff.SemanticChange, rawSourceChangeCount int) []string {
-	labels := make([]string, 0, 8)
-	limit := len(semantic)
-	if limit > 8 {
-		limit = 8
-	}
-	for _, change := range semantic[:limit] {
-		labels = append(labels, titleForSemanticChange(change))
-	}
-	if rawSourceChangeCount > 0 {
-		suffix := "s"
-		if rawSourceChangeCount == 1 {
-			suffix = ""
-		}
-		labels = append(labels, fmt.Sprintf("change %d source file%s", rawSourceChangeCount, suffix))
-	}
-	if len(labels) == 0 {
-		return []string{"capture baseline"}
-	}
-	return labels
-}
-
-func firstChange(changes []diff.SemanticChange, codes ...diff.SemanticChangeCode) *diff.SemanticChange {
-	codeSet := make(map[diff.SemanticChangeCode]struct{}, len(codes))
-	for _, code := range codes {
-		codeSet[code] = struct{}{}
-	}
-	for i := range changes {
-		if _, ok := codeSet[changes[i].Code]; ok {
-			return &changes[i]
-		}
-	}
-	return nil
-}
-
-func titleForSemanticChange(change diff.SemanticChange) string {
-	switch change.Code {
-	case diff.SemanticMcpAdded:
-		return fmt.Sprintf("add %s mcp", change.EntityName)
-	case diff.SemanticMcpRemoved:
-		return fmt.Sprintf("remove %s mcp", change.EntityName)
-	case diff.SemanticMcpChanged:
-		return fmt.Sprintf("update %s mcp", change.EntityName)
-	case diff.SemanticSkillAdded, diff.SemanticSkillExecutableAppeared:
-		return fmt.Sprintf("install %s skill", change.EntityName)
-	case diff.SemanticSkillRemoved:
-		return fmt.Sprintf("remove %s skill", change.EntityName)
-	case diff.SemanticHookAdded, diff.SemanticHookRemoved, diff.SemanticHookChanged:
-		return "update hooks"
-	case diff.SemanticPermissionChanged, diff.SemanticPermissionWildcardAdded:
-		return "update permissions"
-	case diff.SemanticInstructionChanged:
-		return "update project instructions"
-	case diff.SemanticEnvKeyAdded, diff.SemanticEnvKeyRemoved:
-		return "update env key inventory"
-	default:
-		return "update setup"
 	}
 }
