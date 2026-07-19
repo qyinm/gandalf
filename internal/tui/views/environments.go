@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 const (
@@ -34,14 +35,16 @@ type EnvironmentRow struct {
 
 // EnvironmentSurface is one changed setup surface for the focused agent.
 type EnvironmentSurface struct {
-	ID          string
-	Marker      string
-	Kind        string
-	Name        string
-	Detail      string
-	SourcePath  string
-	ChangeCount int
-	Selected    bool
+	ID               string
+	Marker           string
+	Kind             string
+	Name             string
+	Detail           string
+	SourcePath       string
+	ChangeCount      int
+	Capability       string
+	CapabilityReason string
+	Selected         bool
 }
 
 // EnvironmentDiffSide is one side of a side-by-side diff row.
@@ -83,8 +86,8 @@ type EnvironmentsView struct {
 	EmptyMessage string
 }
 
-// RenderEnvironments renders the per-agent snapshot workspace: an environments
-// list, changed setup surfaces, and a focused baseline-vs-current diff.
+// RenderEnvironments renders the per-agent Changes workspace: an agent list,
+// changed setup surfaces, and a focused save-vs-current diff.
 func RenderEnvironments(model EnvironmentsView, width, height int) string {
 	if width < 40 {
 		width = 40
@@ -97,7 +100,7 @@ func RenderEnvironments(model EnvironmentsView, width, height int) string {
 		model.Mode = environmentModeSideBySide
 	}
 
-	lines := []string{titleStyle.Render("Environments")}
+	lines := []string{titleStyle.Render("Changes")}
 	if model.EmptyMessage != "" {
 		lines = append(lines, "", mutedStyle.Render(model.EmptyMessage))
 		return fitHeight(strings.Join(lines, "\n"), height)
@@ -203,17 +206,17 @@ func renderEnvironmentAgents(rows []EnvironmentRow, width, height int, focused b
 			rowStyle = focusStyle
 		}
 		dot := driftDot(row.State)
-		baseline := "no baseline"
+		save := "no save"
 		if row.BaselineName != "" {
-			baseline = row.BaselineName
+			save = row.BaselineName
 			if row.BaselineDate != "" {
-				baseline += " · " + row.BaselineDate
+				save += " · " + row.BaselineDate
 			}
 		}
 		line := fmt.Sprintf("%s%-12s %s %s", prefix, truncate(row.AgentLabel, 12), row.AgentMarker, driftStyle(row.State).Render(dot+" "+row.Detail))
 		lines = append(lines, rowStyle.Render(truncate(line, width)))
 		if row.Selected && width >= 54 {
-			lines = append(lines, mutedStyle.Render(truncate("  baseline "+baseline, width)))
+			lines = append(lines, mutedStyle.Render(truncate("  save "+save, width)))
 		}
 		if row.Selected {
 			selectedStart, selectedEnd = rowStart, len(lines)
@@ -242,6 +245,12 @@ func renderEnvironmentSurfaces(rows []EnvironmentSurface, width, height int, foc
 			title = row.Detail
 		}
 		line := fmt.Sprintf("%s%s %-20s %s", prefix, row.Marker, truncate(title, 20), row.Detail)
+		badge := capabilityLabel(row.Capability, row.CapabilityReason)
+		if ansi.StringWidth(line)+1+ansi.StringWidth(badge) > width {
+			badge = compactCapabilityBadge(row.Capability)
+		}
+		labelWidth := max(1, width-ansi.StringWidth(badge)-1)
+		line = truncate(line, labelWidth) + " " + badge
 		lines = append(lines, style.Render(truncate(line, width)))
 		if row.Selected && strings.TrimSpace(row.SourcePath) != "" {
 			lines = append(lines, mutedStyle.Render(truncate("  "+row.SourcePath, width)))
@@ -287,14 +296,14 @@ func fitHeightAroundSelection(lines []string, height, selectedStart, selectedEnd
 func renderEnvironmentDiffPane(model EnvironmentsView, width, height int, focused bool) string {
 	lines := []string{environmentSectionTitle("Diff", focused)}
 	if strings.TrimSpace(model.FocusAgent) != "" {
-		lines = append(lines, labelStyle.Render(truncate(model.FocusAgent+" · baseline vs current", width)))
+		lines = append(lines, labelStyle.Render(truncate(model.FocusAgent+" · save vs current", width)))
 	}
 	if model.ChangesEmpty != "" {
 		lines = append(lines, mutedStyle.Render(truncate(model.ChangesEmpty, width)))
 		return fitHeight(strings.Join(lines, "\n"), height)
 	}
 	if len(model.Diff.Rows) == 0 {
-		lines = append(lines, mutedStyle.Render("Current environment matches the baseline."))
+		lines = append(lines, mutedStyle.Render("Current environment matches the latest save."))
 		return fitHeight(strings.Join(lines, "\n"), height)
 	}
 	if strings.TrimSpace(model.Diff.SourcePath) != "" {
@@ -332,7 +341,7 @@ func renderEnvironmentDiffSideBySide(rows []EnvironmentDiffRow, width int) []str
 	colWidth := max(18, (contentWidth-3)/2)
 	textWidth := max(8, colWidth-lineNoWidth-3)
 	lines := []string{
-		"  " + padRight("Baseline", colWidth) + mutedStyle.Render(" │ ") + "  " + "Current",
+		"  " + padRight("Save", colWidth) + mutedStyle.Render(" │ ") + "  " + "Current",
 	}
 	for _, row := range rows {
 		if row.Kind == environmentRowHunk {
@@ -437,7 +446,7 @@ func renderEnvironmentHelp(model EnvironmentsView) string {
 	if model.Mode == environmentModeUnified {
 		mode = "side"
 	}
-	return fmt.Sprintf("tab focus:%s · ↑↓/jk move · pg scroll · n/p hunk · v %s · s save · R restore · i console · q quit", focus, mode)
+	return fmt.Sprintf("tab focus:%s · ↑↓/jk move · pg scroll · n/p hunk · v %s · enter restore · s save · ? keys", focus, mode)
 }
 
 func padRight(value string, width int) string {

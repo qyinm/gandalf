@@ -11,7 +11,7 @@ import (
 type HeaderChip struct {
 	AgentMarker string
 	State       string // "clean" | "changed" | "missing"
-	Detail      string // e.g. "clean", "2 changes", "no baseline"
+	Detail      string // e.g. "clean", "2 changes", "no save"
 	ChangeCount int
 	SourceDrift bool
 }
@@ -68,7 +68,7 @@ func compactHeaderChipSummary(chips []HeaderChip) string {
 	}
 	if total > 0 {
 		if hasMissing {
-			return driftStyle("changed").Render(fmt.Sprintf("▲ %d Δ  ○ baseline", total))
+			return driftStyle("changed").Render(fmt.Sprintf("▲ %d Δ  ○ no save", total))
 		}
 		if hasSourceDrift {
 			return driftStyle("changed").Render(fmt.Sprintf("▲ %d Δ + source", total))
@@ -80,7 +80,7 @@ func compactHeaderChipSummary(chips []HeaderChip) string {
 		return driftStyle("changed").Render(fmt.Sprintf("▲ %d %s", total, label))
 	}
 	if hasMissing {
-		return driftStyle("missing").Render("○ no baseline")
+		return driftStyle("missing").Render("○ no save")
 	}
 	if hasSourceDrift {
 		return driftStyle("drift").Render("▲ source drift")
@@ -123,4 +123,12 @@ func divider(width int) string {
 		width = 1
 	}
 	return mutedStyle.Render(strings.Repeat("─", width))
+}
+
+func fitHeight(content string, height int) string {
+	lines := strings.Split(content, "\n")
+	if height > 0 && len(lines) > height {
+		lines = lines[:height]
+	}
+	return strings.Join(lines, "\n")
 }

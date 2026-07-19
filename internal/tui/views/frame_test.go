@@ -37,11 +37,11 @@ func TestRenderHeaderCompactSummaryPreservesChangesAndMissingBaseline(t *testing
 		Title: "Gandalf",
 		Scope: "/Users/hippoo",
 		Chips: []HeaderChip{
-			{AgentMarker: "CC", State: "missing", Detail: "no baseline"},
+			{AgentMarker: "CC", State: "missing", Detail: "no save"},
 			{AgentMarker: "CX", State: "changed", Detail: "3 changes", ChangeCount: 3},
 		},
 	}, 40)
-	if !strings.Contains(rendered, "3") || !strings.Contains(rendered, "baseline") {
+	if !strings.Contains(rendered, "3") || !strings.Contains(rendered, "no save") {
 		t.Fatalf("mixed compact summary:\n%s", rendered)
 	}
 }
@@ -50,9 +50,9 @@ func TestRenderHeaderPreservesMissingBaselineWhenNarrow(t *testing.T) {
 	rendered := RenderHeader(HeaderView{
 		Title: "Gandalf",
 		Scope: "/Users/hippoo",
-		Chips: []HeaderChip{{AgentMarker: "CC", State: "missing", Detail: "no baseline"}},
+		Chips: []HeaderChip{{AgentMarker: "CC", State: "missing", Detail: "no save"}},
 	}, 24)
-	if !strings.Contains(rendered, "no baseline") {
-		t.Fatalf("missing baseline summary:\n%s", rendered)
+	if !strings.Contains(rendered, "no save") {
+		t.Fatalf("missing save summary:\n%s", rendered)
 	}
 }

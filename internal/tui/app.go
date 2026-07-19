@@ -14,10 +14,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/qyinm/gandalf/internal/gandalfcore/agents"
 	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
-	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
 	"github.com/qyinm/gandalf/internal/gandalfcore/restore"
 	"github.com/qyinm/gandalf/internal/gandalfcore/scan"
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
@@ -32,7 +30,6 @@ type bootMsg struct {
 	evidence        []types.DiscoveredItem
 	timelineEntries []types.TimelineEntry
 	corruptEvents   []store.TimelineCorruptEvent
-	snapshotNames   []string
 	snapshotRefs    []snapshotRef
 	baselineStatus  baseline.Status
 	err             error
@@ -92,15 +89,13 @@ type App struct {
 	inventory       []setup.InventoryItem
 	timelineEntries []types.TimelineEntry
 	corruptEvents   []store.TimelineCorruptEvent
-	snapshotNames   []string
 	snapshotRefs    []snapshotRef
 	baselineStatus  baseline.Status
 
-	screen          Screen
-	selectedAgent   *types.AgentID
-	selectedProfile string
+	screen        Screen
+	selectedAgent *types.AgentID
+	keymapVisible bool
 
-	navCursor          int
 	inventoryCursor    int
 	inventoryFocus     bool
 	activeSetupTab     SetupConsoleTab
@@ -110,22 +105,16 @@ type App struct {
 	snapshotCursor     int
 	environments       environmentState
 
-	undoPlan                 *timelineundo.Plan
-	undoError                string
-	notice                   string
-	actionError              string
-	pendingAction            *setup.ActionPlan
-	pendingMarketplaceReview *setup.MarketplaceReviewPlan
-	marketplaceReviewResult  *setup.MarketplaceReviewResult
-	marketplaceInstallResult *setup.ActionPlan
-	skillViewer              *skillMarkdownViewerState
-	rollbackReview           *rollbackReview
-
-	compareModel   *CompareViewModel
-	saveSetupModel *SaveSetupViewModel
-
-	cachedNav    *NavigationModel
-	cachedNavKey string
+	undoPlan                   *timelineundo.Plan
+	status                     views.StatusLine
+	pendingSave                *saveReview
+	pendingAction              *setup.ActionPlan
+	pendingMarketplaceReview   *setup.MarketplaceReviewPlan
+	pendingMarketplaceRollback *setup.ActionPlan
+	marketplaceReviewResult    *setup.MarketplaceReviewResult
+	marketplaceInstallResult   *setup.ActionPlan
+	skillViewer                *skillMarkdownViewerState
+	rollbackReview             *rollbackReview
 
 	actionExecutor      func(context.Context, setup.ActionPlan) error
 	marketplaceRunner   setup.CommandRunner
@@ -146,6 +135,10 @@ type rollbackReview struct {
 	Plan             *types.RestorePlan
 	Items            []types.RestoreItem
 	UnsupportedItems []types.UnsupportedPlanItem
+}
+
+type saveReview struct {
+	Agent *types.AgentID
 }
 
 type setupConsoleState struct {
@@ -181,7 +174,6 @@ func NewApp(runtime types.RuntimeOptions) *App {
 	return &App{
 		runtime:           runtime,
 		screen:            ScreenHome,
-		selectedProfile:   DefaultProfile,
 		inventoryFocus:    true,
 		activeSetupTab:    SetupConsoleTabHooks,
 		setupConsole:      setupState,
@@ -254,18 +246,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case rescanMsg:
 		if typed.err != nil {
-			a.notice = typed.err.Error()
+			a.setStatus(views.StatusError, typed.err.Error())
 			return a, nil
 		}
 		a.applyWorkspaceData(bootMsg(typed))
 		a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
 		a.undoPlan = nil
-		a.undoError = ""
+		a.pendingSave = nil
 		a.pendingAction = nil
 		a.pendingMarketplaceReview = nil
+		a.pendingMarketplaceRollback = nil
 		a.marketplaceReviewResult = nil
-		a.actionError = ""
-		a.notice = "Rescanned global setup."
+		a.setStatus(views.StatusSuccess, "Rescanned global setup.")
 		return a, nil
 
 	case setupActionMsg:
@@ -278,30 +270,31 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.pendingAction = nil
 			}
 			if typed.rolledBack {
+				a.pendingMarketplaceRollback = nil
 				a.marketplaceInstallResult = nil
 			}
-			a.actionError = typed.err.Error()
+			a.setStatus(views.StatusError, typed.err.Error())
 			return a, nil
 		}
 		if typed.data.err != nil {
 			a.pendingAction = nil
-			a.actionError = "Applied setup action, but failed to rescan: " + typed.data.err.Error()
+			a.setStatus(views.StatusError, "Applied setup action, but failed to rescan: "+typed.data.err.Error())
 			return a, nil
 		}
 		a.applyWorkspaceData(typed.data)
 		a.clampSetupConsoleState()
 		a.pendingAction = nil
 		a.marketplaceReviewResult = nil
-		a.actionError = ""
 		if typed.installed && typed.plan != nil && typed.plan.MarketplaceInstall != nil {
 			plan := *typed.plan
 			a.marketplaceInstallResult = &plan
-			a.notice = fmt.Sprintf("Installed %s, rescanned, and verified. Press u to roll back.", plan.MarketplaceInstall.Selector)
+			a.setStatus(views.StatusSuccess, fmt.Sprintf("Installed %s, rescanned, and verified. Press u to roll back.", plan.MarketplaceInstall.Selector))
 		} else if typed.rolledBack {
+			a.pendingMarketplaceRollback = nil
 			a.marketplaceInstallResult = nil
-			a.notice = "Rolled back marketplace install, rescanned, and verified."
+			a.setStatus(views.StatusSuccess, "Rolled back marketplace install, rescanned, and verified.")
 		} else {
-			a.notice = "Applied setup action and rescanned global setup."
+			a.setStatus(views.StatusSuccess, "Applied setup action and rescanned global setup.")
 		}
 		return a, nil
 
@@ -312,11 +305,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			a.pendingMarketplaceReview = nil
 			a.marketplaceReviewResult = nil
-			a.actionError = typed.err.Error()
+			a.setStatus(views.StatusError, typed.err.Error())
 			return a, nil
 		}
 		if typed.data.err != nil {
-			a.actionError = "Reviewed marketplace guidance, but failed to refresh setup data: " + typed.data.err.Error()
+			a.setStatus(views.StatusError, "Reviewed marketplace guidance, but failed to refresh setup data: "+typed.data.err.Error())
 			a.pendingMarketplaceReview = nil
 			a.marketplaceReviewResult = typed.result
 			return a, nil
@@ -325,38 +318,50 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.clampSetupConsoleState()
 		a.pendingMarketplaceReview = nil
 		a.marketplaceReviewResult = typed.result
-		a.actionError = ""
 		if typed.result != nil {
-			a.notice = fmt.Sprintf("Reviewed marketplace guidance for %s. No files changed.", typed.result.Plan.EntryName)
+			a.setStatus(views.StatusInfo, fmt.Sprintf("Reviewed marketplace guidance for %s. No files changed.", typed.result.Plan.EntryName))
 		} else {
-			a.notice = "Reviewed marketplace guidance. No files changed."
+			a.setStatus(views.StatusInfo, "Reviewed marketplace guidance. No files changed.")
 		}
 		return a, nil
 
 	case baselineCreateMsg:
 		if typed.err != nil {
-			a.actionError = typed.err.Error()
+			if len(typed.created) > 0 {
+				if typed.data.err == nil {
+					a.applyWorkspaceData(typed.data)
+				}
+				a.pendingSave = nil
+				a.setStatus(views.StatusError, fmt.Sprintf("Created %d save(s), then failed: %v", len(typed.created), typed.err))
+			} else {
+				a.setStatus(views.StatusError, typed.err.Error())
+			}
 			return a, nil
 		}
 		if typed.data.err != nil {
-			a.actionError = "Created baseline, but failed to rescan: " + typed.data.err.Error()
+			a.pendingSave = nil
+			a.setStatus(views.StatusError, "Created save, but failed to rescan: "+typed.data.err.Error())
 			return a, nil
 		}
 		a.applyWorkspaceData(typed.data)
+		a.pendingSave = nil
 		a.screen = ScreenHome
-		a.actionError = ""
 		if len(typed.created) == 0 {
-			a.notice = "Supported baselines already exist."
+			a.setStatus(views.StatusInfo, "Supported saves already exist.")
 		} else {
-			a.notice = "Created baselines: " + strings.Join(typed.created, ", ")
+			label := "save"
+			if len(typed.created) != 1 {
+				label = "saves"
+			}
+			a.setStatus(views.StatusSuccess, fmt.Sprintf("Created %d %s from current setup.", len(typed.created), label))
 		}
 		return a, nil
 
 	case rollbackPreviewMsg:
 		a.rollbackReview = nil
-		a.actionError = ""
+		a.clearStatus()
 		if typed.err != nil {
-			a.actionError = typed.err.Error()
+			a.setStatus(views.StatusError, typed.err.Error())
 			return a, nil
 		}
 		a.rollbackReview = typed.review
@@ -364,26 +369,25 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case rollbackApplyMsg:
 		if typed.err != nil {
-			a.actionError = typed.err.Error()
+			a.setStatus(views.StatusError, typed.err.Error())
 			return a, nil
 		}
 		if typed.data.err != nil {
 			a.rollbackReview = nil
-			a.actionError = "Applied rollback, but failed to rescan: " + typed.data.err.Error()
+			a.setStatus(views.StatusError, "Applied restore, but failed to rescan: "+typed.data.err.Error())
 			return a, nil
 		}
 		a.applyWorkspaceData(typed.data)
 		a.rollbackReview = nil
-		a.actionError = ""
-		a.notice = fmt.Sprintf("Applied rollback. Restore point: %s. %s", typed.restorePoint, typed.verify)
+		a.setStatus(views.StatusSuccess, fmt.Sprintf("Restored from save. Safety save: %s. %s", typed.restorePoint, typed.verify))
 		return a, nil
 
 	case undoPreviewMsg:
 		a.undoPlan = nil
-		a.undoError = ""
+		a.clearStatus()
 		a.corruptEvents = typed.corruptEvents
 		if typed.err != nil {
-			a.undoError = typed.err.Error()
+			a.setStatus(views.StatusWarn, typed.err.Error())
 			return a, nil
 		}
 		a.undoPlan = typed.plan
@@ -410,23 +414,13 @@ func (a *App) View() string {
 
 	if !a.ready {
 		if a.errText != "" {
-			return views.RenderHistory(views.HistoryView{
-				EmptyMessage: "Failed to load workspace.",
-				EmptyCommand: a.errText,
-			}, contentWidth, contentHeight)
+			return views.RenderBootError("Failed to load workspace.", a.errText, contentWidth, contentHeight)
 		}
-		return "Loading Gandalf global setup workspace..."
+		return views.RenderLoading("Loading Gandalf global setup workspace...", contentWidth, contentHeight)
 	}
 
 	header := views.RenderHeader(a.headerView(), contentWidth)
-	statusParts := make([]string, 0, 2)
-	if a.notice != "" {
-		statusParts = append(statusParts, lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(a.notice))
-	}
-	if a.undoError != "" {
-		statusParts = append(statusParts, lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(a.undoError))
-	}
-	status := strings.Join(statusParts, "  ")
+	status := views.RenderStatusLine(a.statusLine(), contentWidth)
 
 	// Reserve header (1) + divider (1) for the body height.
 	headerLines := strings.Count(header, "\n") + 1
@@ -438,8 +432,114 @@ func (a *App) View() string {
 		bodyHeight = 1
 	}
 
-	body := a.renderContent(contentWidth, bodyHeight)
+	sidebar := a.sidebarItems()
+	var body string
+	if contentWidth >= views.SidebarCollapseWidth {
+		screenWidth := contentWidth - views.SidebarWidth - 1
+		if screenWidth < 20 {
+			screenWidth = 20
+		}
+		screen := a.renderContent(screenWidth, bodyHeight)
+		body = views.JoinSidebar(views.RenderSidebar(sidebar, bodyHeight), screen, screenWidth)
+	} else {
+		strip := views.RenderSidebarStrip(sidebar, contentWidth)
+		screenHeight := bodyHeight - 1
+		if screenHeight < 1 {
+			screenHeight = 1
+		}
+		body = strip + "\n" + a.renderContent(contentWidth, screenHeight)
+	}
+
+	if a.keymapVisible {
+		body = views.RenderKeymapOverlay(body, a.keymapSections(), contentWidth, bodyHeight)
+	}
+
 	return views.RenderFrame(header, body, status, contentWidth, contentHeight)
+}
+
+// statusLine merges the three legacy feedback channels into one frame-level
+// status model so feedback is visible on every screen.
+func (a *App) statusLine() views.StatusLine {
+	return a.status
+}
+
+func (a *App) setStatus(level views.StatusLevel, text string) {
+	a.status = views.StatusLine{Level: level, Text: text}
+}
+
+func (a *App) clearStatus() {
+	a.status = views.StatusLine{}
+}
+
+func (a *App) sidebarItems() []views.SidebarItem {
+	items := make([]views.SidebarItem, 0, len(Destinations))
+	for _, dest := range Destinations {
+		items = append(items, views.SidebarItem{
+			Key:    dest.Key,
+			Label:  dest.Label,
+			Active: dest.Screen == a.screen,
+		})
+	}
+	return items
+}
+
+func (a *App) keymapSections() []views.KeymapSection {
+	sections := []views.KeymapSection{
+		{
+			Title: "Navigate",
+			Keys: []views.KeymapEntry{
+				{Key: "1-5", Help: "jump to Home / Console / Changes / Timeline / Saves"},
+				{Key: "esc", Help: "close overlay, else back to Home"},
+				{Key: "↑↓ / jk", Help: "move selection"},
+				{Key: "tab", Help: "cycle focus / tabs"},
+				{Key: "enter", Help: "primary action on selection"},
+			},
+		},
+		{
+			Title: "Global",
+			Keys: []views.KeymapEntry{
+				{Key: "/", Help: "search (Console)"},
+				{Key: "r", Help: "rescan setup"},
+				{Key: "?", Help: "toggle this keymap"},
+				{Key: "q", Help: "quit"},
+			},
+		},
+	}
+	var contextual []views.KeymapEntry
+	switch a.screen {
+	case ScreenHome:
+		contextual = []views.KeymapEntry{
+			{Key: "enter", Help: "review changes"},
+			{Key: "s", Help: "save setup (creates missing saves)"},
+		}
+	case ScreenInventory:
+		contextual = []views.KeymapEntry{
+			{Key: "enter", Help: "expand / review / open"},
+			{Key: "space", Help: "toggle / expand"},
+			{Key: "u", Help: "roll back last marketplace install"},
+		}
+	case ScreenEnvironments:
+		contextual = []views.KeymapEntry{
+			{Key: "enter", Help: "restore focused agent (review first)"},
+			{Key: "s", Help: "save focused agent setup"},
+			{Key: "n / p", Help: "next / previous hunk"},
+			{Key: "v", Help: "toggle diff layout"},
+			{Key: "pgup/pgdn", Help: "scroll diff"},
+		}
+	case ScreenTimeline:
+		contextual = []views.KeymapEntry{
+			{Key: "u", Help: "preview undo (writes nothing)"},
+		}
+	case ScreenSnapshots:
+		contextual = []views.KeymapEntry{
+			{Key: "enter", Help: "review restore from save"},
+			{Key: "s", Help: "save setup (creates missing saves)"},
+		}
+	}
+	if len(contextual) > 0 {
+		sections = append(sections, views.KeymapSection{Title: "This screen", Keys: contextual})
+	}
+	return sections
 }
 
 func (a *App) headerView() views.HeaderView {
@@ -465,28 +565,35 @@ func (a *App) headerView() views.HeaderView {
 }
 
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
-	switch msg.String() {
-	case "ctrl+c", "q":
+	key := msg.String()
+	if key == "ctrl+c" || key == "q" {
 		return nil, true
+	}
+	if a.keymapVisible {
+		a.keymapVisible = false
+		return nil, false
+	}
+	if key == "?" {
+		a.keymapVisible = true
+		return nil, false
+	}
+	if cmd, handled := a.handleBlockingReviewKey(key); handled {
+		return cmd, false
+	}
+	switch key {
 	case "esc":
-		if a.skillViewer != nil {
-			a.skillViewer = nil
-			a.actionError = ""
+		if a.dismissTopOverlay() {
 			return nil, false
 		}
-		if a.pendingAction != nil {
-			a.pendingAction = nil
-			a.actionError = ""
+		if a.screen != ScreenHome {
+			a.navigateTo(ScreenHome)
 		}
-		if a.pendingMarketplaceReview != nil || a.marketplaceReviewResult != nil {
-			a.pendingMarketplaceReview = nil
-			a.marketplaceReviewResult = nil
-			a.actionError = ""
+		return nil, false
+	case "1", "2", "3", "4", "5":
+		if dest, ok := DestinationForKey(key); ok {
+			a.navigateTo(dest.Screen)
 		}
-		if a.rollbackReview != nil {
-			a.rollbackReview = nil
-			a.actionError = ""
-		}
+		return nil, false
 	case "/":
 		if a.screen == ScreenInventory && !a.hasPendingSetupReview() {
 			a.setupSearchFocused = true
@@ -516,38 +623,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			data := a.fetchWorkspaceData()
 			return rescanMsg(data)
 		}, false
-	case "B":
-		if (a.screen == ScreenHome || a.screen == ScreenInventory || a.screen == ScreenSnapshots) && !a.hasPendingSetupReview() {
-			return func() tea.Msg {
-				created, err := a.createMissingBaselines()
-				if err != nil {
-					return baselineCreateMsg{err: err}
-				}
-				return baselineCreateMsg{created: created, data: a.fetchWorkspaceData()}
-			}, false
-		}
-	case "H":
-		if a.screen == ScreenInventory {
-			a.screen = ScreenTimeline
-			a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
-		}
-	case "S":
-		if a.screen == ScreenInventory {
-			a.screen = ScreenSnapshots
-		}
-	case "E":
-		if a.screen == ScreenInventory || a.screen == ScreenSnapshots || a.screen == ScreenTimeline {
-			a.screen = ScreenEnvironments
-			a.environments.clampAgents(a.baselineStatus)
-			a.actionError = ""
-		}
 	case "v":
-		if a.screen == ScreenHome {
-			a.focusFirstChangedEnvironment()
-			a.screen = ScreenEnvironments
-			a.actionError = ""
-			return nil, false
-		}
 		if a.screen == ScreenEnvironments {
 			a.environments.toggleMode()
 			return nil, false
@@ -568,34 +644,24 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		if a.screen == ScreenEnvironments {
 			return a.saveFocusedEnvironment(), false
 		}
-	case "R":
-		if a.screen == ScreenHome {
-			a.focusFirstChangedEnvironment()
-			return a.restoreFocusedEnvironment(), false
-		}
-		if a.screen == ScreenEnvironments {
-			return a.restoreFocusedEnvironment(), false
-		}
-	case "i":
-		if a.screen != ScreenInventory {
-			a.screen = ScreenInventory
-			a.undoPlan = nil
-			a.undoError = ""
-		}
-	case "I":
-		if a.screen == ScreenInventory && normalizeSetupConsoleTab(a.activeSetupTab) == SetupConsoleTabMarketplace && !a.hasPendingSetupReview() {
-			a.handleMarketplaceInstall()
+		if (a.screen == ScreenHome || a.screen == ScreenSnapshots) && !a.hasPendingSetupReview() {
+			a.pendingSave = &saveReview{}
+			a.clearStatus()
+			return nil, false
 		}
 	case "u":
 		if a.screen == ScreenInventory && a.marketplaceInstallResult != nil && !a.hasPendingSetupReview() {
-			return a.rollbackMarketplaceInstall(), false
+			plan := *a.marketplaceInstallResult
+			a.pendingMarketplaceRollback = &plan
+			a.clearStatus()
+			return nil, false
 		}
 		if a.screen != ScreenTimeline {
 			return nil, false
 		}
 		entries := a.filteredTimeline()
 		if len(entries) == 0 {
-			a.undoError = "No timeline entry selected."
+			a.setStatus(views.StatusWarn, "No timeline entry selected.")
 			return nil, false
 		}
 		selected := entries[a.timelineCursor]
@@ -624,7 +690,10 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.moveEnvironmentSelection(-1)
 			return nil, false
 		}
-		a.moveNavCursor(-1)
+		if a.screen == ScreenTimeline {
+			a.moveTimelineCursor(-1)
+			return nil, false
+		}
 	case "down", "j":
 		if a.screen == ScreenInventory && a.inventoryFocus && !a.hasPendingSetupReview() {
 			a.moveInventoryCursor(1)
@@ -638,7 +707,10 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.moveEnvironmentSelection(1)
 			return nil, false
 		}
-		a.moveNavCursor(1)
+		if a.screen == ScreenTimeline {
+			a.moveTimelineCursor(1)
+			return nil, false
+		}
 	case "pgup":
 		if a.screen == ScreenEnvironments {
 			a.environments.pageDiff(a.currentEnvironmentsViewModel(), a.environmentDiffViewportHeight(), -1)
@@ -658,6 +730,14 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 			a.moveTimelineCursor(1)
 		}
 	case "enter":
+		if a.screen == ScreenHome {
+			a.focusFirstChangedEnvironment()
+			a.navigateTo(ScreenEnvironments)
+			return nil, false
+		}
+		if a.screen == ScreenEnvironments && a.environments.focus == EnvironmentFocusAgents {
+			return a.restoreFocusedEnvironment(), false
+		}
 		if a.screen == ScreenSnapshots {
 			return a.handleSnapshotEnter(), false
 		}
@@ -670,6 +750,87 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 	}
 	return nil, false
+}
+
+func (a *App) handleBlockingReviewKey(key string) (tea.Cmd, bool) {
+	if a.pendingSave == nil &&
+		a.pendingMarketplaceRollback == nil &&
+		a.pendingAction == nil &&
+		a.pendingMarketplaceReview == nil &&
+		a.rollbackReview == nil {
+		return nil, false
+	}
+	switch key {
+	case "esc":
+		a.dismissTopOverlay()
+		return nil, true
+	case "enter":
+		switch {
+		case a.pendingSave != nil:
+			return a.confirmSaveReview(), true
+		case a.pendingMarketplaceRollback != nil:
+			return a.rollbackMarketplaceInstall(), true
+		case a.pendingAction != nil, a.pendingMarketplaceReview != nil:
+			return a.handleInventoryEnter(), true
+		case a.rollbackReview != nil:
+			return a.handleSnapshotEnter(), true
+		}
+	}
+	return nil, true
+}
+
+// navigateTo switches the active destination, resetting transient screen state.
+func (a *App) navigateTo(screen Screen) {
+	if a.screen == screen {
+		return
+	}
+	a.screen = screen
+	a.clearStatus()
+	switch screen {
+	case ScreenTimeline:
+		a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
+	case ScreenEnvironments:
+		a.environments.clampAgents(a.baselineStatus)
+	case ScreenInventory:
+		a.undoPlan = nil
+	}
+}
+
+// dismissTopOverlay closes the top-most open overlay and reports whether one
+// was open. esc only ever closes one layer per press.
+func (a *App) dismissTopOverlay() bool {
+	if a.skillViewer != nil {
+		a.skillViewer = nil
+		a.clearStatus()
+		return true
+	}
+	if a.pendingSave != nil {
+		a.pendingSave = nil
+		a.clearStatus()
+		return true
+	}
+	if a.pendingAction != nil {
+		a.pendingAction = nil
+		a.clearStatus()
+		return true
+	}
+	if a.pendingMarketplaceRollback != nil {
+		a.pendingMarketplaceRollback = nil
+		a.clearStatus()
+		return true
+	}
+	if a.pendingMarketplaceReview != nil || a.marketplaceReviewResult != nil {
+		a.pendingMarketplaceReview = nil
+		a.marketplaceReviewResult = nil
+		a.clearStatus()
+		return true
+	}
+	if a.rollbackReview != nil {
+		a.rollbackReview = nil
+		a.clearStatus()
+		return true
+	}
+	return false
 }
 
 func (a *App) focusFirstChangedEnvironment() {
@@ -710,7 +871,7 @@ func (a *App) handleSetupSearchKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	tabState.search = tabState.searchInput.Value()
 	a.mirrorActiveSetupTabState()
 	a.setInventoryCursor(clampIndex(a.activeSetupTabState().cursor, len(a.currentSetupConsoleViewModel().Rows)))
-	a.actionError = ""
+	a.clearStatus()
 	return cmd, true
 }
 
@@ -761,6 +922,10 @@ func (a *App) handleInventoryEnter() tea.Cmd {
 			return marketplaceReviewMsg{data: data, result: &result}
 		}
 	}
+	if a.marketplaceReviewResult != nil && normalizeSetupConsoleTab(a.activeSetupTab) == SetupConsoleTabMarketplace {
+		a.handleMarketplaceInstall()
+		return nil
+	}
 
 	if normalizeSetupConsoleTab(a.activeSetupTab) == SetupConsoleTabMarketplace {
 		return a.handleMarketplaceEnter()
@@ -780,49 +945,49 @@ func (a *App) handleInventoryEnter() tea.Cmd {
 
 	inventory := a.currentInventory()
 	if len(inventory) == 0 {
-		a.actionError = "No setup item selected."
+		a.setStatus(views.StatusError, "No setup item selected.")
 		return nil
 	}
 	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
 	action, ok := firstAvailableInventoryAction(item)
 	if !ok {
-		a.actionError = "No supported action is available for this setup item."
+		a.setStatus(views.StatusError, "No supported action is available for this setup item.")
 		return nil
 	}
 	plan := setup.PlanItemAction(item, action)
 	if !plan.Available {
-		a.actionError = plan.UnavailableReason
+		a.setStatus(views.StatusError, plan.UnavailableReason)
 		return nil
 	}
 	a.pendingAction = &plan
-	a.actionError = ""
+	a.clearStatus()
 	return nil
 }
 
 func (a *App) handleMarketplaceInstall() {
 	model := a.currentSetupConsoleViewModel()
 	if len(model.Rows) == 0 {
-		a.actionError = "No marketplace entry selected."
+		a.setStatus(views.StatusError, "No marketplace entry selected.")
 		return
 	}
 	row := model.Rows[clampIndex(a.activeSetupTabState().cursor, len(model.Rows))]
 	if row.RowKind != SetupConsoleRowMarketplaceEntry {
-		a.actionError = "Select a marketplace plugin entry to install."
+		a.setStatus(views.StatusError, "Select a marketplace plugin entry to install.")
 		return
 	}
 	source, entry, ok := a.marketplaceEntryByID(row.ID)
 	if !ok {
-		a.actionError = "Marketplace entry was not found in current scan data."
+		a.setStatus(views.StatusError, "Marketplace entry was not found in current scan data.")
 		return
 	}
 	plan := setup.PlanMarketplaceInstall(source, entry)
 	if !plan.Available {
-		a.actionError = plan.UnavailableReason
+		a.setStatus(views.StatusError, plan.UnavailableReason)
 		return
 	}
 	a.pendingAction = &plan
 	a.marketplaceReviewResult = nil
-	a.actionError = ""
+	a.clearStatus()
 }
 
 func (a *App) executeMarketplaceInstall(plan setup.ActionPlan) tea.Cmd {
@@ -881,7 +1046,11 @@ func (a *App) executeMarketplaceInstall(plan setup.ActionPlan) tea.Cmd {
 }
 
 func (a *App) rollbackMarketplaceInstall() tea.Cmd {
-	plan := *a.marketplaceInstallResult
+	if a.pendingMarketplaceRollback == nil {
+		a.setStatus(views.StatusError, "No marketplace rollback is pending.")
+		return nil
+	}
+	plan := *a.pendingMarketplaceRollback
 	return func() tea.Msg {
 		before := a.fetchWorkspaceData()
 		if before.err != nil {
@@ -904,19 +1073,19 @@ func (a *App) rollbackMarketplaceInstall() tea.Cmd {
 func (a *App) openSelectedSkillViewer() {
 	inventory := a.currentInventory()
 	if len(inventory) == 0 {
-		a.actionError = "No skill selected."
+		a.setStatus(views.StatusError, "No skill selected.")
 		return
 	}
 	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
 	viewer := a.buildSkillMarkdownViewer(item)
 	a.skillViewer = &viewer
-	a.actionError = ""
+	a.clearStatus()
 }
 
 func (a *App) handleSkillEnter() {
 	inventory := a.currentInventory()
 	if len(inventory) == 0 {
-		a.actionError = "No skill selected."
+		a.setStatus(views.StatusError, "No skill selected.")
 		return
 	}
 	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
@@ -925,13 +1094,13 @@ func (a *App) handleSkillEnter() {
 		return
 	}
 	a.setExpandedSetupRowID(SetupConsoleTabSkills, item.ID)
-	a.actionError = ""
+	a.clearStatus()
 }
 
 func (a *App) handleMCPEnter() {
 	model := a.currentSetupConsoleViewModel()
 	if len(model.Rows) == 0 {
-		a.actionError = "No MCP server selected."
+		a.setStatus(views.StatusError, "No MCP server selected.")
 		return
 	}
 	row := model.Rows[clampIndex(a.inventoryCursor, len(model.Rows))]
@@ -947,7 +1116,7 @@ func (a *App) handleMCPEnter() {
 			a.setExpandedSetupRowID(SetupConsoleTabMCPServers, row.ID)
 			a.setupConsole.expandedMCPTool = ""
 		}
-		a.actionError = ""
+		a.clearStatus()
 	}
 }
 
@@ -1098,7 +1267,7 @@ func displayPathWithinRoot(path, root string) (string, bool) {
 func (a *App) handleMarketplaceEnter() tea.Cmd {
 	model := a.currentSetupConsoleViewModel()
 	if len(model.Rows) == 0 {
-		a.actionError = "No marketplace source selected."
+		a.setStatus(views.StatusError, "No marketplace source selected.")
 		return nil
 	}
 	row := model.Rows[clampIndex(a.activeSetupTabState().cursor, len(model.Rows))]
@@ -1108,17 +1277,17 @@ func (a *App) handleMarketplaceEnter() tea.Cmd {
 	}
 	source, entry, ok := a.marketplaceEntryByID(row.ID)
 	if !ok {
-		a.actionError = "Marketplace entry was not found in current scan data."
+		a.setStatus(views.StatusError, "Marketplace entry was not found in current scan data.")
 		return nil
 	}
 	plan := setup.PlanMarketplaceEntryAction(source, entry, setup.MarketplaceActionReview)
 	if !plan.Available {
-		a.actionError = plan.UnavailableReason
+		a.setStatus(views.StatusError, plan.UnavailableReason)
 		return nil
 	}
 	a.pendingMarketplaceReview = &plan
 	a.marketplaceReviewResult = nil
-	a.actionError = ""
+	a.clearStatus()
 	return nil
 }
 
@@ -1151,30 +1320,24 @@ func (a *App) handleSetupToggle() tea.Cmd {
 	return nil
 }
 
-// toggleSelectedMCPServer flips the enable/disable state of the selected MCP
-// server. Available only for JSON-backed user-scope servers; otherwise it
-// surfaces the gated reason without mutating anything.
+// toggleSelectedMCPServer opens Review Changes for flipping the selected MCP
+// server's enable/disable state. Like every other mutation, the write only
+// happens after the user confirms the pending action — never on the toggle
+// key itself.
 func (a *App) toggleSelectedMCPServer(rowID string) tea.Cmd {
 	item, ok := a.inventoryItemByID(rowID)
 	if !ok {
-		a.actionError = "No MCP server selected."
+		a.setStatus(views.StatusError, "No MCP server selected.")
 		return nil
 	}
 	plan := setup.PlanItemAction(item, setup.ActionToggle)
 	if !plan.Available {
-		a.actionError = plan.UnavailableReason
+		a.setStatus(views.StatusError, plan.UnavailableReason)
 		return nil
 	}
-	return func() tea.Msg {
-		executor := a.actionExecutor
-		if executor == nil {
-			executor = a.defaultSetupActionExecutor
-		}
-		if err := executor(context.Background(), plan); err != nil {
-			return setupActionMsg{err: err}
-		}
-		return setupActionMsg{data: a.fetchWorkspaceData()}
-	}
+	a.pendingAction = &plan
+	a.clearStatus()
+	return nil
 }
 
 func (a *App) inventoryItemByID(id string) (setup.InventoryItem, bool) {
@@ -1199,13 +1362,13 @@ func (a *App) selectedSetupInventoryExpanded() bool {
 func (a *App) expandSelectedSetupInventory() {
 	inventory := a.currentInventory()
 	if len(inventory) == 0 {
-		a.actionError = "No setup item selected."
+		a.setStatus(views.StatusError, "No setup item selected.")
 		return
 	}
 	activeTab := normalizeSetupConsoleTab(a.activeSetupTab)
 	item := inventory[clampIndex(a.inventoryCursor, len(inventory))]
 	a.setExpandedSetupRowID(activeTab, item.ID)
-	a.actionError = ""
+	a.clearStatus()
 }
 
 func (a *App) toggleSelectedSetupInventory() {
@@ -1220,7 +1383,7 @@ func (a *App) toggleSelectedSetupInventory() {
 	} else {
 		a.setExpandedSetupRowID(activeTab, item.ID)
 	}
-	a.actionError = ""
+	a.clearStatus()
 }
 
 func (a *App) expandedSetupRowID(tab SetupConsoleTab) string {
@@ -1248,7 +1411,7 @@ func (a *App) toggleMCPTool(id string) {
 	} else {
 		a.setupConsole.expandedMCPTool = id
 	}
-	a.actionError = ""
+	a.clearStatus()
 }
 
 func (a *App) currentInventory() []setup.InventoryItem {
@@ -1256,7 +1419,9 @@ func (a *App) currentInventory() []setup.InventoryItem {
 }
 
 func (a *App) hasPendingSetupReview() bool {
-	return a.pendingAction != nil || a.pendingMarketplaceReview != nil
+	return a.pendingAction != nil ||
+		a.pendingMarketplaceReview != nil ||
+		a.pendingMarketplaceRollback != nil
 }
 
 func (a *App) marketplaceEntryByID(entryID string) (setup.MarketplaceSource, setup.MarketplaceEntry, bool) {
@@ -1275,11 +1440,8 @@ func (a *App) applyWorkspaceData(data bootMsg) {
 	a.inventory = setup.BuildInventory(data.evidence)
 	a.timelineEntries = data.timelineEntries
 	a.corruptEvents = data.corruptEvents
-	a.snapshotNames = data.snapshotNames
 	a.snapshotRefs = data.snapshotRefs
 	a.baselineStatus = data.baselineStatus
-	a.cachedNav = nil
-	a.cachedNavKey = ""
 	a.clampSetupConsoleState()
 	a.snapshotCursor = clampIndex(a.snapshotCursor, len(a.snapshotRefs))
 }
@@ -1298,7 +1460,7 @@ func (a *App) moveInventoryCursor(delta int) {
 		next = 0
 	}
 	a.setInventoryCursor(next)
-	a.actionError = ""
+	a.clearStatus()
 }
 
 func (a *App) moveSetupTab(delta int) {
@@ -1320,7 +1482,7 @@ func (a *App) moveSetupTab(delta int) {
 	a.activeSetupTab = SetupConsoleTabs[next]
 	a.mirrorActiveSetupTabState()
 	a.setInventoryCursor(clampIndex(a.activeSetupTabState().cursor, len(a.currentSetupConsoleViewModel().Rows)))
-	a.actionError = ""
+	a.clearStatus()
 }
 
 func (a *App) activeSetupTabState() *setupConsoleTabState {
@@ -1389,7 +1551,7 @@ func (a *App) toggleMarketplaceSource(sourceID string) {
 		a.setupConsole.expandedSources[sourceID] = true
 	}
 	a.setInventoryCursor(clampIndex(a.inventoryCursor, len(a.currentSetupConsoleViewModel().Rows)))
-	a.actionError = ""
+	a.clearStatus()
 }
 
 func (a *App) currentSetupConsoleViewModel() SetupConsoleViewModel {
@@ -1405,10 +1567,8 @@ func (a *App) currentSetupConsoleViewModel() SetupConsoleViewModel {
 		ExpandedSources:          a.setupConsole.expandedSources,
 		ExpandedRowID:            a.expandedSetupRowID(a.activeSetupTab),
 		ExpandedToolID:           a.setupConsole.expandedMCPTool,
-		PendingAction:            a.pendingAction,
 		PendingMarketplaceReview: a.pendingMarketplaceReview,
 		MarketplaceReviewResult:  a.marketplaceReviewResult,
-		ActionError:              a.actionError,
 		BaselineStatus:           baselineStatusPtr(a.baselineStatus),
 	})
 }
@@ -1431,22 +1591,6 @@ func firstAvailableInventoryAction(item setup.InventoryItem) (setup.ActionKind, 
 	return "", false
 }
 
-func (a *App) moveNavCursor(delta int) {
-	nav := a.navigationModel()
-	if len(nav.FlatItems) == 0 {
-		return
-	}
-	maxCursor := len(nav.FlatItems) - 1
-	next := a.navCursor + delta
-	if next < 0 {
-		next = maxCursor
-	}
-	if next > maxCursor {
-		next = 0
-	}
-	a.navCursor = next
-}
-
 func (a *App) moveTimelineCursor(delta int) {
 	entries := a.filteredTimeline()
 	if len(entries) == 0 {
@@ -1462,7 +1606,7 @@ func (a *App) moveTimelineCursor(delta int) {
 	}
 	a.timelineCursor = next
 	a.undoPlan = nil
-	a.undoError = ""
+	a.clearStatus()
 }
 
 func (a *App) moveSnapshotCursor(delta int) {
@@ -1479,7 +1623,7 @@ func (a *App) moveSnapshotCursor(delta int) {
 	}
 	a.snapshotCursor = next
 	a.rollbackReview = nil
-	a.actionError = ""
+	a.clearStatus()
 }
 
 func (a *App) moveEnvironmentSelection(delta int) {
@@ -1492,7 +1636,7 @@ func (a *App) moveEnvironmentSelection(delta int) {
 	default:
 		a.environments.moveAgent(a.baselineStatus, delta)
 	}
-	a.actionError = ""
+	a.clearStatus()
 }
 
 func (a *App) focusedEnvironmentAgent() (types.AgentID, bool) {
@@ -1506,6 +1650,7 @@ func (a *App) currentEnvironmentsViewModel() EnvironmentsViewModel {
 	requestedHunk := a.environments.hunkCursor
 	model := BuildEnvironmentsViewModel(BuildEnvironmentsViewModelInput{
 		Status:               a.baselineStatus,
+		Inventory:            a.inventory,
 		SelectedIndex:        a.environments.agentCursor,
 		SelectedSurfaceIndex: a.environments.surfaceCursor,
 		Focus:                a.environments.focus,
@@ -1518,6 +1663,7 @@ func (a *App) currentEnvironmentsViewModel() EnvironmentsViewModel {
 	if requestedSurface != a.environments.surfaceCursor || requestedHunk != a.environments.hunkCursor {
 		model = BuildEnvironmentsViewModel(BuildEnvironmentsViewModelInput{
 			Status:               a.baselineStatus,
+			Inventory:            a.inventory,
 			SelectedIndex:        a.environments.agentCursor,
 			SelectedSurfaceIndex: a.environments.surfaceCursor,
 			Focus:                a.environments.focus,
@@ -1536,21 +1682,46 @@ func (a *App) environmentDiffViewportHeight() int {
 	return max(4, a.height/2)
 }
 
-// saveFocusedEnvironment captures the focused agent's current setup as a new
-// snapshot, reusing the same capture path as baseline creation.
+// saveFocusedEnvironment opens a review for saving the focused agent's current
+// setup. The actual capture only begins after explicit confirmation.
 func (a *App) saveFocusedEnvironment() tea.Cmd {
 	agent, ok := a.focusedEnvironmentAgent()
 	if !ok {
-		a.actionError = "No environment selected."
+		a.setStatus(views.StatusError, "No environment selected.")
 		return nil
 	}
+	selected := agent
+	a.pendingSave = &saveReview{Agent: &selected}
+	a.clearStatus()
+	return nil
+}
+
+func (a *App) confirmSaveReview() tea.Cmd {
+	if a.pendingSave == nil {
+		a.setStatus(views.StatusError, "No save is pending.")
+		return nil
+	}
+	if a.pendingSave.Agent == nil {
+		return func() tea.Msg {
+			created, err := a.createMissingBaselines()
+			return baselineCreateMsg{
+				created: created,
+				data:    a.fetchWorkspaceData(),
+				err:     err,
+			}
+		}
+	}
+	return a.captureEnvironmentSave(*a.pendingSave.Agent)
+}
+
+func (a *App) captureEnvironmentSave(agent types.AgentID) tea.Cmd {
 	return func() tea.Msg {
 		scope := types.ScopeUser
 		runtime := a.runtime
 		runtime.Agent = &agent
 		runtime.Scope = &scope
 		runtime.CaptureContent = agents.SupportsContentBackedUserSnapshot(agent, scope)
-		name := fmt.Sprintf("snapshot-%s-%s", agent.String(), time.Now().UTC().Format("20060102-150405-000000000"))
+		name := fmt.Sprintf("snapshot-%s-%s", agent.String(), a.now().UTC().Format("20060102-150405-000000000"))
 		state, err := snapshot.CaptureCurrentState(&runtime, name)
 		if err != nil {
 			return baselineCreateMsg{err: err}
@@ -1567,7 +1738,7 @@ func (a *App) saveFocusedEnvironment() tea.Cmd {
 func (a *App) restoreFocusedEnvironment() tea.Cmd {
 	agent, ok := a.focusedEnvironmentAgent()
 	if !ok {
-		a.actionError = "No environment selected."
+		a.setStatus(views.StatusError, "No environment selected.")
 		return nil
 	}
 	var ref *snapshotRef
@@ -1578,7 +1749,7 @@ func (a *App) restoreFocusedEnvironment() tea.Cmd {
 		}
 	}
 	if ref == nil {
-		a.actionError = "No saved snapshot for this agent yet. Press s to save one."
+		a.setStatus(views.StatusError, "No save for this agent yet. Press s to create one.")
 		return nil
 	}
 	selected := *ref
@@ -1607,7 +1778,7 @@ func (a *App) handleSnapshotEnter() tea.Cmd {
 		}
 	}
 	if len(a.snapshotRefs) == 0 {
-		a.actionError = "No supported snapshots selected."
+		a.setStatus(views.StatusError, "No supported save selected.")
 		return nil
 	}
 	ref := a.snapshotRefs[clampIndex(a.snapshotCursor, len(a.snapshotRefs))]
@@ -1620,31 +1791,17 @@ func (a *App) handleSnapshotEnter() tea.Cmd {
 	}
 }
 
-func (a *App) navigationModel() NavigationModel {
-	selectedID := NavItemIDForSelection(NavigationSelection{
-		Screen:          a.screen,
-		SelectedAgent:   a.selectedAgent,
-		SelectedProfile: a.selectedProfile,
-	})
-	key := fmt.Sprintf("%s:%d:%d", selectedID, a.navCursor, len(a.evidence))
-	if a.cachedNav != nil && a.cachedNavKey == key {
-		return *a.cachedNav
-	}
-	nav := BuildNavigationModel(BuildNavigationModelInput{
-		Evidence:       a.evidence,
-		SelectedItemID: selectedID,
-		Cursor:         a.navCursor,
-	})
-	a.cachedNav = &nav
-	a.cachedNavKey = key
-	return nav
-}
-
 func (a *App) filteredTimeline() []types.TimelineEntry {
 	return FilterTimelineEntries(a.timelineEntries, a.selectedAgent)
 }
 
 func (a *App) renderContent(width, height int) string {
+	if a.pendingSave != nil {
+		return a.renderSaveReview(width, height)
+	}
+	if a.pendingMarketplaceRollback != nil {
+		return a.renderMarketplaceRollbackReview(width, height)
+	}
 	now := a.now()
 	switch a.screen {
 	case ScreenHome:
@@ -1655,6 +1812,9 @@ func (a *App) renderContent(width, height int) string {
 		}
 		return views.RenderHome(homeViewFromModel(model, lastSnapshot), width, height)
 	case ScreenInventory:
+		if a.pendingAction != nil {
+			return a.renderSetupActionReview(width, height)
+		}
 		model := a.currentSetupConsoleViewModel()
 		a.syncSetupConsoleViewports(&model, width, height)
 		view := setupConsoleViewFromModel(model)
@@ -1671,58 +1831,100 @@ func (a *App) renderContent(width, height int) string {
 			Now:           now,
 		})
 		return views.RenderHistory(historyViewFromModel(model), width, height)
-	case ScreenAgentDetail:
-		if a.selectedAgent == nil {
-			return "Select an agent."
-		}
-		model := BuildAgentDetailViewModel(BuildAgentDetailViewModelInput{
-			Agent:           *a.selectedAgent,
-			Evidence:        a.evidence,
-			TimelineEntries: a.timelineEntries,
-			Profile:         a.selectedProfile,
-			Now:             now,
-		})
-		return views.RenderAgentDetail(agentDetailViewFromModel(model), width, height)
-	case ScreenCompare:
-		if a.compareModel == nil {
-			return "No compare data loaded."
-		}
-		return views.RenderCompare(compareViewFromModel(*a.compareModel), width, height)
-	case ScreenSaveSetup:
-		if a.saveSetupModel == nil {
-			model := BuildSaveSetupViewModel(BuildSaveSetupViewModelInput{
-				HasPreviousSnapshot: a.hasSnapshots(),
-			})
-			a.saveSetupModel = &model
-		}
-		return views.RenderSaveSetup(saveSetupViewFromModel(*a.saveSetupModel), width, height)
 	case ScreenSnapshots:
 		return a.renderSnapshots(width, height)
 	case ScreenEnvironments:
 		model := a.currentEnvironmentsViewModel()
 		return views.RenderEnvironments(environmentsViewFromModel(model), width, height)
-	case ScreenProfile:
-		agentLabels := make([]string, 0)
-		seen := make(map[types.AgentID]struct{})
-		for _, item := range a.evidence {
-			if item.Agent == types.AgentProject {
-				continue
-			}
-			if _, ok := seen[item.Agent]; ok {
-				continue
-			}
-			seen[item.Agent] = struct{}{}
-			agentLabels = append(agentLabels, FormatAgentLabel(item.Agent))
-		}
-		changedAt := "-"
-		if len(a.timelineEntries) > 0 {
-			changedAt = FormatTimelineTimestamp(a.timelineEntries[0].ObservedAt, now)
-		}
-		return fmt.Sprintf("Profiles\n\ndefault\n  snapshots: %d\n  agents: %s\n  changed: %s",
-			a.snapshotCount(), strings.Join(agentLabels, ", "), changedAt)
 	default:
-		return "Unsupported screen."
+		return views.RenderMuted("Unsupported screen.")
 	}
+}
+
+func (a *App) renderSaveReview(width, height int) string {
+	title := "Save current setup"
+	target := "current supported agent setup"
+	notes := []string{"Creates only missing agent saves."}
+	if a.pendingSave != nil && a.pendingSave.Agent != nil {
+		agentLabel := FormatAgentLabel(*a.pendingSave.Agent)
+		title = "Save " + agentLabel + " setup"
+		target = agentLabel + " user setup"
+		notes = []string{"Creates a new local save for the selected agent."}
+	}
+	return views.RenderReviewChanges(views.ReviewChangesView{
+		Title:    title,
+		Subtitle: "Local save for drift comparison and safe restore.",
+		Notes:    notes,
+		Changes: []views.ReviewChangeRow{{
+			Marker: "+",
+			Kind:   "Save",
+			Target: target,
+		}},
+	}, width, height)
+}
+
+func (a *App) renderMarketplaceRollbackReview(width, height int) string {
+	target := "last marketplace install"
+	notes := []string{"The provider rollback is followed by a rescan and verification."}
+	if a.pendingMarketplaceRollback != nil {
+		plan := *a.pendingMarketplaceRollback
+		if plan.MarketplaceInstall != nil && strings.TrimSpace(plan.MarketplaceInstall.Selector) != "" {
+			target = plan.MarketplaceInstall.Selector
+		}
+		if plan.Agent != "" {
+			notes = append(notes, "agent: "+FormatAgentLabel(plan.Agent))
+		}
+	}
+	return views.RenderReviewChanges(views.ReviewChangesView{
+		Title:    "Undo marketplace install",
+		Subtitle: "Remove the plugin installed by the last verified action.",
+		Notes:    notes,
+		Changes: []views.ReviewChangeRow{{
+			Marker: "-",
+			Kind:   "Plugin",
+			Target: target,
+		}},
+	}, width, height)
+}
+
+func (a *App) renderSetupActionReview(width, height int) string {
+	if a.pendingAction == nil {
+		return views.RenderReviewChanges(views.ReviewChangesView{
+			Title:     "Setup action",
+			EmptyText: "No pending setup action.",
+		}, width, height)
+	}
+	plan := *a.pendingAction
+	agentLabel := FormatAgentLabel(plan.Agent)
+	objectKind := formatSetupObjectKind(plan.ObjectKind)
+	target := plan.ConfigTarget
+	if strings.TrimSpace(target) == "" {
+		target = plan.TargetName
+	}
+	marker := "~"
+	if plan.Action == setup.ActionRemove {
+		marker = "-"
+	} else if plan.Action == setup.ActionAdd {
+		marker = "+"
+	}
+	command := plan.Operation
+	if plan.Command != nil {
+		command = strings.Join(append([]string{plan.Command.Program}, plan.Command.Args...), " ")
+	}
+	notes := []string{"agent: " + agentLabel}
+	if strings.TrimSpace(command) != "" {
+		notes = append(notes, "command: "+command)
+	}
+	return views.RenderReviewChanges(views.ReviewChangesView{
+		Title:    fmt.Sprintf("%s %s %q", plan.Action, objectKind, plan.TargetName),
+		Subtitle: plan.Operation,
+		Notes:    notes,
+		Changes: []views.ReviewChangeRow{{
+			Marker: marker,
+			Kind:   objectKind,
+			Target: target,
+		}},
+	}, width, height)
 }
 
 func (a *App) syncSkillViewer(view *views.SetupConsoleView, width, height int) {
@@ -1785,76 +1987,53 @@ func renderSkillMarkdown(content string, width int) string {
 	return strings.TrimRight(rendered, "\n")
 }
 
-func (a *App) hasSnapshots() bool {
-	return a.snapshotCount() > 0
-}
-
-func (a *App) snapshotCount() int {
-	if len(a.snapshotRefs) > 0 {
-		return len(a.snapshotRefs)
-	}
-	return len(a.snapshotNames)
-}
-
 func (a *App) renderSnapshots(width, height int) string {
 	if a.rollbackReview != nil {
 		return a.renderRollbackReview(width, height)
 	}
-	if len(a.snapshotRefs) == 0 {
-		return "Saved setups\n\nNo supported Codex or Claude Code snapshots yet.\n\nB create baselines"
-	}
-	lines := []string{"Saved setups", ""}
+	model := views.SavesView{Rows: make([]views.SaveRow, 0, len(a.snapshotRefs))}
+	selected := clampIndex(a.snapshotCursor, len(a.snapshotRefs))
 	for i, ref := range a.snapshotRefs {
-		prefix := "  "
-		if i == clampIndex(a.snapshotCursor, len(a.snapshotRefs)) {
-			prefix = "> "
-		}
-		lines = append(lines, fmt.Sprintf("%s%s  %s  %s", prefix, FormatAgentMarker(ref.Agent), ref.Name, formatDate(ref.CreatedAt)))
+		model.Rows = append(model.Rows, views.SaveRow{
+			AgentMarker: FormatAgentMarker(ref.Agent),
+			Name:        formatSaveDisplayName(ref.Name),
+			CreatedAt:   formatDate(ref.CreatedAt),
+			Selected:    i == selected,
+		})
 	}
-	lines = append(lines, "", "enter review changes  B create missing baselines  esc cancel")
-	return fitLines(lines, width, height)
+	return views.RenderSaves(model, width, height)
 }
 
 func (a *App) renderRollbackReview(width, height int) string {
 	review := a.rollbackReview
-	lines := []string{
-		"Review Changes",
-		"",
-		fmt.Sprintf("Rollback %s to %s", FormatAgentLabel(review.Agent), review.SnapshotName),
-		"Restore point will be created before apply.",
-		"",
-		"Changes:",
-	}
-	if len(review.Items) == 0 {
-		lines = append(lines, "  No supported changes.")
+	model := views.ReviewChangesView{
+		Title:    fmt.Sprintf("Restore %s from save %s", FormatAgentLabel(review.Agent), formatSaveDisplayName(review.SnapshotName)),
+		Subtitle: "Current setup is saved automatically before apply.",
 	}
 	for _, item := range review.Items {
-		action := ""
+		marker := "~"
 		if item.Action != nil {
-			action = string(*item.Action)
+			switch string(*item.Action) {
+			case "create", "add":
+				marker = "+"
+			case "delete", "remove":
+				marker = "-"
+			}
 		}
-		lines = append(lines, fmt.Sprintf("  %s  %s  %s", action, item.ItemType, item.Dest))
+		model.Changes = append(model.Changes, views.ReviewChangeRow{
+			Marker: marker,
+			Kind:   item.ItemType,
+			Target: item.Dest,
+		})
 	}
-	if len(review.UnsupportedItems) > 0 {
-		lines = append(lines, "", "Unsupported:")
-		for _, item := range review.UnsupportedItems {
-			lines = append(lines, fmt.Sprintf("  %s  %s  %s", item.Kind, item.SourcePath, item.Reason))
-		}
+	for _, item := range review.UnsupportedItems {
+		model.Unsupported = append(model.Unsupported, views.ReviewUnsupportedRow{
+			Kind:   string(item.Kind),
+			Source: item.SourcePath,
+			Reason: item.Reason,
+		})
 	}
-	lines = append(lines, "", "enter apply  esc cancel")
-	return fitLines(lines, width, height)
-}
-
-func fitLines(lines []string, width, height int) string {
-	if width > 0 {
-		for i, line := range lines {
-			lines[i] = TruncateText(line, width)
-		}
-	}
-	if height > 0 && len(lines) > height {
-		lines = lines[:height]
-	}
-	return strings.Join(lines, "\n")
+	return views.RenderReviewChanges(model, width, height)
 }
 
 func (a *App) syncSetupConsoleViewports(model *SetupConsoleViewModel, width, height int) {
@@ -1922,10 +2101,6 @@ func (a *App) fetchWorkspaceData() bootMsg {
 		return bootMsg{err: err}
 	}
 
-	names, err := store.ListSnapshots(a.runtime.StoreDir, nil)
-	if err != nil {
-		return bootMsg{err: err}
-	}
 	snapshotRefs, err := listSupportedSnapshotRefs(a.runtime.StoreDir)
 	if err != nil {
 		return bootMsg{err: err}
@@ -1939,7 +2114,6 @@ func (a *App) fetchWorkspaceData() bootMsg {
 		evidence:        scanResult.Evidence,
 		timelineEntries: entries,
 		corruptEvents:   corrupt,
-		snapshotNames:   names,
 		snapshotRefs:    snapshotRefs,
 		baselineStatus:  baselineStatus,
 	}
@@ -2031,7 +2205,7 @@ func (a *App) buildRollbackReview(ref snapshotRef) (*rollbackReview, error) {
 func (a *App) applyRollbackReview(review *rollbackReview) rollbackApplyMsg {
 	fresh, err := a.buildRollbackReview(snapshotRef{Name: review.SnapshotName, Agent: review.Agent})
 	if err != nil {
-		return rollbackApplyMsg{err: fmt.Errorf("failed to refresh rollback review before apply: %w", err)}
+		return rollbackApplyMsg{err: fmt.Errorf("failed to refresh restore review before apply: %w", err)}
 	}
 	if !rollbackReviewMatches(review, fresh) {
 		return rollbackApplyMsg{err: fmt.Errorf("review changes are stale; reopen Review Changes before applying")}
@@ -2043,7 +2217,7 @@ func (a *App) applyRollbackReview(review *rollbackReview) rollbackApplyMsg {
 	}
 	restorePoint, err := createRestorePoint(review.Agent)
 	if err != nil {
-		return rollbackApplyMsg{err: fmt.Errorf("failed to create pre-apply restore point: %w", err)}
+		return rollbackApplyMsg{err: fmt.Errorf("failed to create pre-apply safety save: %w", err)}
 	}
 
 	executor := restore.CreateDefaultApplyExecutor()
@@ -2062,7 +2236,7 @@ func (a *App) applyRollbackReview(review *rollbackReview) rollbackApplyMsg {
 		return rollbackApplyMsg{
 			summary:      summary,
 			restorePoint: restorePoint,
-			err:          fmt.Errorf("rollback apply failed: %d failed", summary.Failed),
+			err:          fmt.Errorf("restore apply failed: %d failed", summary.Failed),
 		}
 	}
 	verify := a.verifyRollback(review)
@@ -2097,7 +2271,7 @@ func (a *App) verifyRollback(review *rollbackReview) string {
 		return "Verification failed: " + err.Error()
 	}
 	if len(next.Plan.Items) == 0 {
-		return "Verified selected baseline."
+		return "Verified selected save."
 	}
 	return fmt.Sprintf("Verification found %d remaining supported changes.", len(next.Plan.Items))
 }
@@ -2229,27 +2403,6 @@ func Run(runtime types.RuntimeOptions) int {
 		return 1
 	}
 	return 0
-}
-
-// PreviewCompare builds a compare view model from current and saved snapshots.
-func PreviewCompare(runtime types.RuntimeOptions, fromName, toLabel string) (*CompareViewModel, error) {
-	fromSnap, err := store.ReadSnapshot(runtime.StoreDir, fromName, runtime.Agent)
-	if err != nil {
-		return nil, err
-	}
-	current, err := snapshot.CaptureCurrentState(&runtime, "current")
-	if err != nil {
-		return nil, err
-	}
-	graphDiff := diff.DiffGraphs(fromSnap.Graph, current.Snapshot.Graph)
-	model := BuildCompareViewModel(BuildCompareViewModelInput{
-		FromSnapshot: fromSnap,
-		ToSnapshot:   current.Snapshot,
-		Diff:         graphDiff,
-		ToLabel:      toLabel,
-		Scope:        "Full setup",
-	})
-	return &model, nil
 }
 
 // PreviewUndo builds a dry-run undo plan for a timeline entry id.

@@ -467,24 +467,32 @@ func TestMCPStateDotUsesRedForUnavailableRuntime(t *testing.T) {
 	}
 }
 
-func TestRenderSetupConsoleShowsBaselineStatus(t *testing.T) {
+func TestRenderSetupConsoleShowsCapabilityBadges(t *testing.T) {
 	view := SetupConsoleView{
-		Tabs: []SetupConsoleTab{{Label: "Hooks", Count: 0, Selected: true}},
-		BaselineRows: []SetupConsoleBaselineRow{
-			{AgentMarker: "CC", Status: "missing baseline", Baseline: "-", Changes: "-"},
-			{AgentMarker: "CX", Status: "changed", Baseline: "baseline-codex", Changes: "2 changes"},
+		ActiveTab: "hooks",
+		Tabs:      []SetupConsoleTab{{Label: "Hooks", Count: 3, Selected: true}},
+		Rows: []SetupConsoleRow{
+			{RowKind: "inventory", ObjectKind: "hook", Name: "PostToolUse", AgentLabel: "Claude Code", Capability: "reviewable", Selected: true},
+			{RowKind: "inventory", ObjectKind: "hook", Name: "SessionStart", AgentLabel: "Codex", Capability: "restore-only"},
+			{RowKind: "inventory", ObjectKind: "hook", Name: "Stop", AgentLabel: "Codex", Capability: "read-only", CapabilityReason: "no action provider"},
 		},
-		EmptyMessage: "No global hooks found.",
 	}
 
 	rendered := ansi.Strip(RenderSetupConsole(view, 100, 24))
-	if !strings.Contains(rendered, "CC  missing baseline  baseline -") {
-		t.Fatalf("expected missing baseline row:\n%s", rendered)
+	if !strings.Contains(rendered, "[reviewable]") {
+		t.Fatalf("expected reviewable capability badge:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "CX  changed  baseline baseline-codex  2 changes") {
-		t.Fatalf("expected changed baseline row:\n%s", rendered)
+	if !strings.Contains(rendered, "[restore-only]") {
+		t.Fatalf("expected restore-only capability badge:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "B baseline") {
-		t.Fatalf("expected baseline key help:\n%s", rendered)
+	if !strings.Contains(rendered, "[read-only · no action provider]") {
+		t.Fatalf("expected concrete read-only capability reason:\n%s", rendered)
+	}
+
+	narrow := ansi.Strip(RenderSetupConsole(view, 40, 24))
+	for _, want := range []string{"[reviewable]", "[restore-only]", "[read-only]"} {
+		if !strings.Contains(narrow, want) {
+			t.Fatalf("narrow Console dropped capability %q:\n%s", want, narrow)
+		}
 	}
 }

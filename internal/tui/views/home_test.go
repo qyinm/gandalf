@@ -9,13 +9,13 @@ import (
 
 func TestRenderHomeMissingBaseline(t *testing.T) {
 	rendered := RenderHome(HomeView{}, 100, 24)
-	for _, want := range []string{"No baseline yet", "[B] capture baseline", "[i] setup"} {
+	for _, want := range []string{"No saves yet", "s save setup", "2 console"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("missing %q:\n%s", want, rendered)
 		}
 	}
-	if strings.Contains(rendered, "R rollback") {
-		t.Fatalf("rollback should not be offered without a baseline:\n%s", rendered)
+	if strings.Contains(rendered, "enter review") {
+		t.Fatalf("review should not be offered without a save:\n%s", rendered)
 	}
 }
 
@@ -25,7 +25,7 @@ func TestRenderHomePresentBaseline(t *testing.T) {
 		SkillsChanged: 1, MCPServersChanged: 1, PluginsChanged: 1, OtherChanged: 1,
 		TopChanges: []HomeChange{{Agent: "Codex", Action: "added", Kind: "skill", Name: "review"}},
 	}, 100, 24)
-	for _, want := range []string{"4 setup objects changed", "since 2h ago", "skills 1", "mcp 1", "plugins 1", "other 1", "+ review", "Codex · skill", "[v] review", "[R] rollback"} {
+	for _, want := range []string{"4 setup objects changed", "since last save · 2h ago", "skills 1", "mcp 1", "plugins 1", "other 1", "+ review", "Codex · skill", "enter review", "s save"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("missing %q:\n%s", want, rendered)
 		}
@@ -44,7 +44,7 @@ func TestRenderHomeFitsResponsiveWidths(t *testing.T) {
 	}
 
 	narrow := RenderHome(model, 36, 16)
-	for _, want := range []string{"skills 2", "hooks 1", "mcp 1", "plugins 0", "other 1", "+ image-to-code", "[R] rollback", "[q] quit"} {
+	for _, want := range []string{"skills 2", "hooks 1", "mcp 1", "plugins 0", "other 1", "+ image-to-code", "enter review", "q quit"} {
 		if !strings.Contains(narrow, want) {
 			t.Fatalf("narrow view missing %q:\n%s", want, narrow)
 		}
@@ -66,7 +66,7 @@ func TestRenderHomeReducesChangesBeforeCountsOnShortScreens(t *testing.T) {
 			t.Fatalf("short view should omit %q:\n%s", omitted, rendered)
 		}
 	}
-	for _, action := range []string{"[v] review", "[R] rollback", "[i] setup"} {
+	for _, action := range []string{"enter review", "s save", "? keys"} {
 		if !strings.Contains(rendered, action) {
 			t.Fatalf("short view should preserve %q:\n%s", action, rendered)
 		}
