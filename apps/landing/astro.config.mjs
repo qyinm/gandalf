@@ -10,4 +10,7 @@ export default defineConfig({
 	build: {
 		assets: "_assets",
 	},
+	redirects: {
+		"/docs": "https://docs.usegandalf.com",
+	},
 });

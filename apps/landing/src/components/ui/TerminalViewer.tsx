@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Check, Copy } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./Tabs";
+import { Tabs, TabsList, TabsTrigger } from "./Tabs";
 
 interface CommandScenario {
   id: string;
@@ -109,32 +109,40 @@ export default function TerminalViewer() {
 
   return (
     <div className="terminal-shell">
+      {/* Sleek macOS Terminal Header */}
       <div className="terminal-shell__bar">
+        {/* macOS Traffic Lights */}
         <div className="terminal-shell__dots">
-          <span />
-          <span />
-          <span />
+          <span className="dot dot--red" />
+          <span className="dot dot--yellow" />
+          <span className="dot dot--green" />
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mx-auto overflow-x-auto max-w-full">
-          <TabsList className="bg-zinc-900 border border-zinc-800 p-0.5 h-auto rounded-md flex-nowrap">
-            {scenarios.map((s) => (
-              <TabsTrigger
-                key={s.id}
-                value={s.id}
-                className="font-mono text-[11px] sm:text-xs px-2 sm:px-2.5 py-1 text-zinc-400 data-[state=active]:bg-zinc-800 data-[state=active]:text-white rounded whitespace-nowrap"
-              >
-                <span className="hidden sm:inline">gandalf </span>{s.id}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        {/* Centered Dark Segmented Tabs */}
+        <div className="terminal-shell__tabs-wrapper">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="terminal-tabs-list">
+              {scenarios.map((s) => (
+                <TabsTrigger
+                  key={s.id}
+                  value={s.id}
+                  className="terminal-tab-trigger"
+                >
+                  <span className="terminal-tab-prefix">gandalf </span>
+                  {s.id}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
 
+        {/* Dark Mode Copy Button */}
         <button
           type="button"
           onClick={handleCopy}
-          className="flex items-center gap-1.5 font-mono text-xs text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2 py-1 rounded transition-colors"
+          className="terminal-copy-btn"
           title="Copy command"
+          aria-label="Copy terminal command"
         >
           {copied ? (
             <>
@@ -150,6 +158,7 @@ export default function TerminalViewer() {
         </button>
       </div>
 
+      {/* Terminal Body */}
       <div className="terminal-shell__body">
         <div className="terminal-shell__main">
           {activeScenario.leftLines.map((line, i) => (

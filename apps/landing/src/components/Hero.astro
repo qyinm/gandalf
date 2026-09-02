@@ -196,108 +196,7 @@ import TerminalViewer from './ui/TerminalViewer';
     position: relative;
     z-index: 1;
     width: min(980px, calc(100% - 48px));
-    margin: 16px auto 0;
-  }
-
-  .terminal-shell {
-    overflow: hidden;
-    border: 1px solid rgb(9 9 11 / 0.18);
-    border-radius: 12px;
-    background: #09090b;
-    box-shadow: 0 20px 60px -32px rgb(0 0 0 / 0.6);
-  }
-
-  .terminal-shell__bar {
-    display: flex;
-    align-items: center;
-    height: 44px;
-    padding: 0 18px;
-    border-bottom: 1px solid #27272a;
-    background: #18181b;
-    color: #a1a1aa;
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-  }
-
-  .terminal-shell__traffic {
-    display: flex;
-    gap: 8px;
-  }
-
-  .terminal-shell__traffic span {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #71717a;
-  }
-
-  .terminal-shell__body {
-    display: grid;
-    grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
-    min-height: 480px;
-  }
-
-  .terminal-panel {
-    min-width: 0;
-    padding: 24px 28px;
-    color: #d4d4d8;
-    font-family: var(--font-mono);
-    font-size: clamp(0.74rem, 0.92vw, 0.88rem);
-    line-height: 1.68;
-  }
-
-  .terminal-panel--main {
-    background:
-      linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px),
-      #09090b;
-    background-size: 56px 56px;
-  }
-
-  .terminal-panel--preview {
-    border-left: 1px solid #27272a;
-    background: #111113;
-    color: #d4d4d8;
-  }
-
-  .terminal-line,
-  .preview-line {
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-
-  .terminal-line--prompt {
-    color: #ffffff;
-  }
-
-  .terminal-line--prompt::first-letter {
-    color: var(--brand);
-  }
-
-  .terminal-line--ok {
-    color: #86efac;
-  }
-
-  .terminal-line--muted,
-  .preview-line {
-    color: #a1a1aa;
-  }
-
-  .terminal-line--title,
-  .terminal-line--section,
-  .preview-line--section {
-    color: #ffffff;
-  }
-
-  .terminal-line--warn {
-    color: #fbbf24;
-  }
-
-  .terminal-line--change {
-    color: #93c5fd;
-  }
-
-  .preview-line--safe {
-    color: #86efac;
+    margin: 20px auto 0;
   }
 
   @media (max-width: 900px) {
@@ -313,20 +212,20 @@ import TerminalViewer from './ui/TerminalViewer';
     }
 
     .hero__copy {
-      width: min(calc(100% - 48px), 720px);
-      margin: 24px auto 24px;
+      width: min(calc(100% - 32px), 720px);
+      margin: 24px auto 20px;
     }
 
     .hero__copy h1 {
-      font-size: clamp(2.9rem, 12vw, 4.2rem);
-      line-height: 0.96;
+      font-size: clamp(2.6rem, 10vw, 3.8rem);
+      line-height: 0.98;
     }
 
     .hero__installbar {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr);
       width: min(100%, 340px);
-      height: 44px;
+      height: 42px;
       margin: 0 auto;
     }
 
@@ -341,35 +240,8 @@ import TerminalViewer from './ui/TerminalViewer';
     }
 
     .hero__product {
-      width: min(calc(100% - 14px), 720px);
-      margin: 0 auto -22px;
-    }
-
-    .terminal-shell {
-      border-radius: 12px 12px 0 0;
-    }
-
-    .terminal-shell__bar {
-      grid-template-columns: 58px 1fr;
-    }
-
-    .terminal-shell__bar > span {
-      display: none;
-    }
-
-    .terminal-shell__body {
-      grid-template-columns: 1fr;
-      min-height: auto;
-    }
-
-    .terminal-panel {
-      padding: 18px 16px;
-      font-size: 0.68rem;
-      line-height: 1.72;
-    }
-
-    .terminal-panel--preview {
-      display: none;
+      width: min(calc(100% - 20px), 720px);
+      margin: 0 auto -16px;
     }
   }
 </style>
