@@ -1,6 +1,6 @@
 ---
 import { Check } from 'lucide-react';
-import ManifestoTerminal from './ui/ManifestoTerminal';
+import ManifestoSplitBoard from './ui/ManifestoSplitBoard';
 
 const signals = [
   ["Manifest", "gandalf.toml"],
@@ -36,7 +36,7 @@ const signals = [
     </div>
 
     <div class="manifesto__terminal" aria-label="Agent Environment as Code proof">
-      <ManifestoTerminal client:only="react" />
+      <ManifestoSplitBoard client:only="react" />
     </div>
   </div>
 </section>
