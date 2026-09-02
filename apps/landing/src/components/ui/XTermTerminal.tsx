@@ -8,23 +8,9 @@ const C = {
   reset: "\x1b[0m",
   bold: "\x1b[1m",
   dim: "\x1b[2m",
-  italic: "\x1b[3m",
-  underline: "\x1b[4m",
-  // Gandalf Coral Brand Color (#ff5f6a)
   brand: "\x1b[38;2;255;95;106m",
   brandBold: "\x1b[1;38;2;255;95;106m",
-  // Standard ANSI
-  black: "\x1b[30m",
-  red: "\x1b[31m",
-  green: "\x1b[32m",
   yellow: "\x1b[33m",
-  blue: "\x1b[34m",
-  magenta: "\x1b[35m",
-  cyan: "\x1b[36m",
-  white: "\x1b[37m",
-  brightGreen: "\x1b[92m",
-  brightYellow: "\x1b[93m",
-  brightWhite: "\x1b[97m",
   gray: "\x1b[90m",
 };
 
@@ -32,101 +18,72 @@ interface CommandScenario {
   id: string;
   command: string;
   label: string;
-  run: (term: Terminal) => Promise<void>;
+  lines: string[];
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function typeWriter(term: Terminal, text: string, speed = 20) {
-  for (const char of text) {
-    term.write(char);
-    await sleep(speed);
-  }
-}
-
-// Authentic Gandalf CLI Outputs (No decorative emojis, exact CLI output)
+// Authentic Gandalf CLI Outputs
 const SCENARIOS: CommandScenario[] = [
   {
     id: "apply",
     label: "apply",
     command: "gandalf apply --dry-run",
-    run: async (term) => {
-      term.writeln("");
-      await sleep(100);
-      term.writeln(`Team Manifest: zero2one-backend (version: 1.0)`);
-      term.writeln(`Target Agents: claude-code, codex`);
-      term.writeln("");
-      await sleep(120);
-      term.writeln(`Review Changes before Apply:`);
-      await sleep(80);
-      term.writeln(`  [1] [claude-code] add MCP server 'postgres-db' (~/.claude/settings.json)`);
-      await sleep(80);
-      term.writeln(`  [2] [claude-code] add skill 'team-reviewer' (~/.claude/skills/reviewer.md)`);
-      await sleep(80);
-      term.writeln(`  [3] [codex] add guardrail hook 'pre-save-lint' (~/.codex/config.toml)`);
-      term.writeln("");
-      await sleep(100);
-      term.writeln(`${C.gray}[Dry-run mode] No changes were written to disk.${C.reset}`);
-    },
+    lines: [
+      "Team Manifest: zero2one-backend (version: 1.0)",
+      "Target Agents: claude-code, codex",
+      "",
+      "Review Changes before Apply:",
+      "  [1] [claude-code] add MCP server 'postgres-db' (~/.claude/settings.json)",
+      "  [2] [claude-code] add skill 'team-reviewer' (~/.claude/skills/reviewer.md)",
+      "  [3] [codex] add guardrail hook 'pre-save-lint' (~/.codex/config.toml)",
+      "",
+      `${C.gray}[Dry-run mode] No changes were written to disk.${C.reset}`,
+    ],
   },
   {
     id: "check",
     label: "check",
     command: "gandalf check --ci",
-    run: async (term) => {
-      term.writeln("");
-      await sleep(100);
-      term.writeln(`Team Manifest: zero2one-backend (version: 1.0)`);
-      term.writeln(`Target Agents: claude-code, codex`);
-      term.writeln("");
-      await sleep(120);
-      term.writeln(`${C.yellow}[DRIFT DETECTED]${C.reset} The following items are missing or out of sync:`);
-      await sleep(80);
-      term.writeln(`  [1] [claude-code] mcp: postgres-db (~/.claude/settings.json)`);
-      await sleep(80);
-      term.writeln(`  [2] [claude-code] skill: team-reviewer (~/.claude/skills/reviewer.md)`);
-      term.writeln("");
-      await sleep(100);
-      term.writeln(`${C.gray}Run 'gandalf apply' to synchronize your agent environment.${C.reset}`);
-    },
+    lines: [
+      "Team Manifest: zero2one-backend (version: 1.0)",
+      "Target Agents: claude-code, codex",
+      "",
+      `${C.yellow}[DRIFT DETECTED]${C.reset} The following items are missing or out of sync:`,
+      "  [1] [claude-code] mcp: postgres-db (~/.claude/settings.json)",
+      "  [2] [claude-code] skill: team-reviewer (~/.claude/skills/reviewer.md)",
+      "",
+      `${C.gray}Run 'gandalf apply' to synchronize your agent environment.${C.reset}`,
+    ],
   },
   {
     id: "init",
     label: "init",
     command: "gandalf init",
-    run: async (term) => {
-      term.writeln("");
-      await sleep(100);
-      term.writeln(`Created starter team manifest: /Users/dev/project/gandalf.toml`);
-      await sleep(80);
-      term.writeln(`Created shared directory: /Users/dev/project/.gandalf/skills/`);
-      term.writeln("");
-      await sleep(120);
-      term.writeln(`Next steps:`);
-      term.writeln(`  1. Edit gandalf.toml to declare shared MCP servers and skills.`);
-      term.writeln(`  2. Commit gandalf.toml to your Git repository.`);
-      term.writeln(`  3. Team members run 'gandalf apply' to synchronize.`);
-    },
+    lines: [
+      "Created starter team manifest: /Users/dev/project/gandalf.toml",
+      "Created shared directory: /Users/dev/project/.gandalf/skills/",
+      "",
+      "Next steps:",
+      "  1. Edit gandalf.toml to declare shared MCP servers and skills.",
+      "  2. Commit gandalf.toml to your Git repository.",
+      "  3. Team members run 'gandalf apply' to synchronize.",
+    ],
   },
   {
     id: "restore",
     label: "restore",
     command: "gandalf restore --snapshot preapply-manifest-20260902-160000 --apply",
-    run: async (term) => {
-      term.writeln("");
-      await sleep(100);
-      term.writeln(`Loaded snapshot: preapply-manifest-20260902-160000`);
-      await sleep(80);
-      term.writeln(`Verifying target agent configuration...`);
-      term.writeln("");
-      await sleep(120);
-      term.writeln(`Restoring:`);
-      term.writeln(`  <- ~/.claude/settings.json`);
-      term.writeln(`  <- ~/.codex/config.toml`);
-      term.writeln("");
-      await sleep(100);
-      term.writeln(`Restore completed successfully. 2 configuration files restored.`);
-    },
+    lines: [
+      "Loaded snapshot: preapply-manifest-20260902-160000",
+      "Verifying target agent configuration...",
+      "",
+      "Restoring:",
+      "  <- ~/.claude/settings.json",
+      "  <- ~/.codex/config.toml",
+      "",
+      "Restore completed successfully. 2 configuration files restored.",
+    ],
   },
 ];
 
@@ -138,15 +95,9 @@ export default function XTermTerminal() {
   const [activeScenarioId, setActiveScenarioId] = React.useState<string>("apply");
   const [isRunning, setIsRunning] = React.useState(false);
 
-  // Command buffer state for real typing
   const inputBufferRef = React.useRef("");
   const isRunningRef = React.useRef(false);
   isRunningRef.current = isRunning;
-
-  const prompt = React.useCallback((term: Terminal) => {
-    term.write(`\r\n${C.brandBold}$ ${C.reset}`);
-    inputBufferRef.current = "";
-  }, []);
 
   const executeScenario = React.useCallback(async (scId: string) => {
     const term = termInstanceRef.current;
@@ -158,12 +109,25 @@ export default function XTermTerminal() {
 
     term.clear();
     term.write(`${C.brandBold}$ ${C.reset}`);
-    await typeWriter(term, sc.command, 16);
-    await sc.run(term);
 
+    // Type the command smoothly
+    for (const char of sc.command) {
+      term.write(char);
+      await sleep(15);
+    }
+    term.writeln("");
+    await sleep(60);
+
+    // Stream lines without extra $ prompts
+    for (const line of sc.lines) {
+      term.writeln(line);
+      await sleep(35);
+    }
+
+    term.scrollToTop();
     setIsRunning(false);
-    prompt(term);
-  }, [prompt]);
+    inputBufferRef.current = "";
+  }, []);
 
   // Initialize xterm.js
   React.useEffect(() => {
@@ -173,9 +137,10 @@ export default function XTermTerminal() {
       cursorBlink: true,
       cursorStyle: "block",
       fontFamily: "'DM Mono', 'JetBrains Mono', 'Menlo', 'Monaco', monospace",
-      fontSize: 13,
-      lineHeight: 1.55,
+      fontSize: 13.5,
+      lineHeight: 1.6,
       letterSpacing: 0,
+      rows: 14,
       theme: {
         background: "#09090b",
         foreground: "#f4f4f5",
@@ -222,13 +187,14 @@ export default function XTermTerminal() {
         term.writeln("");
 
         if (!cmd) {
-          prompt(term);
+          term.write(`${C.brandBold}$ ${C.reset}`);
           return;
         }
 
         if (cmd === "clear") {
           term.clear();
-          prompt(term);
+          term.write(`${C.brandBold}$ ${C.reset}`);
+          inputBufferRef.current = "";
           return;
         }
 
@@ -239,7 +205,8 @@ export default function XTermTerminal() {
           term.writeln(`  gandalf apply    - Apply team manifest to local agents`);
           term.writeln(`  gandalf restore  - Restore agent configs from snapshot`);
           term.writeln(`  clear            - Clear terminal screen`);
-          prompt(term);
+          term.write(`\r\n${C.brandBold}$ ${C.reset}`);
+          inputBufferRef.current = "";
           return;
         }
 
@@ -253,7 +220,8 @@ export default function XTermTerminal() {
           await executeScenario("restore");
         } else {
           term.writeln(`gandalf: command not found: '${cmd}'. Try 'apply', 'check', 'init', 'restore', or 'help'`);
-          prompt(term);
+          term.write(`\r\n${C.brandBold}$ ${C.reset}`);
+          inputBufferRef.current = "";
         }
         return;
       }
@@ -305,7 +273,7 @@ export default function XTermTerminal() {
       window.removeEventListener("resize", handleResize);
       term.dispose();
     };
-  }, [executeScenario, prompt]);
+  }, [executeScenario]);
 
   return (
     <div className="terminal-shell">
