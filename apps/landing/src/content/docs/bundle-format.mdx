@@ -1,0 +1,31 @@
+---
+title: Bundle Format
+description: Understanding the .gandalf bundle file format
+order: 1
+category: Reference
+---
+
+# Bundle Format
+
+Gandalf uses `.gandalf` bundles to move a saved setup between local stores or machines. Bundles are not profiles, sync state, or a cloud service.
+
+## Structure
+
+A `.gandalf` file is a POSIX tar archive containing:
+
+- `.gandalf/format-version` — the bundle format version
+- `manifest.json` and checksum data — metadata and integrity information
+- `snapshot/` — saved setup evidence and graph data
+- optional `content/` — captured supported user-global files, omitted with `--metadata-only`
+
+## Usage
+
+```bash
+gandalf bundle export --name baseline --out backup.gandalf --project .
+gandalf bundle inspect backup.gandalf
+gandalf bundle import backup.gandalf --dry-run --project .
+```
+
+## Security
+
+Bundles omit or redact raw secret values. Gandalf validates paths and checksums before import; preview with `--dry-run` before applying captured content.

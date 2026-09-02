@@ -276,9 +276,13 @@ make gate2
 
 ### Landing Site
 
-랜딩 페이지는 별도 저장소에서 관리합니다.
-랜딩 페이지의 빌드/배포/기여는 분리된 랜딩 레포에서 진행하세요.
-[랜딩 레포](https://github.com/qyinm/gandalf-landing)에서 소스 관리하세요.
+The official Gandalf landing website lives under `apps/landing` (built with Astro, React, and Tailwind):
+
+```bash
+cd apps/landing
+npm install # or bun install
+npm run dev
+```
 
 ## Repository Layout
 
@@ -286,8 +290,9 @@ make gate2
 |---|---|
 | `cmd/gandalf` | Go CLI entrypoint |
 | `internal/cli` | Cobra command handlers |
-| `internal/gandalfcore` | Canonical Go engine: scan, store, snapshot, diff, restore, bundle, timeline |
+| `internal/gandalfcore` | Canonical Go engine: scan, store, snapshot, diff, restore, bundle, timeline, manifest, sync |
 | `internal/tui` | Bubble Tea terminal workspace |
+| `apps/landing` | Official landing website (Astro/React) |
 | `install.sh` | Latest GitHub Release binary installer |
 | `.goreleaser.yaml` | Release assets and Homebrew tap formula generation |
 

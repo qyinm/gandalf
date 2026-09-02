@@ -121,4 +121,4 @@ CI must keep the supported runtime green:
 - Restore-safety regression: `./scripts/restore-safety-regression.sh`
 - Gate 2 setup-console acceptance: `./scripts/gate2-console-acceptance.sh`
 
-Landing-site checks live in the dedicated landing repository, not in this CLI/TUI repository.
+Landing-site checks live under `apps/landing`, maintaining Astro/React frontend assets.
