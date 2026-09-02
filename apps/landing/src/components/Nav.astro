@@ -6,13 +6,13 @@ import { GithubIcon } from 'lucide-react';
 <header class="nav">
   <div class="container nav__inner">
     <a href="/" class="nav__logo" aria-label="Gandalf home">
-      <img src="/gandalf-mark-bold-v2.svg" alt="" class="nav__logo-mark" width="52" height="44" aria-hidden="true" />
+      <img src="/gandalf-mark-bold-v2.svg" alt="" class="nav__logo-mark" width="32" height="28" aria-hidden="true" />
       <span class="nav__logo-text">Gandalf</span>
     </a>
     <nav class="nav__links" aria-label="Primary">
       <a href="/docs/overview">Docs</a>
       <a href="https://github.com/qyinm/gandalf" target="_blank" rel="noopener">
-        <GithubIcon size={15} strokeWidth={2} aria-hidden="true" />
+        <GithubIcon size={14} strokeWidth={2} aria-hidden="true" />
         GitHub
       </a>
       <a href="#why">Why</a>
@@ -35,28 +35,28 @@ import { GithubIcon } from 'lucide-react';
     display: flex;
     align-items: center;
     justify-content: space-between;
-    width: min(calc(100% - 64px), var(--max-width));
+    width: min(calc(100% - 48px), var(--max-width));
     margin: 0 auto;
-    height: 76px;
+    height: 54px;
     min-width: 0;
   }
 
   .nav__logo {
     display: inline-flex;
     align-items: center;
-    gap: 14px;
+    gap: 10px;
     color: var(--foreground);
     font-family: var(--font-sans);
     font-weight: 600;
-    font-size: 1.2rem;
+    font-size: 1.05rem;
     letter-spacing: 0;
     min-width: 0;
   }
 
   .nav__logo-mark {
     display: block;
-    width: 52px;
-    height: 44px;
+    width: 32px;
+    height: 28px;
     flex: 0 0 auto;
     object-fit: contain;
   }
@@ -68,8 +68,8 @@ import { GithubIcon } from 'lucide-react';
   .nav__links {
     display: flex;
     align-items: center;
-    gap: 16px;
-    font-size: 1.02rem;
+    gap: 8px;
+    font-size: 0.88rem;
     color: var(--muted-foreground);
     flex: 0 0 auto;
   }
@@ -78,9 +78,9 @@ import { GithubIcon } from 'lucide-react';
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 42px;
-    gap: 6px;
-    padding: 0 14px;
+    height: 32px;
+    gap: 5px;
+    padding: 0 10px;
     border-radius: var(--radius-sm);
     transition: color 0.15s;
   }
@@ -91,8 +91,8 @@ import { GithubIcon } from 'lucide-react';
   }
 
   .nav__links svg {
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
     fill: none;
     stroke: currentColor;
     stroke-width: 2;
@@ -101,18 +101,19 @@ import { GithubIcon } from 'lucide-react';
   }
 
   .nav__links .nav__cta {
-    height: 40px;
+    height: 30px;
     width: auto;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 0 20px;
-    margin-left: 14px;
+    gap: 6px;
+    padding: 0 14px;
+    margin-left: 6px;
     border-radius: var(--radius-sm);
     background: var(--foreground) !important;
     color: #ffffff !important;
     font-weight: 600;
-    box-shadow: 0 12px 28px -18px rgb(0 0 0 / 0.8);
+    font-size: 0.84rem;
+    box-shadow: 0 6px 16px -8px rgb(0 0 0 / 0.6);
   }
 
   .nav__links .nav__cta:hover {
@@ -122,32 +123,32 @@ import { GithubIcon } from 'lucide-react';
 
   @media (max-width: 1120px) {
     .nav__inner {
-      width: min(calc(100% - 44px), var(--max-width));
+      width: min(calc(100% - 32px), var(--max-width));
     }
 
     .nav__links {
-      gap: 10px;
-      font-size: 0.94rem;
+      gap: 6px;
+      font-size: 0.85rem;
     }
   }
 
   @media (max-width: 480px) {
     .nav__inner {
-      height: 70px;
+      height: 48px;
     }
 
     .nav__logo {
-      font-size: 1.12rem;
+      font-size: 0.98rem;
     }
 
     .nav__logo-mark {
-      width: 48px;
-      height: 40px;
+      width: 28px;
+      height: 24px;
     }
 
     .nav__links {
-      gap: 14px;
-      font-size: 1rem;
+      gap: 8px;
+      font-size: 0.85rem;
     }
 
     .nav__links a:nth-child(2),
