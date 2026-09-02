@@ -1,7 +1,7 @@
 ---
 import { Copy, Download } from 'lucide-react';
 import Nav from './Nav.astro';
-import InteractiveTerminal from './ui/InteractiveTerminal';
+import XTermTerminal from './ui/XTermTerminal';
 ---
 
 <section class="hero">
@@ -35,8 +35,8 @@ import InteractiveTerminal from './ui/InteractiveTerminal';
       </div>
     </div>
 
-    <div class="hero__product" aria-label="Gandalf real interactive terminal preview">
-      <InteractiveTerminal client:load />
+    <div class="hero__product" aria-label="Gandalf genuine xterm terminal preview">
+      <XTermTerminal client:only="react" />
     </div>
   </div>
 </section>
