@@ -3,6 +3,8 @@ apps/landing/.astro/
 /bin/
 /gandalf
 node_modules/
+.turbo/
+apps/*/.turbo/
 /target/
 .worktrees/
 *.log
