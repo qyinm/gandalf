@@ -1,32 +1,6 @@
 ---
 import { Check } from 'lucide-react';
-
-const surfaces = ["[mcp_servers]", "[[skills]]", "[hooks]", "[env_template]"];
-
-const manifestSnippet = [
-  '# gandalf.toml (team manifest)',
-  'version = "1.0"',
-  'agents = ["claude-code", "codex"]',
-  '',
-  '[mcp_servers.postgres-db]',
-  'command = "npx"',
-  'args = ["-y", "@mcp/postgres", "${DB_URL}"]',
-  'required_env = ["DB_URL"]',
-  '',
-  '[[skills]]',
-  'name = "team-reviewer"',
-  'source = "./.gandalf/skills/team-reviewer"',
-];
-
-const driftOutput = [
-  '$ gandalf check',
-  '🔍 Target: claude-code (~/.claude/settings.json)',
-  '  ❌ missing mcp: postgres-db',
-  '  ❌ missing skill: team-reviewer',
-  '',
-  '⚡ 2 team items out of sync.',
-  '   Run "gandalf apply" to sync safely.',
-];
+import ManifestoTerminal from './ui/ManifestoTerminal';
 
 const signals = [
   ["Manifest", "gandalf.toml"],
@@ -61,29 +35,8 @@ const signals = [
       </div>
     </div>
 
-    <div class="proof-board" aria-label="Agent Environment as Code proof">
-      <div class="proof-board__files">
-        <div class="proof-board__head">manifest schema</div>
-        {surfaces.map((surf, index) => (
-          <code class:list={[index === 0 ? "is-active" : ""]}>{surf}</code>
-        ))}
-      </div>
-
-      <div class="proof-board__diff">
-        <div class="proof-board__head">declarative manifest vs drift check</div>
-        <div class="diff-grid">
-          <div>
-            <span>gandalf.toml</span>
-            {manifestSnippet.map((line) => <code>{line || "\u00a0"}</code>)}
-          </div>
-          <div>
-            <span>local agent status</span>
-            {driftOutput.map((line, index) => (
-              <code class:list={[index === 2 || index === 3 ? "is-danger" : "", index === 5 ? "is-change" : ""]}>{line || "\u00a0"}</code>
-            ))}
-          </div>
-        </div>
-      </div>
+    <div class="manifesto__terminal" aria-label="Agent Environment as Code proof">
+      <ManifestoTerminal client:only="react" />
     </div>
   </div>
 </section>
@@ -148,127 +101,15 @@ const signals = [
     font-size: 0.8em;
   }
 
-  .proof-board {
-    display: grid;
-    grid-template-columns: 180px minmax(0, 1fr);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg);
-    box-shadow: 0 16px 40px -32px rgb(15 23 42 / 0.35);
-    overflow: hidden;
-  }
-
-  .proof-board__head {
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--muted-foreground);
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
-    background: #fafafa;
-  }
-
-  .proof-board__files {
-    border-right: 1px solid var(--border);
-    background: #fafafa;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .proof-board__files code {
-    display: block;
-    padding: 8px 14px;
-    font-size: 0.78rem;
-    color: var(--muted-foreground);
-    border-bottom: 1px solid rgb(0 0 0 / 0.04);
-  }
-
-  .proof-board__files code.is-active {
-    color: var(--brand);
-    font-weight: 600;
-    background: #ffffff;
-  }
-
-  .proof-board__diff {
+  .manifesto__terminal {
     min-width: 0;
-  }
-
-  .diff-grid {
-    display: grid;
-    grid-template-columns: 1.1fr 0.9fr;
-    font-family: var(--font-mono);
-    font-size: 0.74rem;
-    line-height: 1.55;
-  }
-
-  .diff-grid > div {
-    padding: 12px 14px;
-    overflow-x: auto;
-  }
-
-  .diff-grid > div:first-child {
-    border-right: 1px solid var(--border);
-    background: #ffffff;
-  }
-
-  .diff-grid > div:last-child {
-    background: #09090b;
-    color: #a1a1aa;
-  }
-
-  .diff-grid > div:last-child span {
-    color: #71717a;
-  }
-
-  .diff-grid span {
-    display: block;
-    color: var(--muted-foreground);
-    margin-bottom: 8px;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .diff-grid code {
-    display: block;
-    white-space: pre;
-  }
-
-  .diff-grid code.is-danger {
-    color: #f87171;
-  }
-
-  .diff-grid code.is-change {
-    color: var(--brand);
-    font-weight: 600;
+    width: 100%;
   }
 
   @media (max-width: 900px) {
     .manifesto__grid {
       grid-template-columns: 1fr;
       gap: 36px;
-    }
-
-    .proof-board {
-      grid-template-columns: 1fr;
-    }
-
-    .proof-board__files {
-      border-right: none;
-      border-bottom: 1px solid var(--border);
-      flex-direction: row;
-      flex-wrap: wrap;
-    }
-
-    .diff-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .diff-grid > div:first-child {
-      border-right: none;
-      border-bottom: 1px solid var(--border);
     }
   }
 </style>
