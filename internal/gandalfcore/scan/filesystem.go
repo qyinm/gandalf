@@ -271,9 +271,11 @@ func parseTarget(target ScanTarget, text string) parsers.ParseResult {
 }
 
 func emitJSONEvidence(target ScanTarget, value any) []types.DiscoveredItem {
-	if strings.HasSuffix(target.SourcePath, ".mcp.json") || strings.HasSuffix(target.SourcePath, "/mcp.json") {
+	var evidence []types.DiscoveredItem
+
+	if strings.HasSuffix(target.SourcePath, ".mcp.json") || strings.HasSuffix(target.SourcePath, "/mcp.json") ||
+		strings.HasSuffix(target.SourcePath, "/settings.json") || target.SourcePath == "settings.json" {
 		if servers := mcpServers(value); len(servers) > 0 {
-			var evidence []types.DiscoveredItem
 			for name, serverValue := range servers {
 				serverTarget := target
 				serverTarget.Kind = types.KindMcpServer
@@ -285,11 +287,8 @@ func emitJSONEvidence(target ScanTarget, value any) []types.DiscoveredItem {
 				item.Name = stringPtr(name)
 				evidence = append(evidence, item)
 			}
-			return evidence
 		}
 	}
-
-	var evidence []types.DiscoveredItem
 	if strings.HasSuffix(target.SourcePath, "/settings.json") || target.SourcePath == "settings.json" {
 		if record, ok := AsRecord(value); ok {
 			if perms, ok := AsRecord(record["permissions"]); ok {
