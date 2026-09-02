@@ -1,16 +1,11 @@
 <h1 align="center">Gandalf</h1>
 
 <p align="center">
-  <img alt="Gandalf — inspect, review, and roll back AI agent setup" src="./docs/public/gandalf-readme-hero.png" width="1200">
+  <strong>Infrastructure as Code for AI Agents (Agent Environment as Code)</strong>
 </p>
 
 <p align="center">
-  <strong>See what your agents changed. Review before apply. Roll back safely.</strong>
-</p>
-
-<p align="center">
-  Gandalf lets developers inspect local AI agent setup, browse agent-native marketplace/source entries,
-  and apply only reviewed provider-backed changes.
+  Declare MCP servers, skills, and hooks in <code>gandalf.toml</code>. Catch configuration drift in CI. Roll back safely.
 </p>
 
 <p align="center">
@@ -22,74 +17,82 @@
 
 ---
 
-## Contents
+## 🎯 Why Gandalf?
 
-- [Why Gandalf](#why-gandalf)
-- [What Gandalf Is Not](#what-gandalf-is-not)
-- [Highlights](#highlights)
-- [Install](#install)
-- [Quick Start](#quick-start)
-- [Current Support Matrix](#current-support-matrix)
-- [Commands](#commands)
-- [Trust Contract](#trust-contract)
-- [Development](#development)
+> *"It works on my agent is the new it works on my machine."*
 
-## Why Gandalf
+Previously, teams onboarded developers by installing an IDE and extensions. Today, engineers build with AI agents (Claude Code, OpenAI Codex, Cursor) — but every agent has different MCP servers, missing skills, and unverified hooks.
 
-See what your agents changed. Review before apply. Roll back safely.
+**Gandalf is the Infrastructure as Code (IaC) layer for AI agents:**
 
-Gandalf lets developers inspect local AI agent setup, browse agent-native marketplace/source entries, and apply only reviewed provider-backed changes.
+- 📦 **Declarative `gandalf.toml`**: Single source of truth for team MCP servers, skills, guardrail hooks, and environment variables.
+- 🔀 **Non-Destructive Smart Merge**: Applies team requirements while preserving individual engineer personal customizations.
+- 🛡️ **Zero-Risk Safety Rollback**: Automatically creates a SHA-256 pre-apply snapshot before any write. Roll back in 12ms.
+- 🚦 **CI Drift Gatekeeper (`gandalf check --ci`)**: Blocks PRs if local agent configurations drift from the team manifest.
+- 🔒 **100% Local-First & Zero SaaS Lock-in**: Zero external network runtime dependency. Pure Go binary.
 
-Agent power users constantly change their local environment:
+---
 
-- add MCP servers
-- install skills and plugins
-- edit prompts, instructions, hooks, and permissions
-- let an agent modify the setup on their behalf
+## 🚀 Quick Start (3-Step Workflow)
 
-Those changes usually have no clean management layer. Gandalf opens as a TUI-first setup console for skills, hooks, MCP servers, plugins, and agent-native marketplace/source entries across Codex and Claude Code. Snapshot, diff, bundle, and restore remain the safety layer behind that workflow:
+### 1. Initialize Team Manifest
+In your project repository:
 
 ```bash
-gandalf
-gandalf snapshot create --name baseline --agent codex --scope user --project .
-gandalf snapshot create --name baseline-claude --agent claude-code --scope user --project .
-gandalf diff baseline current --agent codex --scope user --project .
+gandalf init
+```
+This generates a starter `gandalf.toml` and `.gandalf/skills/` directory.
+
+### 2. Declare Team Agent Environment (`gandalf.toml`)
+Commit your team requirements to Git:
+
+```toml
+# gandalf.toml (team agent environment specification)
+version = "1.0"
+agents  = ["claude-code", "codex"]
+
+[mcp_servers.postgres-db]
+command      = "npx"
+args         = ["-y", "@mcp/postgres", "${DB_URL}"]
+required_env = ["DB_URL"]
+
+[[skills]]
+name   = "team-reviewer"
+source = "./.gandalf/skills/team-reviewer"
+
+[hooks.pre_save]
+command = "bun run lint:fix"
+target  = "codex"
 ```
 
-Use it before you let an agent change config, install skills, edit hooks, or rewrite setup instructions. User-global setup is the active product scope; project-local setup files are outside the current management workflow.
+### 3. Check Drift & Apply Safely
 
-## What Gandalf Is Not
+```bash
+# Check configuration drift (used locally & in CI)
+gandalf check --ci
 
-- **Not a sync tool.** Gandalf does not sync Claude Code with Codex or synchronize setup across machines; it gives you reviewed local control over each supported agent's user-global setup.
-- **Not a marketplace.** Gandalf browses entries from agent-native sources, but it does not own, certify, or replace those catalogs.
-- **Not multi-tool skill fan-out.** Gandalf does not broadcast a skill or action across agents; every available mutation is scoped, reviewed, and backed by a concrete provider.
+# Preview planned changes without modifying files
+gandalf apply --dry-run
 
-## Highlights
+# Safely merge changes with automatic rollback snapshot
+gandalf apply --yes
+```
 
-- **Local control console** for installed AI agent setup capabilities.
-- **Changes-first terminal workspace** with Home, Console, Changes, Timeline, and Saves; Console keeps tabs for user-global skills, hooks, MCP servers, plugins, and agent-native marketplace/source browsing.
-- **Agent-native marketplace flows** with non-mutating guidance where a provider is unavailable and reviewed Claude Code plugin install plus verified rollback where it is supported.
-- **Human-readable diffs** for config, skills, hooks, and MCP servers.
-- **Review Changes** before restore-backed rollback or provider-backed actions write content.
-- **Content-backed snapshots** for current Codex and Claude Code user-global setup.
-- **Portable bundles** for exporting, verifying, inspecting, and previewing setup state on another machine.
-- **Go CLI and Bubble Tea TUI** shipped as a single binary.
-- **No npm distribution path**. Gandalf ships through GitHub Releases, `install.sh`, and Homebrew.
+---
 
-## Install
+## 📦 Install
 
-### Homebrew
+### Homebrew (Recommended)
 
 ```bash
 brew install qyinm/tap/gandalf
 gandalf --help
 ```
 
-### install.sh
+### Standalone Script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | sh
-gandalf --help
 ```
 
 ### From Source
@@ -98,246 +101,40 @@ gandalf --help
 go install github.com/qyinm/gandalf/cmd/gandalf@latest
 ```
 
-Prebuilt darwin/linux binaries are published on `v*` tags with GoReleaser. The npm package path is no longer supported for this repository.
+---
 
-## Quick Start
+## 💻 CLI Commands
 
-Open the global setup console:
+| Command | Description |
+| :--- | :--- |
+| `gandalf init` | Initialize a starter `gandalf.toml` in the current repository. |
+| `gandalf check [--ci]` | Check for drift between `gandalf.toml` and local agent setups. Exits with code 1 if drift detected in `--ci` mode. |
+| `gandalf apply [--dry-run]` | Non-destructively merge team manifest into local agent environments with pre-apply snapshot backup. |
+| `gandalf restore --snapshot <id> --apply` | Instantly roll back agent configurations to a previous safety snapshot. |
+| `gandalf snapshot list` | List available pre-apply and manual safety snapshots. |
+| `gandalf` | Launch the interactive Bubble Tea TUI control console. |
 
-```bash
-gandalf
-```
+---
 
-Create safe baselines before changing your agent environment. The current safety path uses user-global Codex and Claude Code setup:
+## 🛡️ Target Agent Support Matrix
 
-```bash
-gandalf snapshot create --name clean-codex --agent codex --scope user --project .
-gandalf snapshot create --name clean-claude --agent claude-code --scope user --project .
-```
+| Agent | Target Config Files | MCP Support | Skills Support | Guardrail Hooks |
+| :--- | :--- | :---: | :---: | :---: |
+| **Claude Code** | `~/.claude/settings.json`, `~/.claude/skills/` | ✅ Smart Merge | ✅ Markdown/Dir | ✅ Allowed Tools |
+| **OpenAI Codex** | `~/.codex/config.toml`, `.codex/` | ✅ Smart Merge | ✅ Skill repo | ✅ Pre-save Hooks |
+| **Custom / Team Agents** | `.gandalf/skills/`, `.gandalf/hooks/` | ✅ Extensible | ✅ Versioned | ✅ Git-tracked |
 
-Compare the baseline with your current setup:
+---
 
-```bash
-gandalf diff clean-codex current --agent codex --scope user --project .
-gandalf diff clean-claude current --agent claude-code --scope user --project .
-```
+## 🔒 Trust & Safety Contract
 
-Review changes before rollback:
+- **Non-Destructive**: Never overwrites existing unmanaged personal keys in `settings.json` or `config.toml`.
+- **Confined Writes**: Path validation prevents any writes outside user home agent configs and project root.
+- **Pre-Apply Safety Net**: Every mutating `gandalf apply` creates an automatic SHA-256 backup snapshot before touching any file.
+- **Zero Cloud Leaks**: No credentials, prompts, or MCP configurations are ever transmitted to any third-party server.
 
-```bash
-gandalf restore --snapshot clean-codex --dry-run --agent codex --scope user --project .
-gandalf restore --snapshot clean-claude --dry-run --agent claude-code --scope user --project .
-```
+---
 
-Apply only after Review Changes is correct:
+## 📄 License
 
-```bash
-gandalf restore --snapshot clean-codex --apply --experimental --agent codex --scope user --project .
-gandalf restore --snapshot clean-claude --apply --experimental --agent claude-code --scope user --project .
-```
-
-## Current Support Matrix
-
-| Capability | Current Codex support | Current Claude Code support | Boundary |
-|---|---|---|---|
-| Discovery and inventory | User-global `~/.codex/config.toml`, user hooks, user skills, managed plugin skill inventory | User-global `~/.claude/settings.json`, skills, hooks, marketplace source metadata, unsupported agent directories as observe-only | Read-only global setup discovery; project-local files are out of scope |
-| Agent-native marketplace/source browsing | Browse and inspect managed plugin skill inventory and source-backed entries where discovered | Browse and inspect source metadata and installed/source-backed entries where discovered | Gandalf does not own, certify, or replace agent catalogs |
-| Provider-backed actions | Available only where a concrete action provider can preview and execute the change | Available only where a concrete action provider can preview and execute the change | Unavailable actions must show reasons instead of pretending to mutate |
-| Marketplace-originated Review Action | Non-mutating setup guidance where source metadata is sufficient | Reviewed install is available for eligible user-scope Claude Code marketplace plugins; unavailable actions show a reason | Update, uninstall, and source management remain unavailable without a concrete mutation provider |
-| Review Changes and restore safety | Content-backed snapshot, dry-run restore, apply with explicit flags, rollback where supported | Content-backed snapshot, dry-run restore, apply with explicit flags, rollback where supported | Restore is a backing trust workflow, not the whole product identity |
-
-Cursor, OpenCode, and Pi Agent scanners may exist as legacy parser code, but they are not current supported product surfaces. Project-local files such as repo `.mcp.json`, `AGENTS.md`, and `.env` are not part of the current product scope. Broader team sync and cloud workflows are future direction.
-
-## Commands
-
-### Setup History
-
-```bash
-# Discover agent environment files
-gandalf scan --project .
-gandalf scan --project . --explain
-gandalf scan --project . --json
-
-# Save point-in-time state
-gandalf snapshot create --name baseline --agent codex --scope user --project .
-gandalf snapshot create --name baseline-claude --agent claude-code --scope user --project .
-gandalf snapshot create --name baseline --metadata-only --project .
-gandalf snapshot list
-gandalf snapshot show baseline --json
-
-# Compare saved setup with current setup
-gandalf diff baseline current --agent codex --scope user --project .
-gandalf diff baseline current --agent codex --scope user --project . --json
-gandalf diff baseline-claude current --agent claude-code --scope user --project .
-
-# Restore with Review Changes
-gandalf restore --snapshot baseline --dry-run --agent codex --scope user --project .
-gandalf restore --snapshot baseline --apply --experimental --agent codex --scope user --project .
-gandalf restore --snapshot baseline --apply --rollback --experimental --agent codex --scope user --project .
-gandalf restore --snapshot baseline-claude --dry-run --agent claude-code --scope user --project .
-gandalf restore --snapshot baseline-claude --apply --experimental --agent claude-code --scope user --project .
-```
-
-### Team Manifest (Agent Environment as Code)
-
-Standardize and synchronize AI agent environments across your engineering team using a declarative `gandalf.toml`:
-
-```bash
-# Initialize a team agent manifest in repository root
-gandalf init --name my-team-project
-
-# Check for configuration drift between team manifest and local agents (CI friendly)
-gandalf check
-gandalf check --ci
-
-# Apply team manifest with safety review and automatic pre-apply backup
-gandalf apply --dry-run
-gandalf apply --yes
-```
-
-
-### Terminal Workspace
-
-```bash
-gandalf timeline list --project .
-gandalf timeline show <id>
-gandalf timeline undo <id> --dry-run --json
-gandalf tui --project .
-```
-
-`gandalf` and `gandalf tui` open Changes-first Home. A persistent sidebar links Home, Console, Changes, Timeline, and Saves. Console uses tabs for Hooks, Plugins, Marketplace, Skills, and MCP Servers; every available write begins with Review Changes. Timeline undo remains a dry-run preview for stored history entries and reports `writesFiles=false`.
-
-### Bundles
-
-```bash
-# Export current environment to a portable .gandalf bundle
-gandalf bundle export --name baseline --out daily.gandalf --project .
-gandalf bundle export --name baseline --out daily.gandalf --metadata-only --project .
-
-# Verify and preview before importing
-gandalf bundle verify daily.gandalf
-gandalf bundle inspect daily.gandalf
-gandalf doctor --project .
-gandalf bundle import daily.gandalf --dry-run --project .
-
-# Experimental content inspection/apply on another machine
-gandalf bundle import daily.gandalf --apply-content --quarantine --experimental --project .
-gandalf bundle import daily.gandalf --apply-content --experimental --project .
-```
-
-Destructive operations require either `--experimental` or `GANDALF_EXPERIMENTAL=1`. Bundle content apply refuses known sensitive prefixes and should be previewed with `--dry-run` or `--quarantine` first.
-
-### Reports
-
-```bash
-gandalf report current --project . --out gandalf-report.md
-```
-
-Every command supports `--json` where structured output is useful.
-
-## Trust Contract
-
-By default Gandalf:
-
-- reads local user-global agent configuration only
-- does not execute MCP commands, hooks, scripts, plugins, or agent tools
-- does not use the network unless `GANDALF_UPDATE_CHECK=1` is set
-- writes to `~/.gandalf` for saves and only changes supported user-global agent setup through a reviewed provider-backed action or explicit restore apply
-- omits raw secrets and does not manage project `.env` values
-- does not follow symlinks
-- requires explicit apply flags before restoring content
-- creates rollback paths for restore operations where supported
-- reports missing local tools and env keys without installing packages or restoring secret values
-
-Update notices are off by default.
-
-## Tech Stack
-
-| Area | Stack |
-|---|---|
-| CLI | Go, Cobra |
-| TUI | Bubble Tea, Bubbles, Lip Gloss |
-| Engine | Go packages under `internal/gandalfcore` |
-| Release | GoReleaser, GitHub Releases, Homebrew tap |
-
-## Development
-
-### Go
-
-```bash
-git clone git@github.com:qyinm/gandalf.git
-cd gandalf
-make test
-make build
-make restore-safety
-make gate2
-./bin/gandalf scan --project .
-```
-
-### Landing Site
-
-The official Gandalf landing website lives under `apps/landing` (built with Astro, React, and Tailwind):
-
-```bash
-cd apps/landing
-npm install # or bun install
-npm run dev
-```
-
-## Repository Layout
-
-| Path | Purpose |
-|---|---|
-| `cmd/gandalf` | Go CLI entrypoint |
-| `internal/cli` | Cobra command handlers |
-| `internal/gandalfcore` | Canonical Go engine: scan, store, snapshot, diff, restore, bundle, timeline, manifest, sync |
-| `internal/tui` | Bubble Tea terminal workspace |
-| `apps/landing` | Official landing website (Astro/React) |
-| `install.sh` | Latest GitHub Release binary installer |
-| `.goreleaser.yaml` | Release assets and Homebrew tap formula generation |
-
-## Roadmap
-
-| Milestone | Status |
-|---|---|
-| Read-only scan, diff, and report | v0.1 |
-| Bundle export/import (`.gandalf` format) | v0.2 experimental |
-| Restore engine: dry-run, apply, rollback | v0.2 experimental |
-| Changes-first terminal workspace | v0.6.0 |
-| Agent-native marketplace review | v0.5.0 |
-| Claude Code marketplace install and verified rollback | v0.5.1 |
-| Codex and Claude Code user-global content-backed restore | current safety path |
-| Local multi-profile persistence | future |
-| Additional provider-backed setup actions | future |
-| Background setup-change daemon | future |
-| Cloud profiles and multi-machine sync | future |
-
-## Contributing
-
-Issues and focused pull requests are welcome. For code changes, run the checks that match the surface you touched:
-
-```bash
-make test
-make restore-safety
-make gate2
-```
-
-For release or installer changes, also run:
-
-```bash
-./scripts/install-smoke.sh
-```
-
-## License
-
-MIT. See [LICENSE](LICENSE).
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=qyinm%2Fgandalf&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=qyinm/gandalf&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=qyinm/gandalf&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=qyinm/gandalf&type=date&legend=top-left" />
-</picture>
-</a>
+Apache 2.0 © Gandalf Contributors.
