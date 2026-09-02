@@ -1,5 +1,4 @@
 import * as React from "react";
-import { Check, Copy, Eraser, RotateCcw } from "lucide-react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
@@ -38,13 +37,14 @@ interface CommandScenario {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function typeWriter(term: Terminal, text: string, speed = 25) {
+async function typeWriter(term: Terminal, text: string, speed = 20) {
   for (const char of text) {
     term.write(char);
     await sleep(speed);
   }
 }
 
+// Authentic Gandalf CLI Outputs (No decorative emojis, exact CLI output)
 const SCENARIOS: CommandScenario[] = [
   {
     id: "apply",
@@ -53,26 +53,20 @@ const SCENARIOS: CommandScenario[] = [
     run: async (term) => {
       term.writeln("");
       await sleep(100);
-      term.writeln(`${C.gray}🔍 Reading gandalf.toml manifest...${C.reset}`);
-      await sleep(150);
-      term.writeln(`${C.brightWhite}📦 Manifest version:${C.reset} 1.0 ${C.gray}(workspace: zero2one/backend)${C.reset}`);
-      await sleep(100);
-      term.writeln(`${C.brightWhite}🎯 Target agents detected:${C.reset} Claude Code, OpenAI Codex`);
-      await sleep(150);
-      term.writeln(`${C.gray}────────────────────────────────────────────────────────${C.reset}`);
-      term.writeln(`${C.bold}${C.brightWhite}📋 Smart Merge Plan (Non-Destructive):${C.reset}`);
+      term.writeln(`Team Manifest: zero2one-backend (version: 1.0)`);
+      term.writeln(`Target Agents: claude-code, codex`);
+      term.writeln("");
       await sleep(120);
-      term.writeln(`  ${C.brand}+ [mcp]${C.reset}    postgres-db   ${C.gray}→ ~/.claude/settings.json${C.reset}`);
+      term.writeln(`Review Changes before Apply:`);
+      await sleep(80);
+      term.writeln(`  [1] [claude-code] add MCP server 'postgres-db' (~/.claude/settings.json)`);
+      await sleep(80);
+      term.writeln(`  [2] [claude-code] add skill 'team-reviewer' (~/.claude/skills/reviewer.md)`);
+      await sleep(80);
+      term.writeln(`  [3] [codex] add guardrail hook 'pre-save-lint' (~/.codex/config.toml)`);
+      term.writeln("");
       await sleep(100);
-      term.writeln(`  ${C.brand}+ [skill]${C.reset}  team-reviewer ${C.gray}→ ~/.claude/skills/reviewer.md${C.reset}`);
-      await sleep(100);
-      term.writeln(`  ${C.brand}+ [hook]${C.reset}   pre-save-lint ${C.gray}→ ~/.codex/config.toml${C.reset}`);
-      await sleep(150);
-      term.writeln(`${C.gray}────────────────────────────────────────────────────────${C.reset}`);
-      term.writeln(`${C.yellow}🛡️  Safety Snapshot Created:${C.reset} preapply-20260902-160000`);
-      await sleep(150);
-      term.writeln(`${C.brightGreen}✓ Dry-run complete.${C.reset} 3 items ready to merge, 0 conflicts.`);
-      term.writeln(`${C.gray}  Run 'gandalf apply --yes' to apply changes safely.${C.reset}`);
+      term.writeln(`${C.gray}[Dry-run mode] No changes were written to disk.${C.reset}`);
     },
   },
   {
@@ -82,22 +76,18 @@ const SCENARIOS: CommandScenario[] = [
     run: async (term) => {
       term.writeln("");
       await sleep(100);
-      term.writeln(`${C.gray}🔍 Scanning local agent environments against gandalf.toml...${C.reset}`);
-      await sleep(150);
-      term.writeln(`${C.brightWhite}• Target: Claude Code (~/.claude/settings.json)${C.reset}`);
-      await sleep(100);
-      term.writeln(`  ${C.red}❌ Missing MCP server:${C.reset} 'postgres-db'`);
-      await sleep(100);
-      term.writeln(`  ${C.red}❌ Missing standardized skill:${C.reset} 'team-reviewer'`);
+      term.writeln(`Team Manifest: zero2one-backend (version: 1.0)`);
+      term.writeln(`Target Agents: claude-code, codex`);
+      term.writeln("");
       await sleep(120);
-      term.writeln(`${C.brightWhite}• Target: OpenAI Codex (~/.codex/config.toml)${C.reset}`);
+      term.writeln(`${C.yellow}[DRIFT DETECTED]${C.reset} The following items are missing or out of sync:`);
+      await sleep(80);
+      term.writeln(`  [1] [claude-code] mcp: postgres-db (~/.claude/settings.json)`);
+      await sleep(80);
+      term.writeln(`  [2] [claude-code] skill: team-reviewer (~/.claude/skills/reviewer.md)`);
+      term.writeln("");
       await sleep(100);
-      term.writeln(`  ${C.brightGreen}✓ Guardrail hook 'pre-save-lint' synchronized${C.reset}`);
-      await sleep(150);
-      term.writeln(`${C.gray}────────────────────────────────────────────────────────${C.reset}`);
-      term.writeln(`${C.yellow}⚡ Drift detected:${C.reset} 2 required items missing.`);
-      term.writeln(`${C.red}${C.bold}❌ Check failed with exit code 1${C.reset} (blocking CI drift).`);
-      term.writeln(`${C.gray}  Tip: Run 'gandalf apply' to sync missing configurations.${C.reset}`);
+      term.writeln(`${C.gray}Run 'gandalf apply' to synchronize your agent environment.${C.reset}`);
     },
   },
   {
@@ -107,41 +97,35 @@ const SCENARIOS: CommandScenario[] = [
     run: async (term) => {
       term.writeln("");
       await sleep(100);
-      term.writeln(`${C.gray}✨ Initializing Gandalf Agent Environment as Code...${C.reset}`);
+      term.writeln(`Created starter team manifest: /Users/dev/project/gandalf.toml`);
+      await sleep(80);
+      term.writeln(`Created shared directory: /Users/dev/project/.gandalf/skills/`);
+      term.writeln("");
       await sleep(120);
-      term.writeln(`  ${C.brightGreen}✓ Created gandalf.toml${C.reset} (team specification template)`);
-      await sleep(100);
-      term.writeln(`  ${C.brightGreen}✓ Created .gandalf/skills/${C.reset} (versioned skill repository)`);
-      await sleep(100);
-      term.writeln(`  ${C.brightGreen}✓ Created .gandalf/hooks/${C.reset} (team guardrails)`);
-      await sleep(100);
-      term.writeln(`  ${C.brightWhite}✓ Configured Git tracking${C.reset} (.gitignore rules applied)`);
-      await sleep(150);
-      term.writeln(`${C.gray}────────────────────────────────────────────────────────${C.reset}`);
-      term.writeln(`${C.bold}${C.brightWhite}🚀 Ready! Next steps:${C.reset}`);
-      term.writeln(`  ${C.brand}1.${C.reset} Edit gandalf.toml to declare shared MCPs & skills`);
-      term.writeln(`  ${C.brand}2.${C.reset} Commit to Git to share with your engineering team`);
-      term.writeln(`  ${C.brand}3.${C.reset} Teammates run 'gandalf apply' to synchronize in seconds`);
+      term.writeln(`Next steps:`);
+      term.writeln(`  1. Edit gandalf.toml to declare shared MCP servers and skills.`);
+      term.writeln(`  2. Commit gandalf.toml to your Git repository.`);
+      term.writeln(`  3. Team members run 'gandalf apply' to synchronize.`);
     },
   },
   {
     id: "restore",
     label: "restore",
-    command: "gandalf restore --snapshot preapply-20260902-160000 --apply",
+    command: "gandalf restore --snapshot preapply-manifest-20260902-160000 --apply",
     run: async (term) => {
       term.writeln("");
       await sleep(100);
-      term.writeln(`${C.gray}🛡️  Loading safety snapshot: preapply-20260902-160000...${C.reset}`);
+      term.writeln(`Loaded snapshot: preapply-manifest-20260902-160000`);
+      await sleep(80);
+      term.writeln(`Verifying target agent configuration...`);
+      term.writeln("");
       await sleep(120);
-      term.writeln(`• Verifying SHA-256 backup integrity: ${C.brightGreen}verified ✓${C.reset}`);
-      await sleep(150);
-      term.writeln(`${C.yellow}⏪ Restoring Claude Code configuration to pre-apply state...${C.reset}`);
-      await sleep(120);
-      term.writeln(`${C.yellow}⏪ Restoring OpenAI Codex configuration to pre-apply state...${C.reset}`);
-      await sleep(150);
-      term.writeln(`${C.gray}────────────────────────────────────────────────────────${C.reset}`);
-      term.writeln(`${C.brightGreen}✓ Rollback completed successfully in 12ms.${C.reset}`);
-      term.writeln(`${C.brightGreen}✓ Configuration verified: 0 errors, 100% restored.${C.reset}`);
+      term.writeln(`Restoring:`);
+      term.writeln(`  <- ~/.claude/settings.json`);
+      term.writeln(`  <- ~/.codex/config.toml`);
+      term.writeln("");
+      await sleep(100);
+      term.writeln(`Restore completed successfully. 2 configuration files restored.`);
     },
   },
 ];
@@ -153,7 +137,6 @@ export default function XTermTerminal() {
 
   const [activeScenarioId, setActiveScenarioId] = React.useState<string>("apply");
   const [isRunning, setIsRunning] = React.useState(false);
-  const [copied, setCopied] = React.useState(false);
 
   // Command buffer state for real typing
   const inputBufferRef = React.useRef("");
@@ -175,7 +158,7 @@ export default function XTermTerminal() {
 
     term.clear();
     term.write(`${C.brandBold}$ ${C.reset}`);
-    await typeWriter(term, sc.command, 20);
+    await typeWriter(term, sc.command, 16);
     await sc.run(term);
 
     setIsRunning(false);
@@ -191,7 +174,7 @@ export default function XTermTerminal() {
       cursorStyle: "block",
       fontFamily: "'DM Mono', 'JetBrains Mono', 'Menlo', 'Monaco', monospace",
       fontSize: 13,
-      lineHeight: 1.5,
+      lineHeight: 1.55,
       letterSpacing: 0,
       theme: {
         background: "#09090b",
@@ -250,12 +233,12 @@ export default function XTermTerminal() {
         }
 
         if (cmd === "help") {
-          term.writeln(`${C.bold}${C.brightWhite}Gandalf CLI Commands:${C.reset}`);
-          term.writeln(`  ${C.brand}gandalf init${C.reset}     - Scaffold team manifest (gandalf.toml)`);
-          term.writeln(`  ${C.brand}gandalf check${C.reset}    - Detect configuration drift across agents`);
-          term.writeln(`  ${C.brand}gandalf apply${C.reset}    - Non-destructively merge team manifest`);
-          term.writeln(`  ${C.brand}gandalf restore${C.reset}  - Instant rollback to safety snapshot`);
-          term.writeln(`  ${C.gray}clear            - Clear terminal screen${C.reset}`);
+          term.writeln(`Gandalf CLI Commands:`);
+          term.writeln(`  gandalf init     - Initialize team agent manifest`);
+          term.writeln(`  gandalf check    - Check for drift between manifest and local agents`);
+          term.writeln(`  gandalf apply    - Apply team manifest to local agents`);
+          term.writeln(`  gandalf restore  - Restore agent configs from snapshot`);
+          term.writeln(`  clear            - Clear terminal screen`);
           prompt(term);
           return;
         }
@@ -269,7 +252,7 @@ export default function XTermTerminal() {
         } else if (cmd.includes("restore")) {
           await executeScenario("restore");
         } else {
-          term.writeln(`${C.red}gandalf: command not found: '${cmd}'. Try 'apply', 'check', 'init', 'restore', or 'help'${C.reset}`);
+          term.writeln(`gandalf: command not found: '${cmd}'. Try 'apply', 'check', 'init', 'restore', or 'help'`);
           prompt(term);
         }
         return;
@@ -324,25 +307,6 @@ export default function XTermTerminal() {
     };
   }, [executeScenario, prompt]);
 
-  const handleCopy = async () => {
-    try {
-      const activeSc = SCENARIOS.find((s) => s.id === activeScenarioId) ?? SCENARIOS[0];
-      await navigator.clipboard.writeText(activeSc.command);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* ignore */
-    }
-  };
-
-  const handleClear = () => {
-    const term = termInstanceRef.current;
-    if (term && !isRunning) {
-      term.clear();
-      prompt(term);
-    }
-  };
-
   return (
     <div className="terminal-shell">
       {/* macOS Native Title Bar */}
@@ -354,7 +318,7 @@ export default function XTermTerminal() {
           <span className="dot dot--green" />
         </div>
 
-        {/* Quick-Click Command Preset Tabs */}
+        {/* Command Preset Tabs */}
         <div className="terminal-shell__tabs-wrapper">
           <div className="terminal-tabs-list">
             {SCENARIOS.map((sc) => {
@@ -375,70 +339,17 @@ export default function XTermTerminal() {
           </div>
         </div>
 
-        {/* Action Buttons: Clear, Replay, Copy */}
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={handleClear}
-            className="terminal-copy-btn"
-            title="Clear terminal"
-            disabled={isRunning}
-          >
-            <Eraser size={11} />
-            <span className="hidden sm:inline">Clear</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => executeScenario(activeScenarioId)}
-            className="terminal-copy-btn"
-            title="Replay execution"
-            disabled={isRunning}
-          >
-            <RotateCcw size={11} className={isRunning ? "animate-spin" : ""} />
-            <span className="hidden sm:inline">Replay</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="terminal-copy-btn"
-            title="Copy command"
-          >
-            {copied ? (
-              <>
-                <Check size={11} className="text-emerald-400" />
-                <span>Copied</span>
-              </>
-            ) : (
-              <>
-                <Copy size={11} />
-                <span>Copy</span>
-              </>
-            )}
-          </button>
+        {/* Right spacing balance */}
+        <div className="terminal-shell__dots invisible" aria-hidden="true">
+          <span className="dot" />
+          <span className="dot" />
+          <span className="dot" />
         </div>
       </div>
 
       {/* Real xterm.js Canvas Container */}
       <div className="xterm-container-wrapper">
         <div ref={terminalRef} className="xterm-target-screen" />
-      </div>
-
-      {/* Real Terminal Status Footer */}
-      <div className="real-terminal-footer">
-        <div className="flex items-center gap-2 text-xs font-mono text-zinc-400">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          <span className="font-semibold text-zinc-200">xterm.js</span>
-          <span className="text-zinc-600">•</span>
-          <span className="text-zinc-400">Type directly or click tabs above</span>
-        </div>
-        <div className="hidden sm:block text-xs font-mono text-zinc-500">
-          Try <span className="text-[#ff5f6a]">apply</span>, <span className="text-[#ff5f6a]">check</span>, <span className="text-[#ff5f6a]">init</span>, or <span className="text-[#ff5f6a]">restore</span>
-        </div>
       </div>
     </div>
   );

@@ -19,7 +19,6 @@
   padding: 0 16px;
   border-bottom: 1px solid rgb(255 255 255 / 0.08);
   background: #141416;
-  gap: 12px;
 }
 
 /* Traffic Lights */
@@ -75,7 +74,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 10px;
+  padding: 4px 11px;
   font-family: var(--font-mono);
   font-size: 0.72rem;
   line-height: 1;
@@ -110,45 +109,16 @@
   margin-right: 2px;
 }
 
-/* Action / Copy Buttons */
-.terminal-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 9px;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: #a1a1aa;
-  background: #1e1e22;
-  border: 1px solid rgb(255 255 255 / 0.09);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  flex: 0 0 auto;
-}
-
-.terminal-copy-btn:hover:not(:disabled) {
-  color: #ffffff;
-  background: #27272a;
-  border-color: rgb(255 255 255 / 0.18);
-}
-
-.terminal-copy-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* Real xterm.js Screen Wrapper */
 .xterm-container-wrapper {
   padding: 18px 22px;
   background: #09090b;
-  min-height: 330px;
+  min-height: 320px;
 }
 
 .xterm-target-screen {
   width: 100%;
-  height: 310px;
+  height: 300px;
 }
 
 /* xterm.js Internal Adjustments */
@@ -175,17 +145,6 @@
 
 .xterm-screen {
   padding: 0 !important;
-}
-
-/* Status Footer */
-.real-terminal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
-  border-top: 1px solid rgb(255 255 255 / 0.06);
-  background: #141416;
-  color: #a1a1aa;
 }
 
 @media (max-width: 768px) {
@@ -215,10 +174,10 @@
 
   .xterm-container-wrapper {
     padding: 12px 14px;
-    min-height: 280px;
+    min-height: 270px;
   }
 
   .xterm-target-screen {
-    height: 270px;
+    height: 260px;
   }
 }
