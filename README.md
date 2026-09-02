@@ -178,6 +178,24 @@ gandalf restore --snapshot baseline-claude --dry-run --agent claude-code --scope
 gandalf restore --snapshot baseline-claude --apply --experimental --agent claude-code --scope user --project .
 ```
 
+### Team Manifest (Agent Environment as Code)
+
+Standardize and synchronize AI agent environments across your engineering team using a declarative `gandalf.toml`:
+
+```bash
+# Initialize a team agent manifest in repository root
+gandalf init --name my-team-project
+
+# Check for configuration drift between team manifest and local agents (CI friendly)
+gandalf check
+gandalf check --ci
+
+# Apply team manifest with safety review and automatic pre-apply backup
+gandalf apply --dry-run
+gandalf apply --yes
+```
+
+
 ### Terminal Workspace
 
 ```bash
