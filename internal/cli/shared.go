@@ -192,15 +192,6 @@ func IsExitError(err error) (int, bool) {
 	return 0, false
 }
 
-func notImplementedError(feature string) *types.SnapError {
-	return &types.SnapError{
-		Code:    "GANDALF_NOT_IMPLEMENTED",
-		Problem: fmt.Sprintf("%s is not implemented in the Go engine yet.", feature),
-		Cause:   "This command requires engine modules planned for U8.",
-		Fix:     "Use the Rust CLI for this feature until Go parity lands.",
-	}
-}
-
 func displayAgent(agent types.AgentID) string {
 	return agents.DisplayName(agent)
 }
@@ -482,42 +473,3 @@ func boolYesNo(value bool) string {
 	return "no"
 }
 
-func printRootHelp(w io.Writer) {
-	help := []string{
-		"gandalf",
-		"",
-		"Local control console for AI agent setup.",
-		"",
-		"Interactive workspace:",
-		"  gandalf",
-		"  gandalf tui",
-		"",
-		"Diagnosis commands:",
-		"  gandalf scan --project .",
-		"  gandalf scan --project . --explain",
-		"  gandalf snapshot create --name baseline --agent codex --scope user --project .",
-		"  gandalf snapshot create --name baseline --metadata-only --project .",
-		"  gandalf snapshot list",
-		"  gandalf snapshot list --agent codex",
-		"  gandalf snapshot show baseline --json",
-		"  gandalf diff baseline current --agent codex --scope user --project .",
-		"  gandalf diff baseline current --project .",
-		"",
-		"Restore commands:",
-		"  gandalf restore --snapshot <name> --dry-run --agent codex --scope user --project .",
-		"  gandalf restore --snapshot <name> --apply --experimental --agent codex --scope user --project .",
-		"",
-		"Extended commands:",
-		"  gandalf doctor --project . [--json]",
-		"  gandalf report [ref] --project . [--out path] [--json]",
-		"  gandalf timeline list --project . [--json]",
-		"  gandalf timeline undo <id> --dry-run --project . [--json]",
-		"  gandalf bundle export --name <snapshot> --out file.gandalf --project .",
-		"  gandalf bundle import file.gandalf --dry-run --project . [--json]",
-		"  gandalf bundle verify file.gandalf",
-		"",
-		"Interactive workspace:",
-		"  gandalf tui --project .",
-	}
-	_, _ = io.WriteString(w, strings.Join(help, "\n")+"\n")
-}
