@@ -105,9 +105,6 @@ export default function ManifestoSplitBoard() {
           <span className="dot dot--yellow" />
           <span className="dot dot--green" />
         </div>
-        <div className="proof-window__title">
-          declarative manifest vs drift check
-        </div>
       </div>
 
       {/* Split Grid: Left = gandalf.toml Editor, Right = xterm.js CLI */}
