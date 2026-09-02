@@ -3,26 +3,24 @@ import { Copy, Download } from 'lucide-react';
 import Nav from './Nav.astro';
 
 const terminalLines = [
-  { text: '$ gandalf', kind: 'prompt' },
-  { text: 'Gandalf', kind: 'title' },
-  { text: '1 Home  2 Console  3 Changes  4 Timeline  5 Saves', kind: 'muted' },
+  { text: '$ gandalf apply --dry-run', kind: 'prompt' },
+  { text: '📦 Team Manifest: gandalf.toml (version 1.0)', kind: 'title' },
+  { text: '🎯 Target Agents: claude-code, codex', kind: 'muted' },
   { text: '', kind: 'space' },
-  { text: '3 setup objects changed since the latest Save', kind: 'warn' },
-  { text: '  ~ mcp    github       changed', kind: 'change' },
-  { text: '  + skill  code-review  added', kind: 'change' },
+  { text: '🔍 Review Changes before Apply:', kind: 'warn' },
+  { text: '  + mcp    postgres-db   (staging db connector)', kind: 'change' },
+  { text: '  + skill  team-reviewer (PR compliance)', kind: 'change' },
 ];
 
 const restoreLines = [
-  'Review Changes',
+  'Smart Merge Preview',
   '',
-  'Install plugin "codex" (Claude Code)',
-  'Agent: Claude Code',
+  'Merge team tools into:',
+  '• ~/.claude/settings.json',
+  '• ~/.codex/config.toml',
   '',
-  'Changes:',
-  '+ Plugin  openai-codex/codex',
-  '',
-  'Provider-backed action',
-  'Rescan and verify after apply.',
+  '🛡️ Pre-apply safety backup enabled',
+  '1-click rollback with gandalf restore',
   '',
   'enter apply · esc cancel',
 ];
@@ -33,14 +31,14 @@ const restoreLines = [
     <Nav />
 
     <div class="hero__copy">
-      <h1>Control your agent setup.</h1>
+      <h1>Agent Environment as Code.</h1>
       <p>
-        See drift across Codex and Claude Code. Every write starts with Review Changes.
+        Declare MCP servers, skills, and hooks in <code>gandalf.toml</code>. Review before apply. Roll back safely.
       </p>
       <ul class="hero__boundaries" aria-label="Gandalf product boundaries">
-        <li>Not a sync tool.</li>
-        <li>Agent-native catalogs, never Gandalf-owned.</li>
-        <li>Not multi-tool skill fan-out.</li>
+        <li>Declarative gandalf.toml</li>
+        <li>Non-destructive smart merge</li>
+        <li>Instant safety rollback</li>
       </ul>
       <div class="hero__installbar">
         <a href="#install" class="hero__install">

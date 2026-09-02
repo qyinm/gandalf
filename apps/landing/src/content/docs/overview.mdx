@@ -1,0 +1,35 @@
+---
+title: "Overview"
+description: "Agent Environment as Code — Standardize and synchronize AI agent setups across teams."
+order: 1
+category: "Get Started"
+---
+
+# Overview
+
+Gandalf is the local control console and standardizer for AI agent environments (Claude Code, OpenAI Codex).
+
+Just as **Docker** solved *"it works on my machine"* for runtime containers, **Gandalf** solves *"it works on my agent"* for AI-assisted engineering teams.
+
+---
+
+## Why Gandalf?
+
+Modern software teams develop primarily using AI agents. Previously, onboarding a developer meant installing an IDE and a few extensions. Today, team members need:
+
+1. **Shared MCP Servers** (staging database connectors, internal API search, log query tools)
+2. **Standardized Skills** (team coding guidelines, PR reviewer skills, prompt recipes)
+3. **Guardrail Hooks** (lint before save, sensitive file protection)
+
+Without a unified declarative setup, each developer's agent has different capabilities, missing MCP tools, or conflicting configurations.
+
+Gandalf provides **Agent Environment as Code**: declare everything in a single `gandalf.toml` in your repository root, verify drift with `gandalf check`, and synchronize local setups with `gandalf apply`.
+
+---
+
+## Key Capabilities
+
+* **Agent Environment as Code**: Declare MCP servers, skills, and hooks in a Git-tracked `gandalf.toml`.
+* **Non-Destructive Smart Merge**: Safely injects team tools without deleting or modifying personal settings.
+* **Drift Detection & CI**: Detect missing agent capabilities automatically locally or in CI pipelines.
+* **Instant Safety Rollback**: Pre-apply backups allow one-click rollback with `gandalf restore`.

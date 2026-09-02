@@ -1,0 +1,33 @@
+---
+title: "Smart Merge"
+description: "Non-destructive merging and safety snapshot architecture."
+order: 4
+category: "Agent Environment as Code"
+---
+
+# Smart Merge & Safety
+
+When team members execute `gandalf apply`, Gandalf does not overwrite existing configuration files blindly. Instead, it runs the **Non-Destructive Smart Merge Engine**.
+
+---
+
+## 1. Non-Destructive Merging
+
+### Claude Code (`~/.claude/settings.json`)
+* **Preserved**: User permissions, dark/light theme, custom plugins, custom status line, and personal MCP servers.
+* **Merged**: Team MCP servers declared in `gandalf.toml` are injected into `mcpServers` without touching other keys.
+
+### OpenAI Codex (`~/.codex/config.toml`)
+* **Preserved**: Model preferences, trusted project list, and existing personal `[mcp_servers.*]` tables.
+* **Merged**: Team MCP servers are appended or updated specifically.
+
+---
+
+## 2. Safety Backups & Rollback
+
+Before modifying any file, Gandalf captures a **content-backed snapshot**:
+
+```text
+🛡️  Pre-apply safety snapshot created: preapply-manifest-20260902-120000
+   (To roll back: 'gandalf restore --snapshot preapply-manifest-20260902-120000 --apply')
+```

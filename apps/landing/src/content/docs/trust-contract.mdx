@@ -1,0 +1,19 @@
+---
+title: "Trust Contract"
+description: "Core safety invariants, read-only policies, and path confinement."
+order: 6
+category: "Safety & Principles"
+---
+
+# The Trust Contract
+
+Gandalf operates under a strict **Trust Contract** designed for safety, transparency, and reversibility.
+
+---
+
+## Core Invariants
+
+* **Read-Only Discovery**: Scan and check operations never mutate local configuration files.
+* **Review Every Change**: Every write begins with an explicit change preview before disk mutation.
+* **Zero Secret Storage**: Raw secrets are omitted/redacted. Gandalf never manages `.env` secrets.
+* **Path Confinement**: Writes are strictly confined within declared user home and project directories.

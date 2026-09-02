@@ -1,0 +1,48 @@
+---
+title: "gandalf.toml Spec"
+description: "Comprehensive schema reference for gandalf.toml team manifests."
+order: 3
+category: "Agent Environment as Code"
+---
+
+# `gandalf.toml` Specification
+
+The `gandalf.toml` manifest file defines your team's standardized AI agent configuration. Place this file at the root of your project repository.
+
+---
+
+## Schema Overview
+
+```toml
+version = "1.0"
+name = "payment-platform"
+description = "Standardized AI agent environment for Payment Engineering"
+agents = ["claude-code", "codex"]
+
+# 1. Team MCP Servers (Command-based)
+[mcp_servers.postgres-db]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
+required_env = ["DATABASE_URL"]
+description = "Staging database connector for SQL querying"
+
+# 2. Team MCP Servers (Remote URL)
+[mcp_servers.mintlify]
+url = "https://mcp.mintlify.com"
+description = "Mintlify documentation MCP server"
+
+# 3. Team Skills
+[[skills]]
+name = "pr-reviewer"
+source = "./.gandalf/skills/pr-reviewer"
+description = "Automated PR review and style compliance skill"
+
+# 4. Guardrail Hooks
+[hooks.pre-save-lint]
+event = "before_save"
+command = "./scripts/lint.sh"
+
+# 5. Environment Variable Template
+[env_template]
+DATABASE_URL = "postgres://user:pass@localhost:5432/db"
+```

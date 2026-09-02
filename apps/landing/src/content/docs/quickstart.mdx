@@ -1,0 +1,74 @@
+---
+title: "Quickstart"
+description: "Get started with Gandalf in under 3 minutes."
+order: 2
+category: "Get Started"
+---
+
+# Quickstart
+
+Follow this step-by-step guide to install Gandalf, initialize a team manifest, and synchronize your local agent environment.
+
+---
+
+## 1. Installation
+
+```bash
+# macOS/Linux with Homebrew
+brew install qyinm/tap/gandalf
+
+# Or with curl
+curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | bash
+```
+
+Verify installation:
+```bash
+gandalf --help
+```
+
+---
+
+## 2. Initialize a Team Manifest
+
+Run `gandalf init` in your repository root to create a starter `gandalf.toml`:
+
+```bash
+gandalf init --name my-team-project
+```
+
+---
+
+## 3. Declare Team Tools & Skills
+
+Edit `gandalf.toml` to define the MCP servers and skills your team requires:
+
+```toml
+version = "1.0"
+name = "my-team-project"
+agents = ["claude-code", "codex"]
+
+# 1. Staging Database MCP Server
+[mcp_servers.postgres-db]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
+required_env = ["DATABASE_URL"]
+description = "Staging database connector for agents"
+
+# 2. Team Code Reviewer Skill
+[[skills]]
+name = "team-reviewer"
+source = "./.gandalf/skills/team-reviewer"
+description = "Automated PR review and style compliance skill"
+```
+
+---
+
+## 4. Check for Drift & Apply
+
+```bash
+# Check if your local environment has missing tools
+gandalf check
+
+# Apply with automatic safety backup
+gandalf apply --yes
+```
