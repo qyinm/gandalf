@@ -1,0 +1,60 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Gandalf",
+  "logo": {
+    "dark": "https://raw.githubusercontent.com/qyinm/gandalf/main/apps/landing/public/gandalf-logo.svg",
+    "light": "https://raw.githubusercontent.com/qyinm/gandalf/main/apps/landing/public/gandalf-logo.svg"
+  },
+  "favicon": "https://raw.githubusercontent.com/qyinm/gandalf/main/apps/landing/public/favicon.svg",
+  "colors": {
+    "primary": "#3b82f6",
+    "light": "#60a5fa",
+    "dark": "#1d4ed8"
+  },
+  "topbarLinks": [
+    {
+      "name": "Landing",
+      "url": "https://usegandalf.vercel.app"
+    },
+    {
+      "name": "GitHub",
+      "url": "https://github.com/qyinm/gandalf"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": [
+        "overview",
+        "quickstart"
+      ]
+    },
+    {
+      "group": "Agent Environment as Code",
+      "pages": [
+        "manifest/gandalf-toml",
+        "manifest/smart-merge"
+      ]
+    },
+    {
+      "group": "CLI Reference",
+      "pages": [
+        "cli/apply",
+        "cli/check",
+        "cli/init",
+        "cli/restore",
+        "cli/snapshot"
+      ]
+    },
+    {
+      "group": "Trust & Safety",
+      "pages": [
+        "concepts/trust-contract",
+        "concepts/bundle-format"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/qyinm/gandalf"
+  }
+}
