@@ -1,0 +1,81 @@
+---
+title: "Gandalf agent support matrix and boundaries"
+sidebarTitle: "Support Matrix"
+description: "Current Gandalf capabilities per agent, including discovery, marketplace browsing, provider-backed actions, and safety features for Codex and Claude Code."
+---
+
+Gandalf supports two agents today: Codex and Claude Code. Each agent exposes a different set of directories, files, and marketplace integrations, so not every operation behaves the same across both. This page maps what Gandalf can discover, browse, modify, and restore for each agent, and where the boundaries are.
+
+## Capability matrix
+
+| Capability | Codex | Claude Code | Boundary |
+| --- | --- | --- | --- |
+| Discovery and inventory | Reads `~/.codex/config.toml`, user hooks, user skills, and managed plugin skill inventory | Reads `~/.claude/settings.json`, skills, hooks, and marketplace source metadata; other agent directories are observe-only | User-global scope only; project-local files are not inspected |
+| Marketplace/source browsing | Browses and inspects source-backed entries where discovered | Browses and inspects source-backed entries where discovered | Gandalf does not own or certify catalogs |
+| Provider-backed actions | Available only where a concrete action provider can preview and execute | Available only where a concrete action provider can preview and execute | Unavailable actions must show reasons |
+| Marketplace-originated Review Action | Offers non-mutating setup guidance where source metadata is sufficient | Offers reviewed install for eligible user-scope marketplace plugins with verified rollback | Update, uninstall, add/remove-source remain unavailable without mutation providers |
+| Review Changes and restore safety | Supports content-backed snapshot, dry-run restore, apply with explicit flags, rollback where supported | Supports content-backed snapshot, dry-run restore, apply with explicit flags, rollback where supported | Full restore requires `--apply` and `--experimental` or `GANDALF_EXPERIMENTAL=1` |
+
+## Discovery and inventory
+
+Gandalf inspects user-global directories for each agent. For Codex, it reads:
+
+- `~/.codex/config.toml` for agent-level settings
+- User hooks and skills
+- Managed plugin skill inventory
+
+For Claude Code, it reads:
+
+- `~/.claude/settings.json`
+- Skills and hooks
+- Marketplace source metadata
+
+<Note>
+  Gandalf treats unsupported agent directories as observe-only. It will read and report their state, but does not offer provider-backed actions for agents outside the `codex` and `claude-code` support matrix.
+</Note>
+
+## Marketplace browsing
+
+Both agents can browse and inspect source-backed marketplace entries that Gandalf discovers in the agent directories. Gandalf presents these entries as they are defined by the source, so you can view descriptions, versions, and configuration details before deciding whether to apply any changes.
+
+Gandalf does not own or certify the catalogs it browses. It surfaces what it finds in the agent directories, and any action that changes your setup is gated by Review Changes.
+
+## Provider-backed actions
+
+A Provider-backed action is only available when Gandalf has a concrete provider that can preview what will change and execute it safely. If an action does not have a provider, Gandalf shows the reason it is unavailable rather than silently skipping it. This applies equally to Codex and Claude Code.
+
+## Marketplace-originated Review Action
+
+Codex and Claude Code handle marketplace actions differently today:
+
+- **Codex:** Gandalf offers non-mutating setup guidance for marketplace plugins when the source metadata is sufficient to render a preview. This lets you see what a plugin would configure without applying changes.
+- **Claude Code:** For eligible user-scope marketplace plugins, Gandalf offers reviewed install with verified rollback. Review Changes runs before the install proceeds, so you can inspect the impact.
+
+For both agents, marketplace updates, uninstalls, and add/remove-source operations remain unavailable when a mutation provider does not exist.
+
+## Review Changes and restore safety
+
+Both agents support the same safety model around restore:
+
+- **Content-backed snapshot:** Requires `--agent codex --scope user` or `--agent claude-code --scope user`. Otherwise, create a metadata-only snapshot.
+- **Dry-run restore:** The default restore mode previews changes without writing them.
+- **Apply restore:** Requires `--apply`, plus `--experimental` or `GANDALF_EXPERIMENTAL=1`.
+- **Rollback:** Supported where the provider offers verified rollback.
+
+Before any mutating restore, Gandalf creates a snapshot so you can undo if needed.
+
+## Out of scope
+
+The following areas are not covered by Gandalf today:
+
+- Project-local files, including `.mcp.json`, project `AGENTS.md`, and `.env`
+- Cursor, OpenCode, and Pi Agent legacy scanners (not active)
+
+## Future direction
+
+Planned expansion for Gandalf includes:
+
+- Broader team sync workflows across multiple workstations
+- Cloud-managed setup and remote configuration workflows
+- Additional agent providers and mutation providers
+- A background setup-change daemon for continuous drift detection

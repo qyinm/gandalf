@@ -1,0 +1,50 @@
+---
+title: "gandalf tui: open the interactive setup console"
+sidebarTitle: "tui"
+description: "Launch the Bubble Tea terminal setup console for Gandalf. Same as running gandalf with no arguments; opens the Changes-first Home by default."
+---
+
+`gandalf tui` launches the interactive Bubble Tea terminal workspace. It is the same entry point as running `gandalf` with no arguments. The console opens on the Changes-first Home and links to the top-tab setup console for browsing installed capabilities.
+
+## Synopsis
+
+```bash
+gandalf
+gandalf tui [flags]
+```
+
+## Flags
+
+| Flag | Description | Default |
+| --- | --- | --- |
+| `-p`, `--project` | Project directory | `.` |
+| `--home` | Home directory | `$HOME` |
+| `--store` | Gandalf store directory | `~/.gandalf` or `$GANDALF_STORE` |
+| `--agent` | Focus a single agent | (all) |
+| `--scope` | Focus a single scope | (all) |
+
+## Screens
+
+The persistent sidebar links five sections:
+
+| Section | Purpose |
+| --- | --- |
+| Home | Changes-first summary of drift from the latest supported baselines |
+| Console | Unified inventory tabs: Hooks, Plugins, Marketplace, Skills, MCP Servers |
+| Changes | Active Review Changes sessions and pending provider-backed actions |
+| Timeline | History of snapshots and operations with dry-run undo |
+| Saves | Saved snapshots to diff, restore, or export as bundles |
+
+Every available write starts with [Review Changes](/concepts/review-changes). Timeline undo remains a dry-run preview.
+
+## Examples
+
+```bash
+gandalf
+gandalf tui --project .
+gandalf tui --agent codex --scope user
+```
+
+## Related
+
+- [Terminal workspace guide](/guides/terminal-workspace)

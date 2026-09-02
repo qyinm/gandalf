@@ -1,131 +1,121 @@
 ---
-title: "Quickstart"
-description: "Get started with Gandalf in under 3 minutes."
+title: "Quickstart: capture a baseline and preview a restore"
+sidebarTitle: "Quickstart"
+description: "Install Gandalf, capture a content-backed baseline of your Codex or Claude Code setup, diff it, and preview a safe restore in under five minutes."
 ---
 
-# Quickstart
+This quickstart walks through installing Gandalf, capturing a content-backed snapshot of your user-global Codex or Claude Code setup, diffing it against your current state, and previewing a restore. No files are changed until you explicitly opt in with `--apply --experimental`.
 
-Follow this step-by-step guide to install Gandalf, initialize a team manifest, and synchronize your local agent environment.
+## Prerequisites
 
----
+- macOS or Linux (amd64 or arm64).
+- A user-global setup for at least one of Codex (`~/.codex/`) or Claude Code (`~/.claude/`).
 
-## 1. Installation
+## 1. Install
 
 <CodeGroup>
-```bash Homebrew (macOS/Linux)
+
+```bash Homebrew
 brew install qyinm/tap/gandalf
-```
-
-```bash Shell Script
-curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | bash
-```
-
-```bash Go Install
-go install github.com/qyinm/gandalf/cmd/gandalf@latest
-```
-</CodeGroup>
-
-Verify installation:
-```bash
 gandalf --help
 ```
 
----
-
-## 2. Initialize a Team Manifest
-
-Run `gandalf init` in your repository root to create a starter `gandalf.toml` and `.gandalf/skills/` directory:
-
-```bash
-gandalf init --name my-team-project
+```bash install.sh
+curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | sh
+gandalf --help
 ```
 
-Or scaffold from your current local setup:
-```bash
-gandalf init --from-current
+```bash Go
+go install github.com/qyinm/gandalf/cmd/gandalf@latest
 ```
 
----
+</CodeGroup>
 
-## 3. Declare Team Tools & Skills
+See [Install](/install) for more details.
 
-Edit `gandalf.toml` to define the MCP servers and skills your team requires:
+## 2. Open the terminal workspace
 
-```toml gandalf.toml
-version = "1.0"
-name = "my-team-project"
-agents = ["claude-code", "codex"]
-
-# 1. Staging Database MCP Server
-[mcp_servers.postgres-db]
-command = "npx"
-args = ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
-required_env = ["DATABASE_URL"]
-description = "Staging database connector for agents"
-
-# 2. Team Code Reviewer Skill
-[[skills]]
-name = "team-reviewer"
-source = "./.gandalf/skills/team-reviewer"
-description = "Automated PR review and style compliance skill"
-```
-
----
-
-## 4. Check for Drift
-
-Before applying, check if your local environment is missing any declared tools:
-
-```bash
-gandalf check
-```
-
-Output:
-```text
-📦 Team Manifest: my-team-project (version: 1.0)
-🎯 Target Agents: claude-code, codex
-
-⚠️  [DRIFT DETECTED] The following items are missing or out of sync:
-  [1] [claude-code] missing_mcp_server: postgres-db (/Users/dev/.claude/settings.json)
-  [2] [codex] missing_mcp_server: postgres-db (/Users/dev/.codex/config.toml)
-  [3] [claude-code] missing_skill: team-reviewer (/Users/dev/.claude/skills/team-reviewer)
-  [4] [codex] missing_skill: team-reviewer (/Users/dev/.codex/skills/team-reviewer)
-
-💡 Run 'gandalf apply' to synchronize your agent environment.
-```
-
----
-
-## 5. Apply with Review Changes
-
-Synchronize your local agent configurations with automatic safety backup:
-
-```bash
-# Preview changes safely without disk writes
-gandalf apply --dry-run
-
-# Apply to local agent setups
-gandalf apply --yes
-```
-
-Output:
-```text
-🔍 Review Changes before Apply:
-  [1] [claude-code] Inject 1 MCP server(s) into Claude Code settings
-  [2] [claude-code] Copy team skill 'team-reviewer' to Claude Code
-  [3] [codex] Inject 1 MCP server(s) into Codex config
-  [4] [codex] Copy team skill 'team-reviewer' to Codex
-
-✅ Successfully synchronized team agent environment!
-🛡️  Pre-apply safety snapshot created: preapply-manifest-20260902-120000
-```
-
----
-
-## 6. Open Control Console
-
-To inspect your local agent configuration, browse changes, and view timeline history in the terminal:
+Running `gandalf` with no arguments opens the Changes-first Home in the Bubble Tea TUI:
 
 ```bash
 gandalf
 ```
+
+The sidebar links Home, Console, Changes, Timeline, and Saves. The Console tabs cover Hooks, Plugins, Marketplace, Skills, and MCP Servers. Every write begins with Review Changes.
+
+## 3. Capture a content-backed baseline
+
+Content-backed snapshots are what make restore safe. They require an explicit `--agent` and `--scope user` for a currently supported agent.
+
+<CodeGroup>
+
+```bash Codex
+gandalf snapshot create --name baseline --agent codex --scope user --project .
+```
+
+```bash Claude Code
+gandalf snapshot create --name baseline-claude --agent claude-code --scope user --project .
+```
+
+</CodeGroup>
+
+Snapshots are written to `~/.gandalf` (or `$GANDALF_STORE`). List and inspect them:
+
+```bash
+gandalf snapshot list
+gandalf snapshot show baseline --json
+```
+
+## 4. Diff against your current state
+
+Change something in your agent setup (add a skill, edit a hook), then compare:
+
+```bash
+gandalf diff baseline current --agent codex --scope user --project .
+```
+
+The output separates **semantic changes** (typed entities such as MCP server entries) from **raw source changes** (file-level additions and removals). Add `--json` for machine-readable output.
+
+## 5. Preview a restore
+
+Dry-run is the default and never writes:
+
+```bash
+gandalf restore --snapshot baseline --dry-run --agent codex --scope user --project .
+```
+
+The plan lists writable changes, unsupported items with reasons, per-item risk, and rollback instructions.
+
+## 6. Apply after review
+
+Applying requires both `--apply` and `--experimental` (or `GANDALF_EXPERIMENTAL=1`). Gandalf creates a pre-apply restore point before writing.
+
+```bash
+gandalf restore --snapshot baseline --apply --experimental --agent codex --scope user --project .
+```
+
+Add `--rollback` to automatically undo on failure:
+
+```bash
+gandalf restore --snapshot baseline --apply --experimental --rollback --agent codex --scope user --project .
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Terminal workspace" icon="terminal" href="/guides/terminal-workspace">
+    Navigate Home, Console, Changes, Timeline, and Saves.
+  </Card>
+
+  <Card title="Bundles" icon="box" href="/guides/bundles">
+    Export, verify, and import portable `.gandalf` archives.
+  </Card>
+
+  <Card title="Team manifest" icon="users" href="/guides/team-manifest">
+    Declare shared MCP servers and skills in `gandalf.toml`.
+  </Card>
+
+  <Card title="Trust contract" icon="shield" href="/trust-contract">
+    Read the safety boundaries Gandalf promises.
+  </Card>
+</CardGroup>
