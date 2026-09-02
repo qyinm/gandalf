@@ -1,0 +1,131 @@
+---
+title: "Quickstart"
+description: "Get started with Gandalf in under 3 minutes."
+---
+
+# Quickstart
+
+Follow this step-by-step guide to install Gandalf, initialize a team manifest, and synchronize your local agent environment.
+
+---
+
+## 1. Installation
+
+<CodeGroup>
+```bash Homebrew (macOS/Linux)
+brew install qyinm/tap/gandalf
+```
+
+```bash Shell Script
+curl -fsSL https://raw.githubusercontent.com/qyinm/gandalf/main/install.sh | bash
+```
+
+```bash Go Install
+go install github.com/qyinm/gandalf/cmd/gandalf@latest
+```
+</CodeGroup>
+
+Verify installation:
+```bash
+gandalf --help
+```
+
+---
+
+## 2. Initialize a Team Manifest
+
+Run `gandalf init` in your repository root to create a starter `gandalf.toml` and `.gandalf/skills/` directory:
+
+```bash
+gandalf init --name my-team-project
+```
+
+Or scaffold from your current local setup:
+```bash
+gandalf init --from-current
+```
+
+---
+
+## 3. Declare Team Tools & Skills
+
+Edit `gandalf.toml` to define the MCP servers and skills your team requires:
+
+```toml gandalf.toml
+version = "1.0"
+name = "my-team-project"
+agents = ["claude-code", "codex"]
+
+# 1. Staging Database MCP Server
+[mcp_servers.postgres-db]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
+required_env = ["DATABASE_URL"]
+description = "Staging database connector for agents"
+
+# 2. Team Code Reviewer Skill
+[[skills]]
+name = "team-reviewer"
+source = "./.gandalf/skills/team-reviewer"
+description = "Automated PR review and style compliance skill"
+```
+
+---
+
+## 4. Check for Drift
+
+Before applying, check if your local environment is missing any declared tools:
+
+```bash
+gandalf check
+```
+
+Output:
+```text
+📦 Team Manifest: my-team-project (version: 1.0)
+🎯 Target Agents: claude-code, codex
+
+⚠️  [DRIFT DETECTED] The following items are missing or out of sync:
+  [1] [claude-code] missing_mcp_server: postgres-db (/Users/dev/.claude/settings.json)
+  [2] [codex] missing_mcp_server: postgres-db (/Users/dev/.codex/config.toml)
+  [3] [claude-code] missing_skill: team-reviewer (/Users/dev/.claude/skills/team-reviewer)
+  [4] [codex] missing_skill: team-reviewer (/Users/dev/.codex/skills/team-reviewer)
+
+💡 Run 'gandalf apply' to synchronize your agent environment.
+```
+
+---
+
+## 5. Apply with Review Changes
+
+Synchronize your local agent configurations with automatic safety backup:
+
+```bash
+# Preview changes safely without disk writes
+gandalf apply --dry-run
+
+# Apply to local agent setups
+gandalf apply --yes
+```
+
+Output:
+```text
+🔍 Review Changes before Apply:
+  [1] [claude-code] Inject 1 MCP server(s) into Claude Code settings
+  [2] [claude-code] Copy team skill 'team-reviewer' to Claude Code
+  [3] [codex] Inject 1 MCP server(s) into Codex config
+  [4] [codex] Copy team skill 'team-reviewer' to Codex
+
+✅ Successfully synchronized team agent environment!
+🛡️  Pre-apply safety snapshot created: preapply-manifest-20260902-120000
+```
+
+---
+
+## 6. Open Control Console
+
+To inspect your local agent configuration, browse changes, and view timeline history in the terminal:
+
+```bash
+gandalf
+```
