@@ -1,0 +1,120 @@
+/* Terminal Viewer UI Styles */
+.terminal-shell {
+  overflow: hidden;
+  border: 1px solid rgb(9 9 11 / 0.18);
+  border-radius: 12px;
+  background: #09090b;
+  box-shadow: 0 20px 60px -32px rgb(0 0 0 / 0.6);
+  text-align: left;
+}
+
+.terminal-shell__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 14px;
+  border-bottom: 1px solid #27272a;
+  background: #18181b;
+  color: #a1a1aa;
+}
+
+.terminal-shell__dots {
+  display: flex;
+  gap: 6px;
+}
+
+.terminal-shell__dots span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #3f3f46;
+}
+
+.terminal-shell__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  min-height: 280px;
+  background: #09090b;
+}
+
+.terminal-shell__main {
+  padding: 18px 20px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.65;
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.025) 1px, transparent 1px),
+    #09090b;
+  background-size: 40px 40px;
+}
+
+.terminal-shell__line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.terminal-shell__line--prompt {
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.terminal-shell__line--title {
+  color: #f4f4f5;
+}
+
+.terminal-shell__line--muted {
+  color: #71717a;
+}
+
+.terminal-shell__line--warn {
+  color: #fbbf24;
+}
+
+.terminal-shell__line--change {
+  color: var(--brand);
+  font-weight: 500;
+}
+
+.terminal-shell__line--danger {
+  color: #f87171;
+}
+
+.terminal-shell__line--success {
+  color: #4ade80;
+}
+
+.terminal-shell__side {
+  border-left: 1px solid #27272a;
+  background: #111113;
+  padding: 18px 20px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.terminal-shell__side-title {
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #27272a;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+}
+
+.terminal-shell__side-body {
+  color: #a1a1aa;
+}
+
+@media (max-width: 768px) {
+  .terminal-shell__body {
+    grid-template-columns: 1fr;
+  }
+
+  .terminal-shell__side {
+    border-left: none;
+    border-top: 1px solid #27272a;
+  }
+}

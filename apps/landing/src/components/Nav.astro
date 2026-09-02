@@ -8,6 +8,7 @@ import { GithubIcon } from 'lucide-react';
     <a href="/" class="nav__logo" aria-label="Gandalf home">
       <img src="/gandalf-mark-bold-v2.svg" alt="" class="nav__logo-mark" width="32" height="28" aria-hidden="true" />
       <span class="nav__logo-text">Gandalf</span>
+      <span class="nav__badge">v0.7.0</span>
     </a>
     <nav class="nav__links" aria-label="Primary">
       <a href="https://docs.usegandalf.com">Docs</a>
@@ -63,6 +64,18 @@ import { GithubIcon } from 'lucide-react';
 
   .nav__logo-text {
     color: var(--foreground);
+  }
+
+  .nav__badge {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--brand);
+    background: var(--brand-soft);
+    border: 1px solid rgb(255 95 106 / 0.2);
+    padding: 1px 7px;
+    border-radius: 9999px;
+    margin-left: 2px;
   }
 
   .nav__links {
