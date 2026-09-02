@@ -95,27 +95,23 @@ const year = new Date().getFullYear();
 
   @media (max-width: 768px) {
     .footer {
-      padding: 16px 0;
+      padding: 20px 0;
       font-size: 0.86rem;
     }
 
     .footer__inner {
+      flex-direction: column;
       align-items: center;
-      justify-content: flex-start;
-      gap: 14px;
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-
-    .footer__inner::-webkit-scrollbar {
-      display: none;
+      justify-content: center;
+      gap: 16px;
+      text-align: center;
     }
 
     .footer__links {
-      justify-content: flex-start;
-      gap: 14px;
-      flex: 0 0 auto;
-      width: auto;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      width: 100%;
     }
 
     .footer__brand {
@@ -123,8 +119,8 @@ const year = new Date().getFullYear();
     }
 
     .footer__brand img {
-      width: 34px;
-      height: 29px;
+      width: 32px;
+      height: 27px;
     }
 
     .footer__links a {
@@ -132,7 +128,9 @@ const year = new Date().getFullYear();
     }
 
     .footer__meta {
-      display: none;
+      display: block;
+      font-size: 0.74rem;
+      color: var(--muted-foreground);
     }
   }
 

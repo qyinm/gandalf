@@ -116,15 +116,15 @@ export default function TerminalViewer() {
           <span />
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mx-auto">
-          <TabsList className="bg-zinc-900 border border-zinc-800 p-0.5 h-auto rounded-md">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mx-auto overflow-x-auto max-w-full">
+          <TabsList className="bg-zinc-900 border border-zinc-800 p-0.5 h-auto rounded-md flex-nowrap">
             {scenarios.map((s) => (
               <TabsTrigger
                 key={s.id}
                 value={s.id}
-                className="font-mono text-xs px-2.5 py-1 text-zinc-400 data-[state=active]:bg-zinc-800 data-[state=active]:text-white rounded"
+                className="font-mono text-[11px] sm:text-xs px-2 sm:px-2.5 py-1 text-zinc-400 data-[state=active]:bg-zinc-800 data-[state=active]:text-white rounded whitespace-nowrap"
               >
-                {s.tabLabel}
+                <span className="hidden sm:inline">gandalf </span>{s.id}
               </TabsTrigger>
             ))}
           </TabsList>
