@@ -53,6 +53,8 @@ func DetectDrift(m *manifest.Manifest, projectRoot, homeDir string, discovered [
 					targetFile = filepath.Join(homeDir, ".claude", "settings.json")
 				case types.AgentCodex:
 					targetFile = filepath.Join(homeDir, ".codex", "config.toml")
+				case types.AgentCursor:
+					targetFile = filepath.Join(homeDir, ".cursor", "mcp.json")
 				}
 
 				report.Items = append(report.Items, DriftItem{
@@ -76,6 +78,8 @@ func DetectDrift(m *manifest.Manifest, projectRoot, homeDir string, discovered [
 				destSkillDir = filepath.Join(homeDir, ".claude", "skills", skill.Name)
 			case types.AgentCodex:
 				destSkillDir = filepath.Join(homeDir, ".codex", "skills", skill.Name)
+			case types.AgentCursor:
+				destSkillDir = filepath.Join(homeDir, ".cursor", "skills", skill.Name)
 			}
 
 			if _, err := os.Stat(destSkillDir); os.IsNotExist(err) {

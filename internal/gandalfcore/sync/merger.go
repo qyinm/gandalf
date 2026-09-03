@@ -69,6 +69,65 @@ func MergeClaudeSettingsJSON(existingJSON string, m *manifest.Manifest) (string,
 	return strings.TrimSpace(buf.String()) + "\n", nil
 }
 
+// MergeCursorMCPJSON merges manifest MCP servers into an existing Cursor mcp.json without removing existing user keys.
+func MergeCursorMCPJSON(existingJSON string, m *manifest.Manifest) (string, error) {
+	var root map[string]any
+
+	trimmed := strings.TrimSpace(existingJSON)
+	if trimmed == "" {
+		root = make(map[string]any)
+	} else {
+		if err := json.Unmarshal([]byte(trimmed), &root); err != nil {
+			return "", fmt.Errorf("invalid json in cursor mcp.json: %w", err)
+		}
+	}
+
+	var mcpServers map[string]any
+	if raw, ok := root["mcpServers"]; ok {
+		if m, ok := raw.(map[string]any); ok {
+			mcpServers = m
+		}
+	}
+	if mcpServers == nil {
+		mcpServers = make(map[string]any)
+	}
+
+	for name, srv := range m.MCPServers {
+		serverEntry := make(map[string]any)
+		if srv.Command != "" {
+			serverEntry["command"] = srv.Command
+		}
+		if len(srv.Args) > 0 {
+			serverEntry["args"] = srv.Args
+		}
+		if len(srv.Env) > 0 {
+			serverEntry["env"] = srv.Env
+		}
+		if srv.URL != "" {
+			serverEntry["url"] = srv.URL
+		}
+		if len(srv.Headers) > 0 {
+			serverEntry["headers"] = srv.Headers
+		}
+		if srv.Disabled {
+			serverEntry["disabled"] = true
+		}
+		mcpServers[name] = serverEntry
+	}
+
+	root["mcpServers"] = mcpServers
+
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetIndent("", "  ")
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(root); err != nil {
+		return "", fmt.Errorf("encode cursor mcp.json: %w", err)
+	}
+
+	return strings.TrimSpace(buf.String()) + "\n", nil
+}
+
 // MergeCodexConfigTOML merges manifest MCP servers and hooks into an existing Codex config.toml without destroying user config.
 func MergeCodexConfigTOML(existingTOML string, m *manifest.Manifest) (string, error) {
 	lines := strings.Split(existingTOML, "\n")
