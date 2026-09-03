@@ -62,6 +62,15 @@ func TestMergeClaudeSettingsJSON(t *testing.T) {
 	} else if teamSrv["command"] != "npx" {
 		t.Errorf("expected command npx, got %v", teamSrv["command"])
 	}
+
+	// Test null JSON does not panic
+	mergedNull, err := MergeClaudeSettingsJSON("null", m)
+	if err != nil {
+		t.Fatalf("unexpected error merging null json: %v", err)
+	}
+	if !strings.Contains(mergedNull, "team-postgres") {
+		t.Errorf("expected team-postgres in merged null JSON")
+	}
 }
 
 func TestMergeCodexConfigTOML(t *testing.T) {
@@ -102,6 +111,67 @@ args = ["test.db"]
 	}
 }
 
+func TestMergeCursorMCPJSON(t *testing.T) {
+	existing := `{
+  "customKey": true,
+  "mcpServers": {
+    "my-personal-tool": {
+      "command": "python",
+      "args": ["tool.py"]
+    }
+  }
+}`
+
+	m := &manifest.Manifest{
+		MCPServers: map[string]manifest.MCPServerDef{
+			"team-postgres": {
+				Command: "npx",
+				Args:    []string{"-y", "@mcp/postgres", "pg://localhost"},
+				Env:     map[string]string{"ENV": "test"},
+			},
+		},
+	}
+
+	merged, err := MergeCursorMCPJSON(existing, m)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(merged), &parsed); err != nil {
+		t.Fatalf("failed to parse merged json: %v", err)
+	}
+
+	if parsed["customKey"] != true {
+		t.Errorf("expected customKey to be preserved, got %v", parsed["customKey"])
+	}
+
+	mcpServers, ok := parsed["mcpServers"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected mcpServers map, got %v", parsed["mcpServers"])
+	}
+
+	if _, ok := mcpServers["my-personal-tool"]; !ok {
+		t.Errorf("expected personal tool to be preserved")
+	}
+
+	teamSrv, ok := mcpServers["team-postgres"].(map[string]any)
+	if !ok {
+		t.Errorf("expected team-postgres to be added")
+	} else if teamSrv["command"] != "npx" {
+		t.Errorf("expected command npx, got %v", teamSrv["command"])
+	}
+
+	// Test null JSON does not panic
+	mergedNull, err := MergeCursorMCPJSON("null", m)
+	if err != nil {
+		t.Fatalf("unexpected error merging null json for cursor: %v", err)
+	}
+	if !strings.Contains(mergedNull, "team-postgres") {
+		t.Errorf("expected team-postgres in merged null JSON for cursor")
+	}
+}
+
 func TestEndToEndSyncPlanAndApply(t *testing.T) {
 	tempDir := t.TempDir()
 	homeDir := filepath.Join(tempDir, "home")
@@ -120,7 +190,7 @@ func TestEndToEndSyncPlanAndApply(t *testing.T) {
 	m := &manifest.Manifest{
 		Version: "1.0",
 		Name:    "e2e-team",
-		Agents:  []types.AgentID{types.AgentClaudeCode, types.AgentCodex},
+		Agents:  []types.AgentID{types.AgentClaudeCode, types.AgentCodex, types.AgentCursor},
 		MCPServers: map[string]manifest.MCPServerDef{
 			"team-postgres": {
 				Command: "npx",
@@ -140,8 +210,8 @@ func TestEndToEndSyncPlanAndApply(t *testing.T) {
 		t.Fatalf("unexpected error creating sync plan: %v", err)
 	}
 
-	if len(plan.Items) != 4 { // 2 agent configs + 2 skills
-		t.Fatalf("expected 4 sync items, got %d", len(plan.Items))
+	if len(plan.Items) != 6 { // 3 agent configs + 3 skills
+		t.Fatalf("expected 6 sync items, got %d", len(plan.Items))
 	}
 
 	roots := &pathconfinement.Roots{
@@ -169,6 +239,11 @@ func TestEndToEndSyncPlanAndApply(t *testing.T) {
 		t.Errorf("codex config.toml was not created: %v", err)
 	}
 
+	cursorConfig := filepath.Join(homeDir, ".cursor", "mcp.json")
+	if _, err := os.Stat(cursorConfig); err != nil {
+		t.Errorf("cursor mcp.json was not created: %v", err)
+	}
+
 	claudeSkill := filepath.Join(homeDir, ".claude", "skills", "reviewer", "SKILL.md")
 	if _, err := os.Stat(claudeSkill); err != nil {
 		t.Errorf("claude skill was not copied: %v", err)
@@ -177,5 +252,10 @@ func TestEndToEndSyncPlanAndApply(t *testing.T) {
 	codexSkill := filepath.Join(homeDir, ".codex", "skills", "reviewer", "SKILL.md")
 	if _, err := os.Stat(codexSkill); err != nil {
 		t.Errorf("codex skill was not copied: %v", err)
+	}
+
+	cursorSkill := filepath.Join(homeDir, ".cursor", "skills", "reviewer", "SKILL.md")
+	if _, err := os.Stat(cursorSkill); err != nil {
+		t.Errorf("cursor skill was not copied: %v", err)
 	}
 }

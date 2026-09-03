@@ -540,6 +540,7 @@ func TestDefaultScanDiscoversOnlyCurrentSupportedAgents(t *testing.T) {
 	want := []types.AgentID{
 		types.AgentClaudeCode,
 		types.AgentCodex,
+		types.AgentCursor,
 	}
 	for _, agent := range want {
 		if _, ok := agents[agent]; !ok {
@@ -547,7 +548,7 @@ func TestDefaultScanDiscoversOnlyCurrentSupportedAgents(t *testing.T) {
 		}
 	}
 	for agent := range agents {
-		if agent != types.AgentClaudeCode && agent != types.AgentCodex {
+		if agent != types.AgentClaudeCode && agent != types.AgentCodex && agent != types.AgentCursor {
 			t.Fatalf("default scan included unsupported current agent %q in %#v", agent, agents)
 		}
 	}

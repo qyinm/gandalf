@@ -85,7 +85,7 @@ func TestBuildStatusReportsAgentScopedBaselineAndChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(status.Agents) != 2 {
+	if len(status.Agents) != 3 {
 		t.Fatalf("agents = %#v", status.Agents)
 	}
 
@@ -103,6 +103,11 @@ func TestBuildStatusReportsAgentScopedBaselineAndChanges(t *testing.T) {
 	claude := findAgentStatus(t, status, types.AgentClaudeCode)
 	if claude.HasBaseline {
 		t.Fatalf("claude should be missing baseline: %#v", claude)
+	}
+
+	cursor := findAgentStatus(t, status, types.AgentCursor)
+	if cursor.HasBaseline {
+		t.Fatalf("cursor should be missing baseline: %#v", cursor)
 	}
 }
 

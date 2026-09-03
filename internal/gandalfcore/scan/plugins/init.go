@@ -7,6 +7,7 @@ func init() {
 		return []scan.ScannerPlugin{
 			ClaudeCodeScanner{},
 			CodexScanner{},
+			CursorScanner{},
 		}
 	})
 }

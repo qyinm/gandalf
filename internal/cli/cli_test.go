@@ -102,7 +102,7 @@ func TestUnsupportedCurrentAgentReturnsExitOne(t *testing.T) {
 		"scan",
 		"--project", projectPath,
 		"--home", homeDir,
-		"--agent", "cursor",
+		"--agent", "opencode",
 	)
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
@@ -110,7 +110,7 @@ func TestUnsupportedCurrentAgentReturnsExitOne(t *testing.T) {
 	if !strings.Contains(stderr, "GANDALF_INVALID_AGENT") {
 		t.Fatalf("expected GANDALF_INVALID_AGENT in stderr, got %q", stderr)
 	}
-	if !strings.Contains(stderr, "Valid agents: claude-code, codex") {
+	if !strings.Contains(stderr, "Valid agents: claude-code, codex, cursor") {
 		t.Fatalf("expected current supported agent list, got %q", stderr)
 	}
 }

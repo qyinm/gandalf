@@ -30,6 +30,8 @@ func CreateSyncPlan(m *manifest.Manifest, projectRoot, homeDir string, discovere
 			existingContent := ""
 			if data, err := os.ReadFile(claudeFile); err == nil {
 				existingContent = string(data)
+			} else if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("read claude settings: %w", err)
 			}
 			mergedJSON, err := MergeClaudeSettingsJSON(existingContent, m)
 			if err != nil {
@@ -67,6 +69,8 @@ func CreateSyncPlan(m *manifest.Manifest, projectRoot, homeDir string, discovere
 			existingContent := ""
 			if data, err := os.ReadFile(codexFile); err == nil {
 				existingContent = string(data)
+			} else if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("read codex config: %w", err)
 			}
 			mergedTOML, err := MergeCodexConfigTOML(existingContent, m)
 			if err != nil {
@@ -95,6 +99,45 @@ func CreateSyncPlan(m *manifest.Manifest, projectRoot, homeDir string, discovere
 						SourceFile:  srcPath,
 						TargetFile:  destPath,
 						Description: fmt.Sprintf("Copy team skill '%s' to Codex", skill.Name),
+					})
+				}
+			}
+
+		case types.AgentCursor:
+			cursorFile := filepath.Join(homeDir, ".cursor", "mcp.json")
+			existingContent := ""
+			if data, err := os.ReadFile(cursorFile); err == nil {
+				existingContent = string(data)
+			} else if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("read cursor mcp settings: %w", err)
+			}
+			mergedJSON, err := MergeCursorMCPJSON(existingContent, m)
+			if err != nil {
+				return nil, fmt.Errorf("merge cursor mcp settings: %w", err)
+			}
+
+			plan.Items = append(plan.Items, SyncPlanItem{
+				Agent:       types.AgentCursor,
+				Kind:        types.KindAgentConfig,
+				Name:        "mcp.json",
+				Action:      "update",
+				TargetFile:  cursorFile,
+				Content:     mergedJSON,
+				Description: fmt.Sprintf("Inject %d MCP server(s) into Cursor config", len(m.MCPServers)),
+			})
+
+			for _, skill := range m.Skills {
+				if skill.Source != "" {
+					srcPath := filepath.Join(projectRoot, filepath.Clean(skill.Source))
+					destPath := filepath.Join(homeDir, ".cursor", "skills", skill.Name)
+					plan.Items = append(plan.Items, SyncPlanItem{
+						Agent:       types.AgentCursor,
+						Kind:        types.KindSkill,
+						Name:        skill.Name,
+						Action:      "copy",
+						SourceFile:  srcPath,
+						TargetFile:  destPath,
+						Description: fmt.Sprintf("Copy team skill '%s' to Cursor", skill.Name),
 					})
 				}
 			}
