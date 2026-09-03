@@ -84,6 +84,20 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 
 	// 3. Process Args
 	for i, arg := range srv.Args {
+		// If previous arg was a credential flag (e.g. "--api-key", "raw-secret-token")
+		if i > 0 {
+			prev := strings.ToLower(srv.Args[i-1])
+			if isCredentialFlag(prev) && !strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "${") && len(arg) >= 8 {
+				cleanFlag := strings.ToUpper(regexp.MustCompile(`[^A-Za-z0-9_]`).ReplaceAllString(strings.TrimLeft(prev, "-"), "_"))
+				varKey := fmt.Sprintf("%s_%s", cleanName, cleanFlag)
+				srv.Args[i] = fmt.Sprintf("${%s}", varKey)
+				requiredEnvMap[varKey] = true
+				if _, exists := envTemplate[varKey]; !exists {
+					envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "default")
+				}
+				continue
+			}
+		}
 		srv.Args[i] = redactStringValue(arg, cleanName, envTemplate, requiredEnvMap)
 	}
 
@@ -287,5 +301,35 @@ func redactStringValue(val, cleanName string, envTemplate map[string]string, req
 		}
 	}
 
+	// 6. Redact flag argument credentials: --api-key=..., --token=..., --secret=...
+	flagCredentialRegex := regexp.MustCompile(`(?i)(--(?:api[_-]?key|token|auth[_-]?token|password|secret|pwd)[=:])([A-Za-z0-9_\-\.\:\@\/\+\=]{8,})`)
+	for {
+		matches := flagCredentialRegex.FindStringSubmatch(normalized)
+		if len(matches) <= 2 {
+			break
+		}
+		prefix := matches[1]
+		secretVal := matches[2]
+		if strings.HasPrefix(secretVal, "${") {
+			break
+		}
+		cleanFlag := strings.ToUpper(regexp.MustCompile(`[^A-Za-z0-9_]`).ReplaceAllString(strings.Trim(prefix, "-=:"), "_"))
+		varKey := fmt.Sprintf("%s_%s", cleanName, cleanFlag)
+		normalized = strings.Replace(normalized, prefix+secretVal, fmt.Sprintf("%s${%s}", prefix, varKey), 1)
+		requiredEnvMap[varKey] = true
+		if _, exists := envTemplate[varKey]; !exists {
+			envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "default")
+		}
+	}
+
 	return normalized
+}
+
+func isCredentialFlag(flag string) bool {
+	f := strings.TrimLeft(flag, "-")
+	switch f {
+	case "api-key", "apikey", "api_key", "token", "auth-token", "auth_token", "secret", "password", "pwd", "p":
+		return true
+	}
+	return false
 }

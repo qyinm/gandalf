@@ -219,7 +219,16 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 						tbl := parseInlineTable(trimmedVal)
 						authMap := make(map[string]any)
 						for k, v := range tbl {
-							authMap[k] = v
+							trimmedV := strings.TrimSpace(v)
+							if trimmedV == "true" {
+								authMap[k] = true
+							} else if trimmedV == "false" {
+								authMap[k] = false
+							} else if intVal, err := strconv.Atoi(trimmedV); err == nil {
+								authMap[k] = intVal
+							} else {
+								authMap[k] = unquote(trimmedV)
+							}
 						}
 						server.Auth = authMap
 					} else {

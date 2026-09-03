@@ -175,11 +175,23 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 		}
 
 		var newlyCreatedSkills []string
+		backedUpSkills := make(map[string]string) // destSkillDir -> tempBackupDir
 		success := false
 		defer func() {
 			if !success {
+				// Rollback newly created skills
 				for _, skillDir := range newlyCreatedSkills {
 					_ = os.RemoveAll(skillDir)
+				}
+				// Restore original skills from backup
+				for destDir, bakDir := range backedUpSkills {
+					_ = os.RemoveAll(destDir)
+					_ = os.Rename(bakDir, destDir)
+				}
+			} else {
+				// Clean up temporary backups on success
+				for _, bakDir := range backedUpSkills {
+					_ = os.RemoveAll(bakDir)
 				}
 			}
 		}()
@@ -227,6 +239,15 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 						destExisted := dirExists(destSkillDir)
 						if destExisted && !opts.Force {
 							return fmt.Errorf("team skill '%s' already exists (use --force to overwrite)", skillName)
+						}
+
+						if destExisted {
+							// For atomic overwrite without retaining obsolete files, move existing to temporary backup
+							bakDir := destSkillDir + fmt.Sprintf(".bak.%d", len(backedUpSkills)+1)
+							if err := os.Rename(destSkillDir, bakDir); err != nil {
+								return fmt.Errorf("backup existing skill '%s': %w", skillName, err)
+							}
+							backedUpSkills[destSkillDir] = bakDir
 						}
 
 						if err := copyDirectory(srcSkillDir, destSkillDir); err != nil {

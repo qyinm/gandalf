@@ -89,6 +89,10 @@ func ReconcileSources(opts ImportOptions, candidates []DetectedCandidate) (*Impo
 		results = append(results, res)
 	}
 
+	if len(results) == 0 && len(candidates) > 0 {
+		return nil, fmt.Errorf("all discovered candidate sources failed to parse: %s", strings.Join(warnings, "; "))
+	}
+
 	// Separate results into project and global
 	var projectResults []parsedCandidateResult
 	var globalResults []parsedCandidateResult
@@ -103,35 +107,34 @@ func ReconcileSources(opts ImportOptions, candidates []DetectedCandidate) (*Impo
 
 	finalMCPServers := make(map[string]manifest.MCPServerDef)
 	envTemplate := make(map[string]string)
+
+	// 1. First add Global MCP servers
+	for _, gr := range globalResults {
+		for name, srv := range gr.MCPServers {
+			finalMCPServers[name] = srv
+		}
+	}
+
+	// 2. Project MCP servers take priority over Global MCP servers
+	for _, pr := range projectResults {
+		for name, srv := range pr.MCPServers {
+			finalMCPServers[name] = srv
+		}
+	}
+
+	// 3. Final Skills: Project takes precedence over Global
 	finalSkillsMap := make(map[string]manifest.SkillDef)
-
-	// 1. Process Global first so Project can override
-	for _, r := range globalResults {
-		for name, srv := range r.MCPServers {
-			if srv.Description == "" {
-				srv.Description = fmt.Sprintf("Imported from global %s (%s)", r.Source.Agent, filepath.Base(r.Source.Path))
-			}
-			finalMCPServers[name] = srv
+	for _, gr := range globalResults {
+		for _, sk := range gr.Skills {
+			finalSkillsMap[sk.Name] = sk
 		}
-		for _, sk := range r.Skills {
+	}
+	for _, pr := range projectResults {
+		for _, sk := range pr.Skills {
 			finalSkillsMap[sk.Name] = sk
 		}
 	}
 
-	// 2. Process Project (Overrides Global for both MCP servers and skills)
-	for _, r := range projectResults {
-		for name, srv := range r.MCPServers {
-			if srv.Description == "" {
-				srv.Description = fmt.Sprintf("Imported from project %s", filepath.Base(r.Source.Path))
-			}
-			finalMCPServers[name] = srv
-		}
-		for _, sk := range r.Skills {
-			finalSkillsMap[sk.Name] = sk
-		}
-	}
-
-	// Deterministic skill list ordering
 	var skillNames []string
 	for name := range finalSkillsMap {
 		skillNames = append(skillNames, name)
@@ -142,7 +145,7 @@ func ReconcileSources(opts ImportOptions, candidates []DetectedCandidate) (*Impo
 		finalSkills = append(finalSkills, finalSkillsMap[name])
 	}
 
-	// 3. Templatize and redact all MCP servers in deterministic order
+	// 3. Templatize secrets across all servers deterministically (sort server keys first)
 	var serverNames []string
 	for name := range finalMCPServers {
 		serverNames = append(serverNames, name)
@@ -167,7 +170,7 @@ func ReconcileSources(opts ImportOptions, candidates []DetectedCandidate) (*Impo
 		switch r.Source.Agent {
 		case "cursor":
 			agentSeen[types.AgentCursor] = true
-		case "claude_code":
+		case "claude_code", "claude-code", "claude":
 			agentSeen[types.AgentClaudeCode] = true
 		case "codex":
 			agentSeen[types.AgentCodex] = true
@@ -295,8 +298,7 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 						if j > 0 {
 							sb.WriteString(", ")
 						}
-						valStr := fmt.Sprintf("%v", a[k])
-						sb.WriteString(fmt.Sprintf("%s = %q", k, valStr))
+						sb.WriteString(fmt.Sprintf("%s = %s", k, formatTOMLValue(a[k])))
 					}
 					sb.WriteString(" }\n")
 				}
@@ -375,4 +377,39 @@ func formatTOMLKey(key string) string {
 		return key
 	}
 	return fmt.Sprintf("%q", key)
+}
+
+func formatTOMLValue(v any) string {
+	if v == nil {
+		return `""`
+	}
+	switch val := v.(type) {
+	case bool:
+		return fmt.Sprintf("%t", val)
+	case int:
+		return fmt.Sprintf("%d", val)
+	case int64:
+		return fmt.Sprintf("%d", val)
+	case float64:
+		if val == float64(int64(val)) {
+			return fmt.Sprintf("%d", int64(val))
+		}
+		return fmt.Sprintf("%f", val)
+	case string:
+		return fmt.Sprintf("%q", val)
+	case []any:
+		var items []string
+		for _, item := range val {
+			items = append(items, formatTOMLValue(item))
+		}
+		return fmt.Sprintf("[%s]", strings.Join(items, ", "))
+	case []string:
+		var items []string
+		for _, item := range val {
+			items = append(items, fmt.Sprintf("%q", item))
+		}
+		return fmt.Sprintf("[%s]", strings.Join(items, ", "))
+	default:
+		return fmt.Sprintf("%q", fmt.Sprintf("%v", val))
+	}
 }

@@ -1013,3 +1013,199 @@ func TestFormatManifestTOML_QuotesDottedServerNames(t *testing.T) {
 		t.Errorf("expected server.with.dots in parsed manifest")
 	}
 }
+
+func TestRedactAndTemplatizeServer_FlagAndPositionalCredentials(t *testing.T) {
+	envTemplate := make(map[string]string)
+	srv := manifest.MCPServerDef{
+		Command: "npx",
+		Args: []string{
+			"-y",
+			"my-tool",
+			"--api-key=supersecretapikey12345",
+			"--token",
+			"rawcustomtoken987654321",
+		},
+	}
+
+	RedactAndTemplatizeServer("my-srv", &srv, envTemplate)
+
+	if !strings.Contains(srv.Args[2], "${MY_SRV_API_KEY}") {
+		t.Errorf("expected --api-key= to be templatized, got: %s", srv.Args[2])
+	}
+	if srv.Args[4] != "${MY_SRV_TOKEN}" {
+		t.Errorf("expected positional token to be templatized, got: %s", srv.Args[4])
+	}
+	if _, ok := envTemplate["MY_SRV_API_KEY"]; !ok {
+		t.Errorf("expected MY_SRV_API_KEY in envTemplate")
+	}
+	if _, ok := envTemplate["MY_SRV_TOKEN"]; !ok {
+		t.Errorf("expected MY_SRV_TOKEN in envTemplate")
+	}
+}
+
+func TestReconcileSources_ClaudeCodeAgentTargeting(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projDir, ".mcp.json"), []byte(`{"mcpServers":{"claude-srv":{"command":"ls"}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+		DryRun:      true,
+	}
+
+	res, err := RunImport(opts)
+	if err != nil {
+		t.Fatalf("RunImport failed: %v", err)
+	}
+
+	foundClaude := false
+	for _, a := range res.Manifest.Agents {
+		if a == types.AgentClaudeCode {
+			foundClaude = true
+			break
+		}
+	}
+	if !foundClaude {
+		t.Errorf("expected AgentClaudeCode ('claude-code') in manifest agents, got: %v", res.Manifest.Agents)
+	}
+}
+
+func TestFormatManifestTOML_StructuredAuthTypesPreserved(t *testing.T) {
+	m := &manifest.Manifest{
+		Version: "1.0",
+		Name:    "test-auth",
+		Agents:  []types.AgentID{types.AgentCursor},
+		MCPServers: map[string]manifest.MCPServerDef{
+			"auth-srv": {
+				Command: "run",
+				Auth: map[string]any{
+					"enabled": true,
+					"retries": 5,
+					"token":   "${AUTH_SRV_TOKEN}",
+				},
+			},
+		},
+	}
+
+	formatted := FormatManifestTOML(m)
+	if !strings.Contains(formatted, "enabled = true") {
+		t.Errorf("expected 'enabled = true' without quotes, got:\n%s", formatted)
+	}
+	if !strings.Contains(formatted, "retries = 5") {
+		t.Errorf("expected 'retries = 5' without quotes, got:\n%s", formatted)
+	}
+
+	// Parse back and verify types
+	parsed, err := manifest.Parse(formatted, nil)
+	if err != nil {
+		t.Fatalf("failed to parse formatted TOML: %v\n%s", err, formatted)
+	}
+	authMap, ok := parsed.Manifest.MCPServers["auth-srv"].Auth.(map[string]any)
+	if !ok {
+		t.Fatalf("expected Auth to be map[string]any, got: %T", parsed.Manifest.MCPServers["auth-srv"].Auth)
+	}
+	if authMap["enabled"] != true {
+		t.Errorf("expected authMap['enabled'] to be bool true, got: %v (%T)", authMap["enabled"], authMap["enabled"])
+	}
+	if authMap["retries"] != 5 {
+		t.Errorf("expected authMap['retries'] to be int 5, got: %v (%T)", authMap["retries"], authMap["retries"])
+	}
+}
+
+func TestRunImport_ForceCleansObsoleteFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	srcSkillDir := filepath.Join(projDir, ".cursor", "skills", "clean-skill")
+	if err := os.MkdirAll(srcSkillDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcSkillDir, "SKILL.md"), []byte("# New Skill"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Existing destination team skill with obsolete file
+	destSkillDir := filepath.Join(projDir, ".gandalf", "skills", "clean-skill")
+	if err := os.MkdirAll(destSkillDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(destSkillDir, "SKILL.md"), []byte("# Old Skill"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	obsoleteFile := filepath.Join(destSkillDir, "old_obsolete_script.sh")
+	if err := os.WriteFile(obsoleteFile, []byte("#!/bin/sh\necho old"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+		Force:       true,
+	}
+
+	_, err := RunImport(opts)
+	if err != nil {
+		t.Fatalf("RunImport with force failed: %v", err)
+	}
+
+	// Verify obsolete file was removed
+	if _, err := os.Stat(obsoleteFile); err == nil {
+		t.Errorf("expected obsolete file to be removed on --force overwrite")
+	}
+
+	// Verify new content is present
+	content, _ := os.ReadFile(filepath.Join(destSkillDir, "SKILL.md"))
+	if string(content) != "# New Skill" {
+		t.Errorf("expected updated skill content, got: %s", string(content))
+	}
+}
+
+func TestRunImport_FailedImportRestoresExistingSkill(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	srcSkillDir := filepath.Join(projDir, ".cursor", "skills", "test-skill")
+	if err := os.MkdirAll(srcSkillDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcSkillDir, "SKILL.md"), []byte("# Source Skill"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Existing skill
+	destSkillDir := filepath.Join(projDir, ".gandalf", "skills", "test-skill")
+	if err := os.MkdirAll(destSkillDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	origFile := filepath.Join(destSkillDir, "original.txt")
+	if err := os.WriteFile(origFile, []byte("preserve me"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Intentionally make output manifest path fail to write (e.g. symlink to root or read-only directory)
+	// By specifying a directory path as the OutputFile, WriteTextAtomically will fail!
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+		Force:       true,
+		OutputFile:  ".cursor", // exists as directory, write will fail
+	}
+
+	_, err := RunImport(opts)
+	if err == nil {
+		t.Fatalf("expected RunImport to fail on directory output file")
+	}
+
+	// Verify original skill directory was restored!
+	content, err := os.ReadFile(origFile)
+	if err != nil {
+		t.Fatalf("original file not found after rollback: %v", err)
+	}
+	if string(content) != "preserve me" {
+		t.Errorf("expected original content preserved, got: %s", string(content))
+	}
+}
