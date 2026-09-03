@@ -62,6 +62,15 @@ func TestMergeClaudeSettingsJSON(t *testing.T) {
 	} else if teamSrv["command"] != "npx" {
 		t.Errorf("expected command npx, got %v", teamSrv["command"])
 	}
+
+	// Test null JSON does not panic
+	mergedNull, err := MergeClaudeSettingsJSON("null", m)
+	if err != nil {
+		t.Fatalf("unexpected error merging null json: %v", err)
+	}
+	if !strings.Contains(mergedNull, "team-postgres") {
+		t.Errorf("expected team-postgres in merged null JSON")
+	}
 }
 
 func TestMergeCodexConfigTOML(t *testing.T) {
@@ -151,6 +160,15 @@ func TestMergeCursorMCPJSON(t *testing.T) {
 		t.Errorf("expected team-postgres to be added")
 	} else if teamSrv["command"] != "npx" {
 		t.Errorf("expected command npx, got %v", teamSrv["command"])
+	}
+
+	// Test null JSON does not panic
+	mergedNull, err := MergeCursorMCPJSON("null", m)
+	if err != nil {
+		t.Fatalf("unexpected error merging null json for cursor: %v", err)
+	}
+	if !strings.Contains(mergedNull, "team-postgres") {
+		t.Errorf("expected team-postgres in merged null JSON for cursor")
 	}
 }
 

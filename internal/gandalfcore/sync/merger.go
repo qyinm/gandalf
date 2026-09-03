@@ -22,6 +22,9 @@ func MergeClaudeSettingsJSON(existingJSON string, m *manifest.Manifest) (string,
 			return "", fmt.Errorf("invalid json in claude settings: %w", err)
 		}
 	}
+	if settings == nil {
+		settings = make(map[string]any)
+	}
 
 	var mcpServers map[string]any
 	if raw, ok := settings["mcpServers"]; ok {
@@ -80,6 +83,9 @@ func MergeCursorMCPJSON(existingJSON string, m *manifest.Manifest) (string, erro
 		if err := json.Unmarshal([]byte(trimmed), &root); err != nil {
 			return "", fmt.Errorf("invalid json in cursor mcp.json: %w", err)
 		}
+	}
+	if root == nil {
+		root = make(map[string]any)
 	}
 
 	var mcpServers map[string]any
