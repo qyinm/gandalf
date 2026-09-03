@@ -100,6 +100,9 @@ func MergeCursorMCPJSON(existingJSON string, m *manifest.Manifest) (string, erro
 
 	for name, srv := range m.MCPServers {
 		serverEntry := make(map[string]any)
+		if srv.Type != "" {
+			serverEntry["type"] = srv.Type
+		}
 		if srv.Command != "" {
 			serverEntry["command"] = srv.Command
 		}
@@ -108,6 +111,9 @@ func MergeCursorMCPJSON(existingJSON string, m *manifest.Manifest) (string, erro
 		}
 		if len(srv.Env) > 0 {
 			serverEntry["env"] = srv.Env
+		}
+		if srv.EnvFile != "" {
+			serverEntry["envFile"] = srv.EnvFile
 		}
 		if srv.URL != "" {
 			serverEntry["url"] = srv.URL

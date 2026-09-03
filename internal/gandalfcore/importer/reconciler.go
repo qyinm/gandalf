@@ -210,6 +210,9 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 		for _, name := range serverNames {
 			srv := m.MCPServers[name]
 			sb.WriteString(fmt.Sprintf("[mcp_servers.%s]\n", name))
+			if srv.Type != "" {
+				sb.WriteString(fmt.Sprintf("type = %q\n", srv.Type))
+			}
 			if srv.Command != "" {
 				sb.WriteString(fmt.Sprintf("command = %q\n", srv.Command))
 			}
@@ -222,6 +225,9 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 					sb.WriteString(fmt.Sprintf("%q", arg))
 				}
 				sb.WriteString("]\n")
+			}
+			if srv.EnvFile != "" {
+				sb.WriteString(fmt.Sprintf("env_file = %q\n", srv.EnvFile))
 			}
 			if srv.URL != "" {
 				sb.WriteString(fmt.Sprintf("url = %q\n", srv.URL))

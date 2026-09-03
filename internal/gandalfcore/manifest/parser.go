@@ -169,6 +169,18 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 
 		case "mcp_servers":
 			if currentSubSection != "" {
+				// Support nested [mcp_servers.<name>.env] tables (e.g. Codex TOML)
+				if strings.HasSuffix(currentSubSection, ".env") {
+					parentName := strings.TrimSuffix(currentSubSection, ".env")
+					server := m.MCPServers[parentName]
+					if server.Env == nil {
+						server.Env = make(map[string]string)
+					}
+					server.Env[key] = unquote(val)
+					m.MCPServers[parentName] = server
+					continue
+				}
+
 				server := m.MCPServers[currentSubSection]
 				if server.Env == nil {
 					server.Env = make(map[string]string)
@@ -178,10 +190,14 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 				}
 
 				switch key {
+				case "type":
+					server.Type = unquote(val)
 				case "command":
 					server.Command = unquote(val)
 				case "args":
 					server.Args = parseStringArray(val)
+				case "env_file":
+					server.EnvFile = unquote(val)
 				case "url":
 					server.URL = unquote(val)
 				case "description":
@@ -290,8 +306,46 @@ func parseStringArray(raw string) []string {
 	}
 
 	var items []string
-	for _, piece := range strings.Split(inner, ",") {
-		clean := unquote(piece)
+	var current strings.Builder
+	inQuote := false
+	var quoteChar rune
+	escaped := false
+
+	for _, r := range inner {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			current.WriteRune(r)
+			escaped = true
+			continue
+		}
+		if (r == '"' || r == '\'') && !inQuote {
+			inQuote = true
+			quoteChar = r
+			current.WriteRune(r)
+			continue
+		}
+		if inQuote && r == quoteChar {
+			inQuote = false
+			current.WriteRune(r)
+			continue
+		}
+		if r == ',' && !inQuote {
+			clean := unquote(strings.TrimSpace(current.String()))
+			if clean != "" {
+				items = append(items, clean)
+			}
+			current.Reset()
+			continue
+		}
+		current.WriteRune(r)
+	}
+
+	if current.Len() > 0 {
+		clean := unquote(strings.TrimSpace(current.String()))
 		if clean != "" {
 			items = append(items, clean)
 		}

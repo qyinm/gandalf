@@ -140,6 +140,11 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 }
 
 func copyDirectory(src, dst string) error {
+	// Security: If destination root is a symlink, do not follow it
+	if fi, err := os.Lstat(dst); err == nil && (fi.Mode()&os.ModeSymlink != 0) {
+		return fmt.Errorf("security violation: destination directory '%s' is a symlink", dst)
+	}
+
 	entries, err := os.ReadDir(src)
 	if err != nil {
 		return err
@@ -150,13 +155,18 @@ func copyDirectory(src, dst string) error {
 	}
 
 	for _, entry := range entries {
-		// Security: Ignore symlinks to prevent path traversal / link-following exploits
+		// Security: Ignore source symlinks to prevent path traversal / link-following exploits
 		if entry.Type()&os.ModeSymlink != 0 {
 			continue
 		}
 
 		srcPath := filepath.Join(src, entry.Name())
 		dstPath := filepath.Join(dst, entry.Name())
+
+		// Security: If destination child already exists as a symlink, reject
+		if fi, err := os.Lstat(dstPath); err == nil && (fi.Mode()&os.ModeSymlink != 0) {
+			return fmt.Errorf("security violation: destination file '%s' is a symlink", dstPath)
+		}
 
 		if entry.IsDir() {
 			if err := copyDirectory(srcPath, dstPath); err != nil {
@@ -172,13 +182,18 @@ func copyDirectory(src, dst string) error {
 }
 
 func copyFile(src, dst string) error {
-	// Security: Check for symlink before opening
+	// Security: Check for source symlink before opening
 	fi, err := os.Lstat(src)
 	if err != nil {
 		return err
 	}
 	if fi.Mode()&os.ModeSymlink != 0 {
 		return nil
+	}
+
+	// Security: Check for destination symlink before creating/writing
+	if dfi, err := os.Lstat(dst); err == nil && (dfi.Mode()&os.ModeSymlink != 0) {
+		return fmt.Errorf("security violation: destination file '%s' is a symlink", dst)
 	}
 
 	in, err := os.Open(src)

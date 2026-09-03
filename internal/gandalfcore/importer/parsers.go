@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/manifest"
 )
@@ -15,6 +16,7 @@ type rawMCPServerJSON struct {
 	Command     string            `json:"command,omitempty"`
 	Args        []string          `json:"args,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
+	EnvFile     string            `json:"envFile,omitempty"`
 	URL         string            `json:"url,omitempty"`
 	Headers     map[string]string `json:"headers,omitempty"`
 	Disabled    bool              `json:"disabled,omitempty"`
@@ -34,9 +36,11 @@ func ParseStandardJSONMCPServers(data []byte) (map[string]manifest.MCPServerDef,
 	result := make(map[string]manifest.MCPServerDef)
 	for name, raw := range root.MCPServers {
 		srv := manifest.MCPServerDef{
+			Type:        raw.Type,
 			Command:     raw.Command,
 			Args:        raw.Args,
 			Env:         raw.Env,
+			EnvFile:     raw.EnvFile,
 			URL:         raw.URL,
 			Headers:     raw.Headers,
 			Disabled:    raw.Disabled,
@@ -67,9 +71,11 @@ func ParseClaudeConfigJSON(data []byte, projectPath string) (map[string]manifest
 	// 1. User-scoped servers
 	for name, raw := range root.MCPServers {
 		result[name] = manifest.MCPServerDef{
+			Type:        raw.Type,
 			Command:     raw.Command,
 			Args:        raw.Args,
 			Env:         raw.Env,
+			EnvFile:     raw.EnvFile,
 			URL:         raw.URL,
 			Headers:     raw.Headers,
 			Disabled:    raw.Disabled,
@@ -83,9 +89,11 @@ func ParseClaudeConfigJSON(data []byte, projectPath string) (map[string]manifest
 		if filepath.Clean(pPath) == cleanProj {
 			for name, raw := range proj.MCPServers {
 				result[name] = manifest.MCPServerDef{
+					Type:        raw.Type,
 					Command:     raw.Command,
 					Args:        raw.Args,
 					Env:         raw.Env,
+					EnvFile:     raw.EnvFile,
 					URL:         raw.URL,
 					Headers:     raw.Headers,
 					Disabled:    raw.Disabled,
@@ -104,7 +112,26 @@ func ParseCodexConfigTOML(data []byte) (map[string]manifest.MCPServerDef, error)
 	if err != nil {
 		return nil, fmt.Errorf("parse codex toml config: %w", err)
 	}
-	return parsed.Manifest.MCPServers, nil
+
+	// Clean up any remaining .env virtual servers and fold them into the parent server
+	servers := parsed.Manifest.MCPServers
+	for name, srv := range servers {
+		if strings.HasSuffix(name, ".env") {
+			parentName := strings.TrimSuffix(name, ".env")
+			if parent, exists := servers[parentName]; exists {
+				if parent.Env == nil {
+					parent.Env = make(map[string]string)
+				}
+				for k, v := range srv.Env {
+					parent.Env[k] = v
+				}
+				servers[parentName] = parent
+			}
+			delete(servers, name)
+		}
+	}
+
+	return servers, nil
 }
 
 // ScanSkillsDirectory scans a directory (e.g. .cursor/skills/ or .claude/skills/)

@@ -380,3 +380,139 @@ func TestRunImport_SafePlaceholderInEnvTemplate(t *testing.T) {
 		t.Errorf("expected safe placeholder in env_template, got: %s", envVal)
 	}
 }
+
+func TestParseStringArray_WithCommasInsideQuotes(t *testing.T) {
+	manifestTOML := `
+[mcp_servers.tool]
+command = "node"
+args = ["--param=a,b,c", "simple", "quoted, with comma"]
+`
+	parsed, err := manifest.Parse(manifestTOML, nil)
+	if err != nil {
+		t.Fatalf("failed to parse manifest: %v", err)
+	}
+
+	tool, ok := parsed.Manifest.MCPServers["tool"]
+	if !ok {
+		t.Fatalf("tool server not found")
+	}
+
+	if len(tool.Args) != 3 {
+		t.Fatalf("expected 3 args, got %d: %v", len(tool.Args), tool.Args)
+	}
+	if tool.Args[0] != "--param=a,b,c" {
+		t.Errorf("expected '--param=a,b,c', got '%s'", tool.Args[0])
+	}
+	if tool.Args[1] != "simple" {
+		t.Errorf("expected 'simple', got '%s'", tool.Args[1])
+	}
+	if tool.Args[2] != "quoted, with comma" {
+		t.Errorf("expected 'quoted, with comma', got '%s'", tool.Args[2])
+	}
+}
+
+func TestParseCodexConfigTOML_WithNestedEnvTable(t *testing.T) {
+	codexTOML := `
+[mcp_servers.my_server]
+command = "node"
+args = ["server.js"]
+
+[mcp_servers.my_server.env]
+API_KEY = "xyz123"
+DEBUG = "true"
+`
+	servers, err := ParseCodexConfigTOML([]byte(codexTOML))
+	if err != nil {
+		t.Fatalf("ParseCodexConfigTOML failed: %v", err)
+	}
+
+	if len(servers) != 1 {
+		t.Fatalf("expected exactly 1 server, got %d: %v", len(servers), servers)
+	}
+
+	srv, exists := servers["my_server"]
+	if !exists {
+		t.Fatalf("my_server not found in parsed servers")
+	}
+
+	if srv.Env["API_KEY"] != "xyz123" {
+		t.Errorf("expected API_KEY=xyz123, got: %s", srv.Env["API_KEY"])
+	}
+	if srv.Env["DEBUG"] != "true" {
+		t.Errorf("expected DEBUG=true, got: %s", srv.Env["DEBUG"])
+	}
+}
+
+func TestParseStandardJSONMCPServers_PreservesTypeAndEnvFile(t *testing.T) {
+	cursorJSON := `{
+  "mcpServers": {
+    "cursor-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["my-tool"],
+      "envFile": "${workspaceFolder}/.env"
+    }
+  }
+}`
+	servers, err := ParseStandardJSONMCPServers([]byte(cursorJSON))
+	if err != nil {
+		t.Fatalf("ParseStandardJSONMCPServers failed: %v", err)
+	}
+
+	srv, ok := servers["cursor-server"]
+	if !ok {
+		t.Fatalf("cursor-server not found")
+	}
+
+	if srv.Type != "stdio" {
+		t.Errorf("expected type 'stdio', got: %s", srv.Type)
+	}
+	if srv.EnvFile != "${workspaceFolder}/.env" {
+		t.Errorf("expected envFile '${workspaceFolder}/.env', got: %s", srv.EnvFile)
+	}
+}
+
+func TestRunImport_DestinationSymlinkRejected(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	outsideDir := filepath.Join(tempDir, "outside")
+
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outsideDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Create a skill: .cursor/skills/test-skill/SKILL.md
+	skillDir := filepath.Join(projDir, ".cursor", "skills", "test-skill")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Skill Content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Make destination .gandalf/skills/test-skill a symlink to outsideDir
+	gandalfSkillsDir := filepath.Join(projDir, ".gandalf", "skills")
+	if err := os.MkdirAll(gandalfSkillsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	destSymlink := filepath.Join(gandalfSkillsDir, "test-skill")
+	if err := os.Symlink(outsideDir, destSymlink); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+	}
+
+	_, err := RunImport(opts)
+	if err == nil {
+		t.Fatalf("expected import to fail when destination skill is a symlink")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("expected symlink security error, got: %v", err)
+	}
+}
