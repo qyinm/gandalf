@@ -95,12 +95,13 @@ func scanCursorMCPFile(target scan.ScanTarget, base scan.ScannerBase) []types.Di
 	if !ok {
 		return nil
 	}
+	fileItem := base.Captured(scan.EvidenceBaseTargetFromScanTarget(target), types.KindAgentConfig, nil, root)
+	evidence := []types.DiscoveredItem{fileItem}
+
 	servers, _ := scan.AsRecord(root["mcpServers"])
 	if servers == nil {
-		item := base.Captured(scan.EvidenceBaseTargetFromScanTarget(target), types.KindAgentConfig, nil, root)
-		return []types.DiscoveredItem{item}
+		return evidence
 	}
-	var evidence []types.DiscoveredItem
 	for name, serverValue := range servers {
 		serverRecord, ok := scan.AsRecord(serverValue)
 		if !ok {

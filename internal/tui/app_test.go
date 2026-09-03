@@ -1063,10 +1063,10 @@ func TestCreateMissingBaselinesWritesAgentScopedSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(created) != 2 {
+	if len(created) != 3 {
 		t.Fatalf("created = %#v", created)
 	}
-	for _, agent := range []types.AgentID{types.AgentClaudeCode, types.AgentCodex} {
+	for _, agent := range []types.AgentID{types.AgentClaudeCode, types.AgentCodex, types.AgentCursor} {
 		names, err := store.ListSnapshots(runtime.StoreDir, &agent)
 		if err != nil {
 			t.Fatal(err)
@@ -1156,6 +1156,13 @@ func TestHomeBaselineActionCreatesBothSupportedBaselinesAndReturnsClean(t *testi
 	if err := os.WriteFile(claudeSettings, []byte(`{"permissions":{"allow":["Bash(echo hi)"]}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	cursorConfig := filepath.Join(runtime.HomeDir, ".cursor", "mcp.json")
+	if err := os.MkdirAll(filepath.Dir(cursorConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cursorConfig, []byte(`{"mcpServers":{"demo":{"command":"echo"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	app := NewApp(runtime)
 	app.ready = true
@@ -1178,7 +1185,7 @@ func TestHomeBaselineActionCreatesBothSupportedBaselinesAndReturnsClean(t *testi
 	if updated.screen != ScreenHome || updated.status.Level == views.StatusError {
 		t.Fatalf("save completion: screen=%q status=%#v", updated.screen, updated.status)
 	}
-	if !strings.Contains(updated.status.Text, "Created 2 saves") {
+	if !strings.Contains(updated.status.Text, "Created 3 saves") {
 		t.Fatalf("status = %q", updated.status.Text)
 	}
 	home := BuildHomeViewModel(updated.baselineStatus)

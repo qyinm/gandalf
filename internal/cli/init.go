@@ -112,7 +112,7 @@ description = "Staging database MCP server"
 version = "1.0"
 name = "%s"
 description = "Standardized AI agent environment for %s"
-agents = ["claude-code", "codex"]
+agents = ["claude-code", "codex", "cursor"]
 
 # Team MCP Servers
 %s
@@ -136,7 +136,7 @@ agents = ["claude-code", "codex"]
 version = "1.0"
 name = "%s"
 description = "Standardized AI agent environment for %s"
-agents = ["claude-code", "codex"]
+agents = ["claude-code", "codex", "cursor"]
 
 # 1. Team MCP Servers
 [mcp_servers.postgres-db]
