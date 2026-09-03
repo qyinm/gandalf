@@ -26,8 +26,8 @@ Previously, teams onboarded developers by installing an IDE and extensions. Toda
 **Gandalf is the Infrastructure as Code (IaC) layer for AI agents:**
 
 - 📦 **Declarative `gandalf.toml`**: Single source of truth for team MCP servers, skills, guardrail hooks, and environment variables.
-- 🔀 **Non-Destructive Smart Merge**: Applies team requirements while preserving individual engineer personal customizations.
-- 🛡️ **Zero-Risk Safety Rollback**: Automatically creates a SHA-256 pre-apply snapshot before any write. Roll back in 12ms.
+- 🔀 **Non-Destructive Smart Merge**: Applies manifest-owned entries while preserving your existing personal keys and sections.
+- 🛡️ **Safety Rollback**: Automatically creates a SHA-256 pre-apply snapshot before any write. One command to restore.
 - 🚦 **CI Drift Gatekeeper (`gandalf check --ci`)**: Blocks PRs if local agent configurations drift from the team manifest.
 - 🔒 **100% Local-First & Zero SaaS Lock-in**: Zero external network runtime dependency. Pure Go binary.
 
