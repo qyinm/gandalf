@@ -102,8 +102,7 @@ func ReconcileSources(opts ImportOptions, candidates []DetectedCandidate) (*Impo
 
 	finalMCPServers := make(map[string]manifest.MCPServerDef)
 	envTemplate := make(map[string]string)
-	var finalSkills []manifest.SkillDef
-	skillSeen := make(map[string]bool)
+	finalSkillsMap := make(map[string]manifest.SkillDef)
 
 	// 1. Process Global first so Project can override
 	for _, r := range globalResults {
@@ -114,14 +113,11 @@ func ReconcileSources(opts ImportOptions, candidates []DetectedCandidate) (*Impo
 			finalMCPServers[name] = srv
 		}
 		for _, sk := range r.Skills {
-			if !skillSeen[sk.Name] {
-				finalSkills = append(finalSkills, sk)
-				skillSeen[sk.Name] = true
-			}
+			finalSkillsMap[sk.Name] = sk
 		}
 	}
 
-	// 2. Process Project (Overrides Global)
+	// 2. Process Project (Overrides Global for both MCP servers and skills)
 	for _, r := range projectResults {
 		for name, srv := range r.MCPServers {
 			if srv.Description == "" {
@@ -130,15 +126,29 @@ func ReconcileSources(opts ImportOptions, candidates []DetectedCandidate) (*Impo
 			finalMCPServers[name] = srv
 		}
 		for _, sk := range r.Skills {
-			if !skillSeen[sk.Name] {
-				finalSkills = append(finalSkills, sk)
-				skillSeen[sk.Name] = true
-			}
+			finalSkillsMap[sk.Name] = sk
 		}
 	}
 
-	// 3. Templatize and redact all MCP servers
-	for name, srv := range finalMCPServers {
+	// Deterministic skill list ordering
+	var skillNames []string
+	for name := range finalSkillsMap {
+		skillNames = append(skillNames, name)
+	}
+	sort.Strings(skillNames)
+	var finalSkills []manifest.SkillDef
+	for _, name := range skillNames {
+		finalSkills = append(finalSkills, finalSkillsMap[name])
+	}
+
+	// 3. Templatize and redact all MCP servers in deterministic order
+	var serverNames []string
+	for name := range finalMCPServers {
+		serverNames = append(serverNames, name)
+	}
+	sort.Strings(serverNames)
+	for _, name := range serverNames {
+		srv := finalMCPServers[name]
 		copied := srv
 		RedactAndTemplatizeServer(name, &copied, envTemplate)
 		finalMCPServers[name] = copied
@@ -150,12 +160,34 @@ func ReconcileSources(opts ImportOptions, candidates []DetectedCandidate) (*Impo
 		projectName = "my-project"
 	}
 
-	// 5. Build final Manifest
+	// 5. Detect distinct agents from discovered sources
+	agentSeen := make(map[types.AgentID]bool)
+	for _, r := range results {
+		switch r.Source.Agent {
+		case "cursor":
+			agentSeen[types.AgentCursor] = true
+		case "claude_code":
+			agentSeen[types.AgentClaudeCode] = true
+		case "codex":
+			agentSeen[types.AgentCodex] = true
+		}
+	}
+	var targetAgents []types.AgentID
+	for _, a := range []types.AgentID{types.AgentClaudeCode, types.AgentCodex, types.AgentCursor} {
+		if agentSeen[a] {
+			targetAgents = append(targetAgents, a)
+		}
+	}
+	if len(targetAgents) == 0 {
+		targetAgents = []types.AgentID{types.AgentClaudeCode, types.AgentCodex, types.AgentCursor}
+	}
+
+	// 6. Build final Manifest
 	m := &manifest.Manifest{
 		Version:     "1.0",
 		Name:        projectName,
 		Description: fmt.Sprintf("Standardized AI agent environment for %s", projectName),
-		Agents:      []types.AgentID{types.AgentClaudeCode, types.AgentCodex, types.AgentCursor},
+		Agents:      targetAgents,
 		MCPServers:  finalMCPServers,
 		Skills:      finalSkills,
 		EnvTemplate: envTemplate,

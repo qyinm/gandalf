@@ -129,29 +129,97 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 			return nil, fmt.Errorf("manifest '%s' already exists (use --force to overwrite)", opts.OutputFile)
 		}
 
-		// First, safely mirror skills. If mirroring fails, abort before writing manifest.
-		for _, cand := range candidates {
-			if cand.Kind == "skills_dir" {
-				entries, err := os.ReadDir(cand.Path)
-				if err != nil {
-					return nil, fmt.Errorf("read skills directory '%s': %w", cand.Path, err)
+		// Ensure parent directory for target output exists
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			return nil, fmt.Errorf("create output directory '%s': %w", filepath.Dir(targetPath), err)
+		}
+
+		var newlyCreatedSkills []string
+		success := false
+		defer func() {
+			if !success {
+				for _, skillDir := range newlyCreatedSkills {
+					_ = os.RemoveAll(skillDir)
 				}
-				for _, entry := range entries {
-					if entry.IsDir() {
-						skillName := entry.Name()
-						srcSkillDir := filepath.Join(cand.Path, skillName)
-						destSkillDir := filepath.Join(opts.ProjectPath, ".gandalf", "skills", skillName)
-						if srcSkillDir != destSkillDir {
-							// Security: Ensure .gandalf and .gandalf/skills parents are not symlinks
-							if err := verifyDestinationPathConfinement(opts.ProjectPath, destSkillDir); err != nil {
-								return nil, err
-							}
-							if err := copyDirectory(srcSkillDir, destSkillDir); err != nil {
-								return nil, fmt.Errorf("mirror skill '%s': %w", skillName, err)
-							}
+			}
+		}()
+
+		// First, safely mirror skills. Project skills take precedence over global skills.
+		// If mirroring fails, abort before writing manifest.
+		mirroredScope := make(map[string]string)
+
+		mirrorCandidateSkills := func(cand DetectedCandidate) error {
+			if cand.Kind != "skills_dir" {
+				return nil
+			}
+			entries, err := os.ReadDir(cand.Path)
+			if err != nil {
+				return fmt.Errorf("read skills directory '%s': %w", cand.Path, err)
+			}
+			for _, entry := range entries {
+				if entry.IsDir() {
+					skillName := entry.Name()
+					srcSkillDir := filepath.Join(cand.Path, skillName)
+
+					// Filter out unrecognized non-skill folders (must contain SKILL.md)
+					if !fileExists(filepath.Join(srcSkillDir, "SKILL.md")) {
+						continue
+					}
+
+					// Project skills override global skills
+					if mirroredScope[skillName] == "project" {
+						continue
+					}
+
+					destSkillDir := filepath.Join(opts.ProjectPath, ".gandalf", "skills", skillName)
+					if srcSkillDir != destSkillDir {
+						// Security: Ensure .gandalf and .gandalf/skills parents are not symlinks
+						if err := verifyDestinationPathConfinement(opts.ProjectPath, destSkillDir); err != nil {
+							return err
+						}
+
+						// Security: If destination itself is a symlink, reject immediately
+						if dfi, err := os.Lstat(destSkillDir); err == nil && (dfi.Mode()&os.ModeSymlink != 0) {
+							return fmt.Errorf("security violation: destination skill '%s' is a symlink", destSkillDir)
+						}
+
+						// Check if destination skill exists and requires --force
+						destExisted := dirExists(destSkillDir)
+						if destExisted && !opts.Force {
+							return fmt.Errorf("team skill '%s' already exists (use --force to overwrite)", skillName)
+						}
+
+						if err := copyDirectory(srcSkillDir, destSkillDir); err != nil {
+							return fmt.Errorf("mirror skill '%s': %w", skillName, err)
+						}
+
+						if !destExisted {
+							newlyCreatedSkills = append(newlyCreatedSkills, destSkillDir)
+						}
+						mirroredScope[skillName] = cand.Scope
+						if !sliceContains(result.MirroredSkills, skillName) {
 							result.MirroredSkills = append(result.MirroredSkills, skillName)
 						}
 					}
+				}
+			}
+			return nil
+		}
+
+		// 1. Mirror project skills first
+		for _, cand := range candidates {
+			if cand.Scope == "project" {
+				if err := mirrorCandidateSkills(cand); err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		// 2. Mirror global skills second (skipping any duplicate skillNames)
+		for _, cand := range candidates {
+			if cand.Scope != "project" {
+				if err := mirrorCandidateSkills(cand); err != nil {
+					return nil, err
 				}
 			}
 		}
@@ -160,6 +228,7 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 		if err := fsutil.WriteTextAtomically(targetPath, result.FormattedTOML, 0644); err != nil {
 			return nil, fmt.Errorf("write %s: %w", opts.OutputFile, err)
 		}
+		success = true
 	}
 
 	return result, nil
@@ -268,4 +337,13 @@ func verifyDestinationPathConfinement(projectRoot, destPath string) error {
 		}
 	}
 	return nil
+}
+
+func sliceContains(slice []string, val string) bool {
+	for _, item := range slice {
+		if item == val {
+			return true
+		}
+	}
+	return false
 }

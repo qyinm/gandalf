@@ -773,3 +773,160 @@ func TestParseStandardJSONMCPServers_SanitizesEnvFile(t *testing.T) {
 		t.Errorf("expected good-server envFile preserved, got: %s", servers["good-server"].EnvFile)
 	}
 }
+
+func TestRunImport_ExistingSkillRequiresForce(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	if err := os.MkdirAll(filepath.Join(projDir, ".cursor", "skills", "my-skill"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projDir, ".cursor", "skills", "my-skill", "SKILL.md"), []byte("# Imported Skill"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pre-create destination team skill
+	destSkillDir := filepath.Join(projDir, ".gandalf", "skills", "my-skill")
+	if err := os.MkdirAll(destSkillDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	originalContent := "# Manually Maintained Skill"
+	if err := os.WriteFile(filepath.Join(destSkillDir, "SKILL.md"), []byte(originalContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+		Force:       false,
+	}
+
+	_, err := RunImport(opts)
+	if err == nil {
+		t.Fatalf("expected error when skill already exists without --force")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("expected 'already exists' error, got: %v", err)
+	}
+
+	// Verify original content was preserved
+	content, _ := os.ReadFile(filepath.Join(destSkillDir, "SKILL.md"))
+	if string(content) != originalContent {
+		t.Errorf("expected original skill content to be preserved, got: %s", string(content))
+	}
+}
+
+func TestReconcileSources_ProjectSkillOverridesGlobal(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	homeDir := filepath.Join(tempDir, "home")
+
+	// Global skill
+	if err := os.MkdirAll(filepath.Join(homeDir, ".cursor", "skills", "common-skill"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(homeDir, ".cursor", "skills", "common-skill", "SKILL.md"), []byte("# Global Common"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Project skill with same name
+	if err := os.MkdirAll(filepath.Join(projDir, ".cursor", "skills", "common-skill"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projDir, ".cursor", "skills", "common-skill", "SKILL.md"), []byte("# Project Common"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		HomeDir:     homeDir,
+		Force:       true,
+	}
+
+	importRes, err := RunImport(opts)
+	if err != nil {
+		t.Fatalf("RunImport failed: %v", err)
+	}
+
+	// Verify the mirrored skill has project content, not global content
+	copiedMD, err := os.ReadFile(filepath.Join(projDir, ".gandalf", "skills", "common-skill", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("failed to read copied skill: %v", err)
+	}
+	if !strings.Contains(string(copiedMD), "# Project Common") {
+		t.Errorf("expected project skill to override global, got: %s", string(copiedMD))
+	}
+
+	_ = importRes
+}
+
+func TestRunImport_IgnoresFolderWithoutSkillMD(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	skillsDir := filepath.Join(projDir, ".cursor", "skills")
+	if err := os.MkdirAll(skillsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Valid skill folder
+	validDir := filepath.Join(skillsDir, "valid-skill")
+	if err := os.MkdirAll(validDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(validDir, "SKILL.md"), []byte("# Valid"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Non-skill folder (e.g. node_modules or temp docs)
+	invalidDir := filepath.Join(skillsDir, "invalid-folder")
+	if err := os.MkdirAll(invalidDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(invalidDir, "README.txt"), []byte("not a skill"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+	}
+
+	res, err := RunImport(opts)
+	if err != nil {
+		t.Fatalf("RunImport failed: %v", err)
+	}
+
+	// Only valid-skill should be mirrored
+	if len(res.MirroredSkills) != 1 || res.MirroredSkills[0] != "valid-skill" {
+		t.Errorf("expected only 'valid-skill' mirrored, got: %v", res.MirroredSkills)
+	}
+	if _, err := os.Stat(filepath.Join(projDir, ".gandalf", "skills", "invalid-folder")); err == nil {
+		t.Errorf("expected invalid-folder to NOT be mirrored")
+	}
+}
+
+func TestRunImport_NestedOutputCreatesParentDir(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	if err := os.MkdirAll(filepath.Join(projDir, ".cursor"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projDir, ".cursor", "mcp.json"), []byte(`{"mcpServers":{"test":{"command":"ls"}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	nestedOutput := "config/nested/gandalf.toml"
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+		OutputFile:  nestedOutput,
+	}
+
+	_, err := RunImport(opts)
+	if err != nil {
+		t.Fatalf("RunImport failed with nested output: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(projDir, nestedOutput)); err != nil {
+		t.Errorf("expected nested output file to exist, got err: %v", err)
+	}
+}
