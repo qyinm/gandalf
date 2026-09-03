@@ -20,3 +20,7 @@ demo/**/*.webm
 demo/**/renders/
 
 .env
+
+PLAN.md
+PRODUCT.md
+CONCEPTS.md
