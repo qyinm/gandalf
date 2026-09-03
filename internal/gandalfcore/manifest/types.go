@@ -25,6 +25,7 @@ type MCPServerDef struct {
 	EnvFile     string            `json:"env_file,omitempty" toml:"env_file,omitempty"`
 	URL         string            `json:"url,omitempty" toml:"url,omitempty"`
 	Headers     map[string]string `json:"headers,omitempty" toml:"headers,omitempty"`
+	Auth        any               `json:"auth,omitempty" toml:"auth,omitempty"`
 	RequiredEnv []string          `json:"required_env,omitempty" toml:"required_env,omitempty"`
 	Description string            `json:"description,omitempty" toml:"description,omitempty"`
 	Disabled    bool              `json:"disabled,omitempty" toml:"disabled,omitempty"`

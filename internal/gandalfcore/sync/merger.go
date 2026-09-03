@@ -121,6 +121,9 @@ func MergeCursorMCPJSON(existingJSON string, m *manifest.Manifest) (string, erro
 		if len(srv.Headers) > 0 {
 			serverEntry["headers"] = srv.Headers
 		}
+		if srv.Auth != nil {
+			serverEntry["auth"] = srv.Auth
+		}
 		if srv.Disabled {
 			serverEntry["disabled"] = true
 		}

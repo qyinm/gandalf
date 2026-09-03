@@ -19,6 +19,7 @@ type rawMCPServerJSON struct {
 	EnvFile     string            `json:"envFile,omitempty"`
 	URL         string            `json:"url,omitempty"`
 	Headers     map[string]string `json:"headers,omitempty"`
+	Auth        any               `json:"auth,omitempty"`
 	Disabled    bool              `json:"disabled,omitempty"`
 	Description string            `json:"description,omitempty"`
 }
@@ -43,6 +44,7 @@ func ParseStandardJSONMCPServers(data []byte) (map[string]manifest.MCPServerDef,
 			EnvFile:     raw.EnvFile,
 			URL:         raw.URL,
 			Headers:     raw.Headers,
+			Auth:        raw.Auth,
 			Disabled:    raw.Disabled,
 			Description: raw.Description,
 		}
@@ -78,6 +80,7 @@ func ParseClaudeConfigJSON(data []byte, projectPath string) (map[string]manifest
 			EnvFile:     raw.EnvFile,
 			URL:         raw.URL,
 			Headers:     raw.Headers,
+			Auth:        raw.Auth,
 			Disabled:    raw.Disabled,
 			Description: raw.Description,
 		}
@@ -96,6 +99,7 @@ func ParseClaudeConfigJSON(data []byte, projectPath string) (map[string]manifest
 					EnvFile:     raw.EnvFile,
 					URL:         raw.URL,
 					Headers:     raw.Headers,
+					Auth:        raw.Auth,
 					Disabled:    raw.Disabled,
 					Description: raw.Description,
 				}

@@ -516,3 +516,83 @@ func TestRunImport_DestinationSymlinkRejected(t *testing.T) {
 		t.Errorf("expected symlink security error, got: %v", err)
 	}
 }
+
+func TestRunImport_SymlinkedSkillParentRejected(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	outsideDir := filepath.Join(tempDir, "outside")
+
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outsideDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Create a skill: .cursor/skills/test-skill/SKILL.md
+	skillDir := filepath.Join(projDir, ".cursor", "skills", "test-skill")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Skill Content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Make the parent .gandalf a symlink pointing to outsideDir
+	symlinkTarget := filepath.Join(projDir, ".gandalf")
+	if err := os.Symlink(outsideDir, symlinkTarget); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+	}
+
+	_, err := RunImport(opts)
+	if err == nil {
+		t.Fatalf("expected import to fail when .gandalf parent directory is a symlink")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("expected symlink security error, got: %v", err)
+	}
+}
+
+func TestParseStandardJSONMCPServers_PreservesAuth(t *testing.T) {
+	cursorJSON := `{
+  "mcpServers": {
+    "oauth-server": {
+      "type": "sse",
+      "url": "https://mcp.example.com/sse",
+      "auth": {
+        "clientId": "client_123",
+        "token": "tok_xyz"
+      }
+    }
+  }
+}`
+	servers, err := ParseStandardJSONMCPServers([]byte(cursorJSON))
+	if err != nil {
+		t.Fatalf("ParseStandardJSONMCPServers failed: %v", err)
+	}
+
+	srv, ok := servers["oauth-server"]
+	if !ok {
+		t.Fatalf("oauth-server not found")
+	}
+
+	if srv.Type != "sse" {
+		t.Errorf("expected type 'sse', got: %s", srv.Type)
+	}
+	if srv.Auth == nil {
+		t.Fatalf("expected auth to be preserved, got nil")
+	}
+
+	authMap, ok := srv.Auth.(map[string]any)
+	if !ok {
+		t.Fatalf("expected auth to be map[string]any, got %T", srv.Auth)
+	}
+	if authMap["clientId"] != "client_123" {
+		t.Errorf("expected clientId 'client_123', got %v", authMap["clientId"])
+	}
+}

@@ -120,6 +120,10 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 						srcSkillDir := filepath.Join(cand.Path, skillName)
 						destSkillDir := filepath.Join(opts.ProjectPath, ".gandalf", "skills", skillName)
 						if srcSkillDir != destSkillDir {
+							// Security: Ensure .gandalf and .gandalf/skills parents are not symlinks
+							if err := verifyDestinationPathConfinement(opts.ProjectPath, destSkillDir); err != nil {
+								return nil, err
+							}
 							if err := copyDirectory(srcSkillDir, destSkillDir); err != nil {
 								return nil, fmt.Errorf("mirror skill '%s': %w", skillName, err)
 							}
@@ -212,4 +216,34 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return out.Sync()
+}
+
+// verifyDestinationPathConfinement checks that destDir and all its parent directories
+// under projectPath are regular directories and never symlinks.
+func verifyDestinationPathConfinement(projectRoot, destPath string) error {
+	cleanProj := filepath.Clean(projectRoot)
+	cleanDest := filepath.Clean(destPath)
+
+	rel, err := filepath.Rel(cleanProj, cleanDest)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return fmt.Errorf("security violation: path '%s' escapes project root '%s'", destPath, projectRoot)
+	}
+
+	parts := strings.Split(rel, string(filepath.Separator))
+	curr := cleanProj
+	for _, part := range parts {
+		curr = filepath.Join(curr, part)
+		fi, err := os.Lstat(curr)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// Path does not exist yet; safe to create as regular directory
+				break
+			}
+			return err
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("security violation: destination path component '%s' is a symlink", curr)
+		}
+	}
+	return nil
 }
