@@ -5,6 +5,7 @@ import "github.com/qyinm/gandalf/internal/gandalfcore/types"
 var currentSupported = []types.AgentID{
 	types.AgentClaudeCode,
 	types.AgentCodex,
+	types.AgentCursor,
 }
 
 // CurrentSupportedIDs returns the product-visible agent set for the active loop.
@@ -38,7 +39,7 @@ func SupportsContentBackedUserSnapshot(agent types.AgentID, scope types.Evidence
 		return false
 	}
 	switch agent {
-	case types.AgentClaudeCode, types.AgentCodex:
+	case types.AgentClaudeCode, types.AgentCodex, types.AgentCursor:
 		return true
 	default:
 		return false
