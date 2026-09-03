@@ -1384,3 +1384,65 @@ args = ["${SECRET_KEY}"]
 		t.Errorf("expected ${SECRET_KEY} placeholder preserved without interpolation, got: %v", srv.Args)
 	}
 }
+
+func TestRunImport_DotPrefixedOutputFileAllowed(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tempDir, ".mcp.json"), []byte(`{"mcpServers":{"srv":{"command":"ls"}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: tempDir,
+		ProjectOnly: true,
+		OutputFile:  "..backup.toml",
+	}
+
+	res, err := RunImport(opts)
+	if err != nil {
+		t.Fatalf("expected ..backup.toml to be allowed in project root, got: %v", err)
+	}
+
+	expectedFile := filepath.Join(tempDir, "..backup.toml")
+	if !fileExists(expectedFile) {
+		t.Errorf("expected output file '%s' to be created", expectedFile)
+	}
+	_ = res
+}
+
+func TestRedactAndTemplatizeServer_NestedAuthSecrets(t *testing.T) {
+	envTemplate := make(map[string]string)
+	srv := manifest.MCPServerDef{
+		Command: "npx",
+		Auth: map[string]any{
+			"provider": "custom",
+			"config": map[string]any{
+				"api_key": "rawsupersecretkey123456",
+			},
+		},
+	}
+
+	RedactAndTemplatizeServer("my-srv", &srv, envTemplate)
+
+	authMap, ok := srv.Auth.(map[string]any)
+	if !ok {
+		t.Fatalf("expected Auth to be map[string]any")
+	}
+	cfgMap, ok := authMap["config"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected config to be map[string]any")
+	}
+	apiKeyVal, ok := cfgMap["api_key"].(string)
+	if !ok || !strings.HasPrefix(apiKeyVal, "${MY_SRV_") {
+		t.Errorf("expected nested api_key to be templatized, got: %v", cfgMap["api_key"])
+	}
+	foundInEnv := false
+	for k := range envTemplate {
+		if strings.Contains(k, "API_KEY") {
+			foundInEnv = true
+			break
+		}
+	}
+	if !foundInEnv {
+		t.Errorf("expected templatized key in envTemplate, got: %v", envTemplate)
+	}
+}

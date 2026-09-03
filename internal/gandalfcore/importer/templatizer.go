@@ -176,31 +176,7 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 				srv.Auth = normalized
 			}
 		case map[string]any:
-			redactedMap := make(map[string]any)
-			for k, v := range a {
-				strVal, isStr := v.(string)
-				if isStr {
-					normalized := NormalizeInterpolation(strVal)
-					for _, e := range ExtractExistingRequiredEnvs(normalized) {
-						requiredEnvMap[e] = true
-					}
-					lowerK := strings.ToLower(k)
-					if !strings.HasPrefix(normalized, "${") &&
-						(strings.Contains(lowerK, "token") || strings.Contains(lowerK, "secret") || strings.Contains(lowerK, "key") || strings.Contains(lowerK, "password")) {
-						varKey := fmt.Sprintf("%s_%s", cleanName, strings.ToUpper(k))
-						redactedMap[k] = fmt.Sprintf("${%s}", varKey)
-						requiredEnvMap[varKey] = true
-						if _, exists := envTemplate[varKey]; !exists {
-							envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "bearer")
-						}
-					} else {
-						redactedMap[k] = normalized
-					}
-				} else {
-					redactedMap[k] = v
-				}
-			}
-			srv.Auth = redactedMap
+			srv.Auth = redactAuthValue(a, cleanName, "AUTH", envTemplate, requiredEnvMap)
 		}
 	}
 
@@ -332,4 +308,41 @@ func isCredentialFlag(flag string) bool {
 		return true
 	}
 	return false
+}
+
+func redactAuthValue(val any, cleanName, keyPath string, envTemplate map[string]string, requiredEnvMap map[string]bool) any {
+	switch v := val.(type) {
+	case string:
+		normalized := redactStringValue(v, cleanName, envTemplate, requiredEnvMap)
+		lowerK := strings.ToLower(keyPath)
+		if !strings.HasPrefix(normalized, "${") &&
+			(strings.Contains(lowerK, "token") || strings.Contains(lowerK, "secret") || strings.Contains(lowerK, "key") || strings.Contains(lowerK, "password")) {
+			cleanKey := strings.ToUpper(regexp.MustCompile(`[^A-Za-z0-9_]`).ReplaceAllString(keyPath, "_"))
+			varKey := fmt.Sprintf("%s_%s", cleanName, cleanKey)
+			normalized = fmt.Sprintf("${%s}", varKey)
+			requiredEnvMap[varKey] = true
+			if _, exists := envTemplate[varKey]; !exists {
+				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "bearer")
+			}
+		}
+		return normalized
+	case map[string]any:
+		res := make(map[string]any)
+		for k, child := range v {
+			nextPath := k
+			if keyPath != "" {
+				nextPath = fmt.Sprintf("%s_%s", keyPath, k)
+			}
+			res[k] = redactAuthValue(child, cleanName, nextPath, envTemplate, requiredEnvMap)
+		}
+		return res
+	case []any:
+		var res []any
+		for _, item := range v {
+			res = append(res, redactAuthValue(item, cleanName, keyPath, envTemplate, requiredEnvMap))
+		}
+		return res
+	default:
+		return val
+	}
 }

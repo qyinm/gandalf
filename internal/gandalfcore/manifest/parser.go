@@ -66,22 +66,7 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 	// Pre-interpolate environment variables in text unless NoInterpolate is requested
 	interpolatedText := text
 	if opts == nil || !opts.NoInterpolate {
-		interpolatedText = envVarPattern.ReplaceAllStringFunc(text, func(match string) string {
-			submatches := envVarPattern.FindStringSubmatch(match)
-			if len(submatches) >= 2 {
-				varName := submatches[1]
-				val := envGetter(varName)
-				if val != "" {
-					return escapeTOMLStringValue(val)
-				}
-				// check default value ${VAR:-default}
-				if len(submatches) >= 3 && submatches[2] != "" {
-					return escapeTOMLStringValue(submatches[2])
-				}
-				missingSet[varName] = struct{}{}
-			}
-			return match
-		})
+		interpolatedText = contextAwareInterpolate(text, envGetter, missingSet)
 	}
 
 	m := &Manifest{
@@ -540,13 +525,15 @@ func parseInlineTableAny(val string) any {
 				if strings.HasPrefix(trimmedV, "{") && strings.HasSuffix(trimmedV, "}") {
 					resMap[cleanKey] = parseInlineTableAny(trimmedV)
 				} else if strings.HasPrefix(trimmedV, "[") && strings.HasSuffix(trimmedV, "]") {
-					resMap[cleanKey] = parseStringArray(trimmedV)
+					resMap[cleanKey] = parseMixedArray(trimmedV)
 				} else if trimmedV == "true" {
 					resMap[cleanKey] = true
 				} else if trimmedV == "false" {
 					resMap[cleanKey] = false
 				} else if intVal, err := strconv.Atoi(trimmedV); err == nil {
 					resMap[cleanKey] = intVal
+				} else if floatVal, err := strconv.ParseFloat(trimmedV, 64); err == nil {
+					resMap[cleanKey] = floatVal
 				} else {
 					resMap[cleanKey] = unquote(trimmedV)
 				}
@@ -557,16 +544,113 @@ func parseInlineTableAny(val string) any {
 	return unquote(trimmedVal)
 }
 
+func parseMixedArray(val string) []any {
+	trimmed := strings.TrimSpace(val)
+	if !strings.HasPrefix(trimmed, "[") || !strings.HasSuffix(trimmed, "]") {
+		return nil
+	}
+	inner := strings.TrimSpace(trimmed[1 : len(trimmed)-1])
+	if inner == "" {
+		return []any{}
+	}
+
+	var elements []string
+	var current strings.Builder
+	inQuote := false
+	var quoteChar rune
+	escaped := false
+	depth := 0
+
+	for _, r := range inner {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			current.WriteRune(r)
+			escaped = true
+			continue
+		}
+		if (r == '"' || r == '\'') && !inQuote {
+			inQuote = true
+			quoteChar = r
+			current.WriteRune(r)
+			continue
+		}
+		if inQuote && r == quoteChar {
+			inQuote = false
+			current.WriteRune(r)
+			continue
+		}
+		if !inQuote {
+			if r == '{' || r == '[' {
+				depth++
+			} else if r == '}' || r == ']' {
+				depth--
+			}
+		}
+		if r == ',' && !inQuote && depth == 0 {
+			t := strings.TrimSpace(current.String())
+			if t != "" {
+				elements = append(elements, t)
+			}
+			current.Reset()
+			continue
+		}
+		current.WriteRune(r)
+	}
+	if current.Len() > 0 {
+		t := strings.TrimSpace(current.String())
+		if t != "" {
+			elements = append(elements, t)
+		}
+	}
+
+	var result []any
+	for _, el := range elements {
+		elTrim := strings.TrimSpace(el)
+		if strings.HasPrefix(elTrim, "{") && strings.HasSuffix(elTrim, "}") {
+			result = append(result, parseInlineTableAny(elTrim))
+		} else if strings.HasPrefix(elTrim, "[") && strings.HasSuffix(elTrim, "]") {
+			result = append(result, parseMixedArray(elTrim))
+		} else if elTrim == "true" {
+			result = append(result, true)
+		} else if elTrim == "false" {
+			result = append(result, false)
+		} else if intVal, err := strconv.Atoi(elTrim); err == nil {
+			result = append(result, intVal)
+		} else if floatVal, err := strconv.ParseFloat(elTrim, 64); err == nil {
+			result = append(result, floatVal)
+		} else {
+			result = append(result, unquote(elTrim))
+		}
+	}
+	return result
+}
+
 func splitTOMLHeader(header string) []string {
 	var parts []string
 	var current strings.Builder
 	inQuote := false
 	var quoteChar rune
+	escaped := false
 
 	for _, r := range header {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' && inQuote && quoteChar == '"' {
+			escaped = true
+			current.WriteRune(r)
+			continue
+		}
 		if inQuote {
 			if r == quoteChar {
 				inQuote = false
+				current.WriteRune(r)
 			} else {
 				current.WriteRune(r)
 			}
@@ -574,8 +658,9 @@ func splitTOMLHeader(header string) []string {
 			if r == '"' || r == '\'' {
 				inQuote = true
 				quoteChar = r
+				current.WriteRune(r)
 			} else if r == '.' {
-				parts = append(parts, current.String())
+				parts = append(parts, unquote(current.String()))
 				current.Reset()
 			} else {
 				current.WriteRune(r)
@@ -583,7 +668,7 @@ func splitTOMLHeader(header string) []string {
 		}
 	}
 	if current.Len() > 0 || len(parts) > 0 {
-		parts = append(parts, current.String())
+		parts = append(parts, unquote(current.String()))
 	}
 	return parts
 }
@@ -620,4 +705,84 @@ func escapeTOMLStringValue(s string) string {
 	s = strings.ReplaceAll(s, "\r", `\r`)
 	s = strings.ReplaceAll(s, "\t", `\t`)
 	return s
+}
+
+func contextAwareInterpolate(text string, envGetter func(string) string, missingSet map[string]struct{}) string {
+	var sb strings.Builder
+	runes := []rune(text)
+	inSingleQuote := false
+	inDoubleQuote := false
+	escaped := false
+
+	for i := 0; i < len(runes); {
+		r := runes[i]
+		if escaped {
+			sb.WriteRune(r)
+			escaped = false
+			i++
+			continue
+		}
+		if r == '\\' && inDoubleQuote {
+			escaped = true
+			sb.WriteRune(r)
+			i++
+			continue
+		}
+		if r == '\'' && !inDoubleQuote {
+			inSingleQuote = !inSingleQuote
+			sb.WriteRune(r)
+			i++
+			continue
+		}
+		if r == '"' && !inSingleQuote {
+			inDoubleQuote = !inDoubleQuote
+			sb.WriteRune(r)
+			i++
+			continue
+		}
+
+		// Check for ${VAR...}
+		if r == '$' && i+1 < len(runes) && runes[i+1] == '{' {
+			end := -1
+			for j := i + 2; j < len(runes); j++ {
+				if runes[j] == '}' {
+					end = j
+					break
+				}
+				if runes[j] == '\n' {
+					break
+				}
+			}
+			if end != -1 {
+				matchStr := string(runes[i : end+1])
+				submatches := envVarPattern.FindStringSubmatch(matchStr)
+				if len(submatches) >= 2 {
+					varName := submatches[1]
+					val := envGetter(varName)
+					if val == "" && len(submatches) >= 3 && submatches[2] != "" {
+						val = submatches[2]
+					}
+					if val != "" {
+						if inSingleQuote {
+							// Inside literal single-quoted strings: preserve raw value without escaping
+							sb.WriteString(val)
+						} else {
+							// Inside double quotes or outside quotes: escape safely
+							sb.WriteString(escapeTOMLStringValue(val))
+						}
+						i = end + 1
+						continue
+					}
+					missingSet[varName] = struct{}{}
+					sb.WriteString(matchStr)
+					i = end + 1
+					continue
+				}
+			}
+		}
+
+		sb.WriteRune(r)
+		i++
+	}
+	return sb.String()
 }

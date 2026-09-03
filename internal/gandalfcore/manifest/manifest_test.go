@@ -228,3 +228,89 @@ enabled = false # disabled for testing
 		t.Errorf("expected enabled = false to map to Disabled = true")
 	}
 }
+
+func TestParseManifest_SingleQuotedLiteralStringPreservesBackslashes(t *testing.T) {
+	tomlContent := `
+version = "1.0"
+name = "literal-string-test"
+agents = ["codex"]
+
+[mcp_servers.win-srv]
+command = 'cmd.exe'
+args = ['${WIN_PATH}']
+`
+	envGetter := func(k string) string {
+		if k == "WIN_PATH" {
+			return `C:\Users\tester\app.exe`
+		}
+		return ""
+	}
+
+	result, err := Parse(tomlContent, &ParseOptions{EnvGetter: envGetter})
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	srv := result.Manifest.MCPServers["win-srv"]
+	if len(srv.Args) != 1 {
+		t.Fatalf("expected 1 arg, got: %d", len(srv.Args))
+	}
+	expected := `C:\Users\tester\app.exe`
+	if srv.Args[0] != expected {
+		t.Errorf("expected literal backslashes preserved: got %q, want %q", srv.Args[0], expected)
+	}
+}
+
+func TestParseManifest_QuotedServerNameWithEscapedQuotes(t *testing.T) {
+	tomlContent := `
+version = "1.0"
+name = "quotes-test"
+agents = ["cursor"]
+
+[mcp_servers."server\"with\"quotes"]
+command = "tool"
+`
+	result, err := Parse(tomlContent, nil)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	expectedKey := `server"with"quotes`
+	if _, ok := result.Manifest.MCPServers[expectedKey]; !ok {
+		t.Errorf("expected key %q in MCPServers, got keys: %v", expectedKey, result.Manifest.MCPServers)
+	}
+}
+
+func TestParseManifest_StructuredAuthFloatAndHeterogeneousArray(t *testing.T) {
+	tomlContent := `
+version = "1.0"
+name = "float-array-test"
+agents = ["codex"]
+
+[mcp_servers.auth-srv]
+command = "run"
+auth = { ratio = 1.25, mixed = [true, 42, 3.14, "hello"] }
+`
+	result, err := Parse(tomlContent, nil)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	authMap, ok := result.Manifest.MCPServers["auth-srv"].Auth.(map[string]any)
+	if !ok {
+		t.Fatalf("expected Auth to be map[string]any, got: %T", result.Manifest.MCPServers["auth-srv"].Auth)
+	}
+	if authMap["ratio"] != 1.25 {
+		t.Errorf("expected ratio to be float 1.25, got: %v (%T)", authMap["ratio"], authMap["ratio"])
+	}
+	mixedArr, ok := authMap["mixed"].([]any)
+	if !ok {
+		t.Fatalf("expected mixed to be []any, got: %T", authMap["mixed"])
+	}
+	if len(mixedArr) != 4 {
+		t.Fatalf("expected 4 elements in mixed, got: %d", len(mixedArr))
+	}
+	if mixedArr[0] != true || mixedArr[1] != 42 || mixedArr[2] != 3.14 || mixedArr[3] != "hello" {
+		t.Errorf("unexpected elements in mixed array: %v", mixedArr)
+	}
+}

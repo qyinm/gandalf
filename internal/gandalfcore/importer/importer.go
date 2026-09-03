@@ -42,12 +42,12 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 	var targetPath string
 	if filepath.IsAbs(cleanOutput) {
 		rel, err := filepath.Rel(cleanProjectPath, cleanOutput)
-		if err != nil || strings.HasPrefix(rel, "..") {
+		if err != nil || isPathEscaping(rel) {
 			return nil, fmt.Errorf("security violation: output file '%s' escapes project root '%s'", opts.OutputFile, cleanProjectPath)
 		}
 		targetPath = cleanOutput
 	} else {
-		if strings.HasPrefix(cleanOutput, "..") {
+		if isPathEscaping(cleanOutput) {
 			return nil, fmt.Errorf("security violation: output file '%s' escapes project root '%s'", opts.OutputFile, cleanProjectPath)
 		}
 		targetPath = filepath.Join(cleanProjectPath, cleanOutput)
@@ -179,7 +179,7 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 		}
 
 		var newlyCreatedSkills []string
-		backedUpSkills := make(map[string]string) // destSkillDir -> tempBackupDir
+		backedUpSkills := make(map[string]string) // destSkillDir -> tempBackupContainer
 		success := false
 		defer func() {
 			if !success {
@@ -187,15 +187,17 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 				for _, skillDir := range newlyCreatedSkills {
 					_ = os.RemoveAll(skillDir)
 				}
-				// Restore original skills from backup
-				for destDir, bakDir := range backedUpSkills {
+				// Restore original skills from secure backup container
+				for destDir, tempContainer := range backedUpSkills {
 					_ = os.RemoveAll(destDir)
+					bakDir := filepath.Join(tempContainer, filepath.Base(destDir))
 					_ = os.Rename(bakDir, destDir)
+					_ = os.RemoveAll(tempContainer)
 				}
 			} else {
-				// Clean up temporary backups on success
-				for _, bakDir := range backedUpSkills {
-					_ = os.RemoveAll(bakDir)
+				// Clean up temporary backup containers on success
+				for _, tempContainer := range backedUpSkills {
+					_ = os.RemoveAll(tempContainer)
 				}
 			}
 		}()
@@ -246,12 +248,18 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 						}
 
 						if destExisted {
-							// For atomic overwrite without retaining obsolete files, move existing to temporary backup
-							bakDir := destSkillDir + fmt.Sprintf(".bak.%d", len(backedUpSkills)+1)
+							// For atomic overwrite without retaining obsolete files, move existing to a secure random temporary backup
+							parentDir := filepath.Dir(destSkillDir)
+							tempContainer, err := os.MkdirTemp(parentDir, ".skill-bak-*")
+							if err != nil {
+								return fmt.Errorf("create temporary backup container for '%s': %w", skillName, err)
+							}
+							bakDir := filepath.Join(tempContainer, skillName)
 							if err := os.Rename(destSkillDir, bakDir); err != nil {
+								_ = os.RemoveAll(tempContainer)
 								return fmt.Errorf("backup existing skill '%s': %w", skillName, err)
 							}
-							backedUpSkills[destSkillDir] = bakDir
+							backedUpSkills[destSkillDir] = tempContainer
 						}
 
 						if err := copyDirectory(srcSkillDir, destSkillDir); err != nil {
@@ -434,4 +442,9 @@ func sliceContains(slice []string, val string) bool {
 		}
 	}
 	return false
+}
+
+func isPathEscaping(p string) bool {
+	sep := string(filepath.Separator)
+	return p == ".." || strings.HasPrefix(p, ".."+sep) || strings.HasPrefix(p, "../") || strings.HasPrefix(p, `..\`)
 }
