@@ -349,7 +349,7 @@ func parseStringArray(raw string) []string {
 			escaped = false
 			continue
 		}
-		if r == '\\' {
+		if r == '\\' && inQuote && quoteChar == '"' {
 			current.WriteRune(r)
 			escaped = true
 			continue

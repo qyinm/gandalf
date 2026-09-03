@@ -1446,3 +1446,41 @@ func TestRedactAndTemplatizeServer_NestedAuthSecrets(t *testing.T) {
 		t.Errorf("expected templatized key in envTemplate, got: %v", envTemplate)
 	}
 }
+
+func TestRunImport_IgnoresSourceSymlinkedSkillDir(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	externalDir := filepath.Join(tempDir, "external-skill")
+	if err := os.MkdirAll(externalDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(externalDir, "SKILL.md"), []byte("# External"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	claudeSkillsDir := filepath.Join(projDir, ".claude", "skills")
+	if err := os.MkdirAll(claudeSkillsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	symlinkSkill := filepath.Join(claudeSkillsDir, "symlinked-skill")
+	if err := os.Symlink(externalDir, symlinkSkill); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+	}
+
+	res, err := RunImport(opts)
+	if err != nil {
+		t.Fatalf("RunImport failed: %v", err)
+	}
+
+	// Symlinked skill should NOT be mirrored
+	destSkillDir := filepath.Join(projDir, ".gandalf", "skills", "symlinked-skill")
+	if _, err := os.Lstat(destSkillDir); err == nil {
+		t.Errorf("security violation: source symlinked skill was mirrored into destination")
+	}
+	_ = res
+}

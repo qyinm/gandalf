@@ -70,7 +70,7 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 	}
 	if realParent, err := filepath.EvalSymlinks(filepath.Dir(targetPath)); err == nil {
 		relParent, err := filepath.Rel(realProject, realParent)
-		if err != nil || strings.HasPrefix(relParent, "..") {
+		if err != nil || isPathEscaping(relParent) {
 			return nil, fmt.Errorf("security violation: output directory escapes project root: %s", realParent)
 		}
 	}
@@ -219,6 +219,11 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 					skillName := entry.Name()
 					srcSkillDir := filepath.Join(cand.Path, skillName)
 
+					// Security: Check if srcSkillDir itself is a symlink. Never follow source skill symlinks
+					if sfi, err := os.Lstat(srcSkillDir); err != nil || (sfi.Mode()&os.ModeSymlink != 0) {
+						continue
+					}
+
 					// Filter out unrecognized non-skill folders (must contain SKILL.md)
 					if !fileExists(filepath.Join(srcSkillDir, "SKILL.md")) {
 						continue
@@ -262,13 +267,14 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 							backedUpSkills[destSkillDir] = tempContainer
 						}
 
+						if !destExisted {
+							newlyCreatedSkills = append(newlyCreatedSkills, destSkillDir)
+						}
+
 						if err := copyDirectory(srcSkillDir, destSkillDir); err != nil {
 							return fmt.Errorf("mirror skill '%s': %w", skillName, err)
 						}
 
-						if !destExisted {
-							newlyCreatedSkills = append(newlyCreatedSkills, destSkillDir)
-						}
 						mirroredScope[skillName] = cand.Scope
 						if !sliceContains(result.MirroredSkills, skillName) {
 							result.MirroredSkills = append(result.MirroredSkills, skillName)
@@ -297,10 +303,24 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 			}
 		}
 
+		// Security: Re-verify destination confinement before writing to eliminate TOCTOU race
+		if err := verifyDestinationPathConfinement(cleanProjectPath, filepath.Dir(targetPath)); err != nil {
+			return nil, fmt.Errorf("security violation: destination parent directory: %w", err)
+		}
+
 		// Finally, atomically write the manifest
 		if err := fsutil.WriteTextAtomically(targetPath, result.FormattedTOML, 0644); err != nil {
 			return nil, fmt.Errorf("write %s: %w", opts.OutputFile, err)
 		}
+
+		// Security: Post-write check to ensure targetPath was not diverted to an external symlink
+		if realTarget, err := filepath.EvalSymlinks(targetPath); err == nil {
+			if relTarget, err := filepath.Rel(realProject, realTarget); err != nil || isPathEscaping(relTarget) {
+				_ = os.Remove(targetPath)
+				return nil, fmt.Errorf("security violation: output escaped project boundary after write: %s", realTarget)
+			}
+		}
+
 		success = true
 	}
 

@@ -314,3 +314,31 @@ auth = { ratio = 1.25, mixed = [true, 42, 3.14, "hello"] }
 		t.Errorf("unexpected elements in mixed array: %v", mixedArr)
 	}
 }
+
+func TestParseManifest_TrailingBackslashInsideSingleQuoteArray(t *testing.T) {
+	tomlContent := `
+version = "1.0"
+name = "backslash-test"
+agents = ["codex"]
+
+[mcp_servers.test]
+command = "run"
+args = ['C:\directory\', 'second_arg']
+`
+	result, err := Parse(tomlContent, nil)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	srv := result.Manifest.MCPServers["test"]
+	if len(srv.Args) != 2 {
+		t.Fatalf("expected 2 arguments, got: %d (%v)", len(srv.Args), srv.Args)
+	}
+	expectedFirst := `C:\directory\`
+	if srv.Args[0] != expectedFirst {
+		t.Errorf("expected %q, got %q", expectedFirst, srv.Args[0])
+	}
+	if srv.Args[1] != "second_arg" {
+		t.Errorf("expected %q, got %q", "second_arg", srv.Args[1])
+	}
+}
