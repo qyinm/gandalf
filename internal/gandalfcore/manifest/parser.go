@@ -69,11 +69,11 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 			varName := submatches[1]
 			val := envGetter(varName)
 			if val != "" {
-				return val
+				return escapeTOMLStringValue(val)
 			}
 			// check default value ${VAR:-default}
 			if len(submatches) >= 3 && submatches[2] != "" {
-				return submatches[2]
+				return escapeTOMLStringValue(submatches[2])
 			}
 			missingSet[varName] = struct{}{}
 		}
@@ -89,10 +89,12 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 	lines := strings.Split(interpolatedText, "\n")
 	var currentSection string
 	var currentSubSection string
+	var isEnvTable bool
 	var currentSkill *SkillDef
 
 	for i := 0; i < len(lines); i++ {
-		line := strings.TrimSpace(lines[i])
+		rawLine := strings.TrimSpace(lines[i])
+		line := strings.TrimSpace(stripInlineComment(rawLine))
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -105,6 +107,7 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 			currentSkill = &SkillDef{}
 			currentSection = "skills"
 			currentSubSection = ""
+			isEnvTable = false
 			continue
 		}
 
@@ -116,13 +119,24 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 			}
 
 			header := strings.TrimSpace(line[1 : len(line)-1])
-			parts := strings.Split(header, ".")
+			parts := splitTOMLHeader(header)
 
-			currentSection = parts[0]
-			if len(parts) > 1 {
-				currentSubSection = strings.Trim(strings.Join(parts[1:], "."), "\"")
-			} else {
-				currentSubSection = ""
+			currentSection = ""
+			currentSubSection = ""
+			isEnvTable = false
+
+			if len(parts) > 0 {
+				currentSection = parts[0]
+			}
+			if len(parts) == 2 {
+				currentSubSection = parts[1]
+			} else if len(parts) >= 3 {
+				if parts[len(parts)-1] == "env" {
+					isEnvTable = true
+					currentSubSection = strings.Join(parts[1:len(parts)-1], ".")
+				} else {
+					currentSubSection = strings.Join(parts[1:], ".")
+				}
 			}
 			continue
 		}
@@ -170,8 +184,12 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 		case "mcp_servers":
 			if currentSubSection != "" {
 				// Support nested [mcp_servers.<name>.env] tables (e.g. Codex TOML)
-				if strings.HasSuffix(currentSubSection, ".env") {
-					parentName := strings.TrimSuffix(currentSubSection, ".env")
+				if isEnvTable || strings.HasSuffix(currentSubSection, ".env") {
+					parentName := currentSubSection
+					if strings.HasSuffix(currentSubSection, ".env") {
+						parentName = strings.TrimSuffix(currentSubSection, ".env")
+					}
+					parentName = strings.Trim(parentName, "\"")
 					server := m.MCPServers[parentName]
 					if server.Env == nil {
 						server.Env = make(map[string]string)
@@ -181,7 +199,8 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 					continue
 				}
 
-				server := m.MCPServers[currentSubSection]
+				cleanSubSection := strings.Trim(currentSubSection, "\"")
+				server := m.MCPServers[cleanSubSection]
 				if server.Env == nil {
 					server.Env = make(map[string]string)
 				}
@@ -192,7 +211,7 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 				if strings.HasPrefix(key, "env.") {
 					envKey := strings.TrimPrefix(key, "env.")
 					server.Env[envKey] = unquote(val)
-					m.MCPServers[currentSubSection] = server
+					m.MCPServers[cleanSubSection] = server
 					continue
 				}
 
@@ -236,10 +255,16 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 					}
 				case "disabled":
 					server.Disabled = val == "true"
+				case "enabled":
+					if val == "false" {
+						server.Disabled = true
+					} else if val == "true" {
+						server.Disabled = false
+					}
 				case "required_env":
 					server.RequiredEnv = parseStringArray(val)
 				}
-				m.MCPServers[currentSubSection] = server
+				m.MCPServers[cleanSubSection] = server
 			}
 
 		case "skills":
@@ -448,4 +473,69 @@ func parseInlineTable(raw string) map[string]string {
 		}
 	}
 	return result
+}
+
+func splitTOMLHeader(header string) []string {
+	var parts []string
+	var current strings.Builder
+	inQuote := false
+	var quoteChar rune
+
+	for _, r := range header {
+		if inQuote {
+			if r == quoteChar {
+				inQuote = false
+			} else {
+				current.WriteRune(r)
+			}
+		} else {
+			if r == '"' || r == '\'' {
+				inQuote = true
+				quoteChar = r
+			} else if r == '.' {
+				parts = append(parts, current.String())
+				current.Reset()
+			} else {
+				current.WriteRune(r)
+			}
+		}
+	}
+	if current.Len() > 0 || len(parts) > 0 {
+		parts = append(parts, current.String())
+	}
+	return parts
+}
+
+func stripInlineComment(line string) string {
+	inSingleQuote := false
+	inDoubleQuote := false
+	var escaped bool
+
+	for i, r := range line {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+		if r == '\'' && !inDoubleQuote {
+			inSingleQuote = !inSingleQuote
+		} else if r == '"' && !inSingleQuote {
+			inDoubleQuote = !inDoubleQuote
+		} else if r == '#' && !inSingleQuote && !inDoubleQuote {
+			return strings.TrimRight(line[:i], " \t")
+		}
+	}
+	return line
+}
+
+func escapeTOMLStringValue(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
+	return s
 }
