@@ -127,3 +127,218 @@ func TestValidateManifest(t *testing.T) {
 		t.Fatalf("expected 2 validation errors, got %d: %v", len(errs), errs)
 	}
 }
+
+func TestParseManifest_EscapesEnvInjection(t *testing.T) {
+	tomlContent := `
+version = "1.0"
+name = "injection-test"
+agents = ["codex"]
+
+[mcp_servers.test]
+command = "echo"
+args = ["${USER_INPUT}"]
+`
+	// Malicious environment value trying to inject a new table and command
+	maliciousEnv := "\"\n[mcp_servers.injected]\ncommand = \"evil\"\nfoo = \""
+	envGetter := func(k string) string {
+		if k == "USER_INPUT" {
+			return maliciousEnv
+		}
+		return ""
+	}
+
+	result, err := Parse(tomlContent, &ParseOptions{EnvGetter: envGetter})
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	// Injected server should NOT exist
+	if _, exists := result.Manifest.MCPServers["injected"]; exists {
+		t.Errorf("security violation: malicious environment value injected new server")
+	}
+
+	// The argument should contain the escaped string safely inside quotes
+	testSrv := result.Manifest.MCPServers["test"]
+	if len(testSrv.Args) != 1 {
+		t.Fatalf("expected 1 arg, got: %d", len(testSrv.Args))
+	}
+}
+
+func TestParseManifest_QuotedDottedServerEnvTable(t *testing.T) {
+	tomlContent := `
+version = "1.0"
+name = "dotted-test"
+agents = ["cursor"]
+
+[mcp_servers."server.with.dots"]
+command = "run-tool"
+
+[mcp_servers."server.with.dots".env]
+API_KEY = "my-secret-key"
+DEBUG = "1"
+`
+	result, err := Parse(tomlContent, nil)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	srv, ok := result.Manifest.MCPServers["server.with.dots"]
+	if !ok {
+		t.Fatalf("expected 'server.with.dots' in MCPServers, got keys: %v", result.Manifest.MCPServers)
+	}
+	if srv.Command != "run-tool" {
+		t.Errorf("expected command 'run-tool', got: %s", srv.Command)
+	}
+	if srv.Env["API_KEY"] != "my-secret-key" {
+		t.Errorf("expected API_KEY 'my-secret-key', got: %s", srv.Env["API_KEY"])
+	}
+	if srv.Env["DEBUG"] != "1" {
+		t.Errorf("expected DEBUG '1', got: %s", srv.Env["DEBUG"])
+	}
+}
+
+func TestParseManifest_StripsInlineComments(t *testing.T) {
+	tomlContent := `
+version = "1.0" # version comment
+name = "comments-test" # team name
+agents = ["codex"]
+
+[mcp_servers.my-server]
+command = "node" # launch node
+url = "https://example.com/api#fragment" # url with valid fragment
+args = ["-y", "tool#1"] # inline flags
+enabled = false # disabled for testing
+`
+	result, err := Parse(tomlContent, nil)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	srv := result.Manifest.MCPServers["my-server"]
+	if srv.Command != "node" {
+		t.Errorf("expected command 'node', got: %s", srv.Command)
+	}
+	if srv.URL != "https://example.com/api#fragment" {
+		t.Errorf("expected URL 'https://example.com/api#fragment', got: %s", srv.URL)
+	}
+	if len(srv.Args) != 2 || srv.Args[1] != "tool#1" {
+		t.Errorf("expected arg 'tool#1', got: %v", srv.Args)
+	}
+	if !srv.Disabled {
+		t.Errorf("expected enabled = false to map to Disabled = true")
+	}
+}
+
+func TestParseManifest_SingleQuotedLiteralStringPreservesBackslashes(t *testing.T) {
+	tomlContent := `
+version = "1.0"
+name = "literal-string-test"
+agents = ["codex"]
+
+[mcp_servers.win-srv]
+command = 'cmd.exe'
+args = ['${WIN_PATH}']
+`
+	envGetter := func(k string) string {
+		if k == "WIN_PATH" {
+			return `C:\Users\tester\app.exe`
+		}
+		return ""
+	}
+
+	result, err := Parse(tomlContent, &ParseOptions{EnvGetter: envGetter})
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	srv := result.Manifest.MCPServers["win-srv"]
+	if len(srv.Args) != 1 {
+		t.Fatalf("expected 1 arg, got: %d", len(srv.Args))
+	}
+	expected := `C:\Users\tester\app.exe`
+	if srv.Args[0] != expected {
+		t.Errorf("expected literal backslashes preserved: got %q, want %q", srv.Args[0], expected)
+	}
+}
+
+func TestParseManifest_QuotedServerNameWithEscapedQuotes(t *testing.T) {
+	tomlContent := `
+version = "1.0"
+name = "quotes-test"
+agents = ["cursor"]
+
+[mcp_servers."server\"with\"quotes"]
+command = "tool"
+`
+	result, err := Parse(tomlContent, nil)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	expectedKey := `server"with"quotes`
+	if _, ok := result.Manifest.MCPServers[expectedKey]; !ok {
+		t.Errorf("expected key %q in MCPServers, got keys: %v", expectedKey, result.Manifest.MCPServers)
+	}
+}
+
+func TestParseManifest_StructuredAuthFloatAndHeterogeneousArray(t *testing.T) {
+	tomlContent := `
+version = "1.0"
+name = "float-array-test"
+agents = ["codex"]
+
+[mcp_servers.auth-srv]
+command = "run"
+auth = { ratio = 1.25, mixed = [true, 42, 3.14, "hello"] }
+`
+	result, err := Parse(tomlContent, nil)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	authMap, ok := result.Manifest.MCPServers["auth-srv"].Auth.(map[string]any)
+	if !ok {
+		t.Fatalf("expected Auth to be map[string]any, got: %T", result.Manifest.MCPServers["auth-srv"].Auth)
+	}
+	if authMap["ratio"] != 1.25 {
+		t.Errorf("expected ratio to be float 1.25, got: %v (%T)", authMap["ratio"], authMap["ratio"])
+	}
+	mixedArr, ok := authMap["mixed"].([]any)
+	if !ok {
+		t.Fatalf("expected mixed to be []any, got: %T", authMap["mixed"])
+	}
+	if len(mixedArr) != 4 {
+		t.Fatalf("expected 4 elements in mixed, got: %d", len(mixedArr))
+	}
+	if mixedArr[0] != true || mixedArr[1] != 42 || mixedArr[2] != 3.14 || mixedArr[3] != "hello" {
+		t.Errorf("unexpected elements in mixed array: %v", mixedArr)
+	}
+}
+
+func TestParseManifest_TrailingBackslashInsideSingleQuoteArray(t *testing.T) {
+	tomlContent := `
+version = "1.0"
+name = "backslash-test"
+agents = ["codex"]
+
+[mcp_servers.test]
+command = "run"
+args = ['C:\directory\', 'second_arg']
+`
+	result, err := Parse(tomlContent, nil)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	srv := result.Manifest.MCPServers["test"]
+	if len(srv.Args) != 2 {
+		t.Fatalf("expected 2 arguments, got: %d (%v)", len(srv.Args), srv.Args)
+	}
+	expectedFirst := `C:\directory\`
+	if srv.Args[0] != expectedFirst {
+		t.Errorf("expected %q, got %q", expectedFirst, srv.Args[0])
+	}
+	if srv.Args[1] != "second_arg" {
+		t.Errorf("expected %q, got %q", "second_arg", srv.Args[1])
+	}
+}

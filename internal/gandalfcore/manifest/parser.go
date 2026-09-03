@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -14,7 +15,8 @@ var envVarPattern = regexp.MustCompile(`\$\{([A-Za-z0-9_]+)(?::-([^}]*))?\}`)
 
 // ParseOptions controls how the manifest is parsed and interpolated.
 type ParseOptions struct {
-	EnvGetter func(string) string
+	EnvGetter     func(string) string
+	NoInterpolate bool
 }
 
 // ParseResult holds the parsed manifest and any missing required environment variables.
@@ -61,23 +63,11 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 
 	missingSet := make(map[string]struct{})
 
-	// Pre-interpolate environment variables in text
-	interpolatedText := envVarPattern.ReplaceAllStringFunc(text, func(match string) string {
-		submatches := envVarPattern.FindStringSubmatch(match)
-		if len(submatches) >= 2 {
-			varName := submatches[1]
-			val := envGetter(varName)
-			if val != "" {
-				return val
-			}
-			// check default value ${VAR:-default}
-			if len(submatches) >= 3 && submatches[2] != "" {
-				return submatches[2]
-			}
-			missingSet[varName] = struct{}{}
-		}
-		return match
-	})
+	// Pre-interpolate environment variables in text unless NoInterpolate is requested
+	interpolatedText := text
+	if opts == nil || !opts.NoInterpolate {
+		interpolatedText = contextAwareInterpolate(text, envGetter, missingSet)
+	}
 
 	m := &Manifest{
 		MCPServers:  make(map[string]MCPServerDef),
@@ -88,10 +78,12 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 	lines := strings.Split(interpolatedText, "\n")
 	var currentSection string
 	var currentSubSection string
+	var isEnvTable bool
 	var currentSkill *SkillDef
 
 	for i := 0; i < len(lines); i++ {
-		line := strings.TrimSpace(lines[i])
+		rawLine := strings.TrimSpace(lines[i])
+		line := strings.TrimSpace(stripInlineComment(rawLine))
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -104,6 +96,7 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 			currentSkill = &SkillDef{}
 			currentSection = "skills"
 			currentSubSection = ""
+			isEnvTable = false
 			continue
 		}
 
@@ -115,13 +108,24 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 			}
 
 			header := strings.TrimSpace(line[1 : len(line)-1])
-			parts := strings.Split(header, ".")
+			parts := splitTOMLHeader(header)
 
-			currentSection = parts[0]
-			if len(parts) > 1 {
-				currentSubSection = strings.Trim(strings.Join(parts[1:], "."), "\"")
-			} else {
-				currentSubSection = ""
+			currentSection = ""
+			currentSubSection = ""
+			isEnvTable = false
+
+			if len(parts) > 0 {
+				currentSection = parts[0]
+			}
+			if len(parts) == 2 {
+				currentSubSection = parts[1]
+			} else if len(parts) >= 3 {
+				if parts[len(parts)-1] == "env" {
+					isEnvTable = true
+					currentSubSection = strings.Join(parts[1:len(parts)-1], ".")
+				} else {
+					currentSubSection = strings.Join(parts[1:], ".")
+				}
 			}
 			continue
 		}
@@ -168,7 +172,24 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 
 		case "mcp_servers":
 			if currentSubSection != "" {
-				server := m.MCPServers[currentSubSection]
+				// Support nested [mcp_servers.<name>.env] tables (e.g. Codex TOML)
+				if isEnvTable || strings.HasSuffix(currentSubSection, ".env") {
+					parentName := currentSubSection
+					if strings.HasSuffix(currentSubSection, ".env") {
+						parentName = strings.TrimSuffix(currentSubSection, ".env")
+					}
+					parentName = strings.Trim(parentName, "\"")
+					server := m.MCPServers[parentName]
+					if server.Env == nil {
+						server.Env = make(map[string]string)
+					}
+					server.Env[key] = unquote(val)
+					m.MCPServers[parentName] = server
+					continue
+				}
+
+				cleanSubSection := strings.Trim(currentSubSection, "\"")
+				server := m.MCPServers[cleanSubSection]
 				if server.Env == nil {
 					server.Env = make(map[string]string)
 				}
@@ -176,21 +197,49 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 					server.Headers = make(map[string]string)
 				}
 
+				if strings.HasPrefix(key, "env.") {
+					envKey := strings.TrimPrefix(key, "env.")
+					server.Env[envKey] = unquote(val)
+					m.MCPServers[cleanSubSection] = server
+					continue
+				}
+
 				switch key {
+				case "type":
+					server.Type = unquote(val)
 				case "command":
 					server.Command = unquote(val)
 				case "args":
 					server.Args = parseStringArray(val)
+				case "env_file":
+					server.EnvFile = unquote(val)
 				case "url":
 					server.URL = unquote(val)
 				case "description":
 					server.Description = unquote(val)
+				case "headers":
+					server.Headers = parseInlineTable(val)
+				case "env":
+					server.Env = parseInlineTable(val)
+				case "auth":
+					trimmedVal := strings.TrimSpace(val)
+					if strings.HasPrefix(trimmedVal, "{") && strings.HasSuffix(trimmedVal, "}") {
+						server.Auth = parseInlineTableAny(trimmedVal)
+					} else {
+						server.Auth = unquote(trimmedVal)
+					}
 				case "disabled":
 					server.Disabled = val == "true"
+				case "enabled":
+					if val == "false" {
+						server.Disabled = true
+					} else if val == "true" {
+						server.Disabled = false
+					}
 				case "required_env":
 					server.RequiredEnv = parseStringArray(val)
 				}
-				m.MCPServers[currentSubSection] = server
+				m.MCPServers[cleanSubSection] = server
 			}
 
 		case "skills":
@@ -266,6 +315,9 @@ func parseKeyValue(line string) (string, string, bool) {
 
 func unquote(s string) string {
 	s = strings.TrimSpace(s)
+	if unquoted, err := strconv.Unquote(s); err == nil {
+		return unquoted
+	}
 	if (strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"")) ||
 		(strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'")) {
 		if len(s) >= 2 {
@@ -286,11 +338,451 @@ func parseStringArray(raw string) []string {
 	}
 
 	var items []string
-	for _, piece := range strings.Split(inner, ",") {
-		clean := unquote(piece)
+	var current strings.Builder
+	inQuote := false
+	var quoteChar rune
+	escaped := false
+
+	for _, r := range inner {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' && inQuote && quoteChar == '"' {
+			current.WriteRune(r)
+			escaped = true
+			continue
+		}
+		if (r == '"' || r == '\'') && !inQuote {
+			inQuote = true
+			quoteChar = r
+			current.WriteRune(r)
+			continue
+		}
+		if inQuote && r == quoteChar {
+			inQuote = false
+			current.WriteRune(r)
+			continue
+		}
+		if r == ',' && !inQuote {
+			clean := unquote(strings.TrimSpace(current.String()))
+			if clean != "" {
+				items = append(items, clean)
+			}
+			current.Reset()
+			continue
+		}
+		current.WriteRune(r)
+	}
+
+	if current.Len() > 0 {
+		clean := unquote(strings.TrimSpace(current.String()))
 		if clean != "" {
 			items = append(items, clean)
 		}
 	}
 	return items
+}
+
+func parseInlineTable(raw string) map[string]string {
+	raw = strings.TrimSpace(raw)
+	if !strings.HasPrefix(raw, "{") || !strings.HasSuffix(raw, "}") {
+		return nil
+	}
+	inner := strings.TrimSpace(raw[1 : len(raw)-1])
+	if inner == "" {
+		return make(map[string]string)
+	}
+
+	result := make(map[string]string)
+	var pairs []string
+	var current strings.Builder
+	inQuote := false
+	var quoteChar rune
+	escaped := false
+	depth := 0
+
+	for _, r := range inner {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			current.WriteRune(r)
+			escaped = true
+			continue
+		}
+		if (r == '"' || r == '\'') && !inQuote {
+			inQuote = true
+			quoteChar = r
+			current.WriteRune(r)
+			continue
+		}
+		if inQuote && r == quoteChar {
+			inQuote = false
+			current.WriteRune(r)
+			continue
+		}
+		if !inQuote {
+			if r == '{' || r == '[' {
+				depth++
+			} else if r == '}' || r == ']' {
+				depth--
+			}
+		}
+		if r == ',' && !inQuote && depth == 0 {
+			trimmed := strings.TrimSpace(current.String())
+			if trimmed != "" {
+				pairs = append(pairs, trimmed)
+			}
+			current.Reset()
+			continue
+		}
+		current.WriteRune(r)
+	}
+	if current.Len() > 0 {
+		trimmed := strings.TrimSpace(current.String())
+		if trimmed != "" {
+			pairs = append(pairs, trimmed)
+		}
+	}
+
+	for _, pair := range pairs {
+		k, v, ok := parseKeyValue(pair)
+		if ok {
+			cleanKey := unquote(k)
+			result[cleanKey] = unquote(v)
+		}
+	}
+	return result
+}
+
+func parseInlineTableAny(val string) any {
+	trimmedVal := strings.TrimSpace(val)
+	if strings.HasPrefix(trimmedVal, "{") && strings.HasSuffix(trimmedVal, "}") {
+		inner := strings.TrimSpace(trimmedVal[1 : len(trimmedVal)-1])
+		var pairs []string
+		var current strings.Builder
+		inQuote := false
+		var quoteChar rune
+		escaped := false
+		depth := 0
+
+		for _, r := range inner {
+			if escaped {
+				current.WriteRune(r)
+				escaped = false
+				continue
+			}
+			if r == '\\' {
+				current.WriteRune(r)
+				escaped = true
+				continue
+			}
+			if (r == '"' || r == '\'') && !inQuote {
+				inQuote = true
+				quoteChar = r
+				current.WriteRune(r)
+				continue
+			}
+			if inQuote && r == quoteChar {
+				inQuote = false
+				current.WriteRune(r)
+				continue
+			}
+			if !inQuote {
+				if r == '{' || r == '[' {
+					depth++
+				} else if r == '}' || r == ']' {
+					depth--
+				}
+			}
+			if r == ',' && !inQuote && depth == 0 {
+				trimmed := strings.TrimSpace(current.String())
+				if trimmed != "" {
+					pairs = append(pairs, trimmed)
+				}
+				current.Reset()
+				continue
+			}
+			current.WriteRune(r)
+		}
+		if current.Len() > 0 {
+			trimmed := strings.TrimSpace(current.String())
+			if trimmed != "" {
+				pairs = append(pairs, trimmed)
+			}
+		}
+
+		resMap := make(map[string]any)
+		for _, pair := range pairs {
+			k, v, ok := parseKeyValue(pair)
+			if ok {
+				cleanKey := unquote(k)
+				trimmedV := strings.TrimSpace(v)
+				if strings.HasPrefix(trimmedV, "{") && strings.HasSuffix(trimmedV, "}") {
+					resMap[cleanKey] = parseInlineTableAny(trimmedV)
+				} else if strings.HasPrefix(trimmedV, "[") && strings.HasSuffix(trimmedV, "]") {
+					resMap[cleanKey] = parseMixedArray(trimmedV)
+				} else if trimmedV == "true" {
+					resMap[cleanKey] = true
+				} else if trimmedV == "false" {
+					resMap[cleanKey] = false
+				} else if intVal, err := strconv.Atoi(trimmedV); err == nil {
+					resMap[cleanKey] = intVal
+				} else if floatVal, err := strconv.ParseFloat(trimmedV, 64); err == nil {
+					resMap[cleanKey] = floatVal
+				} else {
+					resMap[cleanKey] = unquote(trimmedV)
+				}
+			}
+		}
+		return resMap
+	}
+	return unquote(trimmedVal)
+}
+
+func parseMixedArray(val string) []any {
+	trimmed := strings.TrimSpace(val)
+	if !strings.HasPrefix(trimmed, "[") || !strings.HasSuffix(trimmed, "]") {
+		return nil
+	}
+	inner := strings.TrimSpace(trimmed[1 : len(trimmed)-1])
+	if inner == "" {
+		return []any{}
+	}
+
+	var elements []string
+	var current strings.Builder
+	inQuote := false
+	var quoteChar rune
+	escaped := false
+	depth := 0
+
+	for _, r := range inner {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			current.WriteRune(r)
+			escaped = true
+			continue
+		}
+		if (r == '"' || r == '\'') && !inQuote {
+			inQuote = true
+			quoteChar = r
+			current.WriteRune(r)
+			continue
+		}
+		if inQuote && r == quoteChar {
+			inQuote = false
+			current.WriteRune(r)
+			continue
+		}
+		if !inQuote {
+			if r == '{' || r == '[' {
+				depth++
+			} else if r == '}' || r == ']' {
+				depth--
+			}
+		}
+		if r == ',' && !inQuote && depth == 0 {
+			t := strings.TrimSpace(current.String())
+			if t != "" {
+				elements = append(elements, t)
+			}
+			current.Reset()
+			continue
+		}
+		current.WriteRune(r)
+	}
+	if current.Len() > 0 {
+		t := strings.TrimSpace(current.String())
+		if t != "" {
+			elements = append(elements, t)
+		}
+	}
+
+	var result []any
+	for _, el := range elements {
+		elTrim := strings.TrimSpace(el)
+		if strings.HasPrefix(elTrim, "{") && strings.HasSuffix(elTrim, "}") {
+			result = append(result, parseInlineTableAny(elTrim))
+		} else if strings.HasPrefix(elTrim, "[") && strings.HasSuffix(elTrim, "]") {
+			result = append(result, parseMixedArray(elTrim))
+		} else if elTrim == "true" {
+			result = append(result, true)
+		} else if elTrim == "false" {
+			result = append(result, false)
+		} else if intVal, err := strconv.Atoi(elTrim); err == nil {
+			result = append(result, intVal)
+		} else if floatVal, err := strconv.ParseFloat(elTrim, 64); err == nil {
+			result = append(result, floatVal)
+		} else {
+			result = append(result, unquote(elTrim))
+		}
+	}
+	return result
+}
+
+func splitTOMLHeader(header string) []string {
+	var parts []string
+	var current strings.Builder
+	inQuote := false
+	var quoteChar rune
+	escaped := false
+
+	for _, r := range header {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' && inQuote && quoteChar == '"' {
+			escaped = true
+			current.WriteRune(r)
+			continue
+		}
+		if inQuote {
+			if r == quoteChar {
+				inQuote = false
+				current.WriteRune(r)
+			} else {
+				current.WriteRune(r)
+			}
+		} else {
+			if r == '"' || r == '\'' {
+				inQuote = true
+				quoteChar = r
+				current.WriteRune(r)
+			} else if r == '.' {
+				parts = append(parts, unquote(current.String()))
+				current.Reset()
+			} else {
+				current.WriteRune(r)
+			}
+		}
+	}
+	if current.Len() > 0 || len(parts) > 0 {
+		parts = append(parts, unquote(current.String()))
+	}
+	return parts
+}
+
+func stripInlineComment(line string) string {
+	inSingleQuote := false
+	inDoubleQuote := false
+	var escaped bool
+
+	for i, r := range line {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+		if r == '\'' && !inDoubleQuote {
+			inSingleQuote = !inSingleQuote
+		} else if r == '"' && !inSingleQuote {
+			inDoubleQuote = !inDoubleQuote
+		} else if r == '#' && !inSingleQuote && !inDoubleQuote {
+			return strings.TrimRight(line[:i], " \t")
+		}
+	}
+	return line
+}
+
+func escapeTOMLStringValue(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
+	return s
+}
+
+func contextAwareInterpolate(text string, envGetter func(string) string, missingSet map[string]struct{}) string {
+	var sb strings.Builder
+	runes := []rune(text)
+	inSingleQuote := false
+	inDoubleQuote := false
+	escaped := false
+
+	for i := 0; i < len(runes); {
+		r := runes[i]
+		if escaped {
+			sb.WriteRune(r)
+			escaped = false
+			i++
+			continue
+		}
+		if r == '\\' && inDoubleQuote {
+			escaped = true
+			sb.WriteRune(r)
+			i++
+			continue
+		}
+		if r == '\'' && !inDoubleQuote {
+			inSingleQuote = !inSingleQuote
+			sb.WriteRune(r)
+			i++
+			continue
+		}
+		if r == '"' && !inSingleQuote {
+			inDoubleQuote = !inDoubleQuote
+			sb.WriteRune(r)
+			i++
+			continue
+		}
+
+		// Check for ${VAR...}
+		if r == '$' && i+1 < len(runes) && runes[i+1] == '{' {
+			end := -1
+			for j := i + 2; j < len(runes); j++ {
+				if runes[j] == '}' {
+					end = j
+					break
+				}
+				if runes[j] == '\n' {
+					break
+				}
+			}
+			if end != -1 {
+				matchStr := string(runes[i : end+1])
+				submatches := envVarPattern.FindStringSubmatch(matchStr)
+				if len(submatches) >= 2 {
+					varName := submatches[1]
+					val := envGetter(varName)
+					if val == "" && len(submatches) >= 3 && submatches[2] != "" {
+						val = submatches[2]
+					}
+					if val != "" {
+						if inSingleQuote {
+							// Inside literal single-quoted strings: preserve raw value without escaping
+							sb.WriteString(val)
+						} else {
+							// Inside double quotes or outside quotes: escape safely
+							sb.WriteString(escapeTOMLStringValue(val))
+						}
+						i = end + 1
+						continue
+					}
+					missingSet[varName] = struct{}{}
+					sb.WriteString(matchStr)
+					i = end + 1
+					continue
+				}
+			}
+		}
+
+		sb.WriteRune(r)
+		i++
+	}
+	return sb.String()
 }

@@ -259,3 +259,35 @@ func TestEndToEndSyncPlanAndApply(t *testing.T) {
 		t.Errorf("cursor skill was not copied: %v", err)
 	}
 }
+
+func TestMergeCodexConfigTOML_DottedServerAndNestedEnvCleaned(t *testing.T) {
+	existing := `
+[mcp_servers."server.with.dots"]
+command = "old-command"
+
+[mcp_servers."server.with.dots".env]
+OLD_ENV = "old-val"
+`
+	m := &manifest.Manifest{
+		MCPServers: map[string]manifest.MCPServerDef{
+			"server.with.dots": {
+				Command: "new-command",
+				Env: map[string]string{
+					"NEW_ENV": "new-val",
+				},
+			},
+		},
+	}
+
+	merged, err := MergeCodexConfigTOML(existing, m)
+	if err != nil {
+		t.Fatalf("MergeCodexConfigTOML failed: %v", err)
+	}
+
+	if strings.Contains(merged, "old-command") || strings.Contains(merged, "old-val") {
+		t.Errorf("expected old-command and old-val to be removed from merged config:\n%s", merged)
+	}
+	if !strings.Contains(merged, "new-command") || !strings.Contains(merged, "NEW_ENV") {
+		t.Errorf("expected new-command and NEW_ENV in merged config:\n%s", merged)
+	}
+}

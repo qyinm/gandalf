@@ -100,6 +100,9 @@ func MergeCursorMCPJSON(existingJSON string, m *manifest.Manifest) (string, erro
 
 	for name, srv := range m.MCPServers {
 		serverEntry := make(map[string]any)
+		if srv.Type != "" {
+			serverEntry["type"] = srv.Type
+		}
 		if srv.Command != "" {
 			serverEntry["command"] = srv.Command
 		}
@@ -109,11 +112,17 @@ func MergeCursorMCPJSON(existingJSON string, m *manifest.Manifest) (string, erro
 		if len(srv.Env) > 0 {
 			serverEntry["env"] = srv.Env
 		}
+		if srv.EnvFile != "" {
+			serverEntry["envFile"] = srv.EnvFile
+		}
 		if srv.URL != "" {
 			serverEntry["url"] = srv.URL
 		}
 		if len(srv.Headers) > 0 {
 			serverEntry["headers"] = srv.Headers
+		}
+		if srv.Auth != nil {
+			serverEntry["auth"] = srv.Auth
 		}
 		if srv.Disabled {
 			serverEntry["disabled"] = true
@@ -148,10 +157,10 @@ func MergeCodexConfigTOML(existingTOML string, m *manifest.Manifest) (string, er
 
 		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
 			header := trimmed[1 : len(trimmed)-1]
-			parts := strings.Split(header, ".")
+			parts := splitTOMLHeader(header)
 			if len(parts) >= 2 && parts[0] == "mcp_servers" {
-				srvName := strings.Trim(strings.Join(parts[1:], "."), "\"")
-				// If this server is managed by manifest, we will replace it later
+				srvName := parts[1]
+				// If this server (or its nested tables like .env) is managed by manifest, we will replace it later
 				if _, exists := m.MCPServers[srvName]; exists {
 					inMCPServerSection = true
 					continue
@@ -227,4 +236,56 @@ func formatTOMLKey(k string) string {
 		return fmt.Sprintf("%q", k)
 	}
 	return k
+}
+
+func splitTOMLHeader(header string) []string {
+	var parts []string
+	var current strings.Builder
+	inQuote := false
+	var quoteChar rune
+	escaped := false
+
+	for _, r := range header {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' && inQuote && quoteChar == '"' {
+			escaped = true
+			continue
+		}
+		if inQuote {
+			if r == quoteChar {
+				inQuote = false
+			} else {
+				current.WriteRune(r)
+			}
+		} else {
+			if r == '"' || r == '\'' {
+				inQuote = true
+				quoteChar = r
+			} else if r == '.' {
+				parts = append(parts, unquoteHeaderPart(current.String()))
+				current.Reset()
+			} else {
+				current.WriteRune(r)
+			}
+		}
+	}
+	if current.Len() > 0 || len(parts) > 0 {
+		parts = append(parts, unquoteHeaderPart(current.String()))
+	}
+	return parts
+}
+
+func unquoteHeaderPart(s string) string {
+	s = strings.TrimSpace(s)
+	if (strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"")) ||
+		(strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'")) {
+		if len(s) >= 2 {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
 }
