@@ -596,3 +596,83 @@ func TestParseStandardJSONMCPServers_PreservesAuth(t *testing.T) {
 		t.Errorf("expected clientId 'client_123', got %v", authMap["clientId"])
 	}
 }
+
+func TestAuth_EndToEndRoundTripAndRedaction(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	if err := os.MkdirAll(filepath.Join(projDir, ".cursor"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Raw Cursor mcp.json with sensitive oauth auth object
+	rawCursor := `{
+  "mcpServers": {
+    "remote-oauth": {
+      "type": "sse",
+      "url": "https://mcp.internal.com/sse",
+      "auth": {
+        "clientId": "client_abc",
+        "clientSecret": "super_secret_oauth_client_secret_xyz123"
+      }
+    }
+  }
+}`
+	if err := os.WriteFile(filepath.Join(projDir, ".cursor", "mcp.json"), []byte(rawCursor), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Run import
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+	}
+	res, err := RunImport(opts)
+	if err != nil {
+		t.Fatalf("RunImport failed: %v", err)
+	}
+
+	// 3. Verify sensitive clientSecret was redacted
+	srv := res.Manifest.MCPServers["remote-oauth"]
+	authMap, ok := srv.Auth.(map[string]any)
+	if !ok {
+		t.Fatalf("expected srv.Auth to be map[string]any, got %T: %v", srv.Auth, srv.Auth)
+	}
+	secretVal, ok := authMap["clientSecret"].(string)
+	if !ok || !strings.Contains(secretVal, "${") {
+		t.Fatalf("expected clientSecret to be templated into ${...}, got: %v", authMap["clientSecret"])
+	}
+
+	// Verify env_template contains a safe placeholder and NOT the actual secret
+	for _, envVal := range res.Manifest.EnvTemplate {
+		if strings.Contains(envVal, "super_secret_oauth") {
+			t.Fatalf("security violation: raw clientSecret leaked into env_template: %s", envVal)
+		}
+	}
+
+	// 4. Verify round-trip parsing from generated gandalf.toml
+	manifestFile := filepath.Join(projDir, "gandalf.toml")
+	manifestBytes, err := os.ReadFile(manifestFile)
+	if err != nil {
+		t.Fatalf("failed to read generated gandalf.toml: %v", err)
+	}
+
+	parsed, err := manifest.Parse(string(manifestBytes), nil)
+	if err != nil {
+		t.Fatalf("failed to parse generated manifest: %v\nManifest:\n%s", err, string(manifestBytes))
+	}
+
+	parsedSrv, exists := parsed.Manifest.MCPServers["remote-oauth"]
+	if !exists {
+		t.Fatalf("remote-oauth not found in parsed manifest")
+	}
+	if parsedSrv.Type != "sse" {
+		t.Errorf("expected type 'sse', got: %s", parsedSrv.Type)
+	}
+	parsedAuth, ok := parsedSrv.Auth.(map[string]any)
+	if !ok {
+		t.Fatalf("expected parsed auth to be map[string]any, got %T", parsedSrv.Auth)
+	}
+	if parsedAuth["clientId"] != "client_abc" {
+		t.Errorf("expected clientId 'client_abc', got %v", parsedAuth["clientId"])
+	}
+}

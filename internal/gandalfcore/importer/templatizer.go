@@ -203,6 +203,53 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 		}
 	}
 
+	// 6. Process Auth (string or map)
+	if srv.Auth != nil {
+		switch a := srv.Auth.(type) {
+		case string:
+			normalized := NormalizeInterpolation(a)
+			for _, e := range ExtractExistingRequiredEnvs(normalized) {
+				requiredEnvMap[e] = true
+			}
+			if !strings.HasPrefix(normalized, "${") {
+				varKey := fmt.Sprintf("%s_AUTH_TOKEN", cleanName)
+				srv.Auth = fmt.Sprintf("${%s}", varKey)
+				requiredEnvMap[varKey] = true
+				if _, exists := envTemplate[varKey]; !exists {
+					envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "bearer")
+				}
+			} else {
+				srv.Auth = normalized
+			}
+		case map[string]any:
+			redactedMap := make(map[string]any)
+			for k, v := range a {
+				strVal, isStr := v.(string)
+				if isStr {
+					normalized := NormalizeInterpolation(strVal)
+					for _, e := range ExtractExistingRequiredEnvs(normalized) {
+						requiredEnvMap[e] = true
+					}
+					lowerK := strings.ToLower(k)
+					if !strings.HasPrefix(normalized, "${") &&
+						(strings.Contains(lowerK, "token") || strings.Contains(lowerK, "secret") || strings.Contains(lowerK, "key") || strings.Contains(lowerK, "password")) {
+						varKey := fmt.Sprintf("%s_%s", cleanName, strings.ToUpper(k))
+						redactedMap[k] = fmt.Sprintf("${%s}", varKey)
+						requiredEnvMap[varKey] = true
+						if _, exists := envTemplate[varKey]; !exists {
+							envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "bearer")
+						}
+					} else {
+						redactedMap[k] = normalized
+					}
+				} else {
+					redactedMap[k] = v
+				}
+			}
+			srv.Auth = redactedMap
+		}
+	}
+
 	// Rebuild RequiredEnv list
 	var finalRequired []string
 	for req := range requiredEnvMap {

@@ -202,6 +202,22 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 					server.URL = unquote(val)
 				case "description":
 					server.Description = unquote(val)
+				case "headers":
+					server.Headers = parseInlineTable(val)
+				case "env":
+					server.Env = parseInlineTable(val)
+				case "auth":
+					trimmedVal := strings.TrimSpace(val)
+					if strings.HasPrefix(trimmedVal, "{") && strings.HasSuffix(trimmedVal, "}") {
+						tbl := parseInlineTable(trimmedVal)
+						authMap := make(map[string]any)
+						for k, v := range tbl {
+							authMap[k] = v
+						}
+						server.Auth = authMap
+					} else {
+						server.Auth = unquote(trimmedVal)
+					}
 				case "disabled":
 					server.Disabled = val == "true"
 				case "required_env":
@@ -351,4 +367,69 @@ func parseStringArray(raw string) []string {
 		}
 	}
 	return items
+}
+
+func parseInlineTable(raw string) map[string]string {
+	raw = strings.TrimSpace(raw)
+	if !strings.HasPrefix(raw, "{") || !strings.HasSuffix(raw, "}") {
+		return nil
+	}
+	inner := strings.TrimSpace(raw[1 : len(raw)-1])
+	if inner == "" {
+		return make(map[string]string)
+	}
+
+	result := make(map[string]string)
+	var pairs []string
+	var current strings.Builder
+	inQuote := false
+	var quoteChar rune
+	escaped := false
+
+	for _, r := range inner {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			current.WriteRune(r)
+			escaped = true
+			continue
+		}
+		if (r == '"' || r == '\'') && !inQuote {
+			inQuote = true
+			quoteChar = r
+			current.WriteRune(r)
+			continue
+		}
+		if inQuote && r == quoteChar {
+			inQuote = false
+			current.WriteRune(r)
+			continue
+		}
+		if r == ',' && !inQuote {
+			trimmed := strings.TrimSpace(current.String())
+			if trimmed != "" {
+				pairs = append(pairs, trimmed)
+			}
+			current.Reset()
+			continue
+		}
+		current.WriteRune(r)
+	}
+	if current.Len() > 0 {
+		trimmed := strings.TrimSpace(current.String())
+		if trimmed != "" {
+			pairs = append(pairs, trimmed)
+		}
+	}
+
+	for _, pair := range pairs {
+		k, v, ok := parseKeyValue(pair)
+		if ok {
+			result[k] = unquote(v)
+		}
+	}
+	return result
 }

@@ -247,6 +247,27 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 				}
 				sb.WriteString(" }\n")
 			}
+			if srv.Auth != nil {
+				switch a := srv.Auth.(type) {
+				case string:
+					sb.WriteString(fmt.Sprintf("auth = %q\n", a))
+				case map[string]any:
+					var aKeys []string
+					for k := range a {
+						aKeys = append(aKeys, k)
+					}
+					sort.Strings(aKeys)
+					sb.WriteString("auth = { ")
+					for j, k := range aKeys {
+						if j > 0 {
+							sb.WriteString(", ")
+						}
+						valStr := fmt.Sprintf("%v", a[k])
+						sb.WriteString(fmt.Sprintf("%s = %q", k, valStr))
+					}
+					sb.WriteString(" }\n")
+				}
+			}
 			if len(srv.Env) > 0 {
 				var envKeys []string
 				for k := range srv.Env {
