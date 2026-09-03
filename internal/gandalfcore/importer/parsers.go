@@ -41,7 +41,7 @@ func ParseStandardJSONMCPServers(data []byte) (map[string]manifest.MCPServerDef,
 			Command:     raw.Command,
 			Args:        raw.Args,
 			Env:         raw.Env,
-			EnvFile:     raw.EnvFile,
+			EnvFile:     sanitizeEnvFilePath(raw.EnvFile),
 			URL:         raw.URL,
 			Headers:     raw.Headers,
 			Auth:        raw.Auth,
@@ -77,7 +77,7 @@ func ParseClaudeConfigJSON(data []byte, projectPath string) (map[string]manifest
 			Command:     raw.Command,
 			Args:        raw.Args,
 			Env:         raw.Env,
-			EnvFile:     raw.EnvFile,
+			EnvFile:     sanitizeEnvFilePath(raw.EnvFile),
 			URL:         raw.URL,
 			Headers:     raw.Headers,
 			Auth:        raw.Auth,
@@ -96,7 +96,7 @@ func ParseClaudeConfigJSON(data []byte, projectPath string) (map[string]manifest
 					Command:     raw.Command,
 					Args:        raw.Args,
 					Env:         raw.Env,
-					EnvFile:     raw.EnvFile,
+					EnvFile:     sanitizeEnvFilePath(raw.EnvFile),
 					URL:         raw.URL,
 					Headers:     raw.Headers,
 					Auth:        raw.Auth,
@@ -167,4 +167,28 @@ func ScanSkillsDirectory(skillsDir, targetSourcePrefix string) ([]manifest.Skill
 	}
 
 	return skills, nil
+}
+
+// sanitizeEnvFilePath validates that an envFile path is safe and does not escape the project boundary.
+func sanitizeEnvFilePath(envFile string) string {
+	envFile = strings.TrimSpace(envFile)
+	if envFile == "" {
+		return ""
+	}
+	if strings.Contains(envFile, "${workspaceFolder}") {
+		rest := strings.Replace(envFile, "${workspaceFolder}", "", 1)
+		clean := filepath.Clean(rest)
+		if strings.HasPrefix(clean, "..") || strings.Contains(clean, "/../") || strings.Contains(clean, `\..\`) {
+			return ""
+		}
+		return envFile
+	}
+	if filepath.IsAbs(envFile) {
+		return ""
+	}
+	clean := filepath.Clean(envFile)
+	if strings.HasPrefix(clean, "..") {
+		return ""
+	}
+	return clean
 }

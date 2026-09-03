@@ -16,10 +16,10 @@ var (
 	dbURLRegex = regexp.MustCompile(`(postgres|postgresql|mysql|mongodb|mongodb\+srv|redis|rediss)://[^:\s]+:[^@\s]+@[^\s"']+`)
 
 	// Sensitive token patterns
-	anthropicKeyRegex = regexp.MustCompile(`sk-ant-api03-[A-Za-z0-9_-]{80,}`)
-	openAIKeyRegex    = regexp.MustCompile(`sk-(proj-)?[A-Za-z0-9_-]{32,}`)
-	githubTokenRegex  = regexp.MustCompile(`(ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82})`)
-	bearerTokenRegex  = regexp.MustCompile(`Bearer\s+([A-Za-z0-9_\-\.]{20,})`)
+	anthropicKeyRegex = regexp.MustCompile(`sk-ant-api03-[A-Za-z0-9_-]{16,}`)
+	openAIKeyRegex    = regexp.MustCompile(`sk-(proj-)?[A-Za-z0-9_-]{16,}`)
+	githubTokenRegex  = regexp.MustCompile(`(ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,})`)
+	bearerTokenRegex  = regexp.MustCompile(`Bearer\s+([A-Za-z0-9_\-\.]{10,})`)
 )
 
 // NormalizeInterpolation converts vendor-specific env interpolation (like Cursor's ${env:VAR})
@@ -74,88 +74,28 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 
 	// 1. Process URL
 	if srv.URL != "" {
-		srv.URL = NormalizeInterpolation(srv.URL)
-		for _, e := range ExtractExistingRequiredEnvs(srv.URL) {
-			requiredEnvMap[e] = true
-		}
-
-		if match := dbURLRegex.FindString(srv.URL); match != "" {
-			varKey := "DATABASE_URL"
-			if _, exists := envTemplate["DATABASE_URL"]; exists && cleanName != "DATABASE" && cleanName != "POSTGRES" && cleanName != "DB" {
-				varKey = fmt.Sprintf("%s_DATABASE_URL", cleanName)
-			}
-			srv.URL = strings.Replace(srv.URL, match, fmt.Sprintf("${%s}", varKey), 1)
-			requiredEnvMap[varKey] = true
-			if _, exists := envTemplate[varKey]; !exists {
-				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "database_url")
-			}
-		}
+		srv.URL = redactStringValue(srv.URL, cleanName, envTemplate, requiredEnvMap)
 	}
 
 	// 2. Process Command
-	srv.Command = NormalizeInterpolation(srv.Command)
-	for _, e := range ExtractExistingRequiredEnvs(srv.Command) {
-		requiredEnvMap[e] = true
+	if srv.Command != "" {
+		srv.Command = redactStringValue(srv.Command, cleanName, envTemplate, requiredEnvMap)
 	}
 
 	// 3. Process Args
 	for i, arg := range srv.Args {
-		normalized := NormalizeInterpolation(arg)
-		for _, e := range ExtractExistingRequiredEnvs(normalized) {
-			requiredEnvMap[e] = true
-		}
-
-		// Detect DB URL in args (e.g. pg://user:pass@host/db)
-		if match := dbURLRegex.FindString(normalized); match != "" {
-			varKey := "DATABASE_URL"
-			if _, exists := envTemplate["DATABASE_URL"]; exists && cleanName != "DATABASE" && cleanName != "POSTGRES" && cleanName != "DB" {
-				varKey = fmt.Sprintf("%s_DATABASE_URL", cleanName)
-			}
-			normalized = strings.Replace(normalized, match, fmt.Sprintf("${%s}", varKey), 1)
-			requiredEnvMap[varKey] = true
-			if _, exists := envTemplate[varKey]; !exists {
-				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "database_url")
-			}
-		}
-
-		// Detect API keys in args
-		if match := anthropicKeyRegex.FindString(normalized); match != "" {
-			varKey := "ANTHROPIC_API_KEY"
-			normalized = strings.Replace(normalized, match, fmt.Sprintf("${%s}", varKey), 1)
-			requiredEnvMap[varKey] = true
-			if _, exists := envTemplate[varKey]; !exists {
-				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "anthropic")
-			}
-		} else if match := openAIKeyRegex.FindString(normalized); match != "" {
-			varKey := "OPENAI_API_KEY"
-			normalized = strings.Replace(normalized, match, fmt.Sprintf("${%s}", varKey), 1)
-			requiredEnvMap[varKey] = true
-			if _, exists := envTemplate[varKey]; !exists {
-				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "openai")
-			}
-		} else if match := githubTokenRegex.FindString(normalized); match != "" {
-			varKey := "GITHUB_TOKEN"
-			normalized = strings.Replace(normalized, match, fmt.Sprintf("${%s}", varKey), 1)
-			requiredEnvMap[varKey] = true
-			if _, exists := envTemplate[varKey]; !exists {
-				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "github")
-			}
-		}
-
-		srv.Args[i] = normalized
+		srv.Args[i] = redactStringValue(arg, cleanName, envTemplate, requiredEnvMap)
 	}
 
 	// 4. Process Headers
 	for k, v := range srv.Headers {
-		normalized := NormalizeInterpolation(v)
-		for _, e := range ExtractExistingRequiredEnvs(normalized) {
-			requiredEnvMap[e] = true
-		}
-
-		if match := bearerTokenRegex.FindStringSubmatch(normalized); len(match) > 1 {
-			token := match[1]
-			varKey := fmt.Sprintf("%s_AUTH_TOKEN", cleanName)
-			normalized = strings.Replace(normalized, token, fmt.Sprintf("${%s}", varKey), 1)
+		normalized := redactStringValue(v, cleanName, envTemplate, requiredEnvMap)
+		lowerK := strings.ToLower(k)
+		isAuthHeader := lowerK == "authorization" || strings.Contains(lowerK, "token") || strings.Contains(lowerK, "key") || strings.Contains(lowerK, "secret")
+		if isAuthHeader && !strings.HasPrefix(normalized, "${") {
+			cleanK := strings.ToUpper(regexp.MustCompile(`[^A-Za-z0-9_]`).ReplaceAllString(k, "_"))
+			varKey := fmt.Sprintf("%s_%s", cleanName, cleanK)
+			normalized = fmt.Sprintf("${%s}", varKey)
 			requiredEnvMap[varKey] = true
 			if _, exists := envTemplate[varKey]; !exists {
 				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "bearer")
@@ -256,4 +196,96 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 		finalRequired = append(finalRequired, req)
 	}
 	srv.RequiredEnv = finalRequired
+}
+
+func redactStringValue(val, cleanName string, envTemplate map[string]string, requiredEnvMap map[string]bool) string {
+	normalized := NormalizeInterpolation(val)
+	for _, e := range ExtractExistingRequiredEnvs(normalized) {
+		requiredEnvMap[e] = true
+	}
+
+	// 1. Redact DB URLs iteratively
+	for {
+		match := dbURLRegex.FindString(normalized)
+		if match == "" {
+			break
+		}
+		varKey := "DATABASE_URL"
+		if _, exists := envTemplate["DATABASE_URL"]; exists && cleanName != "DATABASE" && cleanName != "POSTGRES" && cleanName != "DB" {
+			varKey = fmt.Sprintf("%s_DATABASE_URL", cleanName)
+		}
+		normalized = strings.Replace(normalized, match, fmt.Sprintf("${%s}", varKey), 1)
+		requiredEnvMap[varKey] = true
+		if _, exists := envTemplate[varKey]; !exists {
+			envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "database_url")
+		}
+	}
+
+	// 2. Redact Anthropic API Keys iteratively
+	for {
+		match := anthropicKeyRegex.FindString(normalized)
+		if match == "" {
+			break
+		}
+		varKey := "ANTHROPIC_API_KEY"
+		if _, exists := envTemplate["ANTHROPIC_API_KEY"]; exists {
+			varKey = fmt.Sprintf("%s_ANTHROPIC_API_KEY", cleanName)
+		}
+		normalized = strings.Replace(normalized, match, fmt.Sprintf("${%s}", varKey), 1)
+		requiredEnvMap[varKey] = true
+		if _, exists := envTemplate[varKey]; !exists {
+			envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "anthropic")
+		}
+	}
+
+	// 3. Redact OpenAI API Keys iteratively
+	for {
+		match := openAIKeyRegex.FindString(normalized)
+		if match == "" {
+			break
+		}
+		varKey := "OPENAI_API_KEY"
+		if _, exists := envTemplate["OPENAI_API_KEY"]; exists {
+			varKey = fmt.Sprintf("%s_OPENAI_API_KEY", cleanName)
+		}
+		normalized = strings.Replace(normalized, match, fmt.Sprintf("${%s}", varKey), 1)
+		requiredEnvMap[varKey] = true
+		if _, exists := envTemplate[varKey]; !exists {
+			envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "openai")
+		}
+	}
+
+	// 4. Redact GitHub Tokens iteratively
+	for {
+		match := githubTokenRegex.FindString(normalized)
+		if match == "" {
+			break
+		}
+		varKey := "GITHUB_TOKEN"
+		if _, exists := envTemplate["GITHUB_TOKEN"]; exists {
+			varKey = fmt.Sprintf("%s_GITHUB_TOKEN", cleanName)
+		}
+		normalized = strings.Replace(normalized, match, fmt.Sprintf("${%s}", varKey), 1)
+		requiredEnvMap[varKey] = true
+		if _, exists := envTemplate[varKey]; !exists {
+			envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "github")
+		}
+	}
+
+	// 5. Redact Bearer tokens in string
+	for {
+		match := bearerTokenRegex.FindStringSubmatch(normalized)
+		if len(match) <= 1 {
+			break
+		}
+		token := match[1]
+		varKey := fmt.Sprintf("%s_AUTH_TOKEN", cleanName)
+		normalized = strings.Replace(normalized, token, fmt.Sprintf("${%s}", varKey), 1)
+		requiredEnvMap[varKey] = true
+		if _, exists := envTemplate[varKey]; !exists {
+			envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "bearer")
+		}
+	}
+
+	return normalized
 }

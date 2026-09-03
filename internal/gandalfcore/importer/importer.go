@@ -52,6 +52,28 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 		targetPath = filepath.Join(cleanProjectPath, cleanOutput)
 	}
 
+	// Security: Ensure parent directory components are not symlinks escaping the project
+	if err := verifyDestinationPathConfinement(cleanProjectPath, filepath.Dir(targetPath)); err != nil {
+		return nil, fmt.Errorf("security violation: output parent directory: %w", err)
+	}
+
+	// Security: If target file itself already exists, ensure it is not a symlink
+	if fi, err := os.Lstat(targetPath); err == nil && (fi.Mode()&os.ModeSymlink != 0) {
+		return nil, fmt.Errorf("security violation: output file '%s' is a symlink", targetPath)
+	}
+
+	// Security: Check realpath of parent directory if it exists to prevent symlink traversal
+	realProject := cleanProjectPath
+	if rp, err := filepath.EvalSymlinks(cleanProjectPath); err == nil {
+		realProject = rp
+	}
+	if realParent, err := filepath.EvalSymlinks(filepath.Dir(targetPath)); err == nil {
+		relParent, err := filepath.Rel(realProject, realParent)
+		if err != nil || strings.HasPrefix(relParent, "..") {
+			return nil, fmt.Errorf("security violation: output directory escapes project root: %s", realParent)
+		}
+	}
+
 	var candidates []DetectedCandidate
 
 	if opts.FromPath != "" {

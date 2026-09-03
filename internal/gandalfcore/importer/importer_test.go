@@ -676,3 +676,100 @@ func TestAuth_EndToEndRoundTripAndRedaction(t *testing.T) {
 		t.Errorf("expected clientId 'client_abc', got %v", parsedAuth["clientId"])
 	}
 }
+
+func TestRunImport_OutputSymlinkRejected(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	outsideDir := filepath.Join(tempDir, "outside")
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outsideDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create valid source
+	if err := os.WriteFile(filepath.Join(projDir, ".mcp.json"), []byte(`{"mcpServers":{"srv":{"command":"echo"}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create symlink inside project pointing outside
+	linkDir := filepath.Join(projDir, "symlink_dir")
+	if err := os.Symlink(outsideDir, linkDir); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+		OutputFile:  "symlink_dir/escaped.toml",
+	}
+
+	_, err := RunImport(opts)
+	if err == nil {
+		t.Fatalf("expected error when output crosses a symlinked parent directory")
+	}
+	if !strings.Contains(err.Error(), "security violation") {
+		t.Errorf("expected security violation error, got: %v", err)
+	}
+}
+
+func TestRedactAndTemplatizeServer_CommandAndMultiTokens(t *testing.T) {
+	envTemplate := make(map[string]string)
+	srv := manifest.MCPServerDef{
+		Command: "connect --url=postgres://usr:pwd@localhost:5432/test --key=sk-ant-api03-abcdefghijklmnop",
+		Args:    []string{"--first=sk-proj-abcdefghijklmnopqrstuvwxyz012345", "--second=ghp_0123456789abcdefghijklmnopqrstuvwxyz"},
+		Headers: map[string]string{
+			"Authorization": "Basic dXNlcjpwYXNz",
+			"X-API-Key":     "raw-secret-key-1234",
+		},
+	}
+
+	RedactAndTemplatizeServer("multi-test", &srv, envTemplate)
+
+	// Verify command credentials redacted
+	if strings.Contains(srv.Command, "pwd@") || strings.Contains(srv.Command, "sk-ant") {
+		t.Errorf("expected credentials in command to be redacted, got: %s", srv.Command)
+	}
+
+	// Verify multiple tokens in args all redacted
+	for _, arg := range srv.Args {
+		if strings.Contains(arg, "sk-proj-xyz123") || strings.Contains(arg, "ghp_") {
+			t.Errorf("expected all secrets in args to be redacted, got: %s", arg)
+		}
+	}
+
+	// Verify headers redacted
+	if srv.Headers["Authorization"] == "Basic dXNlcjpwYXNz" {
+		t.Errorf("expected Authorization header to be redacted")
+	}
+	if srv.Headers["X-API-Key"] == "raw-secret-key-1234" {
+		t.Errorf("expected X-API-Key header to be redacted")
+	}
+}
+
+func TestParseStandardJSONMCPServers_SanitizesEnvFile(t *testing.T) {
+	rawJSON := `{
+  "mcpServers": {
+    "bad-server": {
+      "command": "tool",
+      "envFile": "../../etc/shadow"
+    },
+    "good-server": {
+      "command": "tool",
+      "envFile": "${workspaceFolder}/.env"
+    }
+  }
+}`
+	servers, err := ParseStandardJSONMCPServers([]byte(rawJSON))
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+
+	if servers["bad-server"].EnvFile != "" {
+		t.Errorf("expected bad-server envFile to be rejected, got: %s", servers["bad-server"].EnvFile)
+	}
+	if servers["good-server"].EnvFile != "${workspaceFolder}/.env" {
+		t.Errorf("expected good-server envFile preserved, got: %s", servers["good-server"].EnvFile)
+	}
+}
