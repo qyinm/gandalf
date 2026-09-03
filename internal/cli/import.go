@@ -78,6 +78,7 @@ func runImport(cmd *cobra.Command, flags *importFlags) int {
 			"sources":        res.Sources,
 			"extractedEnvs":  res.ExtractedEnvs,
 			"mirroredSkills": res.MirroredSkills,
+			"warnings":       res.Warnings,
 			"dryRun":         flags.DryRun,
 			"outputFile":     flags.Output,
 		})
@@ -89,6 +90,14 @@ func runImport(cmd *cobra.Command, flags *importFlags) int {
 		_, _ = fmt.Fprintln(out)
 		_, _ = fmt.Fprint(out, res.FormattedTOML)
 		return 0
+	}
+
+	if len(res.Warnings) > 0 {
+		_, _ = fmt.Fprintln(out, "⚠️ Warnings encountered during import:")
+		for _, w := range res.Warnings {
+			_, _ = fmt.Fprintf(out, "  - %s\n", w)
+		}
+		_, _ = fmt.Fprintln(out)
 	}
 
 	_, _ = fmt.Fprintf(out, "🎉 Successfully generated %s!\n", flags.Output)

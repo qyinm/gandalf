@@ -189,6 +189,13 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 					server.Headers = make(map[string]string)
 				}
 
+				if strings.HasPrefix(key, "env.") {
+					envKey := strings.TrimPrefix(key, "env.")
+					server.Env[envKey] = unquote(val)
+					m.MCPServers[currentSubSection] = server
+					continue
+				}
+
 				switch key {
 				case "type":
 					server.Type = unquote(val)

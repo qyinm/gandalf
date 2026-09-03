@@ -85,21 +85,61 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 			return nil, fmt.Errorf("specified --from target does not exist: %s", opts.FromPath)
 		}
 
-		kind := "mcp_json"
-		if strings.HasSuffix(cleanFrom, ".toml") {
-			kind = "codex_toml"
-		} else if strings.HasSuffix(cleanFrom, ".claude.json") {
-			kind = "claude_json"
-		} else if dirExists(cleanFrom) {
-			kind = "skills_dir"
+		if dirExists(cleanFrom) {
+			foundAny := false
+			// Check for nested mcp.json
+			if fileExists(filepath.Join(cleanFrom, "mcp.json")) {
+				candidates = append(candidates, DetectedCandidate{
+					Agent: "custom",
+					Scope: "project",
+					Path:  filepath.Join(cleanFrom, "mcp.json"),
+					Kind:  "mcp_json",
+				})
+				foundAny = true
+			}
+			// Check for nested config.toml
+			if fileExists(filepath.Join(cleanFrom, "config.toml")) {
+				candidates = append(candidates, DetectedCandidate{
+					Agent: "custom",
+					Scope: "project",
+					Path:  filepath.Join(cleanFrom, "config.toml"),
+					Kind:  "codex_toml",
+				})
+				foundAny = true
+			}
+			// Check for nested skills directory
+			if dirExists(filepath.Join(cleanFrom, "skills")) {
+				candidates = append(candidates, DetectedCandidate{
+					Agent: "custom",
+					Scope: "project",
+					Path:  filepath.Join(cleanFrom, "skills"),
+					Kind:  "skills_dir",
+				})
+				foundAny = true
+			}
+			// Fallback: treat directory itself as a skills container
+			if !foundAny {
+				candidates = append(candidates, DetectedCandidate{
+					Agent: "custom",
+					Scope: "project",
+					Path:  cleanFrom,
+					Kind:  "skills_dir",
+				})
+			}
+		} else {
+			kind := "mcp_json"
+			if strings.HasSuffix(cleanFrom, ".toml") {
+				kind = "codex_toml"
+			} else if strings.HasSuffix(cleanFrom, ".claude.json") {
+				kind = "claude_json"
+			}
+			candidates = append(candidates, DetectedCandidate{
+				Agent: "custom",
+				Scope: "project",
+				Path:  cleanFrom,
+				Kind:  kind,
+			})
 		}
-
-		candidates = append(candidates, DetectedCandidate{
-			Agent: "custom",
-			Scope: "project",
-			Path:  cleanFrom,
-			Kind:  kind,
-		})
 	} else {
 		candidates = DetectCandidates(opts)
 	}

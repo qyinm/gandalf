@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -241,7 +242,7 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 
 		for _, name := range serverNames {
 			srv := m.MCPServers[name]
-			sb.WriteString(fmt.Sprintf("[mcp_servers.%s]\n", name))
+			sb.WriteString(fmt.Sprintf("[mcp_servers.%s]\n", formatTOMLKey(name)))
 			if srv.Type != "" {
 				sb.WriteString(fmt.Sprintf("type = %q\n", srv.Type))
 			}
@@ -367,4 +368,11 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 	}
 
 	return sb.String()
+}
+
+func formatTOMLKey(key string) string {
+	if regexp.MustCompile(`^[A-Za-z0-9_-]+$`).MatchString(key) && !strings.Contains(key, ".") {
+		return key
+	}
+	return fmt.Sprintf("%q", key)
 }

@@ -930,3 +930,86 @@ func TestRunImport_NestedOutputCreatesParentDir(t *testing.T) {
 		t.Errorf("expected nested output file to exist, got err: %v", err)
 	}
 }
+
+func TestParseCodexConfigTOML_DottedEnvKeys(t *testing.T) {
+	codexTOML := `
+[mcp_servers.my-server]
+command = "npx"
+args = ["-y", "my-tool"]
+env.API_KEY = "test-key-123"
+env.DEBUG = "1"
+`
+	servers, err := ParseCodexConfigTOML([]byte(codexTOML))
+	if err != nil {
+		t.Fatalf("ParseCodexConfigTOML failed: %v", err)
+	}
+
+	srv, ok := servers["my-server"]
+	if !ok {
+		t.Fatalf("my-server not found")
+	}
+	if srv.Env["API_KEY"] != "test-key-123" {
+		t.Errorf("expected API_KEY 'test-key-123', got: %s", srv.Env["API_KEY"])
+	}
+	if srv.Env["DEBUG"] != "1" {
+		t.Errorf("expected DEBUG '1', got: %s", srv.Env["DEBUG"])
+	}
+}
+
+func TestRunImport_FromDirectoryDetectsNestedMCP(t *testing.T) {
+	tempDir := t.TempDir()
+	customDir := filepath.Join(tempDir, "custom_agent_dir")
+	if err := os.MkdirAll(customDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(customDir, "mcp.json"), []byte(`{"mcpServers":{"nested-srv":{"command":"node","args":["index.js"]}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	projDir := filepath.Join(tempDir, "proj")
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		FromPath:    customDir,
+		DryRun:      true,
+	}
+
+	res, err := RunImport(opts)
+	if err != nil {
+		t.Fatalf("RunImport failed: %v", err)
+	}
+
+	if _, exists := res.Manifest.MCPServers["nested-srv"]; !exists {
+		t.Errorf("expected nested-srv to be discovered from directory --from")
+	}
+}
+
+func TestFormatManifestTOML_QuotesDottedServerNames(t *testing.T) {
+	m := &manifest.Manifest{
+		Version: "1.0",
+		Name:    "test-proj",
+		Agents:  []types.AgentID{types.AgentCursor},
+		MCPServers: map[string]manifest.MCPServerDef{
+			"server.with.dots": {
+				Command: "run-server",
+			},
+		},
+	}
+
+	formatted := FormatManifestTOML(m)
+	if !strings.Contains(formatted, `[mcp_servers."server.with.dots"]`) {
+		t.Errorf("expected dotted server name to be quoted in table header, got:\n%s", formatted)
+	}
+
+	// Verify it parses back cleanly
+	parsed, err := manifest.Parse(formatted, nil)
+	if err != nil {
+		t.Fatalf("failed to parse back manifest: %v\nContent:\n%s", err, formatted)
+	}
+	if _, ok := parsed.Manifest.MCPServers["server.with.dots"]; !ok {
+		t.Errorf("expected server.with.dots in parsed manifest")
+	}
+}
