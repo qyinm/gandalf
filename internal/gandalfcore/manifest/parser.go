@@ -15,7 +15,8 @@ var envVarPattern = regexp.MustCompile(`\$\{([A-Za-z0-9_]+)(?::-([^}]*))?\}`)
 
 // ParseOptions controls how the manifest is parsed and interpolated.
 type ParseOptions struct {
-	EnvGetter func(string) string
+	EnvGetter     func(string) string
+	NoInterpolate bool
 }
 
 // ParseResult holds the parsed manifest and any missing required environment variables.
@@ -62,23 +63,26 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 
 	missingSet := make(map[string]struct{})
 
-	// Pre-interpolate environment variables in text
-	interpolatedText := envVarPattern.ReplaceAllStringFunc(text, func(match string) string {
-		submatches := envVarPattern.FindStringSubmatch(match)
-		if len(submatches) >= 2 {
-			varName := submatches[1]
-			val := envGetter(varName)
-			if val != "" {
-				return escapeTOMLStringValue(val)
+	// Pre-interpolate environment variables in text unless NoInterpolate is requested
+	interpolatedText := text
+	if opts == nil || !opts.NoInterpolate {
+		interpolatedText = envVarPattern.ReplaceAllStringFunc(text, func(match string) string {
+			submatches := envVarPattern.FindStringSubmatch(match)
+			if len(submatches) >= 2 {
+				varName := submatches[1]
+				val := envGetter(varName)
+				if val != "" {
+					return escapeTOMLStringValue(val)
+				}
+				// check default value ${VAR:-default}
+				if len(submatches) >= 3 && submatches[2] != "" {
+					return escapeTOMLStringValue(submatches[2])
+				}
+				missingSet[varName] = struct{}{}
 			}
-			// check default value ${VAR:-default}
-			if len(submatches) >= 3 && submatches[2] != "" {
-				return escapeTOMLStringValue(submatches[2])
-			}
-			missingSet[varName] = struct{}{}
-		}
-		return match
-	})
+			return match
+		})
+	}
 
 	m := &Manifest{
 		MCPServers:  make(map[string]MCPServerDef),
@@ -235,21 +239,7 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 				case "auth":
 					trimmedVal := strings.TrimSpace(val)
 					if strings.HasPrefix(trimmedVal, "{") && strings.HasSuffix(trimmedVal, "}") {
-						tbl := parseInlineTable(trimmedVal)
-						authMap := make(map[string]any)
-						for k, v := range tbl {
-							trimmedV := strings.TrimSpace(v)
-							if trimmedV == "true" {
-								authMap[k] = true
-							} else if trimmedV == "false" {
-								authMap[k] = false
-							} else if intVal, err := strconv.Atoi(trimmedV); err == nil {
-								authMap[k] = intVal
-							} else {
-								authMap[k] = unquote(trimmedV)
-							}
-						}
-						server.Auth = authMap
+						server.Auth = parseInlineTableAny(trimmedVal)
 					} else {
 						server.Auth = unquote(trimmedVal)
 					}
@@ -426,6 +416,7 @@ func parseInlineTable(raw string) map[string]string {
 	inQuote := false
 	var quoteChar rune
 	escaped := false
+	depth := 0
 
 	for _, r := range inner {
 		if escaped {
@@ -449,7 +440,14 @@ func parseInlineTable(raw string) map[string]string {
 			current.WriteRune(r)
 			continue
 		}
-		if r == ',' && !inQuote {
+		if !inQuote {
+			if r == '{' || r == '[' {
+				depth++
+			} else if r == '}' || r == ']' {
+				depth--
+			}
+		}
+		if r == ',' && !inQuote && depth == 0 {
 			trimmed := strings.TrimSpace(current.String())
 			if trimmed != "" {
 				pairs = append(pairs, trimmed)
@@ -469,10 +467,94 @@ func parseInlineTable(raw string) map[string]string {
 	for _, pair := range pairs {
 		k, v, ok := parseKeyValue(pair)
 		if ok {
-			result[k] = unquote(v)
+			cleanKey := unquote(k)
+			result[cleanKey] = unquote(v)
 		}
 	}
 	return result
+}
+
+func parseInlineTableAny(val string) any {
+	trimmedVal := strings.TrimSpace(val)
+	if strings.HasPrefix(trimmedVal, "{") && strings.HasSuffix(trimmedVal, "}") {
+		inner := strings.TrimSpace(trimmedVal[1 : len(trimmedVal)-1])
+		var pairs []string
+		var current strings.Builder
+		inQuote := false
+		var quoteChar rune
+		escaped := false
+		depth := 0
+
+		for _, r := range inner {
+			if escaped {
+				current.WriteRune(r)
+				escaped = false
+				continue
+			}
+			if r == '\\' {
+				current.WriteRune(r)
+				escaped = true
+				continue
+			}
+			if (r == '"' || r == '\'') && !inQuote {
+				inQuote = true
+				quoteChar = r
+				current.WriteRune(r)
+				continue
+			}
+			if inQuote && r == quoteChar {
+				inQuote = false
+				current.WriteRune(r)
+				continue
+			}
+			if !inQuote {
+				if r == '{' || r == '[' {
+					depth++
+				} else if r == '}' || r == ']' {
+					depth--
+				}
+			}
+			if r == ',' && !inQuote && depth == 0 {
+				trimmed := strings.TrimSpace(current.String())
+				if trimmed != "" {
+					pairs = append(pairs, trimmed)
+				}
+				current.Reset()
+				continue
+			}
+			current.WriteRune(r)
+		}
+		if current.Len() > 0 {
+			trimmed := strings.TrimSpace(current.String())
+			if trimmed != "" {
+				pairs = append(pairs, trimmed)
+			}
+		}
+
+		resMap := make(map[string]any)
+		for _, pair := range pairs {
+			k, v, ok := parseKeyValue(pair)
+			if ok {
+				cleanKey := unquote(k)
+				trimmedV := strings.TrimSpace(v)
+				if strings.HasPrefix(trimmedV, "{") && strings.HasSuffix(trimmedV, "}") {
+					resMap[cleanKey] = parseInlineTableAny(trimmedV)
+				} else if strings.HasPrefix(trimmedV, "[") && strings.HasSuffix(trimmedV, "]") {
+					resMap[cleanKey] = parseStringArray(trimmedV)
+				} else if trimmedV == "true" {
+					resMap[cleanKey] = true
+				} else if trimmedV == "false" {
+					resMap[cleanKey] = false
+				} else if intVal, err := strconv.Atoi(trimmedV); err == nil {
+					resMap[cleanKey] = intVal
+				} else {
+					resMap[cleanKey] = unquote(trimmedV)
+				}
+			}
+		}
+		return resMap
+	}
+	return unquote(trimmedVal)
 }
 
 func splitTOMLHeader(header string) []string {

@@ -279,7 +279,7 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 					if j > 0 {
 						sb.WriteString(", ")
 					}
-					sb.WriteString(fmt.Sprintf("%s = %q", k, srv.Headers[k]))
+					sb.WriteString(fmt.Sprintf("%s = %q", formatTOMLKey(k), srv.Headers[k]))
 				}
 				sb.WriteString(" }\n")
 			}
@@ -298,7 +298,7 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 						if j > 0 {
 							sb.WriteString(", ")
 						}
-						sb.WriteString(fmt.Sprintf("%s = %s", k, formatTOMLValue(a[k])))
+						sb.WriteString(fmt.Sprintf("%s = %s", formatTOMLKey(k), formatTOMLValue(a[k])))
 					}
 					sb.WriteString(" }\n")
 				}
@@ -314,7 +314,7 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 					if j > 0 {
 						sb.WriteString(", ")
 					}
-					sb.WriteString(fmt.Sprintf("%s = %q", k, srv.Env[k]))
+					sb.WriteString(fmt.Sprintf("%s = %q", formatTOMLKey(k), srv.Env[k]))
 				}
 				sb.WriteString(" }\n")
 			}
@@ -365,7 +365,7 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 		}
 		sort.Strings(envKeys)
 		for _, k := range envKeys {
-			sb.WriteString(fmt.Sprintf("%s = %q\n", k, m.EnvTemplate[k]))
+			sb.WriteString(fmt.Sprintf("%s = %q\n", formatTOMLKey(k), m.EnvTemplate[k]))
 		}
 	}
 
@@ -409,6 +409,28 @@ func formatTOMLValue(v any) string {
 			items = append(items, fmt.Sprintf("%q", item))
 		}
 		return fmt.Sprintf("[%s]", strings.Join(items, ", "))
+	case map[string]any:
+		var keys []string
+		for k := range val {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var items []string
+		for _, k := range keys {
+			items = append(items, fmt.Sprintf("%s = %s", formatTOMLKey(k), formatTOMLValue(val[k])))
+		}
+		return fmt.Sprintf("{ %s }", strings.Join(items, ", "))
+	case map[string]string:
+		var keys []string
+		for k := range val {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var items []string
+		for _, k := range keys {
+			items = append(items, fmt.Sprintf("%s = %q", formatTOMLKey(k), val[k]))
+		}
+		return fmt.Sprintf("{ %s }", strings.Join(items, ", "))
 	default:
 		return fmt.Sprintf("%q", fmt.Sprintf("%v", val))
 	}

@@ -1209,3 +1209,178 @@ func TestRunImport_FailedImportRestoresExistingSkill(t *testing.T) {
 		t.Errorf("expected original content preserved, got: %s", string(content))
 	}
 }
+
+func TestRunImport_FromExplicitFileInfersAgent(t *testing.T) {
+	tempDir := t.TempDir()
+	codexDir := filepath.Join(tempDir, ".codex")
+	if err := os.MkdirAll(codexDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(codexDir, "config.toml")
+	if err := os.WriteFile(configPath, []byte("[mcp_servers.my-codex]\ncommand = \"node\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: tempDir,
+		FromPath:    configPath,
+		DryRun:      true,
+	}
+
+	res, err := RunImport(opts)
+	if err != nil {
+		t.Fatalf("RunImport failed: %v", err)
+	}
+
+	if len(res.Manifest.Agents) != 1 || res.Manifest.Agents[0] != types.AgentCodex {
+		t.Errorf("expected only AgentCodex in agents, got: %v", res.Manifest.Agents)
+	}
+}
+
+func TestFormatManifestTOML_SpecialKeysQuoted(t *testing.T) {
+	m := &manifest.Manifest{
+		Version: "1.0",
+		Name:    "special-keys",
+		Agents:  []types.AgentID{types.AgentCursor},
+		MCPServers: map[string]manifest.MCPServerDef{
+			"srv": {
+				Command: "run",
+				Headers: map[string]string{
+					"X-Custom.Header": "value",
+					"Space Header":    "val2",
+				},
+				Env: map[string]string{
+					"dot.env.key": "val3",
+				},
+				Auth: map[string]any{
+					"auth.token": "tok123",
+				},
+			},
+		},
+		EnvTemplate: map[string]string{
+			"TEMPLATE.WITH.DOTS": "dummy",
+		},
+	}
+
+	formatted := FormatManifestTOML(m)
+	if !strings.Contains(formatted, `"X-Custom.Header" = "value"`) {
+		t.Errorf("expected quoted header key, got:\n%s", formatted)
+	}
+	if !strings.Contains(formatted, `"Space Header" = "val2"`) {
+		t.Errorf("expected quoted space header key, got:\n%s", formatted)
+	}
+	if !strings.Contains(formatted, `"dot.env.key" = "val3"`) {
+		t.Errorf("expected quoted env key, got:\n%s", formatted)
+	}
+	if !strings.Contains(formatted, `"auth.token" = "tok123"`) {
+		t.Errorf("expected quoted auth key, got:\n%s", formatted)
+	}
+	if !strings.Contains(formatted, `"TEMPLATE.WITH.DOTS" = "dummy"`) {
+		t.Errorf("expected quoted env_template key, got:\n%s", formatted)
+	}
+
+	// Validate it parses cleanly
+	parsed, err := manifest.Parse(formatted, nil)
+	if err != nil {
+		t.Fatalf("failed to parse formatted TOML with special keys: %v\n%s", err, formatted)
+	}
+	if parsed.Manifest.MCPServers["srv"].Headers["X-Custom.Header"] != "value" {
+		t.Errorf("header value mismatch after parse")
+	}
+}
+
+func TestRunImport_SkillPreservesExecutablePermissions(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	skillDir := filepath.Join(projDir, ".claude", "skills", "exec-skill")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Exec Skill"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	scriptPath := filepath.Join(skillDir, "run.sh")
+	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\necho ok"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+	}
+
+	_, err := RunImport(opts)
+	if err != nil {
+		t.Fatalf("RunImport failed: %v", err)
+	}
+
+	destScript := filepath.Join(projDir, ".gandalf", "skills", "exec-skill", "run.sh")
+	fi, err := os.Stat(destScript)
+	if err != nil {
+		t.Fatalf("dest script not found: %v", err)
+	}
+	if fi.Mode().Perm()&0111 == 0 {
+		t.Errorf("expected executable permissions preserved, got: %o", fi.Mode().Perm())
+	}
+}
+
+func TestFormatManifestTOML_NestedAuthRoundTrip(t *testing.T) {
+	m := &manifest.Manifest{
+		Version: "1.0",
+		Name:    "nested-auth",
+		Agents:  []types.AgentID{types.AgentClaudeCode},
+		MCPServers: map[string]manifest.MCPServerDef{
+			"api-srv": {
+				Command: "run",
+				Auth: map[string]any{
+					"token": "secret-token",
+					"options": map[string]any{
+						"retry":  3,
+						"secure": true,
+					},
+				},
+			},
+		},
+	}
+
+	formatted := FormatManifestTOML(m)
+	parsed, err := manifest.Parse(formatted, nil)
+	if err != nil {
+		t.Fatalf("failed to parse TOML with nested auth: %v\n%s", err, formatted)
+	}
+
+	authMap, ok := parsed.Manifest.MCPServers["api-srv"].Auth.(map[string]any)
+	if !ok {
+		t.Fatalf("expected Auth to be map[string]any, got: %T", parsed.Manifest.MCPServers["api-srv"].Auth)
+	}
+	optsMap, ok := authMap["options"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected options to be nested map[string]any, got: %T", authMap["options"])
+	}
+	if optsMap["retry"] != 3 {
+		t.Errorf("expected retry 3, got: %v", optsMap["retry"])
+	}
+	if optsMap["secure"] != true {
+		t.Errorf("expected secure true, got: %v", optsMap["secure"])
+	}
+}
+
+func TestParseCodexConfigTOML_PreservesExistingPlaceholders(t *testing.T) {
+	os.Setenv("SECRET_KEY", "real-secret-must-not-leak")
+	defer os.Unsetenv("SECRET_KEY")
+
+	codexToml := `
+[mcp_servers.my-tool]
+command = "run"
+args = ["${SECRET_KEY}"]
+`
+	servers, err := ParseCodexConfigTOML([]byte(codexToml))
+	if err != nil {
+		t.Fatalf("ParseCodexConfigTOML failed: %v", err)
+	}
+
+	srv := servers["my-tool"]
+	if len(srv.Args) != 1 || srv.Args[0] != "${SECRET_KEY}" {
+		t.Errorf("expected ${SECRET_KEY} placeholder preserved without interpolation, got: %v", srv.Args)
+	}
+}

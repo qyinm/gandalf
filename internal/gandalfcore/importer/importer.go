@@ -9,6 +9,7 @@ import (
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/fsutil"
 	"github.com/qyinm/gandalf/internal/gandalfcore/manifest"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
 // RunImport performs the full import pipeline: detection, parsing, reconciling,
@@ -89,30 +90,33 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 			foundAny := false
 			// Check for nested mcp.json
 			if fileExists(filepath.Join(cleanFrom, "mcp.json")) {
+				p := filepath.Join(cleanFrom, "mcp.json")
 				candidates = append(candidates, DetectedCandidate{
-					Agent: "custom",
+					Agent: inferAgentFromPath(p, "mcp_json"),
 					Scope: "project",
-					Path:  filepath.Join(cleanFrom, "mcp.json"),
+					Path:  p,
 					Kind:  "mcp_json",
 				})
 				foundAny = true
 			}
 			// Check for nested config.toml
 			if fileExists(filepath.Join(cleanFrom, "config.toml")) {
+				p := filepath.Join(cleanFrom, "config.toml")
 				candidates = append(candidates, DetectedCandidate{
-					Agent: "custom",
+					Agent: inferAgentFromPath(p, "codex_toml"),
 					Scope: "project",
-					Path:  filepath.Join(cleanFrom, "config.toml"),
+					Path:  p,
 					Kind:  "codex_toml",
 				})
 				foundAny = true
 			}
 			// Check for nested skills directory
 			if dirExists(filepath.Join(cleanFrom, "skills")) {
+				p := filepath.Join(cleanFrom, "skills")
 				candidates = append(candidates, DetectedCandidate{
-					Agent: "custom",
+					Agent: inferAgentFromPath(p, "skills_dir"),
 					Scope: "project",
-					Path:  filepath.Join(cleanFrom, "skills"),
+					Path:  p,
 					Kind:  "skills_dir",
 				})
 				foundAny = true
@@ -120,7 +124,7 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 			// Fallback: treat directory itself as a skills container
 			if !foundAny {
 				candidates = append(candidates, DetectedCandidate{
-					Agent: "custom",
+					Agent: inferAgentFromPath(cleanFrom, "skills_dir"),
 					Scope: "project",
 					Path:  cleanFrom,
 					Kind:  "skills_dir",
@@ -134,7 +138,7 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 				kind = "claude_json"
 			}
 			candidates = append(candidates, DetectedCandidate{
-				Agent: "custom",
+				Agent: inferAgentFromPath(cleanFrom, kind),
 				Scope: "project",
 				Path:  cleanFrom,
 				Kind:  kind,
@@ -338,36 +342,59 @@ func copyDirectory(src, dst string) error {
 }
 
 func copyFile(src, dst string) error {
-	// Security: Check for source symlink before opening
-	fi, err := os.Lstat(src)
-	if err != nil {
-		return err
-	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		return nil
-	}
-
-	// Security: Check for destination symlink before creating/writing
-	if dfi, err := os.Lstat(dst); err == nil && (dfi.Mode()&os.ModeSymlink != 0) {
-		return fmt.Errorf("security violation: destination file '%s' is a symlink", dst)
-	}
-
-	in, err := os.Open(src)
+	in, err := os.OpenFile(src, os.O_RDONLY, 0)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
 
-	out, err := os.Create(dst)
+	// Use fstat on open descriptor to check for symlinks/regular file (immune to TOCTOU race)
+	fi, err := in.Stat()
 	if err != nil {
 		return err
+	}
+	if !fi.Mode().IsRegular() {
+		// Skip non-regular files (symlinks, devices, pipes)
+		return nil
+	}
+
+	// Security: Use O_EXCL to guarantee destination cannot be a pre-existing symlink (immune to TOCTOU race)
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode().Perm())
+	if err != nil {
+		// If file already exists, check if it's a symlink before overwriting
+		dfi, lerr := os.Lstat(dst)
+		if lerr == nil && (dfi.Mode()&os.ModeSymlink != 0) {
+			return fmt.Errorf("security violation: destination file '%s' is a symlink", dst)
+		}
+		out, err = os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fi.Mode().Perm())
+		if err != nil {
+			return err
+		}
 	}
 	defer out.Close()
 
 	if _, err := io.Copy(out, in); err != nil {
 		return err
 	}
-	return out.Sync()
+	if err := out.Sync(); err != nil {
+		return err
+	}
+	// Explicitly chmod to ensure source executable/permission bits are preserved
+	return os.Chmod(dst, fi.Mode().Perm())
+}
+
+func inferAgentFromPath(p, kind string) types.AgentID {
+	lower := strings.ToLower(p)
+	if strings.Contains(lower, ".cursor") || strings.Contains(lower, "cursor") {
+		return types.AgentCursor
+	}
+	if strings.Contains(lower, ".claude") || strings.Contains(lower, "claude") || kind == "claude_json" {
+		return types.AgentClaudeCode
+	}
+	if strings.Contains(lower, ".codex") || strings.Contains(lower, "codex") || kind == "codex_toml" {
+		return types.AgentCodex
+	}
+	return types.AgentClaudeCode
 }
 
 // verifyDestinationPathConfinement checks that destDir and all its parent directories

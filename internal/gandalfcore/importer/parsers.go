@@ -112,7 +112,7 @@ func ParseClaudeConfigJSON(data []byte, projectPath string) (map[string]manifest
 
 // ParseCodexConfigTOML parses Codex config.toml containing [mcp_servers.<name>] tables.
 func ParseCodexConfigTOML(data []byte) (map[string]manifest.MCPServerDef, error) {
-	parsed, err := manifest.Parse(string(data), nil)
+	parsed, err := manifest.Parse(string(data), &manifest.ParseOptions{NoInterpolate: true})
 	if err != nil {
 		return nil, fmt.Errorf("parse codex toml config: %w", err)
 	}
