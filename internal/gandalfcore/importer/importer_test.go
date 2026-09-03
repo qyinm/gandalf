@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/manifest"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
 func TestRunImport_UnifiedProjectAndGlobal(t *testing.T) {
@@ -85,8 +86,8 @@ func TestRunImport_UnifiedProjectAndGlobal(t *testing.T) {
 		t.Errorf("expected secret URL to be replaced with ${DATABASE_URL}, got %v", dbSrv.Args)
 	}
 
-	if res.Manifest.EnvTemplate["DATABASE_URL"] != "postgres://user:supersecret@db.internal:5432/proddb" {
-		t.Errorf("expected env_template to hold original DB URL, got %v", res.Manifest.EnvTemplate["DATABASE_URL"])
+	if res.Manifest.EnvTemplate["DATABASE_URL"] == "" || strings.Contains(res.Manifest.EnvTemplate["DATABASE_URL"], "supersecret") {
+		t.Errorf("expected safe template in env_template without exposing secret, got %v", res.Manifest.EnvTemplate["DATABASE_URL"])
 	}
 
 	// Verify file was written
@@ -272,5 +273,110 @@ args = ["helper.py"]
 	mirroredSkillMD := filepath.Join(projDir, ".gandalf", "skills", "pr-reviewer", "SKILL.md")
 	if data, err := os.ReadFile(mirroredSkillMD); err != nil || string(data) != "# PR Reviewer Skill" {
 		t.Errorf("expected skill to be mirrored to .gandalf/skills, got err: %v", err)
+	}
+}
+
+func TestFormatManifestTOML_RoundTripWithEscapes(t *testing.T) {
+	m := &manifest.Manifest{
+		Version: "1.0",
+		Name:    "roundtrip-test",
+		Agents:  []types.AgentID{"claude-code", "cursor"},
+		MCPServers: map[string]manifest.MCPServerDef{
+			"win-tool": {
+				Command:     `C:\Program Files\Tool\tool.exe`,
+				Args:        []string{`--config="C:\data\config.json"`, `with "quotes"`},
+				Description: `A tool with "quotes" and \backslashes\`,
+			},
+		},
+	}
+
+	formatted := FormatManifestTOML(m)
+	parsed, err := manifest.Parse(formatted, nil)
+	if err != nil {
+		t.Fatalf("failed to parse formatted TOML: %v\nFormatted content:\n%s", err, formatted)
+	}
+
+	winTool, ok := parsed.Manifest.MCPServers["win-tool"]
+	if !ok {
+		t.Fatalf("win-tool not found in parsed manifest")
+	}
+
+	if winTool.Command != `C:\Program Files\Tool\tool.exe` {
+		t.Errorf("expected command to round-trip accurately, got: %s", winTool.Command)
+	}
+	if len(winTool.Args) != 2 || winTool.Args[0] != `--config="C:\data\config.json"` {
+		t.Errorf("expected args to round-trip accurately, got: %v", winTool.Args)
+	}
+	if winTool.Description != `A tool with "quotes" and \backslashes\` {
+		t.Errorf("expected description to round-trip accurately, got: %s", winTool.Description)
+	}
+}
+
+func TestRunImport_OutputEscapesProjectRejected(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	projMCP := `{"mcpServers": {"demo": {"command": "node"}}}`
+	if err := os.WriteFile(filepath.Join(projDir, ".mcp.json"), []byte(projMCP), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+		OutputFile:  "../outside.toml",
+	}
+
+	_, err := RunImport(opts)
+	if err == nil {
+		t.Fatalf("expected path traversal output file to be rejected, but it succeeded")
+	}
+	if !strings.Contains(err.Error(), "escapes project root") {
+		t.Errorf("expected security violation error message, got: %v", err)
+	}
+}
+
+func TestRunImport_SafePlaceholderInEnvTemplate(t *testing.T) {
+	tempDir := t.TempDir()
+	projDir := filepath.Join(tempDir, "proj")
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	projMCP := `{
+  "mcpServers": {
+    "auth-service": {
+      "command": "npx",
+      "args": ["-y", "auth-tool"],
+      "env": {
+        "SECRET_KEY": "sk-ant-api03-actual-sensitive-key-123456789012345678901234567890123456789012345678901234567890"
+      }
+    }
+  }
+}`
+	if err := os.WriteFile(filepath.Join(projDir, ".mcp.json"), []byte(projMCP), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := ImportOptions{
+		ProjectPath: projDir,
+		ProjectOnly: true,
+	}
+
+	res, err := RunImport(opts)
+	if err != nil {
+		t.Fatalf("RunImport failed: %v", err)
+	}
+
+	// Ensure actual raw secret key is NEVER stored in envTemplate
+	envVal := res.Manifest.EnvTemplate["SECRET_KEY"]
+	if strings.Contains(envVal, "actual-sensitive-key") {
+		t.Errorf("security violation: raw secret key was exposed in env_template! Got: %s", envVal)
+	}
+	if !strings.Contains(envVal, "sample") && !strings.Contains(envVal, "your-") {
+		t.Errorf("expected safe placeholder in env_template, got: %s", envVal)
 	}
 }

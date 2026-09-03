@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -266,6 +267,9 @@ func parseKeyValue(line string) (string, string, bool) {
 
 func unquote(s string) string {
 	s = strings.TrimSpace(s)
+	if unquoted, err := strconv.Unquote(s); err == nil {
+		return unquoted
+	}
 	if (strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"")) ||
 		(strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'")) {
 		if len(s) >= 2 {

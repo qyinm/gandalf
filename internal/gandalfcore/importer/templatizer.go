@@ -41,8 +41,29 @@ func ExtractExistingRequiredEnvs(s string) []string {
 	return envs
 }
 
+func sanitizeSecretPlaceholder(key, sampleType string) string {
+	lowerKey := strings.ToLower(key)
+	switch sampleType {
+	case "database_url":
+		return "postgres://user:password@localhost:5432/dbname"
+	case "anthropic":
+		return "sk-ant-api03-sample-key"
+	case "openai":
+		return "sk-sample-key"
+	case "github":
+		return "ghp_sample_token"
+	case "bearer":
+		return "sample-auth-token"
+	default:
+		if strings.Contains(lowerKey, "url") || strings.Contains(lowerKey, "uri") {
+			return "https://api.example.com"
+		}
+		return fmt.Sprintf("your-%s-here", lowerKey)
+	}
+}
+
 // RedactAndTemplatizeServer inspects an MCPServerDef, redacting hardcoded secrets
-// into ${ENV_VAR} references and updating the server's RequiredEnv and the global envTemplate.
+// into ${ENV_VAR} references and updating the server's RequiredEnv and safe [env_template] placeholders.
 func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, envTemplate map[string]string) {
 	requiredEnvMap := make(map[string]bool)
 	for _, req := range srv.RequiredEnv {
@@ -60,13 +81,13 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 
 		if match := dbURLRegex.FindString(srv.URL); match != "" {
 			varKey := "DATABASE_URL"
-			if existing, exists := envTemplate["DATABASE_URL"]; exists && existing != match {
+			if _, exists := envTemplate["DATABASE_URL"]; exists && cleanName != "DATABASE" && cleanName != "POSTGRES" && cleanName != "DB" {
 				varKey = fmt.Sprintf("%s_DATABASE_URL", cleanName)
 			}
 			srv.URL = strings.Replace(srv.URL, match, fmt.Sprintf("${%s}", varKey), 1)
 			requiredEnvMap[varKey] = true
 			if _, exists := envTemplate[varKey]; !exists {
-				envTemplate[varKey] = match
+				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "database_url")
 			}
 		}
 	}
@@ -87,13 +108,13 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 		// Detect DB URL in args (e.g. pg://user:pass@host/db)
 		if match := dbURLRegex.FindString(normalized); match != "" {
 			varKey := "DATABASE_URL"
-			if existing, exists := envTemplate["DATABASE_URL"]; exists && existing != match {
+			if _, exists := envTemplate["DATABASE_URL"]; exists && cleanName != "DATABASE" && cleanName != "POSTGRES" && cleanName != "DB" {
 				varKey = fmt.Sprintf("%s_DATABASE_URL", cleanName)
 			}
 			normalized = strings.Replace(normalized, match, fmt.Sprintf("${%s}", varKey), 1)
 			requiredEnvMap[varKey] = true
 			if _, exists := envTemplate[varKey]; !exists {
-				envTemplate[varKey] = match
+				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "database_url")
 			}
 		}
 
@@ -103,21 +124,21 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 			normalized = strings.Replace(normalized, match, fmt.Sprintf("${%s}", varKey), 1)
 			requiredEnvMap[varKey] = true
 			if _, exists := envTemplate[varKey]; !exists {
-				envTemplate[varKey] = match
+				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "anthropic")
 			}
 		} else if match := openAIKeyRegex.FindString(normalized); match != "" {
 			varKey := "OPENAI_API_KEY"
 			normalized = strings.Replace(normalized, match, fmt.Sprintf("${%s}", varKey), 1)
 			requiredEnvMap[varKey] = true
 			if _, exists := envTemplate[varKey]; !exists {
-				envTemplate[varKey] = match
+				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "openai")
 			}
 		} else if match := githubTokenRegex.FindString(normalized); match != "" {
 			varKey := "GITHUB_TOKEN"
 			normalized = strings.Replace(normalized, match, fmt.Sprintf("${%s}", varKey), 1)
 			requiredEnvMap[varKey] = true
 			if _, exists := envTemplate[varKey]; !exists {
-				envTemplate[varKey] = match
+				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "github")
 			}
 		}
 
@@ -137,7 +158,7 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 			normalized = strings.Replace(normalized, token, fmt.Sprintf("${%s}", varKey), 1)
 			requiredEnvMap[varKey] = true
 			if _, exists := envTemplate[varKey]; !exists {
-				envTemplate[varKey] = token
+				envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "bearer")
 			}
 		}
 		srv.Headers[k] = normalized
@@ -164,10 +185,16 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 
 				if isSecret {
 					varKey := k
+					// If another server already registered this env key with a conflicting context,
+					// use a server-scoped key name.
+					if _, exists := envTemplate[varKey]; exists {
+						varKey = fmt.Sprintf("%s_%s", cleanName, k)
+					}
+
 					srv.Env[k] = fmt.Sprintf("${%s}", varKey)
 					requiredEnvMap[varKey] = true
 					if _, exists := envTemplate[varKey]; !exists {
-						envTemplate[varKey] = normalized
+						envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "default")
 					}
 					continue
 				}
