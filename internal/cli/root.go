@@ -48,6 +48,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newApplyCmd())
 	root.AddCommand(newCheckCmd())
 	root.AddCommand(newInitCmd())
+	root.AddCommand(newImportCmd())
 	root.AddCommand(newTuiCmd())
 
 	return root
