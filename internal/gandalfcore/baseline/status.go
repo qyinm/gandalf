@@ -1,12 +1,13 @@
 package baseline
 
 import (
-	"encoding/json"
 	"sort"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/agents"
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
-	"github.com/qyinm/gandalf/internal/gandalfcore/snapshot"
+	"github.com/qyinm/gandalf/internal/gandalfcore/graph"
+	"github.com/qyinm/gandalf/internal/gandalfcore/scan"
+	_ "github.com/qyinm/gandalf/internal/gandalfcore/scan/plugins"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
@@ -37,26 +38,24 @@ func (s AgentStatus) ChangeCount() int {
 
 // BuildStatus compares each current supported agent's latest user baseline with current state.
 func BuildStatus(options types.RuntimeOptions) (Status, error) {
-	scope := types.ScopeUser
+	scanResult := scan.ScanProject(&types.ScanOptions{
+		ProjectPath: options.ProjectPath,
+		HomeDir:     options.HomeDir,
+		StoreDir:    options.StoreDir,
+	})
+	return BuildStatusFromEvidence(options, scanResult.Evidence)
+}
+
+// BuildStatusFromEvidence builds baseline drift from an already-scanned inventory.
+// Callers that already ran ScanProject should use this to avoid a second walk.
+func BuildStatusFromEvidence(options types.RuntimeOptions, evidence []types.DiscoveredItem) (Status, error) {
 	out := Status{Agents: make([]AgentStatus, 0, len(agents.CurrentSupportedIDs()))}
 
 	for _, agent := range agents.CurrentSupportedIDs() {
-		currentRuntime := options
-		currentRuntime.Agent = &agent
-		currentRuntime.Scope = &scope
-		// Status is a read-only drift summary. Content capture belongs on
-		// snapshot write paths (baseline create / pre-apply), not TUI boot.
-		currentRuntime.CaptureContent = false
-
-		current, err := snapshot.CaptureCurrentState(&currentRuntime, "current")
-		if err != nil {
-			return Status{}, err
-		}
-
+		filtered := filterAgentUserEvidence(evidence, agent)
 		status := AgentStatus{
-			Agent:               agent,
-			UnsupportedCount:    countUnsupported(current.Snapshot.Evidence),
-			OmittedContentCount: countOmittedContent(current.Snapshot),
+			Agent:            agent,
+			UnsupportedCount: countUnsupported(filtered),
 		}
 
 		latest, err := latestSnapshot(options.StoreDir, agent)
@@ -68,7 +67,7 @@ func BuildStatus(options types.RuntimeOptions) (Status, error) {
 			status.BaselineName = latest.Manifest.Name
 			status.BaselineCreatedAt = latest.Manifest.CreatedAt
 			status.ContentBacked = hasCapturedContent(*latest)
-			status.Diff = diff.DiffGraphs(latest.Graph, current.Snapshot.Graph)
+			status.Diff = diff.DiffGraphs(latest.Graph, graph.BuildGraph(filtered))
 			status.SemanticChangeCount = len(status.Diff.SemanticChanges)
 			status.RawChangeCount = len(status.Diff.RawSourceChanges)
 		}
@@ -76,6 +75,17 @@ func BuildStatus(options types.RuntimeOptions) (Status, error) {
 	}
 
 	return out, nil
+}
+
+func filterAgentUserEvidence(evidence []types.DiscoveredItem, agent types.AgentID) []types.DiscoveredItem {
+	filtered := make([]types.DiscoveredItem, 0, len(evidence))
+	for _, item := range evidence {
+		if item.Agent != agent || item.Scope != types.ScopeUser {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
 }
 
 func latestSnapshot(storeDir string, agent types.AgentID) (*types.Snapshot, error) {
@@ -124,31 +134,4 @@ func countUnsupported(evidence []types.DiscoveredItem) int {
 		}
 	}
 	return count
-}
-
-func countOmittedContent(snapshot types.Snapshot) int {
-	seen := map[string]struct{}{}
-	for _, entry := range snapshot.Content {
-		if entry.CaptureStatus == "omitted" {
-			seen[entry.EvidenceID] = struct{}{}
-		}
-	}
-	for _, item := range snapshot.Evidence {
-		if contentCaptureStatus(item) == "omitted" {
-			seen[item.ID] = struct{}{}
-		}
-	}
-	return len(seen)
-}
-
-func contentCaptureStatus(item types.DiscoveredItem) string {
-	if len(item.Metadata) == 0 {
-		return ""
-	}
-	var meta map[string]any
-	if err := json.Unmarshal(item.Metadata, &meta); err != nil {
-		return ""
-	}
-	status, _ := meta["contentCaptureStatus"].(string)
-	return status
 }

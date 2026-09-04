@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
+	"github.com/qyinm/gandalf/internal/gandalfcore/scan"
+	_ "github.com/qyinm/gandalf/internal/gandalfcore/scan/plugins"
 	"github.com/qyinm/gandalf/internal/gandalfcore/snapshot"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -229,5 +231,54 @@ func TestBuildStatusDoesNotCaptureCurrentContent(t *testing.T) {
 	codex := findAgentStatus(t, status, types.AgentCodex)
 	if codex.OmittedContentCount != 0 {
 		t.Fatalf("status build should not capture current content: %#v", codex)
+	}
+}
+
+func TestBuildStatusFromEvidenceMatchesBuildStatus(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, storeDir := makeSandbox(t)
+	codexConfig := filepath.Join(homeDir, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(codexConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codexConfig, []byte("model = \"gpt-5\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := types.AgentCodex
+	scope := types.ScopeUser
+	runtime := types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+		Agent:       &agent,
+		Scope:       &scope,
+		CaptureContent: true,
+	}
+	state, err := snapshot.CaptureCurrentState(&runtime, "baseline-codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WriteSnapshot(storeDir, store.StoreSnapshotFrom(state.Snapshot), &agent); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codexConfig, []byte("model = \"gpt-5.1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	options := types.RuntimeOptions{ProjectPath: projectPath, HomeDir: homeDir, StoreDir: storeDir}
+	want, err := baseline.BuildStatus(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanResult := scan.ScanProject(&types.ScanOptions{ProjectPath: projectPath, HomeDir: homeDir, StoreDir: storeDir})
+	got, err := baseline.BuildStatusFromEvidence(options, scanResult.Evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCodex := findAgentStatus(t, want, types.AgentCodex)
+	gotCodex := findAgentStatus(t, got, types.AgentCodex)
+	if !gotCodex.HasBaseline || gotCodex.ChangeCount() != wantCodex.ChangeCount() {
+		t.Fatalf("from-evidence %#v, want %#v", gotCodex, wantCodex)
 	}
 }

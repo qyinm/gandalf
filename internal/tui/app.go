@@ -2105,7 +2105,7 @@ func (a *App) fetchWorkspaceData() bootMsg {
 	if err != nil {
 		return bootMsg{err: err}
 	}
-	baselineStatus, err := baseline.BuildStatus(a.runtime)
+	baselineStatus, err := baseline.BuildStatusFromEvidence(a.runtime, scanResult.Evidence)
 	if err != nil {
 		return bootMsg{err: err}
 	}
