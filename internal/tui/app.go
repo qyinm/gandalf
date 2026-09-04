@@ -2127,11 +2127,11 @@ func listSupportedSnapshotRefs(storeDir string) ([]snapshotRef, error) {
 			return nil, err
 		}
 		for _, name := range names {
-			snap, err := store.ReadSnapshot(storeDir, name, &agent)
+			manifest, err := store.ReadSnapshotManifest(storeDir, name, &agent)
 			if err != nil {
 				return nil, err
 			}
-			refs = append(refs, snapshotRef{Name: name, Agent: agent, CreatedAt: snap.Manifest.CreatedAt})
+			refs = append(refs, snapshotRef{Name: name, Agent: agent, CreatedAt: manifest.CreatedAt})
 		}
 	}
 	sort.Slice(refs, func(i, j int) bool {

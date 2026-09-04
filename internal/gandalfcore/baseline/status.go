@@ -97,24 +97,32 @@ func latestSnapshot(storeDir string, agent types.AgentID) (*types.Snapshot, erro
 		return nil, nil
 	}
 
-	snapshots := make([]types.Snapshot, 0, len(names))
+	type ranked struct {
+		name      string
+		createdAt string
+	}
+	candidates := make([]ranked, 0, len(names))
 	for _, name := range names {
 		if store.IsRestorePointSnapshotName(name) {
 			continue
 		}
-		snap, err := store.ReadSnapshot(storeDir, name, &agent)
+		manifest, err := store.ReadSnapshotManifest(storeDir, name, &agent)
 		if err != nil {
 			return nil, err
 		}
-		snapshots = append(snapshots, snap)
+		candidates = append(candidates, ranked{name: name, createdAt: manifest.CreatedAt})
 	}
-	if len(snapshots) == 0 {
+	if len(candidates) == 0 {
 		return nil, nil
 	}
-	sort.Slice(snapshots, func(i, j int) bool {
-		return snapshots[i].Manifest.CreatedAt > snapshots[j].Manifest.CreatedAt
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].createdAt > candidates[j].createdAt
 	})
-	return &snapshots[0], nil
+	snap, err := store.ReadSnapshotDiffState(storeDir, candidates[0].name, &agent)
+	if err != nil {
+		return nil, err
+	}
+	return &snap, nil
 }
 
 func hasCapturedContent(snapshot types.Snapshot) bool {

@@ -332,6 +332,46 @@ func replaceSnapshotDir(tempDir, targetDir string) error {
 	return nil
 }
 
+// ReadSnapshotManifest loads only manifest.json for listing and recency.
+func ReadSnapshotManifest(storeDir, name string, agent *types.AgentID) (types.SnapshotManifest, error) {
+	safeName, err := validateSnapshotName(name)
+	if err != nil {
+		return types.SnapshotManifest{}, err
+	}
+	var manifest types.SnapshotManifest
+	if err := readJSON(filepath.Join(snapshotDir(storeDir, safeName, agent), "manifest.json"), &manifest); err != nil {
+		return types.SnapshotManifest{}, err
+	}
+	return manifest, nil
+}
+
+// ReadSnapshotDiffState loads the files needed to compare a baseline graph.
+func ReadSnapshotDiffState(storeDir, name string, agent *types.AgentID) (types.Snapshot, error) {
+	safeName, err := validateSnapshotName(name)
+	if err != nil {
+		return types.Snapshot{}, err
+	}
+	dir := snapshotDir(storeDir, safeName, agent)
+
+	var manifest types.SnapshotManifest
+	if err := readJSON(filepath.Join(dir, "manifest.json"), &manifest); err != nil {
+		return types.Snapshot{}, err
+	}
+	var graph []types.GraphNode
+	if err := readJSON(filepath.Join(dir, "graph.json"), &graph); err != nil {
+		return types.Snapshot{}, err
+	}
+	content, err := readOptionalJSON[[]types.SnapshotContentEntry](filepath.Join(dir, "content-index.json"))
+	if err != nil {
+		return types.Snapshot{}, err
+	}
+	snapshot := types.Snapshot{Manifest: manifest, Graph: graph}
+	if content != nil {
+		snapshot.Content = *content
+	}
+	return snapshot, nil
+}
+
 func ReadSnapshot(storeDir, name string, agent *types.AgentID) (types.Snapshot, error) {
 	safeName, err := validateSnapshotName(name)
 	if err != nil {

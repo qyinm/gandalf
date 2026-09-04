@@ -562,6 +562,34 @@ func TestListSnapshotsSkipsAgentScopedDirsWithoutManifest(t *testing.T) {
 	}
 }
 
+func TestReadSnapshotManifestDoesNotLoadEvidence(t *testing.T) {
+	root := tempStore(t)
+	agent := types.AgentCodex
+	snap := testSnapshot("baseline")
+	if err := WriteSnapshot(root, StoreSnapshotFrom(snap), &agent); err != nil {
+		t.Fatalf("WriteSnapshot: %v", err)
+	}
+
+	manifest, err := ReadSnapshotManifest(root, "baseline", &agent)
+	if err != nil {
+		t.Fatalf("ReadSnapshotManifest: %v", err)
+	}
+	if manifest.Name != "baseline" || manifest.CreatedAt != snap.Manifest.CreatedAt {
+		t.Fatalf("manifest = %#v", manifest)
+	}
+
+	diffState, err := ReadSnapshotDiffState(root, "baseline", &agent)
+	if err != nil {
+		t.Fatalf("ReadSnapshotDiffState: %v", err)
+	}
+	if len(diffState.Graph) != 1 {
+		t.Fatalf("graph = %#v", diffState.Graph)
+	}
+	if len(diffState.Evidence) != 0 || len(diffState.AuditFindings) != 0 {
+		t.Fatalf("diff state loaded unused files: %#v", diffState)
+	}
+}
+
 func TestListAgentsReturnsAgentsWithSnapshots(t *testing.T) {
 	root := tempStore(t)
 	cc := types.AgentClaudeCode
