@@ -91,6 +91,7 @@ func RenderImportSelect(m ImportSelectModel) string {
 	if len(m.Warnings) > 0 {
 		body = append(body, "")
 	}
+	cursorRow := -1
 	for _, group := range m.Groups {
 		scope := ""
 		if group.Scope != "" {
@@ -102,12 +103,30 @@ func RenderImportSelect(m ImportSelectModel) string {
 			body = append(body, truncate("    "+mutedStyle.Render("no importable items"), width))
 		}
 		for _, item := range group.Items {
+			if item.Cursor {
+				cursorRow = len(body)
+			}
 			body = append(body, truncate(renderImportItem(item, width-2), width))
 		}
 		body = append(body, "")
 	}
 	if len(body) > 0 {
 		body = body[:len(body)-1]
+	}
+
+	// Keep the cursor row visible: when the body is taller than the viewport
+	// (e.g. many scan warnings or sources), scroll instead of letting
+	// RenderFrame clip selectable entries off the bottom. Header height varies
+	// because it stacks onto two lines on narrow terminals.
+	headerLines := len(strings.Split(header, "\n"))
+	avail := max(m.Height-headerLines-2, 1) // header + divider + status
+	if len(body) > avail {
+		offset := 0
+		if cursorRow >= avail {
+			offset = cursorRow - avail + 1
+		}
+		end := min(offset+avail, len(body))
+		body = body[offset:end]
 	}
 
 	status := importHelpBar(width, "space toggle", "tab preview", "enter import", "q cancel")

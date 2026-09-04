@@ -173,6 +173,28 @@ func TestRenderImportSelect_WarningsStayVisible(t *testing.T) {
 	assertLinesFit(t, RenderImportSelect(model), 80)
 }
 
+func TestRenderImportSelect_CursorRowSurvivesManyWarnings(t *testing.T) {
+	model := sampleSelectModel(80, 24)
+	// Flood the screen with warnings so the body overflows the viewport.
+	for i := 0; i < 30; i++ {
+		model.Warnings = append(model.Warnings, strings.Repeat("w", 10)+strings.Repeat("arning ", 3))
+	}
+	// Add many items; put the cursor on the very last one.
+	var extra []ImportItemView
+	for i := 0; i < 30; i++ {
+		extra = append(extra, ImportItemView{Kind: "server", Name: strings.Repeat("s", 5) + string(rune('a'+i%26)) + strings.Repeat("v", i%3), Selected: true})
+	}
+	extra = append(extra, ImportItemView{Kind: "server", Name: "cursor-target-server", Selected: true, Cursor: true})
+	model.Groups[0].Items = append(model.Groups[0].Items, extra...)
+
+	rendered := RenderImportSelect(model)
+	assertLinesFit(t, rendered, 80)
+	assertLineCount(t, rendered, 24)
+	if !strings.Contains(ansi.Strip(rendered), "cursor-target-server") {
+		t.Errorf("cursor row must stay visible even when warnings overflow the viewport")
+	}
+}
+
 func TestRenderImportLoading_Fits(t *testing.T) {
 	rendered := RenderImportLoading("Import agent setup", "/repo", 80, 24)
 	assertLinesFit(t, rendered, 80)
