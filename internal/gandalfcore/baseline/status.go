@@ -105,7 +105,7 @@ func buildAgentStatus(options types.RuntimeOptions, evidence []types.DiscoveredI
 func withoutCodexPluginCache(nodes []types.GraphNode) []types.GraphNode {
 	out := make([]types.GraphNode, 0, len(nodes))
 	for _, node := range nodes {
-		if isCodexPluginCacheSource(node.SourcePath) {
+		if node.Agent == types.AgentCodex && node.EntityKind == types.KindSkill && isCodexPluginCacheSource(node.SourcePath) {
 			continue
 		}
 		out = append(out, node)

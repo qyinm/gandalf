@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
@@ -324,6 +325,58 @@ func TestBuildStatusIgnoresLegacyCodexPluginCacheSkills(t *testing.T) {
 	}
 	if !foundReviewRemoved {
 		t.Fatalf("expected user skill removal, got %#v", codex.Diff.SemanticChanges)
+	}
+}
+
+func TestBuildStatusReportsCodexInstalledPluginDrift(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, storeDir := makeSandbox(t)
+	configPath := filepath.Join(homeDir, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := types.AgentCodex
+	scope := types.ScopeUser
+	runtime := &types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+		Agent:       &agent,
+		Scope:       &scope,
+	}
+	state, err := snapshot.CaptureCurrentState(runtime, "baseline-codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WriteSnapshot(storeDir, store.StoreSnapshotFrom(state.Snapshot), &agent); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5\"\n\n[plugins.\"vercel@openai-curated\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status, err := baseline.BuildStatus(types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex := findAgentStatus(t, status, types.AgentCodex)
+	foundPlugin := false
+	for _, change := range codex.Diff.RawSourceChanges {
+		if change.Status == "added" && strings.Contains(change.SourcePath, "/.codex/plugins/cache/") {
+			foundPlugin = true
+			break
+		}
+	}
+	if !foundPlugin {
+		t.Fatalf("expected installed plugin addition, got %#v", codex.Diff.RawSourceChanges)
 	}
 }
 

@@ -35,8 +35,9 @@ Saves listing.
 - Paint Home after scan + baseline status, then load Timeline and Saves.
 - Treat `~/.codex/plugins/cache` as a vendor download tree. Installed plugins
   come from `config.toml`; user skills come from `~/.codex/skills`.
-- Drop Codex plugin-cache graph nodes from both baseline and current graphs
-  before Home status diffs, so older snapshots do not report phantom removals.
+- Drop Codex plugin-cache *skill* graph nodes from both baseline and current
+  graphs before Home status diffs. Installed plugins (`KindExtension`) still
+  live under `~/.codex/plugins/cache` and must remain in the drift comparison.
 
 ## Measured result
 
