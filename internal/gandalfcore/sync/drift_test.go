@@ -280,7 +280,7 @@ func TestDetectProjectDrift_UnsyncedProjectConfig(t *testing.T) {
 	m := &manifest.Manifest{
 		Name:    "team-env",
 		Version: "1.0",
-		Agents:  []types.AgentID{types.AgentCursor},
+		Agents:  []types.AgentID{types.AgentClaudeCode},
 		MCPServers: map[string]manifest.MCPServerDef{
 			"srv-1": {Command: "cmd1"},
 			"srv-2": {Command: "cmd2"},
@@ -305,5 +305,92 @@ func TestDetectProjectDrift_UnsyncedProjectConfig(t *testing.T) {
 	}
 	if !foundUnsynced {
 		t.Errorf("expected DriftUnsyncedProjectConfig for srv-2, got: %+v", report.Items)
+	}
+}
+
+func TestDetectProjectDrift_UntargetedAgentFileIgnored(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Manifest targets ONLY claude-code and matches .mcp.json perfectly
+	mcpJSON := `{"mcpServers": {"common-srv": {"command": "cmd1"}}}`
+	if err := os.WriteFile(filepath.Join(tempDir, ".mcp.json"), []byte(mcpJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an untargeted .cursor/mcp.json with extra unmanaged servers
+	cursorDir := filepath.Join(tempDir, ".cursor")
+	if err := os.MkdirAll(cursorDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	cursorJSON := `{"mcpServers": {"cursor-only-srv": {"command": "special"}}}`
+	if err := os.WriteFile(filepath.Join(cursorDir, "mcp.json"), []byte(cursorJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	m := &manifest.Manifest{
+		Name:    "team-env",
+		Version: "1.0",
+		Agents:  []types.AgentID{types.AgentClaudeCode},
+		MCPServers: map[string]manifest.MCPServerDef{
+			"common-srv": {Command: "cmd1"},
+		},
+	}
+
+	report, err := DetectProjectDrift(m, tempDir)
+	if err != nil {
+		t.Fatalf("DetectProjectDrift failed: %v", err)
+	}
+
+	if !report.InSync {
+		t.Errorf("expected InSync=true because .cursor/mcp.json is not targeted, got items: %+v", report.Items)
+	}
+}
+
+func TestDetectProjectDrift_SymlinkedSkillEscapingProjectFails(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create an external directory outside the project
+	externalDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(externalDir, "SKILL.md"), []byte("# External Skill"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Inside project, create a symlink pointing to externalDir
+	gandalfSkillsDir := filepath.Join(tempDir, ".gandalf", "skills")
+	if err := os.MkdirAll(gandalfSkillsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	symlinkPath := filepath.Join(gandalfSkillsDir, "escaped-skill")
+	if err := os.Symlink(externalDir, symlinkPath); err != nil {
+		t.Fatal(err)
+	}
+
+	m := &manifest.Manifest{
+		Name:    "security-test",
+		Version: "1.0",
+		Agents:  []types.AgentID{types.AgentClaudeCode},
+		Skills: []manifest.SkillDef{
+			{Name: "escaped-skill", Source: ".gandalf/skills/escaped-skill"},
+		},
+	}
+
+	report, err := DetectProjectDrift(m, tempDir)
+	if err != nil {
+		t.Fatalf("DetectProjectDrift failed: %v", err)
+	}
+
+	if report.InSync {
+		t.Errorf("expected InSync=false because skill symlink points outside project boundary")
+	}
+
+	foundEscape := false
+	for _, item := range report.Items {
+		if item.Kind == DriftMissingSkill && item.Name == "escaped-skill" {
+			foundEscape = true
+			break
+		}
+	}
+	if !foundEscape {
+		t.Errorf("expected DriftMissingSkill for escaped symlink, got: %+v", report.Items)
 	}
 }

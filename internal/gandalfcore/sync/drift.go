@@ -8,6 +8,7 @@ import (
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/importer"
 	"github.com/qyinm/gandalf/internal/gandalfcore/manifest"
+	"github.com/qyinm/gandalf/internal/gandalfcore/pathconfinement"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
@@ -159,14 +160,58 @@ func DetectProjectDrift(m *manifest.Manifest, projectRoot string) (*DriftReport,
 		}
 	}
 
-	// 2. Verify that all declared skills exist in project and contain SKILL.md
+	cleanProjectRoot, err := filepath.EvalSymlinks(filepath.Clean(projectRoot))
+	if err != nil {
+		cleanProjectRoot = filepath.Clean(projectRoot)
+	}
+
+	// 2. Verify that all declared skills exist in project and contain SKILL.md without escaping projectRoot
 	for _, skill := range m.Skills {
 		relPath := skill.Source
 		if relPath == "" {
 			relPath = filepath.Join(".gandalf", "skills", skill.Name)
 		}
+
+		if pathconfinement.PathHasTraversal(relPath) {
+			report.InSync = false
+			report.Items = append(report.Items, DriftItem{
+				Kind:        DriftMissingSkill,
+				Name:        skill.Name,
+				Description: skill.Description,
+				TargetFile:  relPath,
+				Details:     fmt.Sprintf("Skill path '%s' contains traversal elements", relPath),
+			})
+			continue
+		}
+
 		skillDir := filepath.Join(projectRoot, filepath.Clean(relPath))
-		fi, err := os.Stat(skillDir)
+		if !pathconfinement.IsStrictlyUnder(filepath.Clean(skillDir), filepath.Clean(projectRoot)) {
+			report.InSync = false
+			report.Items = append(report.Items, DriftItem{
+				Kind:        DriftMissingSkill,
+				Name:        skill.Name,
+				Description: skill.Description,
+				TargetFile:  relPath,
+				Details:     fmt.Sprintf("Skill path '%s' escapes project root", relPath),
+			})
+			continue
+		}
+
+		// Security: resolve symlinks and ensure real path is strictly under projectRoot
+		realSkillDir, err := filepath.EvalSymlinks(skillDir)
+		if err != nil {
+			report.InSync = false
+			report.Items = append(report.Items, DriftItem{
+				Kind:        DriftMissingSkill,
+				Name:        skill.Name,
+				Description: skill.Description,
+				TargetFile:  relPath,
+				Details:     fmt.Sprintf("Skill directory '%s' does not exist or has invalid link: %v", relPath, err),
+			})
+			continue
+		}
+
+		fi, err := os.Stat(realSkillDir)
 		if err != nil || !fi.IsDir() {
 			report.InSync = false
 			report.Items = append(report.Items, DriftItem{
@@ -174,13 +219,26 @@ func DetectProjectDrift(m *manifest.Manifest, projectRoot string) (*DriftReport,
 				Name:        skill.Name,
 				Description: skill.Description,
 				TargetFile:  relPath,
-				Details:     fmt.Sprintf("Skill directory '%s' does not exist in repository", relPath),
+				Details:     fmt.Sprintf("Skill path '%s' is not a valid directory", relPath),
+			})
+			continue
+		}
+
+		if !pathconfinement.IsStrictlyUnder(realSkillDir, cleanProjectRoot) && realSkillDir != cleanProjectRoot {
+			report.InSync = false
+			report.Items = append(report.Items, DriftItem{
+				Kind:        DriftMissingSkill,
+				Name:        skill.Name,
+				Description: skill.Description,
+				TargetFile:  relPath,
+				Details:     fmt.Sprintf("Skill directory '%s' links outside repository boundary", relPath),
 			})
 			continue
 		}
 
 		skillMD := filepath.Join(skillDir, "SKILL.md")
-		if _, err := os.Stat(skillMD); os.IsNotExist(err) {
+		realSkillMD, err := filepath.EvalSymlinks(skillMD)
+		if err != nil {
 			report.InSync = false
 			report.Items = append(report.Items, DriftItem{
 				Kind:        DriftMissingSkillFile,
@@ -189,51 +247,43 @@ func DetectProjectDrift(m *manifest.Manifest, projectRoot string) (*DriftReport,
 				TargetFile:  filepath.Join(relPath, "SKILL.md"),
 				Details:     fmt.Sprintf("SKILL.md is missing inside skill directory '%s'", relPath),
 			})
-		}
-	}
-
-	// 3. Check project-level JSON MCP configs (.mcp.json, .cursor/mcp.json)
-	projectMCPFiles := []string{".mcp.json", filepath.Join(".cursor", "mcp.json")}
-	for _, relMCP := range projectMCPFiles {
-		mcpPath := filepath.Join(projectRoot, relMCP)
-		data, err := os.ReadFile(mcpPath)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				report.InSync = false
-				report.Items = append(report.Items, DriftItem{
-					Kind:        DriftOutdatedConfig,
-					TargetFile:  relMCP,
-					Description: fmt.Sprintf("Failed to read project config '%s'", relMCP),
-					Details:     err.Error(),
-				})
-			}
 			continue
 		}
 
-		parsedServers, err := importer.ParseStandardJSONMCPServers(data)
-		if err != nil {
+		if !pathconfinement.IsStrictlyUnder(realSkillMD, cleanProjectRoot) {
 			report.InSync = false
 			report.Items = append(report.Items, DriftItem{
-				Kind:        DriftOutdatedConfig,
-				TargetFile:  relMCP,
-				Description: fmt.Sprintf("Malformed project config '%s'", relMCP),
-				Details:     fmt.Sprintf("Failed to parse mcpServers in '%s': %v", relMCP, err),
+				Kind:        DriftMissingSkillFile,
+				Name:        skill.Name,
+				Description: skill.Description,
+				TargetFile:  filepath.Join(relPath, "SKILL.md"),
+				Details:     fmt.Sprintf("SKILL.md in '%s' links outside repository boundary", relPath),
 			})
-			continue
-		}
-
-		compareProjectServers(report, relMCP, m.MCPServers, parsedServers)
-	}
-
-	// 4. Check project-level Codex config (.codex/config.toml) if manifest targets Codex
-	targetsCodex := false
-	for _, a := range m.Agents {
-		if a == types.AgentCodex {
-			targetsCodex = true
-			break
 		}
 	}
-	if targetsCodex {
+
+	targetsAgent := func(agent types.AgentID) bool {
+		for _, a := range m.Agents {
+			if a == agent {
+				return true
+			}
+		}
+		return false
+	}
+
+	// 3. Check project-level configs only for agents targeted by the manifest
+	// Claude Code -> .mcp.json
+	if targetsAgent(types.AgentClaudeCode) {
+		checkJSONProjectConfig(report, projectRoot, ".mcp.json", m.MCPServers)
+	}
+
+	// Cursor -> .cursor/mcp.json
+	if targetsAgent(types.AgentCursor) {
+		checkJSONProjectConfig(report, projectRoot, filepath.Join(".cursor", "mcp.json"), m.MCPServers)
+	}
+
+	// Codex -> .codex/config.toml
+	if targetsAgent(types.AgentCodex) {
 		relCodex := filepath.Join(".codex", "config.toml")
 		codexPath := filepath.Join(projectRoot, relCodex)
 		data, err := os.ReadFile(codexPath)
@@ -264,6 +314,37 @@ func DetectProjectDrift(m *manifest.Manifest, projectRoot string) (*DriftReport,
 	}
 
 	return report, nil
+}
+
+func checkJSONProjectConfig(report *DriftReport, projectRoot, relFile string, expectedServers map[string]manifest.MCPServerDef) {
+	filePath := filepath.Join(projectRoot, relFile)
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			report.InSync = false
+			report.Items = append(report.Items, DriftItem{
+				Kind:        DriftOutdatedConfig,
+				TargetFile:  relFile,
+				Description: fmt.Sprintf("Failed to read project config '%s'", relFile),
+				Details:     err.Error(),
+			})
+		}
+		return
+	}
+
+	parsedServers, err := importer.ParseStandardJSONMCPServers(data)
+	if err != nil {
+		report.InSync = false
+		report.Items = append(report.Items, DriftItem{
+			Kind:        DriftOutdatedConfig,
+			TargetFile:  relFile,
+			Description: fmt.Sprintf("Malformed project config '%s'", relFile),
+			Details:     fmt.Sprintf("Failed to parse mcpServers in '%s': %v", relFile, err),
+		})
+		return
+	}
+
+	compareProjectServers(report, relFile, expectedServers, parsedServers)
 }
 
 func compareProjectServers(report *DriftReport, targetFile string, expectedServers map[string]manifest.MCPServerDef, actualServers map[string]manifest.MCPServerDef) {
