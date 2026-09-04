@@ -177,8 +177,8 @@ func sanitizeEnvFilePath(envFile string) string {
 	}
 	if strings.Contains(envFile, "${workspaceFolder}") {
 		rest := strings.Replace(envFile, "${workspaceFolder}", "", 1)
-		clean := filepath.Clean(rest)
-		if strings.HasPrefix(clean, "..") || strings.Contains(clean, "/../") || strings.Contains(clean, `\..\`) {
+		clean := filepath.Clean(strings.TrimPrefix(filepath.ToSlash(rest), "/"))
+		if hasParentTraversal(clean) || clean == "." || clean == "" {
 			return ""
 		}
 		return envFile
@@ -187,8 +187,17 @@ func sanitizeEnvFilePath(envFile string) string {
 		return ""
 	}
 	clean := filepath.Clean(envFile)
-	if strings.HasPrefix(clean, "..") {
+	if hasParentTraversal(clean) {
 		return ""
 	}
 	return clean
+}
+
+// hasParentTraversal reports whether a cleaned relative path escapes upward.
+// Segment-aware so legitimate names containing dots (e.g. "configs..old")
+// are not rejected.
+func hasParentTraversal(clean string) bool {
+	return clean == ".." ||
+		strings.HasPrefix(clean, "../") ||
+		strings.HasPrefix(clean, `..\`)
 }

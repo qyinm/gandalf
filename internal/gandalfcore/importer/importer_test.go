@@ -1484,3 +1484,180 @@ func TestRunImport_IgnoresSourceSymlinkedSkillDir(t *testing.T) {
 	}
 	_ = res
 }
+
+// Tests for Defect 1: Critical Path Traversal in sanitizeEnvFilePath
+func TestSanitizeEnvFilePath_WorkspaceFolderTraversal(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{input: "${workspaceFolder}/../../etc/shadow", expected: ""},
+		{input: "${workspaceFolder}/../.env", expected: ""},
+		{input: "${workspaceFolder}/../../../etc/passwd", expected: ""},
+		{input: "${workspaceFolder}/sub/../../etc/passwd", expected: ""},
+		{input: "${workspaceFolder}/..", expected: ""},
+		{input: "${workspaceFolder}", expected: ""},
+		{input: "${workspaceFolder}/", expected: ""},
+		{input: "${workspaceFolder}/.env", expected: "${workspaceFolder}/.env"},
+		{input: "${workspaceFolder}/config/.env", expected: "${workspaceFolder}/config/.env"},
+		{input: "../../etc/shadow", expected: ""},
+		{input: "/etc/shadow", expected: ""},
+		{input: "config/.env", expected: "config/.env"},
+		// Segment-aware: ".." inside a filename is not traversal.
+		{input: "${workspaceFolder}/configs..old/.env", expected: "${workspaceFolder}/configs..old/.env"},
+		{input: "configs..old/.env", expected: "configs..old/.env"},
+		{input: "..foo/.env", expected: "..foo/.env"},
+	}
+
+	for _, tc := range cases {
+		actual := sanitizeEnvFilePath(tc.input)
+		if actual != tc.expected {
+			t.Errorf("sanitizeEnvFilePath(%q): got %q, want %q", tc.input, actual, tc.expected)
+		}
+	}
+}
+
+// Tests for Defect 2: Pre-existing ${VAR} added to envTemplate
+func TestRedactAndTemplatizeServer_PreExistingEnvsAddedToEnvTemplate(t *testing.T) {
+	envTemplate := make(map[string]string)
+	srv := manifest.MCPServerDef{
+		Command: "npx",
+		Args:    []string{"-y", "pg-mcp", "${PG_HOST}"},
+		Env: map[string]string{
+			"PORT": "${SERVER_PORT}",
+		},
+		Headers: map[string]string{
+			"Authorization": "Bearer ${USER_AUTH_TOKEN}",
+		},
+		RequiredEnv: []string{"PRE_EXISTING_VAR"},
+	}
+
+	RedactAndTemplatizeServer("my-srv", &srv, envTemplate)
+
+	expectedKeys := []string{"PG_HOST", "SERVER_PORT", "USER_AUTH_TOKEN", "PRE_EXISTING_VAR"}
+	for _, key := range expectedKeys {
+		if _, ok := envTemplate[key]; !ok {
+			t.Errorf("expected %q in envTemplate, but missing; envTemplate = %v", key, envTemplate)
+		}
+	}
+
+	// Verify Bearer prefix was preserved
+	if srv.Headers["Authorization"] != "Bearer ${USER_AUTH_TOKEN}" {
+		t.Errorf("expected Bearer prefix preserved, got: %s", srv.Headers["Authorization"])
+	}
+}
+
+// Tests for Defect 3: Redis password-only URL regex
+func TestRedactAndTemplatizeServer_RedisPasswordOnlyURL(t *testing.T) {
+	envTemplate := make(map[string]string)
+	srv := manifest.MCPServerDef{
+		Command: "cache",
+		Args: []string{
+			"redis://:supersecretredispassword123@redis.internal:6379/0",
+			"rediss://:anothersecretpassword@cache.prod:6380",
+		},
+	}
+
+	RedactAndTemplatizeServer("redis_srv", &srv, envTemplate)
+
+	for _, arg := range srv.Args {
+		if strings.Contains(arg, "supersecretredispassword123") || strings.Contains(arg, "anothersecretpassword") {
+			t.Errorf("redis password leaked in args: %s", arg)
+		}
+		if !strings.Contains(arg, "${") {
+			t.Errorf("expected arg to be templatized: %s", arg)
+		}
+	}
+	if _, ok := envTemplate["DATABASE_URL"]; !ok {
+		t.Errorf("expected DATABASE_URL in envTemplate")
+	}
+}
+
+// Tests for Defect 4: Flag credential parsing with punctuation and quotes
+func TestRedactAndTemplatizeServer_FlagCredentialPunctuationAndQuotes(t *testing.T) {
+	envTemplate := make(map[string]string)
+	srv := manifest.MCPServerDef{
+		Command: "run-tool",
+		Args: []string{
+			"--password=SuperSecret123!#$",
+			`--password="secret"`,
+			`--token='SuperSecretToken12345'`,
+			`--api-key="quoted-api-key-val"`,
+		},
+	}
+
+	RedactAndTemplatizeServer("flag_srv", &srv, envTemplate)
+
+	if strings.Contains(srv.Args[0], "!#$") || strings.Contains(srv.Args[0], "SuperSecret") {
+		t.Errorf("trailing punctuation or secret leaked: %s", srv.Args[0])
+	}
+	if strings.Contains(srv.Args[1], "secret") {
+		t.Errorf("quoted password not redacted: %s", srv.Args[1])
+	}
+	if strings.Contains(srv.Args[2], "SuperSecretToken") {
+		t.Errorf("single-quoted token not redacted: %s", srv.Args[2])
+	}
+	if strings.Contains(srv.Args[3], "quoted-api-key") {
+		t.Errorf("quoted api key not redacted: %s", srv.Args[3])
+	}
+}
+
+// Tests for Defect 5: Standalone secret keys (TOKEN, KEY, SECRET, PASSWORD)
+func TestRedactAndTemplatizeServer_StandaloneSecretKeys(t *testing.T) {
+	envTemplate := make(map[string]string)
+	srv := manifest.MCPServerDef{
+		Command: "node",
+		Env: map[string]string{
+			"TOKEN":    "raw-token-value-12345",
+			"KEY":      "raw-key-value-12345",
+			"SECRET":   "raw-secret-value-12345",
+			"PASSWORD": "raw-password-value-12345",
+		},
+	}
+
+	RedactAndTemplatizeServer("keys_srv", &srv, envTemplate)
+
+	for k, v := range srv.Env {
+		if strings.Contains(v, "raw-") {
+			t.Errorf("standalone secret env %s not redacted, got: %s", k, v)
+		}
+		if !strings.Contains(v, "${") {
+			t.Errorf("expected %s to be templatized, got: %s", k, v)
+		}
+	}
+}
+
+// Tests for Defect 6: Server name ending in .env in manifest parser
+func TestManifestParser_ServerNameEndingInDotEnv(t *testing.T) {
+	tomlContent := `
+version = "1.0"
+name = "dotenv-test"
+agents = ["claude-code"]
+
+[mcp_servers."service.env"]
+command = "npx"
+args = ["-y", "service.env"]
+
+[mcp_servers."service.env".env]
+DEBUG = "1"
+`
+	parsed, err := manifest.Parse(tomlContent, &manifest.ParseOptions{NoInterpolate: true})
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	srv, exists := parsed.Manifest.MCPServers["service.env"]
+	if !exists {
+		t.Fatalf("expected server 'service.env' to exist, got: %v", parsed.Manifest.MCPServers)
+	}
+	if srv.Command != "npx" {
+		t.Errorf("expected command 'npx', got: %s", srv.Command)
+	}
+	if len(srv.Args) != 2 || srv.Args[1] != "service.env" {
+		t.Errorf("expected args ['-y', 'service.env'], got: %v", srv.Args)
+	}
+	if srv.Env["DEBUG"] != "1" {
+		t.Errorf("expected DEBUG = '1', got: %v", srv.Env)
+	}
+}
+

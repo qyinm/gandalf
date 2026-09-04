@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/qyinm/gandalf/internal/gandalfcore/importer"
+	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
 func TestCLIImport_Success(t *testing.T) {
@@ -204,5 +207,68 @@ func TestCLIImport_ProjectOnly(t *testing.T) {
 	}
 	if strings.Contains(string(content), "global-server") {
 		t.Errorf("expected global-server to be excluded with --project-only, stdout: %s", stdout)
+	}
+}
+
+func TestShouldLaunchImportTUI(t *testing.T) {
+	t.Parallel()
+	withJSON := func(f *importFlags) { f.JSON = true }
+	withDryRun := func(f *importFlags) { f.DryRun = true }
+	withForce := func(f *importFlags) { f.Force = true }
+	cases := []struct {
+		name   string
+		mutate func(*importFlags)
+		isTTY  bool
+		want   bool
+	}{
+		{"interactive default", nil, true, true},
+		{"interactive with force", withForce, true, true},
+		{"json stays headless", withJSON, true, false},
+		{"dry-run stays headless", withDryRun, true, false},
+		{"piped output stays headless", nil, false, false},
+		{"piped json stays headless", withJSON, false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			flags := importFlags{}
+			if tc.mutate != nil {
+				tc.mutate(&flags)
+			}
+			if got := shouldLaunchImportTUI(&flags, tc.isTTY); got != tc.want {
+				t.Errorf("shouldLaunchImportTUI(%+v, %v) = %v, want %v", flags, tc.isTTY, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRunCLIImport_DoesNotLaunchTUIWhenPiped(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, _ := makeSandbox(t)
+
+	mcpJSON := `{"mcpServers": {"piped-server": {"command": "npx"}}}`
+	if err := os.WriteFile(filepath.Join(projectPath, ".mcp.json"), []byte(mcpJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stub the TUI launch seam: it must NOT be called for captured (non-TTY)
+	// output, otherwise automation would block on an interactive screen.
+	launched := false
+	previous := launchImportTUI
+	launchImportTUI = func(_ types.RuntimeOptions, _ importer.ImportOptions) int {
+		launched = true
+		return 0
+	}
+	defer func() { launchImportTUI = previous }()
+
+	_, stderr, code := runCLI(t,
+		"import",
+		"--project", projectPath,
+		"--home", homeDir,
+	)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d. Stderr: %s", code, stderr)
+	}
+	if launched {
+		t.Errorf("TUI must not launch when stdout is not a terminal")
 	}
 }

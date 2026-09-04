@@ -2,12 +2,18 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/importer"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
+	"github.com/qyinm/gandalf/internal/tui"
 )
+
+// launchImportTUI is a seam so tests can stub the interactive wizard.
+var launchImportTUI = tui.RunImport
 
 type importFlags struct {
 	CommonFlags
@@ -48,6 +54,31 @@ redacts hardcoded secrets into [env_template], and mirrors team skills into .gan
 	return cmd
 }
 
+// shouldLaunchImportTUI reports whether this invocation is an interactive
+// session eligible for the TUI wizard. Machine-readable (--json) and
+// non-destructive preview (--dry-run) modes always stay headless.
+func shouldLaunchImportTUI(flags *importFlags, isTTY bool) bool {
+	if !isTTY {
+		return false
+	}
+	return !flags.JSON && !flags.DryRun
+}
+
+// importIOIsTerminal reports whether both stdout and stdin are interactive
+// terminals; a wizard that cannot receive answers (redirected stdin) must
+// stay headless. In tests the streams are captured buffers, so this is false.
+func importIOIsTerminal(cmd *cobra.Command) bool {
+	out, ok := cmd.OutOrStdout().(*os.File)
+	if !ok || !term.IsTerminal(out.Fd()) {
+		return false
+	}
+	in, ok := cmd.InOrStdin().(*os.File)
+	if !ok || !term.IsTerminal(in.Fd()) {
+		return false
+	}
+	return true
+}
+
 func runImport(cmd *cobra.Command, flags *importFlags) int {
 	runtime, snapErr := resolveRuntime(&flags.CommonFlags)
 	if snapErr != nil {
@@ -62,6 +93,13 @@ func runImport(cmd *cobra.Command, flags *importFlags) int {
 		DryRun:      flags.DryRun,
 		Force:       flags.Force,
 		OutputFile:  flags.Output,
+	}
+
+	// Interactive terminals get the TUI wizard (toggle servers/skills, preview
+	// the masked manifest before writing). Headless invocations (--json,
+	// --dry-run, piped output) keep the scriptable behavior.
+	if shouldLaunchImportTUI(flags, importIOIsTerminal(cmd)) {
+		return launchImportTUI(runtime, opts)
 	}
 
 	res, err := importer.RunImport(opts)

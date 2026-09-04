@@ -13,7 +13,7 @@ var (
 	cursorEnvRegex = regexp.MustCompile(`\$\{env:([A-Za-z0-9_]+)\}`)
 
 	// Database URL patterns
-	dbURLRegex = regexp.MustCompile(`(postgres|postgresql|mysql|mongodb|mongodb\+srv|redis|rediss)://[^:\s]+:[^@\s]+@[^\s"']+`)
+	dbURLRegex = regexp.MustCompile(`(postgres|postgresql|mysql|mongodb|mongodb\+srv|redis|rediss)://(?:[^:\s]*):([^@\s]+)@[^\s"']+`)
 
 	// Sensitive token patterns
 	anthropicKeyRegex = regexp.MustCompile(`sk-ant-api03-[A-Za-z0-9_-]{16,}`)
@@ -68,6 +68,9 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 	requiredEnvMap := make(map[string]bool)
 	for _, req := range srv.RequiredEnv {
 		requiredEnvMap[req] = true
+		if _, exists := envTemplate[req]; !exists {
+			envTemplate[req] = sanitizeSecretPlaceholder(req, "default")
+		}
 	}
 
 	cleanName := strings.ToUpper(regexp.MustCompile(`[^A-Za-z0-9_]`).ReplaceAllString(serverName, "_"))
@@ -106,7 +109,7 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 		normalized := redactStringValue(v, cleanName, envTemplate, requiredEnvMap)
 		lowerK := strings.ToLower(k)
 		isAuthHeader := lowerK == "authorization" || strings.Contains(lowerK, "token") || strings.Contains(lowerK, "key") || strings.Contains(lowerK, "secret")
-		if isAuthHeader && !strings.HasPrefix(normalized, "${") {
+		if isAuthHeader && !strings.HasPrefix(normalized, "${") && !strings.HasPrefix(normalized, "Bearer ${") {
 			cleanK := strings.ToUpper(regexp.MustCompile(`[^A-Za-z0-9_]`).ReplaceAllString(k, "_"))
 			varKey := fmt.Sprintf("%s_%s", cleanName, cleanK)
 			normalized = fmt.Sprintf("${%s}", varKey)
@@ -124,18 +127,23 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 			normalized := NormalizeInterpolation(v)
 			for _, e := range ExtractExistingRequiredEnvs(normalized) {
 				requiredEnvMap[e] = true
+				if _, exists := envTemplate[e]; !exists {
+					envTemplate[e] = sanitizeSecretPlaceholder(e, "default")
+				}
 			}
 
 			// If the env value is a raw secret key and not already a ${VAR}
 			if !strings.HasPrefix(normalized, "${") {
+				kUpper := strings.ToUpper(k)
 				isSecret := anthropicKeyRegex.MatchString(normalized) ||
 					openAIKeyRegex.MatchString(normalized) ||
 					githubTokenRegex.MatchString(normalized) ||
 					dbURLRegex.MatchString(normalized) ||
-					strings.HasSuffix(strings.ToUpper(k), "_KEY") ||
-					strings.HasSuffix(strings.ToUpper(k), "_TOKEN") ||
-					strings.HasSuffix(strings.ToUpper(k), "_SECRET") ||
-					strings.HasSuffix(strings.ToUpper(k), "_PASSWORD")
+					kUpper == "TOKEN" || kUpper == "KEY" || kUpper == "SECRET" || kUpper == "PASSWORD" ||
+					strings.HasSuffix(kUpper, "_KEY") ||
+					strings.HasSuffix(kUpper, "_TOKEN") ||
+					strings.HasSuffix(kUpper, "_SECRET") ||
+					strings.HasSuffix(kUpper, "_PASSWORD")
 
 				if isSecret {
 					varKey := k
@@ -164,6 +172,9 @@ func RedactAndTemplatizeServer(serverName string, srv *manifest.MCPServerDef, en
 			normalized := NormalizeInterpolation(a)
 			for _, e := range ExtractExistingRequiredEnvs(normalized) {
 				requiredEnvMap[e] = true
+				if _, exists := envTemplate[e]; !exists {
+					envTemplate[e] = sanitizeSecretPlaceholder(e, "default")
+				}
 			}
 			if !strings.HasPrefix(normalized, "${") {
 				varKey := fmt.Sprintf("%s_AUTH_TOKEN", cleanName)
@@ -192,6 +203,9 @@ func redactStringValue(val, cleanName string, envTemplate map[string]string, req
 	normalized := NormalizeInterpolation(val)
 	for _, e := range ExtractExistingRequiredEnvs(normalized) {
 		requiredEnvMap[e] = true
+		if _, exists := envTemplate[e]; !exists {
+			envTemplate[e] = sanitizeSecretPlaceholder(e, "default")
+		}
 	}
 
 	// 1. Redact DB URLs iteratively
@@ -278,20 +292,29 @@ func redactStringValue(val, cleanName string, envTemplate map[string]string, req
 	}
 
 	// 6. Redact flag argument credentials: --api-key=..., --token=..., --secret=...
-	flagCredentialRegex := regexp.MustCompile(`(?i)(--(?:api[_-]?key|token|auth[_-]?token|password|secret|pwd)[=:])([A-Za-z0-9_\-\.\:\@\/\+\=]{8,})`)
-	for {
-		matches := flagCredentialRegex.FindStringSubmatch(normalized)
-		if len(matches) <= 2 {
-			break
+	flagCredentialRegex := regexp.MustCompile(`(?i)(--(?:api[_-]?key|token|auth[_-]?token|password|secret|pwd)[=:])(?:"([^"]+)"|'([^']+)'|([^\s"']+))`)
+	allMatches := flagCredentialRegex.FindAllStringSubmatchIndex(normalized, -1)
+	for i := len(allMatches) - 1; i >= 0; i-- {
+		loc := allMatches[i]
+		prefix := normalized[loc[2]:loc[3]]
+		var secretVal string
+		if loc[4] != -1 {
+			secretVal = normalized[loc[4]:loc[5]]
+		} else if loc[6] != -1 {
+			secretVal = normalized[loc[6]:loc[7]]
+		} else if loc[8] != -1 {
+			secretVal = normalized[loc[8]:loc[9]]
 		}
-		prefix := matches[1]
-		secretVal := matches[2]
-		if strings.HasPrefix(secretVal, "${") {
-			break
+
+		if secretVal == "" || strings.HasPrefix(secretVal, "${") {
+			continue
 		}
+
 		cleanFlag := strings.ToUpper(regexp.MustCompile(`[^A-Za-z0-9_]`).ReplaceAllString(strings.Trim(prefix, "-=:"), "_"))
 		varKey := fmt.Sprintf("%s_%s", cleanName, cleanFlag)
-		normalized = strings.Replace(normalized, prefix+secretVal, fmt.Sprintf("%s${%s}", prefix, varKey), 1)
+		replacement := fmt.Sprintf("%s${%s}", prefix, varKey)
+		normalized = normalized[:loc[0]] + replacement + normalized[loc[1]:]
+
 		requiredEnvMap[varKey] = true
 		if _, exists := envTemplate[varKey]; !exists {
 			envTemplate[varKey] = sanitizeSecretPlaceholder(varKey, "default")
