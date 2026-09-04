@@ -144,3 +144,45 @@ func TestEscapingWorkflowCommandsAndSummary(t *testing.T) {
 	}
 }
 
+func TestCheckCmd_ProjectOnly_FailsOnMissingEnvTemplateEvenWhenEnvExistsInProcess(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Set environment variable in current process (like a CI runner with existing env vars)
+	t.Setenv("RUNNER_SECRET_TOKEN", "real-secret-value-12345")
+
+	manifestContent := `
+version = "1.0"
+name = "runner-env-test"
+agents = ["claude-code"]
+
+[mcp_servers.echo]
+command = "echo"
+args = ["${RUNNER_SECRET_TOKEN}"]
+
+# env_template deliberately omits RUNNER_SECRET_TOKEN
+[env_template]
+OTHER_VAR = "val"
+`
+	if err := os.WriteFile(filepath.Join(tempDir, "gandalf.toml"), []byte(manifestContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newCheckCmd()
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"--project", tempDir, "--project-only", "--ci"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected check to fail with exit code 1 because RUNNER_SECRET_TOKEN is missing from env_template, but passed")
+	}
+
+	if !strings.Contains(stdout.String(), "DRIFT DETECTED") {
+		t.Errorf("expected DRIFT DETECTED in output, got: %s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "RUNNER_SECRET_TOKEN") {
+		t.Errorf("expected stderr to report RUNNER_SECRET_TOKEN, got: %s", stderr.String())
+	}
+}
+

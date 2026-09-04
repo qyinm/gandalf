@@ -66,7 +66,12 @@ func runCheck(cmd *cobra.Command, flags *checkFlags) int {
 		manifestPath = found
 	}
 
-	res, err := manifest.LoadManifest(manifestPath, nil)
+	parseOpts := &manifest.ParseOptions{}
+	if flags.ProjectOnly || (flags.CI && os.Getenv("GITHUB_ACTIONS") == "true") {
+		parseOpts.NoInterpolate = true
+	}
+
+	res, err := manifest.LoadManifest(manifestPath, parseOpts)
 	if err != nil {
 		return writeError(cmd.ErrOrStderr(), &types.SnapError{
 			Code:    "MANIFEST_PARSE_ERROR",
