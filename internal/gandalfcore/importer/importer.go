@@ -157,6 +157,13 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 		return nil, fmt.Errorf("reconcile sources: %w", err)
 	}
 
+	// Apply interactive selection (TUI wizard) before validation so the
+	// validated and written manifest exactly matches the user's choice.
+	if opts.Selection != nil {
+		result.Manifest = FilterManifest(result.Manifest, opts.Selection)
+		result.FormattedTOML = FormatManifestTOML(result.Manifest)
+	}
+
 	// Validate the generated manifest
 	validationErrors := manifest.Validate(result.Manifest, opts.ProjectPath)
 	if len(validationErrors) > 0 {
@@ -226,6 +233,11 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 
 					// Filter out unrecognized non-skill folders (must contain SKILL.md)
 					if !fileExists(filepath.Join(srcSkillDir, "SKILL.md")) {
+						continue
+					}
+
+					// Interactive selection may exclude this skill entirely
+					if !opts.Selection.IncludesSkill(skillName) {
 						continue
 					}
 

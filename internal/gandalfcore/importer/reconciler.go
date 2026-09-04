@@ -47,6 +47,7 @@ func ReconcileSources(opts ImportOptions, candidates []DetectedCandidate) (*Impo
 			}
 			res.MCPServers = servers
 			res.Source.ServerCount = len(servers)
+			res.Source.ServerNames = sortedKeys(servers)
 
 		case "claude_json":
 			data, err := os.ReadFile(cand.Path)
@@ -61,6 +62,7 @@ func ReconcileSources(opts ImportOptions, candidates []DetectedCandidate) (*Impo
 			}
 			res.MCPServers = servers
 			res.Source.ServerCount = len(servers)
+			res.Source.ServerNames = sortedKeys(servers)
 
 		case "codex_toml":
 			data, err := os.ReadFile(cand.Path)
@@ -75,6 +77,7 @@ func ReconcileSources(opts ImportOptions, candidates []DetectedCandidate) (*Impo
 			}
 			res.MCPServers = servers
 			res.Source.ServerCount = len(servers)
+			res.Source.ServerNames = sortedKeys(servers)
 
 		case "skills_dir":
 			skills, err := ScanSkillsDirectory(cand.Path, ".gandalf/skills")
@@ -84,6 +87,9 @@ func ReconcileSources(opts ImportOptions, candidates []DetectedCandidate) (*Impo
 			}
 			res.Skills = skills
 			res.Source.SkillCount = len(skills)
+			for _, sk := range skills {
+				res.Source.SkillNames = append(res.Source.SkillNames, sk.Name)
+			}
 		}
 
 		results = append(results, res)
@@ -370,6 +376,15 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 	}
 
 	return sb.String()
+}
+
+func sortedKeys(m map[string]manifest.MCPServerDef) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func formatTOMLKey(key string) string {

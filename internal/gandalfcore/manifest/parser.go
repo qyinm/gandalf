@@ -173,12 +173,8 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 		case "mcp_servers":
 			if currentSubSection != "" {
 				// Support nested [mcp_servers.<name>.env] tables (e.g. Codex TOML)
-				if isEnvTable || strings.HasSuffix(currentSubSection, ".env") {
-					parentName := currentSubSection
-					if strings.HasSuffix(currentSubSection, ".env") {
-						parentName = strings.TrimSuffix(currentSubSection, ".env")
-					}
-					parentName = strings.Trim(parentName, "\"")
+				if isEnvTable {
+					parentName := strings.Trim(currentSubSection, "\"")
 					server := m.MCPServers[parentName]
 					if server.Env == nil {
 						server.Env = make(map[string]string)

@@ -177,8 +177,8 @@ func sanitizeEnvFilePath(envFile string) string {
 	}
 	if strings.Contains(envFile, "${workspaceFolder}") {
 		rest := strings.Replace(envFile, "${workspaceFolder}", "", 1)
-		clean := filepath.Clean(rest)
-		if strings.HasPrefix(clean, "..") || strings.Contains(clean, "/../") || strings.Contains(clean, `\..\`) {
+		clean := filepath.Clean(strings.TrimPrefix(filepath.ToSlash(rest), "/"))
+		if strings.Contains(rest, "..") || strings.HasPrefix(clean, "..") || clean == "." || clean == "" {
 			return ""
 		}
 		return envFile
