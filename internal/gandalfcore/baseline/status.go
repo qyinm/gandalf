@@ -44,7 +44,9 @@ func BuildStatus(options types.RuntimeOptions) (Status, error) {
 		currentRuntime := options
 		currentRuntime.Agent = &agent
 		currentRuntime.Scope = &scope
-		currentRuntime.CaptureContent = agents.SupportsContentBackedUserSnapshot(agent, scope)
+		// Status is a read-only drift summary. Content capture belongs on
+		// snapshot write paths (baseline create / pre-apply), not TUI boot.
+		currentRuntime.CaptureContent = false
 
 		current, err := snapshot.CaptureCurrentState(&currentRuntime, "current")
 		if err != nil {

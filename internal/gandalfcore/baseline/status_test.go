@@ -207,7 +207,7 @@ func TestBuildStatusDoesNotTreatOnlyPreApplySnapshotAsBaseline(t *testing.T) {
 	}
 }
 
-func TestBuildStatusCountsOmittedContent(t *testing.T) {
+func TestBuildStatusDoesNotCaptureCurrentContent(t *testing.T) {
 	t.Parallel()
 	projectPath, homeDir, storeDir := makeSandbox(t)
 	configPath := filepath.Join(homeDir, ".codex", "config.toml")
@@ -227,7 +227,7 @@ func TestBuildStatusCountsOmittedContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	codex := findAgentStatus(t, status, types.AgentCodex)
-	if codex.OmittedContentCount == 0 {
-		t.Fatalf("expected omitted content count: %#v", codex)
+	if codex.OmittedContentCount != 0 {
+		t.Fatalf("status build should not capture current content: %#v", codex)
 	}
 }
