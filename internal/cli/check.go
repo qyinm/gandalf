@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"html"
 	"os"
 	"strings"
 
@@ -154,13 +155,14 @@ func runCheck(cmd *cobra.Command, flags *checkFlags) int {
 	_, _ = fmt.Fprintln(out, "💡 Run 'gandalf apply' to synchronize your agent environment.")
 
 	if flags.CI {
-		// Output GitHub workflow command annotations
+		// Output GitHub workflow command annotations with proper property and data escaping
 		for _, item := range drift.Items {
 			fileArg := ""
 			if item.TargetFile != "" {
-				fileArg = fmt.Sprintf("file=%s,", item.TargetFile)
+				fileArg = fmt.Sprintf("file=%s,", escapeWorkflowProperty(item.TargetFile))
 			}
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "::error %stitle=Agent Environment Drift::%s: %s\n", fileArg, item.Name, item.Details)
+			msg := fmt.Sprintf("%s: %s", item.Name, item.Details)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "::error %stitle=%s::%s\n", fileArg, escapeWorkflowProperty("Agent Environment Drift"), escapeWorkflowData(msg))
 		}
 		return 1
 	}
@@ -185,9 +187,9 @@ func writeGitHubStepSummary(m *manifest.Manifest, drift *sync.DriftReport) {
 
 	var agentStrs []string
 	for _, a := range m.Agents {
-		agentStrs = append(agentStrs, string(a))
+		agentStrs = append(agentStrs, escapeMarkdownTableCell(string(a)))
 	}
-	sb.WriteString(fmt.Sprintf("**Manifest:** `%s` (v%s) | **Target Agents:** `%s`\n\n", m.Name, m.Version, strings.Join(agentStrs, ", ")))
+	sb.WriteString(fmt.Sprintf("**Manifest:** `%s` (v%s) | **Target Agents:** `%s`\n\n", escapeMarkdownTableCell(m.Name), escapeMarkdownTableCell(m.Version), strings.Join(agentStrs, ", ")))
 
 	if drift.InSync {
 		sb.WriteString("✅ **All agent configurations are in sync with the team manifest!**\n\n")
@@ -196,15 +198,52 @@ func writeGitHubStepSummary(m *manifest.Manifest, drift *sync.DriftReport) {
 		sb.WriteString("| # | Kind | Target / Name | Details |\n")
 		sb.WriteString("| :---: | :--- | :--- | :--- |\n")
 		for i, item := range drift.Items {
-			kindBadge := fmt.Sprintf("`%s`", item.Kind)
+			kindBadge := fmt.Sprintf("`%s`", escapeMarkdownTableCell(string(item.Kind)))
 			target := item.TargetFile
 			if target == "" {
 				target = item.Name
 			}
-			sb.WriteString(fmt.Sprintf("| %d | %s | **%s** (`%s`) | %s |\n", i+1, kindBadge, item.Name, target, item.Details))
+			nameEsc := escapeMarkdownTableCell(item.Name)
+			targetEsc := escapeMarkdownTableCell(target)
+			detailsEsc := escapeMarkdownTableCell(item.Details)
+			sb.WriteString(fmt.Sprintf("| %d | %s | **%s** (`%s`) | %s |\n", i+1, kindBadge, nameEsc, targetEsc, detailsEsc))
 		}
 		sb.WriteString("\n> 💡 *Run `gandalf apply` locally to synchronize your agent environment.*\n\n")
 	}
 
 	_, _ = f.WriteString(sb.String())
+}
+
+// escapeWorkflowProperty escapes special characters for GitHub Actions workflow command properties (file, title, etc.).
+func escapeWorkflowProperty(s string) string {
+	r := strings.NewReplacer(
+		"%", "%25",
+		"\r", "%0D",
+		"\n", "%0A",
+		":", "%3A",
+		",", "%2C",
+	)
+	return r.Replace(s)
+}
+
+// escapeWorkflowData escapes special characters for GitHub Actions workflow command data/messages.
+func escapeWorkflowData(s string) string {
+	r := strings.NewReplacer(
+		"%", "%25",
+		"\r", "%0D",
+		"\n", "%0A",
+	)
+	return r.Replace(s)
+}
+
+// escapeMarkdownTableCell escapes content intended for Markdown table cells to prevent table breakage and markup injection.
+func escapeMarkdownTableCell(s string) string {
+	escaped := html.EscapeString(s)
+	r := strings.NewReplacer(
+		"|", "&#124;",
+		"\r\n", "<br>",
+		"\n", "<br>",
+		"\r", "",
+	)
+	return r.Replace(escaped)
 }

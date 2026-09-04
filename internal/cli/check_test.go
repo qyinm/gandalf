@@ -120,3 +120,27 @@ command = "run"
 		t.Errorf("expected manifest name in summary, got:\n%s", summary)
 	}
 }
+
+func TestEscapingWorkflowCommandsAndSummary(t *testing.T) {
+	// 1. Test workflow property escaping
+	rawProp := "path/with:colons,commas%percent\r\nand_newline"
+	escProp := escapeWorkflowProperty(rawProp)
+	if strings.ContainsAny(escProp, ":,\r\n") {
+		t.Errorf("expected property to be escaped, got: %s", escProp)
+	}
+
+	// 2. Test workflow data escaping
+	rawData := "message%with\r\nnewlines"
+	escData := escapeWorkflowData(rawData)
+	if strings.ContainsAny(escData, "\r\n") {
+		t.Errorf("expected data to be escaped, got: %s", escData)
+	}
+
+	// 3. Test Markdown table cell escaping
+	rawCell := "<script>alert('xss')</script> | pipe | \r\n newline"
+	escCell := escapeMarkdownTableCell(rawCell)
+	if strings.Contains(escCell, "<script>") || strings.Contains(escCell, "|") || strings.ContainsAny(escCell, "\r\n") {
+		t.Errorf("expected cell markup and pipes to be escaped, got: %s", escCell)
+	}
+}
+

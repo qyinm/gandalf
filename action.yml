@@ -31,11 +31,9 @@ runs:
       run: |
         set -e
 
-        # 1. Resolve Gandalf binary
+        # 1. Resolve Gandalf binary safely
         GANDALF_BIN=""
-        if command -v gandalf >/dev/null 2>&1; then
-          GANDALF_BIN="gandalf"
-        elif [ -f "${GITHUB_ACTION_PATH}/bin/gandalf" ]; then
+        if [ -f "${GITHUB_ACTION_PATH}/bin/gandalf" ]; then
           GANDALF_BIN="${GITHUB_ACTION_PATH}/bin/gandalf"
         elif command -v go >/dev/null 2>&1; then
           echo "Compiling Gandalf CLI via Go toolchain..."

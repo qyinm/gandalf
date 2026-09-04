@@ -1,12 +1,12 @@
 package sync
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 
+	"github.com/qyinm/gandalf/internal/gandalfcore/importer"
 	"github.com/qyinm/gandalf/internal/gandalfcore/manifest"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
@@ -192,45 +192,170 @@ func DetectProjectDrift(m *manifest.Manifest, projectRoot string) (*DriftReport,
 		}
 	}
 
-	// 3. Check project-level .mcp.json and .cursor/mcp.json if they exist
+	// 3. Check project-level JSON MCP configs (.mcp.json, .cursor/mcp.json)
 	projectMCPFiles := []string{".mcp.json", filepath.Join(".cursor", "mcp.json")}
 	for _, relMCP := range projectMCPFiles {
 		mcpPath := filepath.Join(projectRoot, relMCP)
 		data, err := os.ReadFile(mcpPath)
-		if err == nil {
-			var parsed struct {
-				MCPServers map[string]any `json:"mcpServers"`
+		if err != nil {
+			if !os.IsNotExist(err) {
+				report.InSync = false
+				report.Items = append(report.Items, DriftItem{
+					Kind:        DriftOutdatedConfig,
+					TargetFile:  relMCP,
+					Description: fmt.Sprintf("Failed to read project config '%s'", relMCP),
+					Details:     err.Error(),
+				})
 			}
-			if err := json.Unmarshal(data, &parsed); err == nil && parsed.MCPServers != nil {
-				// Check for missing servers in project file that are declared in gandalf.toml
-				for srvName := range m.MCPServers {
-					if _, ok := parsed.MCPServers[srvName]; !ok {
-						report.InSync = false
-						report.Items = append(report.Items, DriftItem{
-							Kind:        DriftUnsyncedProjectConfig,
-							Name:        srvName,
-							TargetFile:  relMCP,
-							Description: fmt.Sprintf("MCP server '%s' declared in gandalf.toml is missing from project '%s'", srvName, relMCP),
-							Details:     "Project agent configuration is out of sync with gandalf.toml (run 'gandalf apply' to sync)",
-						})
-					}
-				}
-				// Check for unmanaged extra servers in project file
-				for srvName := range parsed.MCPServers {
-					if _, ok := m.MCPServers[srvName]; !ok {
-						report.InSync = false
-						report.Items = append(report.Items, DriftItem{
-							Kind:        DriftUnsyncedProjectConfig,
-							Name:        srvName,
-							TargetFile:  relMCP,
-							Description: fmt.Sprintf("Unmanaged MCP server '%s' in project '%s' is not declared in gandalf.toml", srvName, relMCP),
-							Details:     "Project file contains extra MCP servers not tracked by team manifest (run 'gandalf import' or update gandalf.toml)",
-						})
-					}
-				}
+			continue
+		}
+
+		parsedServers, err := importer.ParseStandardJSONMCPServers(data)
+		if err != nil {
+			report.InSync = false
+			report.Items = append(report.Items, DriftItem{
+				Kind:        DriftOutdatedConfig,
+				TargetFile:  relMCP,
+				Description: fmt.Sprintf("Malformed project config '%s'", relMCP),
+				Details:     fmt.Sprintf("Failed to parse mcpServers in '%s': %v", relMCP, err),
+			})
+			continue
+		}
+
+		compareProjectServers(report, relMCP, m.MCPServers, parsedServers)
+	}
+
+	// 4. Check project-level Codex config (.codex/config.toml) if manifest targets Codex
+	targetsCodex := false
+	for _, a := range m.Agents {
+		if a == types.AgentCodex {
+			targetsCodex = true
+			break
+		}
+	}
+	if targetsCodex {
+		relCodex := filepath.Join(".codex", "config.toml")
+		codexPath := filepath.Join(projectRoot, relCodex)
+		data, err := os.ReadFile(codexPath)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				report.InSync = false
+				report.Items = append(report.Items, DriftItem{
+					Kind:        DriftOutdatedConfig,
+					TargetFile:  relCodex,
+					Description: fmt.Sprintf("Failed to read project config '%s'", relCodex),
+					Details:     err.Error(),
+				})
+			}
+		} else {
+			parsedServers, err := importer.ParseCodexConfigTOML(data)
+			if err != nil {
+				report.InSync = false
+				report.Items = append(report.Items, DriftItem{
+					Kind:        DriftOutdatedConfig,
+					TargetFile:  relCodex,
+					Description: fmt.Sprintf("Malformed project config '%s'", relCodex),
+					Details:     fmt.Sprintf("Failed to parse Codex config '%s': %v", relCodex, err),
+				})
+			} else {
+				compareProjectServers(report, relCodex, m.MCPServers, parsedServers)
 			}
 		}
 	}
 
 	return report, nil
+}
+
+func compareProjectServers(report *DriftReport, targetFile string, expectedServers map[string]manifest.MCPServerDef, actualServers map[string]manifest.MCPServerDef) {
+	for srvName, exp := range expectedServers {
+		act, ok := actualServers[srvName]
+		if !ok {
+			report.InSync = false
+			report.Items = append(report.Items, DriftItem{
+				Kind:        DriftUnsyncedProjectConfig,
+				Name:        srvName,
+				TargetFile:  targetFile,
+				Description: fmt.Sprintf("MCP server '%s' declared in gandalf.toml is missing from project '%s'", srvName, targetFile),
+				Details:     "Project agent configuration is out of sync with gandalf.toml (run 'gandalf apply' to sync)",
+			})
+			continue
+		}
+
+		if !isMCPServerEqual(exp, act) {
+			report.InSync = false
+			report.Items = append(report.Items, DriftItem{
+				Kind:        DriftOutdatedConfig,
+				Name:        srvName,
+				TargetFile:  targetFile,
+				Description: fmt.Sprintf("MCP server '%s' in '%s' has modified settings differing from gandalf.toml", srvName, targetFile),
+				Details:     "Server configuration differs from gandalf.toml (run 'gandalf apply' to sync)",
+			})
+		}
+	}
+
+	for srvName := range actualServers {
+		if _, ok := expectedServers[srvName]; !ok {
+			report.InSync = false
+			report.Items = append(report.Items, DriftItem{
+				Kind:        DriftUnsyncedProjectConfig,
+				Name:        srvName,
+				TargetFile:  targetFile,
+				Description: fmt.Sprintf("Unmanaged MCP server '%s' in project '%s' is not declared in gandalf.toml", srvName, targetFile),
+				Details:     "Project file contains extra MCP servers not tracked by team manifest (run 'gandalf import' or update gandalf.toml)",
+			})
+		}
+	}
+}
+
+func isMCPServerEqual(expected, actual manifest.MCPServerDef) bool {
+	if expected.Command != actual.Command {
+		return false
+	}
+	if !slicesEqual(expected.Args, actual.Args) {
+		return false
+	}
+	if expected.URL != actual.URL {
+		return false
+	}
+	if expected.Type != "" && actual.Type != "" && expected.Type != actual.Type {
+		return false
+	}
+	if expected.Disabled != actual.Disabled {
+		return false
+	}
+	if len(expected.Env) > 0 || len(actual.Env) > 0 {
+		if !mapsEqual(expected.Env, actual.Env) {
+			return false
+		}
+	}
+	if len(expected.Headers) > 0 || len(actual.Headers) > 0 {
+		if !mapsEqual(expected.Headers, actual.Headers) {
+			return false
+		}
+	}
+	return true
+}
+
+func slicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func mapsEqual(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
 }
