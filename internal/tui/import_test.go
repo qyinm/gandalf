@@ -336,6 +336,32 @@ func TestImportApp_ScanFailureIsTerminal(t *testing.T) {
 	}
 }
 
+func TestImportApp_FromFlagScansCustomSource(t *testing.T) {
+	projectPath := t.TempDir()
+	homeDir := t.TempDir()
+
+	// Default locations hold nothing; only the --from target has a server.
+	customDir := t.TempDir()
+	customMCP := `{"mcpServers": {"custom-server": {"command": "npx", "args": ["custom"]}}}`
+	customPath := filepath.Join(customDir, "custom.json")
+	if err := os.WriteFile(customPath, []byte(customMCP), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := NewImportApp(
+		types.RuntimeOptions{ProjectPath: projectPath, HomeDir: homeDir},
+		importer.ImportOptions{FromPath: customPath},
+	)
+	app = scanApp(t, app)
+
+	if app.step != importStepSelect {
+		t.Fatalf("expected select step for --from scan, got %v (err=%v)", app.step, app.err)
+	}
+	if app.itemCount() != 1 || !app.selServers["custom-server"] {
+		t.Errorf("expected exactly the custom source server, got %+v", app.selServers)
+	}
+}
+
 func TestImportApp_WindowResizeUpdatesDimensions(t *testing.T) {
 	app, _, _ := newTestImportApp(t)
 	app = scanApp(t, app)

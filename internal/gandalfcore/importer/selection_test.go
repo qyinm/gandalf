@@ -88,9 +88,16 @@ func TestFilterManifest_EnvRefsDetectedAcrossFields(t *testing.T) {
 			"ORPHAN_VAR": "x",
 		},
 	}
+	m.EnvTemplate["REQUIRED_ONLY"] = "x"
+	m.MCPServers["srv"] = func() manifest.MCPServerDef {
+		s := m.MCPServers["srv"]
+		s.RequiredEnv = []string{"REQUIRED_ONLY"}
+		return s
+	}()
+
 	got := FilterManifest(m, &Selection{Servers: map[string]bool{"srv": true}})
 
-	for _, want := range []string{"CMD_VAR", "ARG_VAR", "HOST_VAR", "ENV_VAR", "HEADER_VAR", "FILE_VAR", "AUTH_VAR"} {
+	for _, want := range []string{"CMD_VAR", "ARG_VAR", "HOST_VAR", "ENV_VAR", "HEADER_VAR", "FILE_VAR", "AUTH_VAR", "REQUIRED_ONLY"} {
 		if _, ok := got.EnvTemplate[want]; !ok {
 			t.Errorf("expected %s to remain referenced", want)
 		}
@@ -167,5 +174,11 @@ func TestRunImport_WithSelectionWritesFilteredManifest(t *testing.T) {
 
 	if len(res.Manifest.MCPServers) != 1 {
 		t.Errorf("expected result manifest to contain only the selected server, got %d", len(res.Manifest.MCPServers))
+	}
+
+	// Reported extraction set must match what survived filtering.
+	if len(res.ExtractedEnvs) != len(res.Manifest.EnvTemplate) {
+		t.Errorf("ExtractedEnvs (%d) out of sync with manifest env_template (%d)",
+			len(res.ExtractedEnvs), len(res.Manifest.EnvTemplate))
 	}
 }

@@ -115,7 +115,12 @@ func (a ImportApp) Init() tea.Cmd {
 
 func scanImportSourcesCmd(opts importer.ImportOptions) tea.Cmd {
 	return func() tea.Msg {
-		candidates := importer.DetectCandidates(opts)
+		// CandidatesFor honors --from so the wizard previews exactly the
+		// custom source RunImport would write.
+		candidates, err := importer.CandidatesFor(opts)
+		if err != nil {
+			return importScanDoneMsg{err: err}
+		}
 		if len(candidates) == 0 {
 			return importScanDoneMsg{err: fmt.Errorf("no agent configurations found to import (checked .cursor/mcp.json, .mcp.json, ~/.cursor/mcp.json, etc.)")}
 		}

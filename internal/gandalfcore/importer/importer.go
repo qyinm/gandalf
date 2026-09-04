@@ -12,6 +12,84 @@ import (
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
+// CandidatesFor resolves the detection candidate list for opts, honoring
+// FromPath (explicit file or directory) when set. Interactive surfaces use
+// this so their scan matches exactly what RunImport would write.
+func CandidatesFor(opts ImportOptions) ([]DetectedCandidate, error) {
+	if opts.FromPath == "" {
+		return DetectCandidates(opts), nil
+	}
+
+	cleanFrom := filepath.Clean(opts.FromPath)
+	if !filepath.IsAbs(cleanFrom) {
+		cleanFrom = filepath.Join(opts.ProjectPath, cleanFrom)
+	}
+	if !fileExists(cleanFrom) && !dirExists(cleanFrom) {
+		return nil, fmt.Errorf("specified --from target does not exist: %s", opts.FromPath)
+	}
+
+	var candidates []DetectedCandidate
+	if dirExists(cleanFrom) {
+		foundAny := false
+		// Check for nested mcp.json
+		if fileExists(filepath.Join(cleanFrom, "mcp.json")) {
+			p := filepath.Join(cleanFrom, "mcp.json")
+			candidates = append(candidates, DetectedCandidate{
+				Agent: inferAgentFromPath(p, "mcp_json"),
+				Scope: "project",
+				Path:  p,
+				Kind:  "mcp_json",
+			})
+			foundAny = true
+		}
+		// Check for nested config.toml
+		if fileExists(filepath.Join(cleanFrom, "config.toml")) {
+			p := filepath.Join(cleanFrom, "config.toml")
+			candidates = append(candidates, DetectedCandidate{
+				Agent: inferAgentFromPath(p, "codex_toml"),
+				Scope: "project",
+				Path:  p,
+				Kind:  "codex_toml",
+			})
+			foundAny = true
+		}
+		// Check for nested skills directory
+		if dirExists(filepath.Join(cleanFrom, "skills")) {
+			p := filepath.Join(cleanFrom, "skills")
+			candidates = append(candidates, DetectedCandidate{
+				Agent: inferAgentFromPath(p, "skills_dir"),
+				Scope: "project",
+				Path:  p,
+				Kind:  "skills_dir",
+			})
+			foundAny = true
+		}
+		// Fallback: treat directory itself as a skills container
+		if !foundAny {
+			candidates = append(candidates, DetectedCandidate{
+				Agent: inferAgentFromPath(cleanFrom, "skills_dir"),
+				Scope: "project",
+				Path:  cleanFrom,
+				Kind:  "skills_dir",
+			})
+		}
+		return candidates, nil
+	}
+
+	kind := "mcp_json"
+	if strings.HasSuffix(cleanFrom, ".toml") {
+		kind = "codex_toml"
+	} else if strings.HasSuffix(cleanFrom, ".claude.json") {
+		kind = "claude_json"
+	}
+	return []DetectedCandidate{{
+		Agent: inferAgentFromPath(cleanFrom, kind),
+		Scope: "project",
+		Path:  cleanFrom,
+		Kind:  kind,
+	}}, nil
+}
+
 // RunImport performs the full import pipeline: detection, parsing, reconciling,
 // templatizing secrets, validating, and writing out gandalf.toml (unless dry-run).
 func RunImport(opts ImportOptions) (*ImportResult, error) {
@@ -75,93 +153,27 @@ func RunImport(opts ImportOptions) (*ImportResult, error) {
 		}
 	}
 
-	var candidates []DetectedCandidate
-
-	if opts.FromPath != "" {
-		cleanFrom := filepath.Clean(opts.FromPath)
-		if !filepath.IsAbs(cleanFrom) {
-			cleanFrom = filepath.Join(opts.ProjectPath, cleanFrom)
-		}
-		if !fileExists(cleanFrom) && !dirExists(cleanFrom) {
-			return nil, fmt.Errorf("specified --from target does not exist: %s", opts.FromPath)
-		}
-
-		if dirExists(cleanFrom) {
-			foundAny := false
-			// Check for nested mcp.json
-			if fileExists(filepath.Join(cleanFrom, "mcp.json")) {
-				p := filepath.Join(cleanFrom, "mcp.json")
-				candidates = append(candidates, DetectedCandidate{
-					Agent: inferAgentFromPath(p, "mcp_json"),
-					Scope: "project",
-					Path:  p,
-					Kind:  "mcp_json",
-				})
-				foundAny = true
-			}
-			// Check for nested config.toml
-			if fileExists(filepath.Join(cleanFrom, "config.toml")) {
-				p := filepath.Join(cleanFrom, "config.toml")
-				candidates = append(candidates, DetectedCandidate{
-					Agent: inferAgentFromPath(p, "codex_toml"),
-					Scope: "project",
-					Path:  p,
-					Kind:  "codex_toml",
-				})
-				foundAny = true
-			}
-			// Check for nested skills directory
-			if dirExists(filepath.Join(cleanFrom, "skills")) {
-				p := filepath.Join(cleanFrom, "skills")
-				candidates = append(candidates, DetectedCandidate{
-					Agent: inferAgentFromPath(p, "skills_dir"),
-					Scope: "project",
-					Path:  p,
-					Kind:  "skills_dir",
-				})
-				foundAny = true
-			}
-			// Fallback: treat directory itself as a skills container
-			if !foundAny {
-				candidates = append(candidates, DetectedCandidate{
-					Agent: inferAgentFromPath(cleanFrom, "skills_dir"),
-					Scope: "project",
-					Path:  cleanFrom,
-					Kind:  "skills_dir",
-				})
-			}
-		} else {
-			kind := "mcp_json"
-			if strings.HasSuffix(cleanFrom, ".toml") {
-				kind = "codex_toml"
-			} else if strings.HasSuffix(cleanFrom, ".claude.json") {
-				kind = "claude_json"
-			}
-			candidates = append(candidates, DetectedCandidate{
-				Agent: inferAgentFromPath(cleanFrom, kind),
-				Scope: "project",
-				Path:  cleanFrom,
-				Kind:  kind,
-			})
-		}
-	} else {
-		candidates = DetectCandidates(opts)
+	candidates, err := CandidatesFor(opts)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no agent configurations found to import (checked .cursor/mcp.json, .mcp.json, ~/.cursor/mcp.json, etc.)")
 	}
 
-	result, err := ReconcileSources(opts, candidates)
-	if err != nil {
-		return nil, fmt.Errorf("reconcile sources: %w", err)
-	}
+		result, err := ReconcileSources(opts, candidates)
+		if err != nil {
+			return nil, fmt.Errorf("reconcile sources: %w", err)
+		}
 
 	// Apply interactive selection (TUI wizard) before validation so the
 	// validated and written manifest exactly matches the user's choice.
 	if opts.Selection != nil {
 		result.Manifest = FilterManifest(result.Manifest, opts.Selection)
 		result.FormattedTOML = FormatManifestTOML(result.Manifest)
+		// Keep the reported extraction set consistent with what survives.
+		result.ExtractedEnvs = result.Manifest.EnvTemplate
 	}
 
 	// Validate the generated manifest

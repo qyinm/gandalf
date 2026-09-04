@@ -81,6 +81,11 @@ func referencedEnvVars(servers map[string]manifest.MCPServerDef) map[string]bool
 				collect(fmt.Sprintf("%v", v))
 			}
 		}
+		// required_env declares variables by name (not by ${} reference);
+		// keep their template entries when the server survives filtering.
+		for _, req := range srv.RequiredEnv {
+			refs[req] = true
+		}
 	}
 	return refs
 }
