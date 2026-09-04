@@ -1,9 +1,11 @@
 package sync
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/importer"
@@ -296,6 +298,9 @@ func DetectProjectDrift(m *manifest.Manifest, projectRoot string) (*DriftReport,
 					Description: fmt.Sprintf("Failed to read project config '%s'", relCodex),
 					Details:     err.Error(),
 				})
+			} else if len(m.MCPServers) > 0 {
+				// Target agent file is completely missing while manifest declares servers
+				compareProjectServers(report, relCodex, m.MCPServers, make(map[string]manifest.MCPServerDef))
 			}
 		} else {
 			parsedServers, err := importer.ParseCodexConfigTOML(data)
@@ -328,6 +333,9 @@ func checkJSONProjectConfig(report *DriftReport, projectRoot, relFile string, ex
 				Description: fmt.Sprintf("Failed to read project config '%s'", relFile),
 				Details:     err.Error(),
 			})
+		} else if len(expectedServers) > 0 {
+			// Target agent file is completely missing while manifest declares servers
+			compareProjectServers(report, relFile, expectedServers, make(map[string]manifest.MCPServerDef))
 		}
 		return
 	}
@@ -389,6 +397,9 @@ func compareProjectServers(report *DriftReport, targetFile string, expectedServe
 }
 
 func isMCPServerEqual(expected, actual manifest.MCPServerDef) bool {
+	if expected.Type != actual.Type {
+		return false
+	}
 	if expected.Command != actual.Command {
 		return false
 	}
@@ -398,23 +409,44 @@ func isMCPServerEqual(expected, actual manifest.MCPServerDef) bool {
 	if expected.URL != actual.URL {
 		return false
 	}
-	if expected.Type != "" && actual.Type != "" && expected.Type != actual.Type {
+	if expected.EnvFile != actual.EnvFile {
 		return false
 	}
 	if expected.Disabled != actual.Disabled {
 		return false
 	}
-	if len(expected.Env) > 0 || len(actual.Env) > 0 {
-		if !mapsEqual(expected.Env, actual.Env) {
-			return false
-		}
+	if !mapsEqual(expected.Env, actual.Env) {
+		return false
 	}
-	if len(expected.Headers) > 0 || len(actual.Headers) > 0 {
-		if !mapsEqual(expected.Headers, actual.Headers) {
-			return false
-		}
+	if !mapsEqual(expected.Headers, actual.Headers) {
+		return false
+	}
+	if !isAuthEqual(expected.Auth, actual.Auth) {
+		return false
 	}
 	return true
+}
+
+func isAuthEqual(a, b any) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if reflect.DeepEqual(a, b) {
+		return true
+	}
+	// Normalize via JSON marshaling to handle differences in int vs float64 or map key ordering
+	aBytes, errA := json.Marshal(a)
+	bBytes, errB := json.Marshal(b)
+	if errA == nil && errB == nil {
+		var aNorm, bNorm any
+		if json.Unmarshal(aBytes, &aNorm) == nil && json.Unmarshal(bBytes, &bNorm) == nil {
+			return reflect.DeepEqual(aNorm, bNorm)
+		}
+	}
+	return false
 }
 
 func slicesEqual(a, b []string) bool {

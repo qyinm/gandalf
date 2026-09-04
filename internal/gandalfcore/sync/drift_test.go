@@ -21,9 +21,16 @@ func TestDetectProjectDrift_InSync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create matching .mcp.json
+	// Create matching .mcp.json and .cursor/mcp.json
 	mcpJSON := `{"mcpServers": {"pg-srv": {"command": "npx", "args": ["-y", "mcp-pg", "${PG_HOST}"]}}}`
 	if err := os.WriteFile(filepath.Join(tempDir, ".mcp.json"), []byte(mcpJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cursorDir := filepath.Join(tempDir, ".cursor")
+	if err := os.MkdirAll(cursorDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cursorDir, "mcp.json"), []byte(mcpJSON), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -393,4 +400,244 @@ func TestDetectProjectDrift_SymlinkedSkillEscapingProjectFails(t *testing.T) {
 	if !foundEscape {
 		t.Errorf("expected DriftMissingSkill for escaped symlink, got: %+v", report.Items)
 	}
+}
+
+func TestDetectProjectDrift_MissingTargetedProjectConfig(t *testing.T) {
+	t.Run("claude_code_missing_mcp_json", func(t *testing.T) {
+		tempDir := t.TempDir()
+		m := &manifest.Manifest{
+			Name:    "test",
+			Version: "1.0",
+			Agents:  []types.AgentID{types.AgentClaudeCode},
+			MCPServers: map[string]manifest.MCPServerDef{
+				"srv": {Command: "echo"},
+			},
+		}
+
+		report, err := DetectProjectDrift(m, tempDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if report.InSync {
+			t.Errorf("expected InSync=false when .mcp.json is missing and servers are defined")
+		}
+		found := false
+		for _, item := range report.Items {
+			if item.Kind == DriftUnsyncedProjectConfig && item.TargetFile == ".mcp.json" && item.Name == "srv" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected DriftUnsyncedProjectConfig for .mcp.json, got: %+v", report.Items)
+		}
+	})
+
+	t.Run("cursor_missing_mcp_json", func(t *testing.T) {
+		tempDir := t.TempDir()
+		m := &manifest.Manifest{
+			Name:    "test",
+			Version: "1.0",
+			Agents:  []types.AgentID{types.AgentCursor},
+			MCPServers: map[string]manifest.MCPServerDef{
+				"srv": {Command: "echo"},
+			},
+		}
+
+		report, err := DetectProjectDrift(m, tempDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if report.InSync {
+			t.Errorf("expected InSync=false when .cursor/mcp.json is missing and servers are defined")
+		}
+		expectedTarget := filepath.Join(".cursor", "mcp.json")
+		found := false
+		for _, item := range report.Items {
+			if item.Kind == DriftUnsyncedProjectConfig && item.TargetFile == expectedTarget && item.Name == "srv" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected DriftUnsyncedProjectConfig for %s, got: %+v", expectedTarget, report.Items)
+		}
+	})
+
+	t.Run("codex_missing_config_toml", func(t *testing.T) {
+		tempDir := t.TempDir()
+		m := &manifest.Manifest{
+			Name:    "test",
+			Version: "1.0",
+			Agents:  []types.AgentID{types.AgentCodex},
+			MCPServers: map[string]manifest.MCPServerDef{
+				"srv": {Command: "echo"},
+			},
+		}
+
+		report, err := DetectProjectDrift(m, tempDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if report.InSync {
+			t.Errorf("expected InSync=false when .codex/config.toml is missing and servers are defined")
+		}
+		expectedTarget := filepath.Join(".codex", "config.toml")
+		found := false
+		for _, item := range report.Items {
+			if item.Kind == DriftUnsyncedProjectConfig && item.TargetFile == expectedTarget && item.Name == "srv" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected DriftUnsyncedProjectConfig for %s, got: %+v", expectedTarget, report.Items)
+		}
+	})
+
+	t.Run("empty_servers_missing_config_passes", func(t *testing.T) {
+		tempDir := t.TempDir()
+		m := &manifest.Manifest{
+			Name:       "test",
+			Version:    "1.0",
+			Agents:     []types.AgentID{types.AgentClaudeCode, types.AgentCursor, types.AgentCodex},
+			MCPServers: map[string]manifest.MCPServerDef{},
+		}
+
+		report, err := DetectProjectDrift(m, tempDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !report.InSync {
+			t.Errorf("expected InSync=true when no servers are declared even if configs are missing, got: %+v", report.Items)
+		}
+	})
+}
+
+func TestDetectProjectDrift_DeepFieldComparisons(t *testing.T) {
+	t.Run("type_mismatch", func(t *testing.T) {
+		tempDir := t.TempDir()
+		mcpJSON := `{"mcpServers": {"srv": {"command": "echo", "type": "stdio"}}}`
+		if err := os.WriteFile(filepath.Join(tempDir, ".mcp.json"), []byte(mcpJSON), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		m := &manifest.Manifest{
+			Name:    "test",
+			Version: "1.0",
+			Agents:  []types.AgentID{types.AgentClaudeCode},
+			MCPServers: map[string]manifest.MCPServerDef{
+				"srv": {Command: "echo", Type: "sse"},
+			},
+		}
+
+		report, err := DetectProjectDrift(m, tempDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if report.InSync {
+			t.Errorf("expected InSync=false when Type differs")
+		}
+		found := false
+		for _, item := range report.Items {
+			if item.Kind == DriftOutdatedConfig && item.Name == "srv" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected DriftOutdatedConfig for Type mismatch, got: %+v", report.Items)
+		}
+	})
+
+	t.Run("env_file_mismatch", func(t *testing.T) {
+		tempDir := t.TempDir()
+		mcpJSON := `{"mcpServers": {"srv": {"command": "echo", "envFile": ".env.prod"}}}`
+		if err := os.WriteFile(filepath.Join(tempDir, ".mcp.json"), []byte(mcpJSON), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		m := &manifest.Manifest{
+			Name:    "test",
+			Version: "1.0",
+			Agents:  []types.AgentID{types.AgentClaudeCode},
+			MCPServers: map[string]manifest.MCPServerDef{
+				"srv": {Command: "echo", EnvFile: ".env.local"},
+			},
+		}
+
+		report, err := DetectProjectDrift(m, tempDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if report.InSync {
+			t.Errorf("expected InSync=false when EnvFile differs")
+		}
+		found := false
+		for _, item := range report.Items {
+			if item.Kind == DriftOutdatedConfig && item.Name == "srv" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected DriftOutdatedConfig for EnvFile mismatch, got: %+v", report.Items)
+		}
+	})
+
+	t.Run("auth_deep_comparison", func(t *testing.T) {
+		tempDir := t.TempDir()
+		mcpJSON := `{"mcpServers": {"srv": {"command": "echo", "auth": {"type": "bearer", "token": "secret123"}}}}`
+		if err := os.WriteFile(filepath.Join(tempDir, ".mcp.json"), []byte(mcpJSON), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Case 1: Matching auth
+		mMatch := &manifest.Manifest{
+			Name:    "test",
+			Version: "1.0",
+			Agents:  []types.AgentID{types.AgentClaudeCode},
+			MCPServers: map[string]manifest.MCPServerDef{
+				"srv": {
+					Command: "echo",
+					Auth: map[string]any{
+						"type":  "bearer",
+						"token": "secret123",
+					},
+				},
+			},
+		}
+
+		report, err := DetectProjectDrift(mMatch, tempDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !report.InSync {
+			t.Errorf("expected InSync=true when Auth matches, got: %+v", report.Items)
+		}
+
+		// Case 2: Mismatched auth
+		mDiff := &manifest.Manifest{
+			Name:    "test",
+			Version: "1.0",
+			Agents:  []types.AgentID{types.AgentClaudeCode},
+			MCPServers: map[string]manifest.MCPServerDef{
+				"srv": {
+					Command: "echo",
+					Auth: map[string]any{
+						"type":  "bearer",
+						"token": "differentToken",
+					},
+				},
+			},
+		}
+
+		reportDiff, err := DetectProjectDrift(mDiff, tempDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if reportDiff.InSync {
+			t.Errorf("expected InSync=false when Auth differs")
+		}
+	})
 }

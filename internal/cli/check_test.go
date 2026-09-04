@@ -27,6 +27,11 @@ APP_ENV = "production"
 		t.Fatal(err)
 	}
 
+	mcpJSON := `{"mcpServers": {"echo": {"command": "echo", "args": ["${APP_ENV}"]}}}`
+	if err := os.WriteFile(filepath.Join(tempDir, ".mcp.json"), []byte(mcpJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
 	cmd := newCheckCmd()
 	var stdout, stderr bytes.Buffer
 	cmd.SetOut(&stdout)
