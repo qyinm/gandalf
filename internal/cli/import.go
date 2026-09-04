@@ -64,15 +64,19 @@ func shouldLaunchImportTUI(flags *importFlags, isTTY bool) bool {
 	return !flags.JSON && !flags.DryRun
 }
 
-// stdoutIsTerminal reports whether the command's stdout is an interactive
-// terminal. In tests the output is a captured buffer, so this stays false.
-func stdoutIsTerminal(cmd *cobra.Command) bool {
-	out := cmd.OutOrStdout()
-	file, ok := out.(*os.File)
-	if !ok {
+// importIOIsTerminal reports whether both stdout and stdin are interactive
+// terminals; a wizard that cannot receive answers (redirected stdin) must
+// stay headless. In tests the streams are captured buffers, so this is false.
+func importIOIsTerminal(cmd *cobra.Command) bool {
+	out, ok := cmd.OutOrStdout().(*os.File)
+	if !ok || !term.IsTerminal(out.Fd()) {
 		return false
 	}
-	return term.IsTerminal(file.Fd())
+	in, ok := cmd.InOrStdin().(*os.File)
+	if !ok || !term.IsTerminal(in.Fd()) {
+		return false
+	}
+	return true
 }
 
 func runImport(cmd *cobra.Command, flags *importFlags) int {
@@ -94,7 +98,7 @@ func runImport(cmd *cobra.Command, flags *importFlags) int {
 	// Interactive terminals get the TUI wizard (toggle servers/skills, preview
 	// the masked manifest before writing). Headless invocations (--json,
 	// --dry-run, piped output) keep the scriptable behavior.
-	if shouldLaunchImportTUI(flags, stdoutIsTerminal(cmd)) {
+	if shouldLaunchImportTUI(flags, importIOIsTerminal(cmd)) {
 		return launchImportTUI(runtime, opts)
 	}
 

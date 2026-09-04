@@ -1503,6 +1503,10 @@ func TestSanitizeEnvFilePath_WorkspaceFolderTraversal(t *testing.T) {
 		{input: "../../etc/shadow", expected: ""},
 		{input: "/etc/shadow", expected: ""},
 		{input: "config/.env", expected: "config/.env"},
+		// Segment-aware: ".." inside a filename is not traversal.
+		{input: "${workspaceFolder}/configs..old/.env", expected: "${workspaceFolder}/configs..old/.env"},
+		{input: "configs..old/.env", expected: "configs..old/.env"},
+		{input: "..foo/.env", expected: "..foo/.env"},
 	}
 
 	for _, tc := range cases {

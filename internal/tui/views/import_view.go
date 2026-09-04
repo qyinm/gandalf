@@ -27,6 +27,7 @@ type ImportSelectModel struct {
 	Title       string
 	ProjectPath string
 	Groups      []ImportGroupView
+	Warnings    []string // partial-scan failures that must stay visible
 	Width       int
 	Height      int
 }
@@ -84,6 +85,12 @@ func RenderImportSelect(m ImportSelectModel) string {
 	}, width)
 
 	var body []string
+	for _, warning := range m.Warnings {
+		body = append(body, truncate(warnStyle.Render("⚠ "+warning), width))
+	}
+	if len(m.Warnings) > 0 {
+		body = append(body, "")
+	}
 	for _, group := range m.Groups {
 		scope := ""
 		if group.Scope != "" {

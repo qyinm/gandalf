@@ -163,6 +163,16 @@ func TestRenderImportResult_Badges(t *testing.T) {
 	}
 }
 
+func TestRenderImportSelect_WarningsStayVisible(t *testing.T) {
+	model := sampleSelectModel(80, 24)
+	model.Warnings = []string{"failed to parse /repo/.cursor/mcp.json: unexpected end of JSON input"}
+	plain := ansi.Strip(RenderImportSelect(model))
+	if !strings.Contains(plain, "⚠ failed to parse /repo/.cursor/mcp.json") {
+		t.Errorf("expected partial-scan warning to remain visible on the select screen")
+	}
+	assertLinesFit(t, RenderImportSelect(model), 80)
+}
+
 func TestRenderImportLoading_Fits(t *testing.T) {
 	rendered := RenderImportLoading("Import agent setup", "/repo", 80, 24)
 	assertLinesFit(t, rendered, 80)

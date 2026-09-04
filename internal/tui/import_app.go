@@ -408,6 +408,7 @@ func (a ImportApp) View() string {
 		model := views.ImportSelectModel{
 			Title:       "Import agent setup",
 			ProjectPath: a.opts.ProjectPath,
+			Warnings:    a.result.Warnings,
 			Width:       a.width,
 			Height:      a.height,
 		}
@@ -458,11 +459,19 @@ func (a ImportApp) View() string {
 
 	case importStepDone:
 		res := a.written
-		lines := []string{
+		var lines []string
+		// Partial-scan failures must not look identical to a complete scan.
+		for _, w := range res.Warnings {
+			lines = append(lines, "⚠ "+w)
+		}
+		if len(res.Warnings) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines,
 			fmt.Sprintf("Generated %s", a.opts.OutputFile),
 			fmt.Sprintf("Discovered %d source(s), %d MCP server(s), %d skill(s)",
 				len(res.Sources), len(res.Manifest.MCPServers), len(res.Manifest.Skills)),
-		}
+		)
 		if len(res.ExtractedEnvs) > 0 {
 			lines = append(lines, fmt.Sprintf("Secret protection: templated %d sensitive variable(s) into [env_template]", len(res.ExtractedEnvs)))
 		}
