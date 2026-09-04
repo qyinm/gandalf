@@ -9,11 +9,14 @@ import (
 type DriftKind string
 
 const (
-	DriftMissingMCPServer DriftKind = "missing_mcp_server"
-	DriftMissingSkill     DriftKind = "missing_skill"
-	DriftMissingHook      DriftKind = "missing_hook"
-	DriftOutdatedSkill    DriftKind = "outdated_skill"
-	DriftOutdatedConfig   DriftKind = "outdated_config"
+	DriftMissingMCPServer      DriftKind = "missing_mcp_server"
+	DriftMissingSkill          DriftKind = "missing_skill"
+	DriftMissingHook           DriftKind = "missing_hook"
+	DriftOutdatedSkill         DriftKind = "outdated_skill"
+	DriftOutdatedConfig        DriftKind = "outdated_config"
+	DriftMissingSkillFile      DriftKind = "missing_skill_file"
+	DriftMissingEnvTemplate    DriftKind = "missing_env_template"
+	DriftUnsyncedProjectConfig DriftKind = "unsynced_project_config"
 )
 
 // DriftItem is a single drift entry between manifest and local setup.
