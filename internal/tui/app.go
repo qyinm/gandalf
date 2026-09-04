@@ -35,6 +35,19 @@ type bootMsg struct {
 	err             error
 }
 
+type homeBootMsg struct {
+	evidence       []types.DiscoveredItem
+	baselineStatus baseline.Status
+	err            error
+}
+
+type restBootMsg struct {
+	timelineEntries []types.TimelineEntry
+	corruptEvents   []store.TimelineCorruptEvent
+	snapshotRefs    []snapshotRef
+	err             error
+}
+
 type rescanMsg bootMsg
 
 type setupActionMsg struct {
@@ -205,7 +218,7 @@ func newSetupSearchInput() textinput.Model {
 
 // Init implements tea.Model.
 func (a *App) Init() tea.Cmd {
-	return a.loadData
+	return a.loadHome
 }
 
 // Update implements tea.Model.
@@ -232,6 +245,23 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if cmd != nil {
 			return a, cmd
 		}
+		return a, nil
+
+	case homeBootMsg:
+		if typed.err != nil {
+			a.errText = typed.err.Error()
+			return a, nil
+		}
+		a.ready = true
+		a.applyHomeData(typed.evidence, typed.baselineStatus)
+		return a, a.loadRest
+
+	case restBootMsg:
+		if typed.err != nil {
+			a.setStatus(views.StatusError, typed.err.Error())
+			return a, nil
+		}
+		a.applyRestData(typed.timelineEntries, typed.corruptEvents, typed.snapshotRefs)
 		return a, nil
 
 	case bootMsg:
@@ -1436,14 +1466,23 @@ func (a *App) marketplaceEntryByID(entryID string) (setup.MarketplaceSource, set
 }
 
 func (a *App) applyWorkspaceData(data bootMsg) {
-	a.evidence = data.evidence
-	a.inventory = setup.BuildInventory(data.evidence)
-	a.timelineEntries = data.timelineEntries
-	a.corruptEvents = data.corruptEvents
-	a.snapshotRefs = data.snapshotRefs
-	a.baselineStatus = data.baselineStatus
+	a.applyHomeData(data.evidence, data.baselineStatus)
+	a.applyRestData(data.timelineEntries, data.corruptEvents, data.snapshotRefs)
+}
+
+func (a *App) applyHomeData(evidence []types.DiscoveredItem, baselineStatus baseline.Status) {
+	a.evidence = evidence
+	a.inventory = setup.BuildInventory(evidence)
+	a.baselineStatus = baselineStatus
 	a.clampSetupConsoleState()
+}
+
+func (a *App) applyRestData(entries []types.TimelineEntry, corrupt []store.TimelineCorruptEvent, refs []snapshotRef) {
+	a.timelineEntries = entries
+	a.corruptEvents = corrupt
+	a.snapshotRefs = refs
 	a.snapshotCursor = clampIndex(a.snapshotCursor, len(a.snapshotRefs))
+	a.timelineCursor = ClampTimelineIndex(a.timelineCursor, a.filteredTimeline())
 }
 
 func (a *App) moveInventoryCursor(delta int) {
@@ -2075,21 +2114,23 @@ func (a *App) defaultSetupActionExecutor(ctx context.Context, plan setup.ActionP
 	return err
 }
 
-func (a *App) loadData() tea.Msg {
-	return a.fetchWorkspaceData()
-}
-
-func (a *App) fetchWorkspaceData() bootMsg {
+func (a *App) loadHome() tea.Msg {
 	if _, err := store.EnsureStore(a.runtime.StoreDir); err != nil {
-		return bootMsg{err: err}
+		return homeBootMsg{err: err}
 	}
-
 	scanResult := scan.ScanProject(&types.ScanOptions{
 		ProjectPath: a.runtime.ProjectPath,
 		HomeDir:     a.runtime.HomeDir,
 		StoreDir:    a.runtime.StoreDir,
 	})
+	baselineStatus, err := baseline.BuildStatusFromEvidence(a.runtime, scanResult.Evidence)
+	if err != nil {
+		return homeBootMsg{err: err}
+	}
+	return homeBootMsg{evidence: scanResult.Evidence, baselineStatus: baselineStatus}
+}
 
+func (a *App) loadRest() tea.Msg {
 	var corrupt []store.TimelineCorruptEvent
 	entries, err := store.ListTimelineEntries(a.runtime.StoreDir, store.TimelineListOptions{
 		ProjectPath: a.runtime.ProjectPath,
@@ -2098,24 +2139,38 @@ func (a *App) fetchWorkspaceData() bootMsg {
 		},
 	})
 	if err != nil {
-		return bootMsg{err: err}
+		return restBootMsg{err: err}
 	}
-
 	snapshotRefs, err := listSupportedSnapshotRefs(a.runtime.StoreDir)
 	if err != nil {
-		return bootMsg{err: err}
+		return restBootMsg{err: err}
 	}
-	baselineStatus, err := baseline.BuildStatusFromEvidence(a.runtime, scanResult.Evidence)
-	if err != nil {
-		return bootMsg{err: err}
-	}
+	return restBootMsg{timelineEntries: entries, corruptEvents: corrupt, snapshotRefs: snapshotRefs}
+}
 
+func (a *App) fetchWorkspaceData() bootMsg {
+	home := a.loadHome()
+	typed, ok := home.(homeBootMsg)
+	if !ok {
+		return bootMsg{err: fmt.Errorf("unexpected home boot message")}
+	}
+	if typed.err != nil {
+		return bootMsg{err: typed.err}
+	}
+	rest := a.loadRest()
+	restTyped, ok := rest.(restBootMsg)
+	if !ok {
+		return bootMsg{err: fmt.Errorf("unexpected rest boot message")}
+	}
+	if restTyped.err != nil {
+		return bootMsg{err: restTyped.err}
+	}
 	return bootMsg{
-		evidence:        scanResult.Evidence,
-		timelineEntries: entries,
-		corruptEvents:   corrupt,
-		snapshotRefs:    snapshotRefs,
-		baselineStatus:  baselineStatus,
+		evidence:        typed.evidence,
+		timelineEntries: restTyped.timelineEntries,
+		corruptEvents:   restTyped.corruptEvents,
+		snapshotRefs:    restTyped.snapshotRefs,
+		baselineStatus:  typed.baselineStatus,
 	}
 }
 

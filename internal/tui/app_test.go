@@ -14,6 +14,7 @@ import (
 	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
 	"github.com/qyinm/gandalf/internal/gandalfcore/setup"
+	"github.com/qyinm/gandalf/internal/gandalfcore/snapshot"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 	"github.com/qyinm/gandalf/internal/tui/views"
@@ -27,6 +28,71 @@ func TestNewAppOpensChangesFirstHomeAndKeepsSetupReachable(t *testing.T) {
 	app.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
 	if app.screen != ScreenInventory {
 		t.Fatalf("setup screen = %q", app.screen)
+	}
+}
+
+func TestInitPaintsHomeBeforeLoadingSaves(t *testing.T) {
+	runtime := makeTestRuntime(t)
+	writeCodexConfig(t, runtime.HomeDir, "model = \"gpt-5\"\n")
+	agent := types.AgentCodex
+	scope := types.ScopeUser
+	captureRuntime := runtime
+	captureRuntime.Agent = &agent
+	captureRuntime.Scope = &scope
+	state, err := snapshot.CaptureCurrentState(&captureRuntime, "save-codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WriteSnapshot(runtime.StoreDir, store.StoreSnapshotFrom(state.Snapshot), &agent); err != nil {
+		t.Fatal(err)
+	}
+
+	app := NewApp(runtime)
+	cmd := app.Init()
+	if cmd == nil {
+		t.Fatal("Init should start home boot")
+	}
+	home, ok := cmd().(homeBootMsg)
+	if !ok {
+		t.Fatal("Init should load Home before Saves")
+	}
+	if home.err != nil {
+		t.Fatal(home.err)
+	}
+
+	model, next := app.Update(home)
+	updated := model.(*App)
+	if !updated.ready {
+		t.Fatal("home boot should mark the app ready")
+	}
+	if len(updated.snapshotRefs) != 0 {
+		t.Fatalf("saves should still be empty after home boot: %#v", updated.snapshotRefs)
+	}
+	if len(updated.baselineStatus.Agents) == 0 {
+		t.Fatal("home boot should load baseline status")
+	}
+	if next == nil {
+		t.Fatal("home boot should continue with rest load")
+	}
+
+	rest, ok := next().(restBootMsg)
+	if !ok {
+		t.Fatal("second boot stage should load Saves/Timeline")
+	}
+	if rest.err != nil {
+		t.Fatal(rest.err)
+	}
+	if len(rest.snapshotRefs) == 0 {
+		t.Fatal("rest boot should load snapshot refs")
+	}
+
+	model, next = updated.Update(rest)
+	updated = model.(*App)
+	if next != nil {
+		t.Fatal("rest boot should not chain another load")
+	}
+	if len(updated.snapshotRefs) == 0 {
+		t.Fatal("saves should populate after rest boot")
 	}
 }
 

@@ -2,6 +2,7 @@ package baseline
 
 import (
 	"sort"
+	"sync"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/agents"
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
@@ -49,32 +50,52 @@ func BuildStatus(options types.RuntimeOptions) (Status, error) {
 // BuildStatusFromEvidence builds baseline drift from an already-scanned inventory.
 // Callers that already ran ScanProject should use this to avoid a second walk.
 func BuildStatusFromEvidence(options types.RuntimeOptions, evidence []types.DiscoveredItem) (Status, error) {
-	out := Status{Agents: make([]AgentStatus, 0, len(agents.CurrentSupportedIDs()))}
-
-	for _, agent := range agents.CurrentSupportedIDs() {
-		filtered := filterAgentUserEvidence(evidence, agent)
-		status := AgentStatus{
-			Agent:            agent,
-			UnsupportedCount: countUnsupported(filtered),
-		}
-
-		latest, err := latestSnapshot(options.StoreDir, agent)
+	ids := agents.CurrentSupportedIDs()
+	out := Status{Agents: make([]AgentStatus, len(ids))}
+	errCh := make(chan error, len(ids))
+	var wg sync.WaitGroup
+	for i, agent := range ids {
+		wg.Add(1)
+		go func(i int, agent types.AgentID) {
+			defer wg.Done()
+			status, err := buildAgentStatus(options, evidence, agent)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			out.Agents[i] = status
+		}(i, agent)
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
 		if err != nil {
 			return Status{}, err
 		}
-		if latest != nil {
-			status.HasBaseline = true
-			status.BaselineName = latest.Manifest.Name
-			status.BaselineCreatedAt = latest.Manifest.CreatedAt
-			status.ContentBacked = hasCapturedContent(*latest)
-			status.Diff = diff.DiffGraphs(latest.Graph, graph.BuildGraph(filtered))
-			status.SemanticChangeCount = len(status.Diff.SemanticChanges)
-			status.RawChangeCount = len(status.Diff.RawSourceChanges)
-		}
-		out.Agents = append(out.Agents, status)
 	}
-
 	return out, nil
+}
+
+func buildAgentStatus(options types.RuntimeOptions, evidence []types.DiscoveredItem, agent types.AgentID) (AgentStatus, error) {
+	filtered := filterAgentUserEvidence(evidence, agent)
+	status := AgentStatus{
+		Agent:            agent,
+		UnsupportedCount: countUnsupported(filtered),
+	}
+	latest, err := latestSnapshot(options.StoreDir, agent)
+	if err != nil {
+		return AgentStatus{}, err
+	}
+	if latest != nil {
+		status.HasBaseline = true
+		status.BaselineName = latest.Manifest.Name
+		status.BaselineCreatedAt = latest.Manifest.CreatedAt
+		status.ContentBacked = hasCapturedContent(*latest)
+		status.Diff = diff.DiffGraphs(latest.Graph, graph.BuildGraph(filtered))
+		status.SemanticChangeCount = len(status.Diff.SemanticChanges)
+		status.RawChangeCount = len(status.Diff.RawSourceChanges)
+	}
+	return status, nil
 }
 
 func filterAgentUserEvidence(evidence []types.DiscoveredItem, agent types.AgentID) []types.DiscoveredItem {
