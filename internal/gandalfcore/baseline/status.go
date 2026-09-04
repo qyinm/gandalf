@@ -2,6 +2,7 @@ package baseline
 
 import (
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/agents"
@@ -91,11 +92,32 @@ func buildAgentStatus(options types.RuntimeOptions, evidence []types.DiscoveredI
 		status.BaselineName = latest.Manifest.Name
 		status.BaselineCreatedAt = latest.Manifest.CreatedAt
 		status.ContentBacked = hasCapturedContent(*latest)
-		status.Diff = diff.DiffGraphs(latest.Graph, graph.BuildGraph(filtered))
+		status.Diff = diff.DiffGraphs(
+			withoutCodexPluginCache(latest.Graph),
+			withoutCodexPluginCache(graph.BuildGraph(filtered)),
+		)
 		status.SemanticChangeCount = len(status.Diff.SemanticChanges)
 		status.RawChangeCount = len(status.Diff.RawSourceChanges)
 	}
 	return status, nil
+}
+
+func withoutCodexPluginCache(nodes []types.GraphNode) []types.GraphNode {
+	out := make([]types.GraphNode, 0, len(nodes))
+	for _, node := range nodes {
+		if isCodexPluginCacheSource(node.SourcePath) {
+			continue
+		}
+		out = append(out, node)
+	}
+	return out
+}
+
+func isCodexPluginCacheSource(sourcePath string) bool {
+	if sourcePath == "~/.codex/plugins/cache" || strings.HasPrefix(sourcePath, "~/.codex/plugins/cache/") {
+		return true
+	}
+	return strings.Contains(sourcePath, "/.codex/plugins/cache/")
 }
 
 func filterAgentUserEvidence(evidence []types.DiscoveredItem, agent types.AgentID) []types.DiscoveredItem {
