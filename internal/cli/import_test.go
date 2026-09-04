@@ -210,11 +210,24 @@ func TestCLIImport_ProjectOnly(t *testing.T) {
 	}
 }
 
+func cliLaunchImportTUIForTest(t *testing.T, fn func(types.RuntimeOptions, importer.ImportOptions) int) func() {
+	t.Helper()
+	prev := launchImportTUI
+	launchImportTUI = fn
+	return func() {
+		launchImportTUI = prev
+	}
+}
+
 func TestShouldLaunchImportTUI(t *testing.T) {
 	t.Parallel()
 	withJSON := func(f *importFlags) { f.JSON = true }
 	withDryRun := func(f *importFlags) { f.DryRun = true }
 	withForce := func(f *importFlags) { f.Force = true }
+	withInteractive := func(f *importFlags) { f.Interactive = true }
+	withInteractiveAndDryRun := func(f *importFlags) { f.Interactive = true; f.DryRun = true }
+	withInteractiveAndJSON := func(f *importFlags) { f.Interactive = true; f.JSON = true }
+
 	cases := []struct {
 		name   string
 		mutate func(*importFlags)
@@ -227,6 +240,12 @@ func TestShouldLaunchImportTUI(t *testing.T) {
 		{"dry-run stays headless", withDryRun, true, false},
 		{"piped output stays headless", nil, false, false},
 		{"piped json stays headless", withJSON, false, false},
+		{"interactive flag overrides non-TTY", withInteractive, false, true},
+		{"interactive flag with TTY", withInteractive, true, true},
+		{"interactive flag with dry-run stays headless", withInteractiveAndDryRun, false, false},
+		{"interactive flag with json stays headless", withInteractiveAndJSON, false, false},
+		{"interactive flag with dry-run and TTY stays headless", withInteractiveAndDryRun, true, false},
+		{"interactive flag with json and TTY stays headless", withInteractiveAndJSON, true, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -242,7 +261,6 @@ func TestShouldLaunchImportTUI(t *testing.T) {
 }
 
 func TestRunCLIImport_DoesNotLaunchTUIWhenPiped(t *testing.T) {
-	t.Parallel()
 	projectPath, homeDir, _ := makeSandbox(t)
 
 	mcpJSON := `{"mcpServers": {"piped-server": {"command": "npx"}}}`
@@ -253,12 +271,11 @@ func TestRunCLIImport_DoesNotLaunchTUIWhenPiped(t *testing.T) {
 	// Stub the TUI launch seam: it must NOT be called for captured (non-TTY)
 	// output, otherwise automation would block on an interactive screen.
 	launched := false
-	previous := launchImportTUI
-	launchImportTUI = func(_ types.RuntimeOptions, _ importer.ImportOptions) int {
+	restore := cliLaunchImportTUIForTest(t, func(_ types.RuntimeOptions, _ importer.ImportOptions) int {
 		launched = true
 		return 0
-	}
-	defer func() { launchImportTUI = previous }()
+	})
+	defer restore()
 
 	_, stderr, code := runCLI(t,
 		"import",
@@ -270,5 +287,173 @@ func TestRunCLIImport_DoesNotLaunchTUIWhenPiped(t *testing.T) {
 	}
 	if launched {
 		t.Errorf("TUI must not launch when stdout is not a terminal")
+	}
+}
+
+func TestCLIImport_InteractiveFlag_LaunchesTUI(t *testing.T) {
+	projectPath, homeDir, _ := makeSandbox(t)
+
+	mcpJSON := `{"mcpServers": {"interactive-server": {"command": "npx"}}}`
+	if err := os.WriteFile(filepath.Join(projectPath, ".mcp.json"), []byte(mcpJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	called := false
+	var capturedOpts importer.ImportOptions
+	restore := cliLaunchImportTUIForTest(t, func(_ types.RuntimeOptions, opts importer.ImportOptions) int {
+		called = true
+		capturedOpts = opts
+		return 0
+	})
+	defer restore()
+
+	stdout, stderr, code := runCLI(t,
+		"import",
+		"--project", projectPath,
+		"--home", homeDir,
+		"--interactive",
+	)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0 with --interactive stub, got %d. Stderr: %s", code, stderr)
+	}
+	if !called {
+		t.Errorf("expected launchImportTUI to be called when --interactive is provided, stdout: %s", stdout)
+	}
+	realProject := projectPath
+	if rp, err := filepath.EvalSymlinks(projectPath); err == nil {
+		realProject = rp
+	}
+	if capturedOpts.ProjectPath != realProject {
+		t.Errorf("expected ProjectPath %q, got %q", realProject, capturedOpts.ProjectPath)
+	}
+}
+
+func TestCLIImport_InteractiveFlag_DryRunOverridesTUI(t *testing.T) {
+	projectPath, homeDir, _ := makeSandbox(t)
+
+	mcpJSON := `{"mcpServers": {"demo": {"command": "node"}}}`
+	if err := os.WriteFile(filepath.Join(projectPath, ".mcp.json"), []byte(mcpJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	called := false
+	restore := cliLaunchImportTUIForTest(t, func(_ types.RuntimeOptions, _ importer.ImportOptions) int {
+		called = true
+		return 0
+	})
+	defer restore()
+
+	stdout, stderr, code := runCLI(t,
+		"import",
+		"--project", projectPath,
+		"--home", homeDir,
+		"--interactive",
+		"--dry-run",
+	)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d. Stderr: %s", code, stderr)
+	}
+	if called {
+		t.Errorf("launchImportTUI must NOT be called when --dry-run is passed even with --interactive")
+	}
+	if !strings.Contains(stdout, "[DRY-RUN]") {
+		t.Errorf("expected [DRY-RUN] in stdout, got: %s", stdout)
+	}
+}
+
+func TestCLIImport_InteractiveFlag_JSONOverridesTUI(t *testing.T) {
+	projectPath, homeDir, _ := makeSandbox(t)
+
+	mcpJSON := `{"mcpServers": {"demo": {"command": "node"}}}`
+	if err := os.WriteFile(filepath.Join(projectPath, ".mcp.json"), []byte(mcpJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	called := false
+	restore := cliLaunchImportTUIForTest(t, func(_ types.RuntimeOptions, _ importer.ImportOptions) int {
+		called = true
+		return 0
+	})
+	defer restore()
+
+	stdout, stderr, code := runCLI(t,
+		"import",
+		"--project", projectPath,
+		"--home", homeDir,
+		"-i",
+		"--json",
+	)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d. Stderr: %s", code, stderr)
+	}
+	if called {
+		t.Errorf("launchImportTUI must NOT be called when --json is passed even with -i")
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(stdout), &parsed); err != nil {
+		t.Fatalf("expected valid json output, got: %s", stdout)
+	}
+}
+
+func TestCLIImport_CustomOutput(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, _ := makeSandbox(t)
+
+	mcpJSON := `{"mcpServers": {"custom-output-srv": {"command": "node"}}}`
+	if err := os.WriteFile(filepath.Join(projectPath, ".mcp.json"), []byte(mcpJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	customOut := "custom-manifest.toml"
+	stdout, stderr, code := runCLI(t,
+		"import",
+		"--project", projectPath,
+		"--home", homeDir,
+		"-o", customOut,
+	)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d. Stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Successfully generated "+customOut) {
+		t.Errorf("expected output mentioning %s, got: %s", customOut, stdout)
+	}
+	if _, err := os.Stat(filepath.Join(projectPath, customOut)); err != nil {
+		t.Fatalf("expected %s to be created on disk: %v", customOut, err)
+	}
+}
+
+func TestCLIImport_FromFlag(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, _ := makeSandbox(t)
+
+	// Create custom config outside standard discovery paths
+	customDir := t.TempDir()
+	customPath := filepath.Join(customDir, "explicit-mcp.json")
+	customContent := `{"mcpServers": {"explicit-server": {"command": "python", "args": ["main.py"]}}}`
+	if err := os.WriteFile(customPath, []byte(customContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr, code := runCLI(t,
+		"import",
+		"--project", projectPath,
+		"--home", homeDir,
+		"--from", customPath,
+	)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d. Stderr: %s", code, stderr)
+	}
+
+	manifestData, err := os.ReadFile(filepath.Join(projectPath, "gandalf.toml"))
+	if err != nil {
+		t.Fatalf("failed to read generated gandalf.toml: %v", err)
+	}
+	if !strings.Contains(string(manifestData), "explicit-server") {
+		t.Errorf("expected explicit-server from --from file, got content: %s", string(manifestData))
 	}
 }

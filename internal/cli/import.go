@@ -22,6 +22,7 @@ type importFlags struct {
 	DryRun      bool
 	Force       bool
 	Output      string
+	Interactive bool
 }
 
 func newImportCmd() *cobra.Command {
@@ -50,6 +51,7 @@ redacts hardcoded secrets into [env_template], and mirrors team skills into .gan
 	cmd.Flags().BoolVar(&flags.DryRun, "dry-run", false, "Preview generated gandalf.toml without writing to disk")
 	cmd.Flags().BoolVarP(&flags.Force, "force", "f", false, "Overwrite existing gandalf.toml if present")
 	cmd.Flags().StringVarP(&flags.Output, "output", "o", "gandalf.toml", "Output manifest file path")
+	cmd.Flags().BoolVarP(&flags.Interactive, "interactive", "i", false, "Launch interactive TUI wizard")
 
 	return cmd
 }
@@ -58,10 +60,10 @@ redacts hardcoded secrets into [env_template], and mirrors team skills into .gan
 // session eligible for the TUI wizard. Machine-readable (--json) and
 // non-destructive preview (--dry-run) modes always stay headless.
 func shouldLaunchImportTUI(flags *importFlags, isTTY bool) bool {
-	if !isTTY {
+	if flags.JSON || flags.DryRun {
 		return false
 	}
-	return !flags.JSON && !flags.DryRun
+	return isTTY || flags.Interactive
 }
 
 // importIOIsTerminal reports whether both stdout and stdin are interactive
