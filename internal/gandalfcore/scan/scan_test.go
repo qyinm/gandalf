@@ -193,7 +193,7 @@ OPENAI_API_KEY = "secret"
 	}
 }
 
-func TestDiscoversCodexSkillsFromUserAndPluginCache(t *testing.T) {
+func TestDiscoversCodexUserSkillsAndSkipsPluginCache(t *testing.T) {
 	sb := makeSandbox(t)
 	userSkill := filepath.Join(sb.homeDir, ".codex/skills/review/SKILL.md")
 	pluginSkill := filepath.Join(
@@ -228,8 +228,11 @@ func TestDiscoversCodexSkillsFromUserAndPluginCache(t *testing.T) {
 			foundReact = true
 		}
 	}
-	if !foundReview || !foundReact {
-		t.Fatalf("skills missing: review=%v react=%v", foundReview, foundReact)
+	if !foundReview {
+		t.Fatal("expected user skill ~/.codex/skills/review")
+	}
+	if foundReact {
+		t.Fatal("plugin cache skills should not be scanned as inventory skills")
 	}
 }
 

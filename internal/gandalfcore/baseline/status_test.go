@@ -1,11 +1,16 @@
 package baseline_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/baseline"
+	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
+	"github.com/qyinm/gandalf/internal/gandalfcore/scan"
+	_ "github.com/qyinm/gandalf/internal/gandalfcore/scan/plugins"
 	"github.com/qyinm/gandalf/internal/gandalfcore/snapshot"
 	"github.com/qyinm/gandalf/internal/gandalfcore/store"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
@@ -207,7 +212,7 @@ func TestBuildStatusDoesNotTreatOnlyPreApplySnapshotAsBaseline(t *testing.T) {
 	}
 }
 
-func TestBuildStatusCountsOmittedContent(t *testing.T) {
+func TestBuildStatusDoesNotCaptureCurrentContent(t *testing.T) {
 	t.Parallel()
 	projectPath, homeDir, storeDir := makeSandbox(t)
 	configPath := filepath.Join(homeDir, ".codex", "config.toml")
@@ -227,7 +232,199 @@ func TestBuildStatusCountsOmittedContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	codex := findAgentStatus(t, status, types.AgentCodex)
-	if codex.OmittedContentCount == 0 {
-		t.Fatalf("expected omitted content count: %#v", codex)
+	if codex.OmittedContentCount != 0 {
+		t.Fatalf("status build should not capture current content: %#v", codex)
+	}
+}
+
+func TestBuildStatusIgnoresLegacyCodexPluginCacheSkills(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, storeDir := makeSandbox(t)
+	userSkill := filepath.Join(homeDir, ".codex", "skills", "review", "SKILL.md")
+	pluginSkill := filepath.Join(
+		homeDir,
+		".codex", "plugins", "cache", "openai-curated", "build-web-apps", "1.0.0", "skills", "react-best-practices", "SKILL.md",
+	)
+	if err := os.MkdirAll(filepath.Dir(userSkill), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(pluginSkill), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(userSkill, []byte("---\nname: review\ndescription: Review code\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(pluginSkill, []byte("---\nname: react-best-practices\ndescription: React guidance\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := types.AgentCodex
+	scope := types.ScopeUser
+	runtime := &types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+		Agent:       &agent,
+		Scope:       &scope,
+	}
+	state, err := snapshot.CaptureCurrentState(runtime, "baseline-codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cachePath := "~/.codex/plugins/cache/openai-curated/build-web-apps/1.0.0/skills/react-best-practices"
+	state.Snapshot.Graph = append(state.Snapshot.Graph, types.GraphNode{
+		ID:             "codex:user:skill:react-best-practices:legacy-cache",
+		Agent:          types.AgentCodex,
+		Scope:          types.ScopeUser,
+		SourcePath:     cachePath,
+		EntityKind:     types.KindSkill,
+		EntityName:     "react-best-practices",
+		EffectiveValue: json.RawMessage(`{"captureStatus":"captured"}`),
+		Confidence:     types.ConfidenceHigh,
+		EvidenceID:     "legacy-cache",
+	})
+	if err := store.WriteSnapshot(storeDir, store.StoreSnapshotFrom(state.Snapshot), &agent); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := baseline.BuildStatus(types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex := findAgentStatus(t, status, types.AgentCodex)
+	for _, change := range codex.Diff.SemanticChanges {
+		if change.Code == diff.SemanticSkillRemoved && change.EntityName == "react-best-practices" {
+			t.Fatalf("plugin-cache skill should not appear as removed: %#v", change)
+		}
+	}
+
+	if err := os.RemoveAll(filepath.Dir(userSkill)); err != nil {
+		t.Fatal(err)
+	}
+	status, err = baseline.BuildStatus(types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex = findAgentStatus(t, status, types.AgentCodex)
+	foundReviewRemoved := false
+	for _, change := range codex.Diff.SemanticChanges {
+		if change.Code == diff.SemanticSkillRemoved && change.EntityName == "review" {
+			foundReviewRemoved = true
+		}
+		if change.Code == diff.SemanticSkillRemoved && change.EntityName == "react-best-practices" {
+			t.Fatalf("plugin-cache skill should not appear as removed after real drift: %#v", change)
+		}
+	}
+	if !foundReviewRemoved {
+		t.Fatalf("expected user skill removal, got %#v", codex.Diff.SemanticChanges)
+	}
+}
+
+func TestBuildStatusReportsCodexInstalledPluginDrift(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, storeDir := makeSandbox(t)
+	configPath := filepath.Join(homeDir, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := types.AgentCodex
+	scope := types.ScopeUser
+	runtime := &types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+		Agent:       &agent,
+		Scope:       &scope,
+	}
+	state, err := snapshot.CaptureCurrentState(runtime, "baseline-codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WriteSnapshot(storeDir, store.StoreSnapshotFrom(state.Snapshot), &agent); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(configPath, []byte("model = \"gpt-5\"\n\n[plugins.\"vercel@openai-curated\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status, err := baseline.BuildStatus(types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex := findAgentStatus(t, status, types.AgentCodex)
+	foundPlugin := false
+	for _, change := range codex.Diff.RawSourceChanges {
+		if change.Status == "added" && strings.Contains(change.SourcePath, "/.codex/plugins/cache/") {
+			foundPlugin = true
+			break
+		}
+	}
+	if !foundPlugin {
+		t.Fatalf("expected installed plugin addition, got %#v", codex.Diff.RawSourceChanges)
+	}
+}
+
+func TestBuildStatusFromEvidenceMatchesBuildStatus(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, storeDir := makeSandbox(t)
+	codexConfig := filepath.Join(homeDir, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(codexConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codexConfig, []byte("model = \"gpt-5\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := types.AgentCodex
+	scope := types.ScopeUser
+	runtime := types.RuntimeOptions{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+		StoreDir:    storeDir,
+		Agent:       &agent,
+		Scope:       &scope,
+		CaptureContent: true,
+	}
+	state, err := snapshot.CaptureCurrentState(&runtime, "baseline-codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WriteSnapshot(storeDir, store.StoreSnapshotFrom(state.Snapshot), &agent); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codexConfig, []byte("model = \"gpt-5.1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	options := types.RuntimeOptions{ProjectPath: projectPath, HomeDir: homeDir, StoreDir: storeDir}
+	want, err := baseline.BuildStatus(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanResult := scan.ScanProject(&types.ScanOptions{ProjectPath: projectPath, HomeDir: homeDir, StoreDir: storeDir})
+	got, err := baseline.BuildStatusFromEvidence(options, scanResult.Evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCodex := findAgentStatus(t, want, types.AgentCodex)
+	gotCodex := findAgentStatus(t, got, types.AgentCodex)
+	if !gotCodex.HasBaseline || gotCodex.ChangeCount() != wantCodex.ChangeCount() {
+		t.Fatalf("from-evidence %#v, want %#v", gotCodex, wantCodex)
 	}
 }

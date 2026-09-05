@@ -81,7 +81,6 @@ func codexSkillTargets(homeDir string) []scan.ScanTarget {
 	dir := true
 	return []scan.ScanTarget{
 		scan.HomeTarget(homeDir, ".codex/skills", types.AgentCodex, types.KindSkill, types.ParserFilesystem, scan.ScanTargetOverrides{Directory: &dir}),
-		scan.HomeTarget(homeDir, ".codex/plugins/cache", types.AgentCodex, types.KindSkill, types.ParserFilesystem, scan.ScanTargetOverrides{Directory: &dir}),
 		scan.HomeTarget(homeDir, ".codex/vendor_imports/skills", types.AgentCodex, types.KindSkill, types.ParserFilesystem, scan.ScanTargetOverrides{Directory: &dir}),
 	}
 }
