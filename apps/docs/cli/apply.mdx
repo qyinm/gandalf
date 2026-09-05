@@ -54,7 +54,7 @@ gandalf restore --snapshot <backup> --apply --experimental
   Smart Merge never deletes or modifies unrelated personal settings. Only entries declared in the manifest are added or updated.
 </Note>
 
-With `--project-only`, apply skips user-home writes and Smart-Merges repository agent files (`.mcp.json`, `.cursor/mcp.json`, `.codex/config.toml`) using uninterpolated `${ENV}` templates so `gandalf check --project-only` / the CI Action can pass.
+With `--project-only`, apply skips user-home writes and reconciles repository agent files (`.mcp.json`, `.cursor/mcp.json`, `.codex/config.toml`) to the manifest set using uninterpolated `${ENV}` templates so `gandalf check --project-only` / the CI Action can pass. Undeclared project MCP servers are removed; unrelated keys are preserved. Disk content is re-read at apply time after Review Changes.
 
 ## Related
 

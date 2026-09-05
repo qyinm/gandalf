@@ -37,10 +37,7 @@ func (p ProjectSyncPlanner) CreatePlan() (*SyncPlan, error) {
 		Manifest:    p.Manifest,
 		ProjectRoot: p.ProjectRoot,
 		HomeDir:     p.HomeDir,
-	}
-
-	if len(p.Manifest.MCPServers) == 0 {
-		return plan, nil
+		Scope:       types.ScopeProject,
 	}
 
 	for _, agent := range p.Manifest.Agents {
@@ -67,13 +64,43 @@ func (p ProjectSyncPlanner) CreatePlan() (*SyncPlan, error) {
 	return plan, nil
 }
 
+// RefreshStaleItems re-merges plan content when a target changed after review.
+func (p ProjectSyncPlanner) RefreshStaleItems(plan *SyncPlan) error {
+	if plan == nil {
+		return fmt.Errorf("plan is required")
+	}
+	for i := range plan.Items {
+		item := &plan.Items[i]
+		if item.Action != "update" || item.MergeKind == "" {
+			continue
+		}
+		current, err := readOptionalText(item.TargetFile)
+		if err != nil {
+			return fmt.Errorf("revalidate %s: %w", item.TargetFile, err)
+		}
+		if current == item.BaseContent {
+			continue
+		}
+		merged, err := mergeProjectTarget(item.MergeKind, current, plan.Manifest)
+		if err != nil {
+			return fmt.Errorf("re-merge %s: %w", item.TargetFile, err)
+		}
+		item.Content = merged
+		item.BaseContent = current
+	}
+	return nil
+}
+
 func (p ProjectSyncPlanner) addJSONConfig(plan *SyncPlan, relFile string, agent types.AgentID) error {
 	target := filepath.Join(p.ProjectRoot, relFile)
 	existing, err := readOptionalText(target)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", relFile, err)
 	}
-	merged, err := MergeCursorMCPJSON(existing, p.Manifest)
+	if len(p.Manifest.MCPServers) == 0 && existing == "" {
+		return nil
+	}
+	merged, err := ReconcileCursorMCPJSON(existing, p.Manifest)
 	if err != nil {
 		return fmt.Errorf("merge %s: %w", relFile, err)
 	}
@@ -84,7 +111,9 @@ func (p ProjectSyncPlanner) addJSONConfig(plan *SyncPlan, relFile string, agent 
 		Action:      "update",
 		TargetFile:  target,
 		Content:     merged,
-		Description: fmt.Sprintf("Inject %d MCP server(s) into project %s", len(p.Manifest.MCPServers), relFile),
+		BaseContent: existing,
+		MergeKind:   projectMergeJSON,
+		Description: fmt.Sprintf("Reconcile MCP servers in project %s", relFile),
 	})
 	return nil
 }
@@ -95,7 +124,10 @@ func (p ProjectSyncPlanner) addTOMLConfig(plan *SyncPlan, relFile string, agent 
 	if err != nil {
 		return fmt.Errorf("read %s: %w", relFile, err)
 	}
-	merged, err := MergeCodexConfigTOML(existing, p.Manifest)
+	if len(p.Manifest.MCPServers) == 0 && existing == "" {
+		return nil
+	}
+	merged, err := ReconcileCodexConfigTOML(existing, p.Manifest)
 	if err != nil {
 		return fmt.Errorf("merge %s: %w", relFile, err)
 	}
@@ -106,9 +138,22 @@ func (p ProjectSyncPlanner) addTOMLConfig(plan *SyncPlan, relFile string, agent 
 		Action:      "update",
 		TargetFile:  target,
 		Content:     merged,
-		Description: fmt.Sprintf("Inject %d MCP server(s) into project %s", len(p.Manifest.MCPServers), relFile),
+		BaseContent: existing,
+		MergeKind:   projectMergeTOML,
+		Description: fmt.Sprintf("Reconcile MCP servers in project %s", relFile),
 	})
 	return nil
+}
+
+func mergeProjectTarget(kind, existing string, m *manifest.Manifest) (string, error) {
+	switch kind {
+	case projectMergeJSON:
+		return ReconcileCursorMCPJSON(existing, m)
+	case projectMergeTOML:
+		return ReconcileCodexConfigTOML(existing, m)
+	default:
+		return "", fmt.Errorf("unknown project merge kind %q", kind)
+	}
 }
 
 func readOptionalText(path string) (string, error) {

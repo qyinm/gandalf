@@ -33,3 +33,9 @@ CI loads the manifest with `NoInterpolate`. Project apply must do the same so `$
 
 ### 4. Home apply stays home-only
 Default apply remains the developer-machine Smart Merge. Creating project files is opt-in (`--project-only`) so a local sync does not dirty the repository by surprise.
+
+### 5. Project apply is a reviewed reconcile, not a stale write
+Review Changes is not apply authority. Re-read each project target at apply time and re-merge if it changed, so concurrent unrelated keys survive. Pre-apply snapshots use project scope and must capture those files before a rollback name is reported.
+
+### 6. Extra project MCP servers are drift that apply closes
+CI rejects undeclared servers. Project apply therefore drops unmanaged `mcpServers` / `[mcp_servers.*]` entries while preserving non-server keys. Home Smart Merge still keeps personal servers.
