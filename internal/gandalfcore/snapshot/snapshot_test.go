@@ -222,3 +222,50 @@ func TestSkipsClaudeJSONMetadataOnlyFromContentCapture(t *testing.T) {
 		t.Fatalf("~/.claude.json must stay metadata-only, got %#v", state.Snapshot.Content)
 	}
 }
+
+func TestCapturesCursorCLIConfigWithContentBacking(t *testing.T) {
+	t.Parallel()
+	projectPath, homeDir, storeDir := makeSandbox(t)
+	cursorDir := filepath.Join(homeDir, ".cursor")
+	if err := os.MkdirAll(cursorDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cliConfig := `{
+  "version": 1,
+  "editor": {"vimMode": false},
+  "permissions": {"allow": ["Shell(ls)"], "deny": []}
+}`
+	if err := os.WriteFile(filepath.Join(cursorDir, "cli-config.json"), []byte(cliConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := types.AgentCursor
+	scope := types.ScopeUser
+	state, err := snapshot.CaptureCurrentState(&types.RuntimeOptions{
+		ProjectPath:    projectPath,
+		HomeDir:        homeDir,
+		StoreDir:       storeDir,
+		Agent:          &agent,
+		Scope:          &scope,
+		CaptureContent: true,
+	}, "cursor-cli-baseline")
+	if err != nil {
+		t.Fatalf("CaptureCurrentState: %v", err)
+	}
+
+	foundContent := false
+	for _, entry := range state.Snapshot.Content {
+		if entry.SourcePath == "~/.cursor/cli-config.json" && entry.CaptureStatus == "captured" {
+			foundContent = true
+			if entry.Content == nil || *entry.Content != cliConfig {
+				t.Fatalf("content = %#v", entry.Content)
+			}
+			if entry.Checksum == "" || entry.StoragePath == "" {
+				t.Fatalf("missing checksum/storage path: %#v", entry)
+			}
+		}
+	}
+	if !foundContent {
+		t.Fatal("expected Cursor CLI cli-config.json content capture")
+	}
+}

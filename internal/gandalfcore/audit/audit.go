@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/graph"
+	"github.com/qyinm/gandalf/internal/gandalfcore/policy"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
@@ -70,17 +71,14 @@ func isWildcardPermission(item *types.DiscoveredItem) bool {
 	if item.Kind != types.KindPermission {
 		return false
 	}
-	rule := entityName(item)
 	if len(item.Value) > 0 {
 		if obj := record(item.Value); obj != nil {
 			if v, ok := obj["rule"]; ok {
-				if s := jsonString(v); s != "" {
-					rule = s
-				}
+				return policy.PermissionWildcard{}.InJSON(v)
 			}
 		}
 	}
-	return rule == "*" || strings.Contains(rule, "*") || strings.Contains(rule, "(*)")
+	return policy.PermissionWildcard{}.InName(entityName(item))
 }
 
 func isSecretLike(item *types.DiscoveredItem) bool {

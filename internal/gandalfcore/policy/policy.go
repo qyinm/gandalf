@@ -3,6 +3,7 @@ package policy
 import (
 	"encoding/json"
 	"regexp"
+	"strings"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
@@ -26,6 +27,42 @@ func RestorePolicyFor(kind types.EvidenceKind) types.RestorePolicy {
 	default:
 		return types.RestoreNotSupported
 	}
+}
+
+// PermissionWildcard inspects permission names and structured rule payloads.
+type PermissionWildcard struct{}
+
+func (PermissionWildcard) InName(name string) bool {
+	return permissionWildcardToken(name)
+}
+
+func (PermissionWildcard) InJSON(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var decoded any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return permissionWildcardToken(string(raw))
+	}
+	return permissionWildcardValue(decoded)
+}
+
+func permissionWildcardToken(s string) bool {
+	return s == "*" || strings.Contains(s, "*") || strings.Contains(s, "(*)")
+}
+
+func permissionWildcardValue(value any) bool {
+	switch v := value.(type) {
+	case string:
+		return permissionWildcardToken(v)
+	case []any:
+		for _, item := range v {
+			if permissionWildcardValue(item) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func IsSecretLikeKey(key string) bool {

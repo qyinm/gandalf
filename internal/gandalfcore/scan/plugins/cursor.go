@@ -21,22 +21,24 @@ var (
 	cursorScopeRootPattern     = regexp.MustCompile(`^(.*?)(?:^|/)(?:\.cursor|\.agents)/skills$`)
 )
 
-// CursorScanner discovers Cursor editor configuration.
+// CursorScanner discovers Cursor editor and Agent CLI configuration.
 type CursorScanner struct{}
 
 func (CursorScanner) AgentID() types.AgentID { return types.AgentCursor }
 func (CursorScanner) AgentName() string      { return "Cursor" }
 func (CursorScanner) Description() string {
-	return "Cursor editor configuration (MCP servers, skills, hooks)"
+	return "Cursor editor and CLI configuration (MCP servers, skills, hooks, CLI permissions)"
 }
-func (CursorScanner) Targets(projectPath, homeDir string) []scan.ScanTarget {
-	return cursorMCPTargets(projectPath, homeDir)
+func (c CursorScanner) Targets(projectPath, homeDir string) []scan.ScanTarget {
+	targets := cursorMCPTargets(projectPath, homeDir)
+	return append(targets, CursorCLIConfig{}.Targets(projectPath, homeDir)...)
 }
 
 func (c CursorScanner) Scan(context *scan.ScannerContext) []types.DiscoveredItem {
 	base := scan.NewScannerBase(types.AgentCursor)
 	mcpEvidence := scanCursorMCPServers(context.ProjectPath, context.HomeDir, context.Scope, base)
 	hookEvidence := scanCursorHooks(context.ProjectPath, context.HomeDir, context.Scope, base)
+	cliEvidence := CursorCLIConfig{}.Scan(context)
 	var skillEvidence []types.DiscoveredItem
 	for _, target := range cursorSkillTargets(context.ProjectPath, context.HomeDir) {
 		if !scan.ScopeEnabled(target.Scope, context.Scope) {
@@ -44,13 +46,14 @@ func (c CursorScanner) Scan(context *scan.ScannerContext) []types.DiscoveredItem
 		}
 		skillEvidence = append(skillEvidence, scanCursorSkillDirectory(target)...)
 	}
-	if len(mcpEvidence) == 0 && len(skillEvidence) == 0 && len(hookEvidence) == 0 {
+	if len(mcpEvidence) == 0 && len(skillEvidence) == 0 && len(hookEvidence) == 0 && len(cliEvidence) == 0 {
 		return nil
 	}
 	var evidence []types.DiscoveredItem
 	evidence = append(evidence, mcpEvidence...)
 	evidence = append(evidence, dedupeSkillsByName(skillEvidence)...)
 	evidence = append(evidence, hookEvidence...)
+	evidence = append(evidence, cliEvidence...)
 	evidence = append(evidence, cursorTeamHooksBlindSpot())
 	return evidence
 }
