@@ -297,12 +297,19 @@ func emitJSONEvidence(target ScanTarget, value any) []types.DiscoveredItem {
 					permTarget.Kind = types.KindPermission
 					permTarget.Sensitivity = "command_config"
 					permTarget.ContentPolicy = "structured_safe_fields_only"
-					item := baseItem(permTarget, types.CaptureCaptured, map[string]any{
+					ruleDisplay := ValueToJSString(permRule)
+					metadata := map[string]any{
 						"permissionKey": permName,
-					}, map[string]any{"rule": permRule})
+					}
+					name := ruleDisplay
+					if isCursorCLIConfigSource(target.SourcePath) {
+						name = permName
+						metadata["ruleDisplay"] = ruleDisplay
+					}
+					item := baseItem(permTarget, types.CaptureCaptured, metadata, map[string]any{"rule": permRule})
 					item.ID = itemID(target, "perm-"+permName)
 					item.Kind = types.KindPermission
-					item.Name = stringPtr(ValueToJSString(permRule))
+					item.Name = stringPtr(name)
 					evidence = append(evidence, item)
 				}
 			}
@@ -356,13 +363,35 @@ func emitJSONEvidence(target ScanTarget, value any) []types.DiscoveredItem {
 		}
 	}
 
-	evidence = append(evidence, baseItem(target, types.CaptureCaptured, nil, value))
+	evidence = append(evidence, capturedJSONFileItem(target, value))
 	return evidence
+}
+
+func capturedJSONFileItem(target ScanTarget, value any) types.DiscoveredItem {
+	item := baseItem(target, types.CaptureCaptured, nil, value)
+	if !isCursorCLIConfigSource(target.SourcePath) || len(item.Value) == 0 {
+		return item
+	}
+	redacted, err := policy.RedactStructuredValue(item.Value)
+	if err != nil {
+		return item
+	}
+	item.Value = redacted
+	return item
 }
 
 func isPermissionJSONSource(sourcePath string) bool {
 	switch filepath.Base(sourcePath) {
 	case "settings.json", "cli-config.json", "cli.json":
+		return true
+	default:
+		return false
+	}
+}
+
+func isCursorCLIConfigSource(sourcePath string) bool {
+	switch filepath.Base(sourcePath) {
+	case "cli-config.json", "cli.json":
 		return true
 	default:
 		return false
