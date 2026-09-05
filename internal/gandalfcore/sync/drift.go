@@ -365,7 +365,7 @@ func compareProjectServers(report *DriftReport, targetFile string, expectedServe
 				Name:        srvName,
 				TargetFile:  targetFile,
 				Description: fmt.Sprintf("MCP server '%s' declared in gandalf.toml is missing from project '%s'", srvName, targetFile),
-				Details:     "Project agent configuration is out of sync with gandalf.toml (run 'gandalf apply' to sync)",
+				Details:     "Project agent configuration is out of sync with gandalf.toml (run 'gandalf apply --project-only' to sync)",
 			})
 			continue
 		}
@@ -377,7 +377,7 @@ func compareProjectServers(report *DriftReport, targetFile string, expectedServe
 				Name:        srvName,
 				TargetFile:  targetFile,
 				Description: fmt.Sprintf("MCP server '%s' in '%s' has modified settings differing from gandalf.toml", srvName, targetFile),
-				Details:     "Server configuration differs from gandalf.toml (run 'gandalf apply' to sync)",
+				Details:     "Server configuration differs from gandalf.toml (run 'gandalf apply --project-only' to sync)",
 			})
 		}
 	}
