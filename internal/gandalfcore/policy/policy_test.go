@@ -29,6 +29,26 @@ func TestRestorePolicyFor(t *testing.T) {
 	}
 }
 
+func TestPermissionWildcardInspectsStringAndArrayRules(t *testing.T) {
+	t.Parallel()
+	wildcard := policy.PermissionWildcard{}
+	if !wildcard.InName("Bash(*)") || !wildcard.InName("*") {
+		t.Fatal("expected wildcard names to match")
+	}
+	if wildcard.InName("allow") || wildcard.InName("deny") {
+		t.Fatal("allow/deny names are not wildcards")
+	}
+	if !wildcard.InJSON(json.RawMessage(`"Shell(*)"`)) {
+		t.Fatal("expected string wildcard rule")
+	}
+	if !wildcard.InJSON(json.RawMessage(`["Shell(ls)","Shell(*)"]`)) {
+		t.Fatal("expected array wildcard rule")
+	}
+	if wildcard.InJSON(json.RawMessage(`["Shell(ls)","Shell(echo)"]`)) {
+		t.Fatal("explicit command list is not a wildcard")
+	}
+}
+
 func TestSecretLikeKeys(t *testing.T) {
 	t.Parallel()
 	for _, key := range []string{"OPENAI_API_KEY", "github_token", "client-secret"} {

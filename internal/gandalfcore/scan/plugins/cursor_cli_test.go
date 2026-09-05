@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/qyinm/gandalf/internal/gandalfcore/audit"
 	"github.com/qyinm/gandalf/internal/gandalfcore/diff"
 	"github.com/qyinm/gandalf/internal/gandalfcore/graph"
 	"github.com/qyinm/gandalf/internal/gandalfcore/scan"
@@ -179,6 +180,67 @@ func TestCursorCLIEqualAllowDenyStayDistinctAndTrackOneKeyChange(t *testing.T) {
 	}
 	if allowChanges != 0 {
 		t.Fatalf("allow should stay stable, got %d allow changes in %#v", allowChanges, graphDiff.SemanticChanges)
+	}
+}
+
+func TestCursorCLIWildcardPermissionsAreAuditedAndDiffed(t *testing.T) {
+	homeDir := t.TempDir()
+	projectPath := t.TempDir()
+	writeFile(t, filepath.Join(homeDir, ".cursor/cli-config.json"), `{
+  "version": 1,
+  "editor": {"vimMode": false},
+  "permissions": {
+    "allow": ["Shell(ls)"],
+    "deny": ["Shell(rm)"]
+  }
+}`)
+	baseline := CursorScanner{}.Scan(&scan.ScannerContext{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+	})
+	writeFile(t, filepath.Join(homeDir, ".cursor/cli-config.json"), `{
+  "version": 1,
+  "editor": {"vimMode": false},
+  "permissions": {
+    "allow": ["Shell(*)"],
+    "deny": ["Read(*)"]
+  }
+}`)
+	current := CursorScanner{}.Scan(&scan.ScannerContext{
+		ProjectPath: projectPath,
+		HomeDir:     homeDir,
+	})
+
+	allow := findCursorPermission(t, current, "~/.cursor/cli-config.json", "allow")
+	if allow.Name == nil || *allow.Name != "allow" {
+		t.Fatalf("wildcard must keep stable allow name, got %#v", allow.Name)
+	}
+	deny := findCursorPermission(t, current, "~/.cursor/cli-config.json", "deny")
+	if deny.Name == nil || *deny.Name != "deny" {
+		t.Fatalf("wildcard must keep stable deny name, got %#v", deny.Name)
+	}
+
+	findings := audit.AuditEvidence(current, graph.BuildGraph(current))
+	wildcardFindings := 0
+	for _, finding := range findings {
+		if finding.Code == "PERMISSION_WILDCARD_ADDED" {
+			wildcardFindings++
+		}
+	}
+	if wildcardFindings < 2 {
+		t.Fatalf("expected wildcard audit for allow and deny, got %d in %#v", wildcardFindings, findings)
+	}
+
+	graphDiff := diff.DiffGraphs(graph.BuildGraph(baseline), graph.BuildGraph(current))
+	wildcardChanges := 0
+	for _, change := range graphDiff.SemanticChanges {
+		if change.Code == diff.SemanticPermissionWildcardAdded &&
+			(change.EntityName == "allow" || change.EntityName == "deny") {
+			wildcardChanges++
+		}
+	}
+	if wildcardChanges != 2 {
+		t.Fatalf("expected wildcard diffs for allow and deny, got %d in %#v", wildcardChanges, graphDiff.SemanticChanges)
 	}
 }
 

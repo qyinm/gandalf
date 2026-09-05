@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/qyinm/gandalf/internal/gandalfcore/policy"
 	"github.com/qyinm/gandalf/internal/gandalfcore/types"
 )
 
@@ -220,15 +221,12 @@ func isWildcardPermission(node *types.GraphNode) bool {
 	if node.EntityKind != types.KindPermission {
 		return false
 	}
-	rule := node.EntityName
 	if obj := asRecord(node.EffectiveValue); obj != nil {
 		if v, ok := obj["rule"]; ok {
-			if s := jsonString(v); s != "" {
-				rule = s
-			}
+			return policy.PermissionWildcard{}.InJSON(v)
 		}
 	}
-	return strings.Contains(rule, "*") || strings.Contains(rule, "(*)") || rule == "*"
+	return policy.PermissionWildcard{}.InName(node.EntityName)
 }
 
 func executableAppeared(before *types.GraphNode, after *types.GraphNode) bool {
