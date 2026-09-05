@@ -556,3 +556,40 @@ func TestDefaultScanDiscoversOnlyCurrentSupportedAgents(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultScanDiscoversCursorCLIConfig(t *testing.T) {
+	sb := makeSandbox(t)
+	if err := os.MkdirAll(filepath.Join(sb.homeDir, ".cursor"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cliConfig := `{
+  "version": 1,
+  "editor": {"vimMode": false},
+  "permissions": {"allow": ["Shell(ls)"], "deny": []}
+}`
+	if err := os.WriteFile(filepath.Join(sb.homeDir, ".cursor/cli-config.json"), []byte(cliConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	scanResult := scan.ScanProject(scanOptions(sb))
+	foundConfig := false
+	foundAllow := false
+	for i := range scanResult.Evidence {
+		item := &scanResult.Evidence[i]
+		if item.Agent != types.AgentCursor || item.SourcePath != "~/.cursor/cli-config.json" {
+			continue
+		}
+		if item.Kind == types.KindAgentConfig && item.CaptureStatus == types.CaptureCaptured {
+			foundConfig = true
+		}
+		if item.Kind == types.KindPermission {
+			foundAllow = true
+		}
+	}
+	if !foundConfig {
+		t.Fatalf("default scan missed Cursor CLI config: %#v", scanResult.Evidence)
+	}
+	if !foundAllow {
+		t.Fatalf("default scan missed Cursor CLI permissions: %#v", scanResult.Evidence)
+	}
+}

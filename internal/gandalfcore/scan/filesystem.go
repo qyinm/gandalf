@@ -289,7 +289,7 @@ func emitJSONEvidence(target ScanTarget, value any) []types.DiscoveredItem {
 			}
 		}
 	}
-	if strings.HasSuffix(target.SourcePath, "/settings.json") || target.SourcePath == "settings.json" {
+	if isPermissionJSONSource(target.SourcePath) {
 		if record, ok := AsRecord(value); ok {
 			if perms, ok := AsRecord(record["permissions"]); ok {
 				for permName, permRule := range perms {
@@ -358,6 +358,15 @@ func emitJSONEvidence(target ScanTarget, value any) []types.DiscoveredItem {
 
 	evidence = append(evidence, baseItem(target, types.CaptureCaptured, nil, value))
 	return evidence
+}
+
+func isPermissionJSONSource(sourcePath string) bool {
+	switch filepath.Base(sourcePath) {
+	case "settings.json", "cli-config.json", "cli.json":
+		return true
+	default:
+		return false
+	}
 }
 
 func mcpServers(value any) map[string]any {

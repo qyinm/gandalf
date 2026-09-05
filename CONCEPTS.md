@@ -26,7 +26,7 @@ The v0.5.0-era product direction: a local TUI-first console for user-global AI a
 Older wording for the console-era direction. Historical; prefer "IaC layer" / "manifest loop" in new product docs.
 
 ### Current Supported Agent Set
-The product-visible agent boundary for the current Gandalf loop. Gandalf may keep legacy scanners or type constants for compatibility, but the default TUI, CLI help, active scan path, and documentation should only present current Codex and Claude Code support. Cursor promotion to a supported surface is planned in PLAN.md M1; broader coverage is explicitly deferred (depth over breadth).
+The product-visible agent boundary for the current Gandalf loop: Codex, Claude Code, and Cursor. Cursor includes editor-shared `.cursor/` surfaces (MCP, skills, hooks) and Cursor Agent CLI config (`~/.cursor/cli-config.json`, project `.cursor/cli.json`). Gandalf may keep legacy scanners or type constants for compatibility; OpenCode, Pi Agent, and broader coverage remain deferred (depth over breadth).
 
 ### Unified Inventory
 The normalized cross-agent setup inventory used by the setup console. It presents skills, hooks, MCP servers, and plugins as global/user setup rows with compact agent identity rather than forcing users through an agent picker first.
@@ -116,5 +116,5 @@ The non-destructive merge algorithm that injects and updates team-declared MCP s
 The planned strategy (PLAN.md M2) of generating vendor-native enforcement artifacts — Claude Code `managed-settings.json`, Codex requirements — from `gandalf.toml`, so Gandalf is the git-reviewable source of policy rather than a competitor to vendor runtime enforcement or MCP gateways.
 
 ### Manifest Import
-The reverse-engineering workflow (`gandalf import`) that generates a canonical `gandalf.toml` and mirrors team skills from existing native agent configurations (Cursor `.cursor/mcp.json`, `~/.cursor/mcp.json`, Claude Code `.mcp.json`, `~/.claude.json`, OpenAI Codex `.codex/config.toml`, `~/.codex/config.toml`), with automatic secret extraction into `[env_template]`, symlink-safe path confinement, and atomic skill rollback.
+The reverse-engineering workflow (`gandalf import`) that generates a canonical `gandalf.toml` and mirrors team skills from existing native agent configurations (Cursor `.cursor/mcp.json`, `~/.cursor/mcp.json`, Claude Code `.mcp.json`, `~/.claude.json`, OpenAI Codex `.codex/config.toml`, `~/.codex/config.toml`). Cursor Agent CLI permissions live in `~/.cursor/cli-config.json` and project `.cursor/cli.json` and are discovered by scan/snapshot on the same `cursor` agent; they are not a separate import schema. Import still extracts secrets into `[env_template]` with symlink-safe path confinement and atomic skill rollback.
 
