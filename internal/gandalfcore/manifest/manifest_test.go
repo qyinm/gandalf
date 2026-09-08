@@ -342,3 +342,112 @@ args = ['C:\directory\', 'second_arg']
 		t.Errorf("expected %q, got %q", "second_arg", srv.Args[1])
 	}
 }
+
+func TestParseManifest_Profiles(t *testing.T) {
+	tomlContent := `
+version = "1.0"
+name = "profile-test"
+agents = ["claude-code", "codex"]
+
+[[skills]]
+name = "react-expert"
+source = "./.gandalf/skills/react-expert"
+
+[[skills]]
+name = "tailwind-design"
+source = "./.gandalf/skills/tailwind-design"
+
+[[skills]]
+name = "terraform-infra"
+source = "./.gandalf/skills/terraform-infra"
+
+[profiles.frontend]
+description = "Frontend UI profile"
+skills = ["react-expert", "tailwind-design"]
+
+[profiles.infra]
+description = "Cloud Infra profile"
+skills = ["terraform-infra"]
+
+[profiles.fullstack]
+description = "Fullstack profile"
+includes = ["frontend", "infra"]
+skills = []
+`
+	result, err := Parse(tomlContent, nil)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	m := result.Manifest
+	if len(m.Profiles) != 3 {
+		t.Fatalf("expected 3 profiles, got: %d", len(m.Profiles))
+	}
+
+	fe := m.Profiles["frontend"]
+	if fe.Description != "Frontend UI profile" {
+		t.Errorf("expected description 'Frontend UI profile', got %q", fe.Description)
+	}
+	if len(fe.Skills) != 2 || fe.Skills[0] != "react-expert" || fe.Skills[1] != "tailwind-design" {
+		t.Errorf("unexpected skills for frontend: %v", fe.Skills)
+	}
+
+	fs := m.Profiles["fullstack"]
+	if len(fs.Includes) != 2 || fs.Includes[0] != "frontend" || fs.Includes[1] != "infra" {
+		t.Errorf("unexpected includes for fullstack: %v", fs.Includes)
+	}
+
+	// Validate should pass
+	errs := Validate(m, "")
+	if len(errs) > 0 {
+		t.Fatalf("unexpected validation errors: %v", errs)
+	}
+}
+
+func TestValidateProfiles_CycleDetection(t *testing.T) {
+	m := &Manifest{
+		Version: "1.0",
+		Name:    "cycle-test",
+		Agents:  []types.AgentID{types.AgentCodex},
+		Profiles: map[string]ProfileDef{
+			"a": {Includes: []string{"b"}},
+			"b": {Includes: []string{"c"}},
+			"c": {Includes: []string{"a"}},
+		},
+	}
+
+	errs := Validate(m, "")
+	foundCycle := false
+	for _, e := range errs {
+		if e.Field == "profiles.includes" {
+			foundCycle = true
+			break
+		}
+	}
+	if !foundCycle {
+		t.Errorf("expected circular inheritance error, got: %v", errs)
+	}
+}
+
+func TestValidateProfiles_UnknownSkill(t *testing.T) {
+	m := &Manifest{
+		Version: "1.0",
+		Name:    "unknown-skill-test",
+		Agents:  []types.AgentID{types.AgentCodex},
+		Profiles: map[string]ProfileDef{
+			"fe": {Skills: []string{"nonexistent-skill"}},
+		},
+	}
+
+	errs := Validate(m, "")
+	foundUnknown := false
+	for _, e := range errs {
+		if e.Field == "profiles.fe.skills" {
+			foundUnknown = true
+			break
+		}
+	}
+	if !foundUnknown {
+		t.Errorf("expected unknown skill validation error, got: %v", errs)
+	}
+}

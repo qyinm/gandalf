@@ -71,6 +71,7 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 
 	m := &Manifest{
 		MCPServers:  make(map[string]MCPServerDef),
+		Profiles:    make(map[string]ProfileDef),
 		Hooks:       make(map[string]HookDef),
 		EnvTemplate: make(map[string]string),
 	}
@@ -268,6 +269,28 @@ func Parse(text string, opts *ParseOptions) (*ParseResult, error) {
 					hook.Description = unquote(val)
 				}
 				m.Hooks[currentSubSection] = hook
+			}
+
+		case "profiles":
+			if currentSubSection != "" {
+				cleanSubSection := strings.Trim(currentSubSection, "\"")
+				profile := m.Profiles[cleanSubSection]
+				switch key {
+				case "description":
+					profile.Description = unquote(val)
+				case "skills":
+					profile.Skills = parseStringArray(val)
+				case "includes":
+					profile.Includes = parseStringArray(val)
+				case "mcp_servers":
+					profile.MCPServers = parseStringArray(val)
+				case "agents":
+					rawAgents := parseStringArray(val)
+					for _, a := range rawAgents {
+						profile.Agents = append(profile.Agents, types.ParseAgentID(a))
+					}
+				}
+				m.Profiles[cleanSubSection] = profile
 			}
 
 		case "env_template":

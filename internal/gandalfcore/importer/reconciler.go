@@ -361,6 +361,35 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 		}
 	}
 
+	// Task Profiles
+	if len(m.Profiles) > 0 {
+		sb.WriteString("# Task Profiles\n")
+		for _, pName := range sortedProfileKeys(m.Profiles) {
+			prof := m.Profiles[pName]
+			sb.WriteString(fmt.Sprintf("[profiles.%s]\n", formatTOMLKey(pName)))
+			if prof.Description != "" {
+				sb.WriteString(fmt.Sprintf("description = %q\n", prof.Description))
+			}
+			if len(prof.Includes) > 0 {
+				sb.WriteString(fmt.Sprintf("includes = %s\n", formatTOMLValue(prof.Includes)))
+			}
+			if len(prof.Skills) > 0 {
+				sb.WriteString(fmt.Sprintf("skills = %s\n", formatTOMLValue(prof.Skills)))
+			}
+			if len(prof.MCPServers) > 0 {
+				sb.WriteString(fmt.Sprintf("mcp_servers = %s\n", formatTOMLValue(prof.MCPServers)))
+			}
+			if len(prof.Agents) > 0 {
+				var agentStrs []string
+				for _, a := range prof.Agents {
+					agentStrs = append(agentStrs, string(a))
+				}
+				sb.WriteString(fmt.Sprintf("agents = %s\n", formatTOMLValue(agentStrs)))
+			}
+			sb.WriteString("\n")
+		}
+	}
+
 	// Env Template
 	if len(m.EnvTemplate) > 0 {
 		sb.WriteString("# Required Environment Variables Template\n")
@@ -379,6 +408,15 @@ func FormatManifestTOML(m *manifest.Manifest) string {
 }
 
 func sortedKeys(m map[string]manifest.MCPServerDef) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedProfileKeys(m map[string]manifest.ProfileDef) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

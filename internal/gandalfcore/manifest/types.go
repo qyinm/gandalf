@@ -12,8 +12,18 @@ type Manifest struct {
 	Agents      []types.AgentID          `json:"agents" toml:"agents"`
 	MCPServers  map[string]MCPServerDef  `json:"mcp_servers,omitempty" toml:"mcp_servers,omitempty"`
 	Skills      []SkillDef               `json:"skills,omitempty" toml:"skills,omitempty"`
+	Profiles    map[string]ProfileDef    `json:"profiles,omitempty" toml:"profiles,omitempty"`
 	Hooks       map[string]HookDef       `json:"hooks,omitempty" toml:"hooks,omitempty"`
 	EnvTemplate map[string]string        `json:"env_template,omitempty" toml:"env_template,omitempty"`
+}
+
+// ProfileDef defines a task/role profile in the manifest.
+type ProfileDef struct {
+	Description string          `json:"description,omitempty" toml:"description,omitempty"`
+	Skills      []string        `json:"skills" toml:"skills"`
+	Includes    []string        `json:"includes,omitempty" toml:"includes,omitempty"`
+	MCPServers  []string        `json:"mcp_servers,omitempty" toml:"mcp_servers,omitempty"`
+	Agents      []types.AgentID `json:"agents,omitempty" toml:"agents,omitempty"`
 }
 
 // MCPServerDef defines an MCP server in the manifest.

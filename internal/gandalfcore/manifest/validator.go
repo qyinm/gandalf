@@ -2,7 +2,9 @@ package manifest
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/qyinm/gandalf/internal/gandalfcore/agents"
@@ -105,5 +107,113 @@ func Validate(m *Manifest, projectRoot string) []ValidationError {
 		}
 	}
 
+	// Profiles validation
+	for profName, prof := range m.Profiles {
+		if strings.TrimSpace(profName) == "" {
+			errors = append(errors, ValidationError{
+				Field:   "profiles",
+				Problem: "Profile name cannot be empty",
+				Fix:     "Provide a valid identifier for the profile (e.g. [profiles.frontend])",
+			})
+		} else if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(profName) {
+			errors = append(errors, ValidationError{
+				Field:   fmt.Sprintf("profiles.%s", profName),
+				Problem: fmt.Sprintf("Profile name '%s' contains invalid characters", profName),
+				Fix:     "Use alphanumeric characters, dashes, and underscores only",
+			})
+		}
+
+		for _, inc := range prof.Includes {
+			if _, exists := m.Profiles[inc]; !exists {
+				errors = append(errors, ValidationError{
+					Field:   fmt.Sprintf("profiles.%s.includes", profName),
+					Problem: fmt.Sprintf("Profile '%s' includes unknown profile '%s'", profName, inc),
+					Fix:     fmt.Sprintf("Declare [profiles.%s] before referencing it", inc),
+				})
+			}
+		}
+
+		for _, sk := range prof.Skills {
+			found := false
+			for _, def := range m.Skills {
+				if def.Name == sk {
+					found = true
+					break
+				}
+			}
+			if !found && projectRoot != "" {
+				skillPath := filepath.Join(projectRoot, ".gandalf", "skills", sk)
+				if info, err := os.Stat(skillPath); err == nil && info.IsDir() {
+					found = true
+				}
+			}
+			if !found {
+				errors = append(errors, ValidationError{
+					Field:   fmt.Sprintf("profiles.%s.skills", profName),
+					Problem: fmt.Sprintf("Profile '%s' references undeclared skill '%s'", profName, sk),
+					Fix:     fmt.Sprintf("Declare [[skills]] with name = %q or add it to .gandalf/skills/%s", sk, sk),
+				})
+			}
+		}
+	}
+
+	// Cycle detection for profile includes
+	if cycle := detectProfileCycle(m.Profiles); len(cycle) > 0 {
+		errors = append(errors, ValidationError{
+			Field:   "profiles.includes",
+			Problem: fmt.Sprintf("Circular inheritance detected in profiles: %s", strings.Join(cycle, " -> ")),
+			Fix:     "Break the inheritance cycle between profiles",
+		})
+	}
+
 	return errors
+}
+
+func detectProfileCycle(profiles map[string]ProfileDef) []string {
+	visited := make(map[string]int) // 0: unvisited, 1: visiting, 2: visited
+	var path []string
+
+	var dfs func(node string) []string
+	dfs = func(node string) []string {
+		visited[node] = 1
+		path = append(path, node)
+
+		if prof, ok := profiles[node]; ok {
+			for _, inc := range prof.Includes {
+				if visited[inc] == 1 {
+					cycleStart := -1
+					for i, p := range path {
+						if p == inc {
+							cycleStart = i
+							break
+						}
+					}
+					if cycleStart >= 0 {
+						res := append([]string{}, path[cycleStart:]...)
+						res = append(res, inc)
+						return res
+					}
+					return []string{node, inc}
+				}
+				if visited[inc] == 0 {
+					if c := dfs(inc); len(c) > 0 {
+						return c
+					}
+				}
+			}
+		}
+
+		visited[node] = 2
+		path = path[:len(path)-1]
+		return nil
+	}
+
+	for name := range profiles {
+		if visited[name] == 0 {
+			if c := dfs(name); len(c) > 0 {
+				return c
+			}
+		}
+	}
+	return nil
 }
