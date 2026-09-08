@@ -46,6 +46,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newTimelineCmd())
 	root.AddCommand(newBundleCmd())
 	root.AddCommand(newApplyCmd())
+	root.AddCommand(newBoostCmd())
 	root.AddCommand(newCheckCmd())
 	root.AddCommand(newInitCmd())
 	root.AddCommand(newExportCmd())

@@ -156,12 +156,17 @@ description = "Shared staging database MCP server"
 # source = "./.gandalf/skills/code-reviewer"
 # description = "Automated PR review skill"
 
-# 3. Agent Hooks
+# 3. Task Profiles (use with 'gandalf boost <profile>')
+# [profiles.frontend]
+# description = "Frontend UI development profile"
+# skills = ["code-reviewer"]
+
+# 4. Agent Hooks
 # [hooks.pre-save-lint]
 # event = "before_save"
 # command = "./scripts/lint.sh"
 
-# 4. Required Environment Variables Template
+# 5. Required Environment Variables Template
 [env_template]
 DATABASE_URL = "postgres://user:password@localhost:5432/db"
 `, projectName, projectName)
@@ -188,9 +193,10 @@ DATABASE_URL = "postgres://user:password@localhost:5432/db"
 	_, _ = fmt.Fprintf(out, "📁 Team skills directory created: %s\n", skillsDir)
 	_, _ = fmt.Fprintln(out)
 	_, _ = fmt.Fprintln(out, "Next steps:")
-	_, _ = fmt.Fprintln(out, "  1. Edit 'gandalf.toml' to declare team MCP servers and skills.")
+	_, _ = fmt.Fprintln(out, "  1. Edit 'gandalf.toml' to declare team MCP servers, skills, and profiles.")
 	_, _ = fmt.Fprintln(out, "  2. Commit 'gandalf.toml' and '.gandalf/skills/' to your Git repository.")
 	_, _ = fmt.Fprintln(out, "  3. Team members can run 'gandalf apply' to sync their local agent setup.")
+	_, _ = fmt.Fprintln(out, "  4. Switch task skills anytime with 'gandalf boost <profile>'.")
 
 	return 0
 }
