@@ -264,6 +264,48 @@ func DetectProjectDrift(m *manifest.Manifest, projectRoot string) (*DriftReport,
 		}
 	}
 
+	// 2.5 Verify Profiles integrity
+	for profName, prof := range m.Profiles {
+		for _, inc := range prof.Includes {
+			if _, exists := m.Profiles[inc]; !exists {
+				report.InSync = false
+				report.Items = append(report.Items, DriftItem{
+					Kind:        DriftInvalidProfile,
+					Name:        profName,
+					TargetFile:  "gandalf.toml",
+					Description: fmt.Sprintf("Profile '%s' includes unknown profile '%s'", profName, inc),
+					Details:     fmt.Sprintf("Profile inheritance refers to undefined profile '%s'", inc),
+				})
+			}
+		}
+
+		for _, sk := range prof.Skills {
+			found := false
+			for _, s := range m.Skills {
+				if s.Name == sk {
+					found = true
+					break
+				}
+			}
+			if !found {
+				skDir := filepath.Join(projectRoot, ".gandalf", "skills", sk)
+				if fi, err := os.Stat(skDir); err == nil && fi.IsDir() {
+					found = true
+				}
+			}
+			if !found {
+				report.InSync = false
+				report.Items = append(report.Items, DriftItem{
+					Kind:        DriftInvalidProfile,
+					Name:        profName,
+					TargetFile:  "gandalf.toml",
+					Description: fmt.Sprintf("Profile '%s' references undeclared skill '%s'", profName, sk),
+					Details:     fmt.Sprintf("Skill '%s' is not declared in [[skills]] or present in .gandalf/skills", sk),
+				})
+			}
+		}
+	}
+
 	targetsAgent := func(agent types.AgentID) bool {
 		for _, a := range m.Agents {
 			if a == agent {

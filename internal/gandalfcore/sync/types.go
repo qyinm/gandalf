@@ -17,6 +17,7 @@ const (
 	DriftMissingSkillFile      DriftKind = "missing_skill_file"
 	DriftMissingEnvTemplate    DriftKind = "missing_env_template"
 	DriftUnsyncedProjectConfig DriftKind = "unsynced_project_config"
+	DriftInvalidProfile        DriftKind = "invalid_profile"
 )
 
 // DriftItem is a single drift entry between manifest and local setup.
